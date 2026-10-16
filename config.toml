@@ -61,7 +61,10 @@ warn_gb = 2.0
 [notes]                       # DeepSeek notes (PLAN.md Method section 8)
 base_url = "https://api.deepseek.com"
 model = "deepseek-flash"      # from GET /models on 2026-10-17 (deepseek-flash, deepseek-v4-pro)
-temperature = 0.2
+temperature = 0.0
+spike_growth = 1.0            # one_off_gain check 1: net profit growth above this ...
+spike_cash_conv = 0.5         # ... with operating cash flow / net profit below this (non-financials)
+eps_fall = 0.6                # check 2: next year's consensus EPS below this share of trailing EPS
 title_days = 60
 max_titles = 10
 workers = 4

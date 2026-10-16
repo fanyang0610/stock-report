@@ -26,17 +26,39 @@ SYSTEM = """你是 A 股研究助理，为程序生成的选股卡片写简短�
 2. note：一到两句话，不超过 60 个字（数字、字母和标点都算），说明这个动作（买入 / 持有·不追高 / 卖出·回避）的主要依据和最需要注意的地方。
 3. risk：不超过 30 个字（数字、字母和标点都算），最主要的风险。
 4. flag 只能取以下之一，只有当数字或公告标题给出明确依据时才标记，否则为 none：
-   - one_off_gain：估值所依据的近期利润被一次性或短期异常因素明显扭曲（非经常性损益、资产处置、投资收益、补贴，或周期高点、低基数反弹造成的利润暴增），不能代表正常盈利水平。
+   - one_off_gain：近期利润不能代表正常盈利水平。满足以下任一条就必须标记：检查一为"是"；检查二为"是"；公告标题显示明确的一次性收益（出售资产或子公司、投资收益、公允价值变动、授权或许可首付款、政府补助等），且它很可能是利润大增的主要来源。仅凭增速高、处于周期行业或行情好不标记。银行、券商、保险的投资和交易收益属于主营业务，不算一次性收益。卖出档不标记 one_off_gain（一次性收益只会让高估更明显）。
    - pending_deal：正在进行重大资产重组、收购、私有化、吸收合并或停牌筹划，股价主要由交易决定。
    - delisting_or_st：有退市风险警示、ST、可能终止上市，或被立案调查可能导致退市。
    - data_suspect：给出的数字彼此明显矛盾，或与公告标题明显不符。
-5. reason：一句话说明 flag 的依据；flag 为 none 时写"无"。
+5. reason：一句话用白话说明 flag 的依据（引用相关数字或公告，不要写"检查一""检查二"这类说法）；flag 为 none 时写"无"。
 增速、ROE 等指标已在全市场 2%/98% 分位截尾，处于截尾值说明实际值更极端。
 只输出 JSON：{"note": "...", "risk": "...", "flag": "...", "reason": "..."}"""
 
 
 def pct(x) -> str:
     return "无" if pd.isna(x) else f"{x:+.1%}"
+
+
+def checks(row: pd.Series) -> list[str]:
+    """Two earnings-spike checks computed from the data, so the one_off_gain flag is applied the same
+    way to every buy and hold candidate (thresholds in config.toml [notes])."""
+    cfg, min_analysts = CONFIG["notes"], CONFIG["value"]["forward_min_analysts"]
+    if row["bucket"] == "sell":
+        return ["检查一、检查二：不适用（卖出档）"]
+    yes = lambda b: "是" if b else "否"
+    first = (f"检查一（利润暴增但现金流不足：净利润同比 > {cfg['spike_growth']:+.0%} 且经营现金流/净利润 < "
+             f"{cfg['spike_cash_conv']}）：")
+    if row["method"] == "P/B+justified" or pd.isna(row["cash_conv"]) or row["np_ttm"] <= 0:
+        first += "不适用"
+    else:
+        first += yes(row["np_growth"] > cfg["spike_growth"] and row["cash_conv"] < cfg["spike_cash_conv"])
+    second = f"检查二（分析师预期利润回落：明年一致预期 EPS 不到近 12 个月 EPS 的 {cfg['eps_fall']:.0%}）："
+    if row["analysts"] >= min_analysts and row["eps_ttm"] > 0 and pd.notna(row["eps_e2"]):
+        ratio = row["eps_e2"] / row["eps_ttm"]
+        second += f"{yes(ratio < cfg['eps_fall'])}（{ratio:.2f} 倍，{row['analysts']:.0f} 家分析师）"
+    else:
+        second += f"不适用（覆盖分析师不足 {min_analysts} 家或近期亏损）"
+    return [first, second]
 
 
 def card_numbers(row: pd.Series) -> str:
@@ -58,6 +80,7 @@ def card_numbers(row: pd.Series) -> str:
         + f"股息率 {pct(row['div_yield'])}；市盈率 TTM {num(row['pe'], 1)}；市净率 {num(row['pb'])}",
         f"过去 12 个月（剔除最近 1 个月）涨幅 {pct(row['mom_12_1'])}；年化波动率 {pct(row['vol_1y'])}",
         f"程序给出的驱动：{row['drivers']}；程序给出的主要短板：{row['key_risk']}",
+        *checks(row),
     ]
     return "\n".join(lines)
 
@@ -150,10 +173,14 @@ class Notes:
             return template_note(row)
         content = card_numbers(row) + "\n近 60 日公告标题：\n" + ("\n".join(titles) or "（无）")
         try:
-            return ask(self.client, content) | {"source": CONFIG["notes"]["model"], "titles": titles}
+            note = ask(self.client, content) | {"source": CONFIG["notes"]["model"], "titles": titles}
         except RuntimeError as e:
             log.warning("%s %s: %s; using the template note", row["code"], row["name"], e)
             return template_note(row)
+        if row["bucket"] == "sell" and note["flag"] == "one_off_gain":  # a one-off gain only adds to overvaluation
+            log.info("%s %s: one_off_gain ignored for a sell (%s)", row["code"], row["name"], note["reason"])
+            note["flag"], note["reason"] = "none", "无"
+        return note
 
     def store(self, code: str, note: dict) -> None:
         self.cache[code] = note

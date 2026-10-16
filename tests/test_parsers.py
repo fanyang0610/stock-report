@@ -104,3 +104,18 @@ def test_keyword_match():
         assert is_keyword(text), text
     for text in ["股票报告呢", "请发股票报告", "stock", "hi", ""]:
         assert not is_keyword(text), text
+
+
+def test_one_off_checks_on_saved_picks():
+    from stockreport.notes import card_numbers, checks
+
+    picks = pd.read_csv(SAMPLES / "cn_picks_sample.csv", dtype={"code": str}).set_index("code", drop=False)
+    first = lambda code: checks(picks.loc[code])[0].split("：")[-1]
+    second = lambda code: checks(picks.loc[code])[1].split("：")[-1]
+    assert first("301308") == "是"                    # 江波龙: profit +1216%, cash conversion -0.30
+    assert second("688331").startswith("是（0.12 倍")  # 荣昌生物: analysts expect EPS to fall to 0.12x
+    assert first("002466") == "否" and second("002466").startswith("否")  # 天齐锂业: cash 0.51, EPS 1.76x
+    assert first("600999") == "不适用"                # 招商证券: broker
+    assert second("001309").startswith("不适用")      # 德明利: only 2 analysts
+    assert checks(picks.loc["688126"]) == ["检查一、检查二：不适用（卖出档）"]
+    assert all("检查" in card_numbers(row) for _, row in picks.iterrows())
