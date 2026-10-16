@@ -1,0 +1,59 @@
+# Weights, thresholds and retention periods. Method: docs/PLAN.md.
+
+[universe]
+top_n = 800
+min_listing_days = 365
+history_days = 385            # calendar days of daily prices kept (12-1 momentum needs ~252 trading days)
+exclude_name_patterns = ["ST", "退"]
+
+[universe.min_turnover]       # 20-day average daily turnover, quote currency
+cn = 50_000_000
+hk = 20_000_000
+us = 10_000_000
+
+[peers]
+min_group_size = 8
+financial_industries = ["银行", "证券", "保险"]   # substring match on the industry name
+
+[value]
+equity_premium = { cn = 0.06, hk = 0.06, us = 0.05 }
+g_cap = 0.03
+winsor = [0.02, 0.98]
+growth_metric = "rev_growth"  # growth regressor in the P/E and P/S fits
+ri_fade_years = 10            # residual income: ROE fades linearly to r over this many years
+cross_check_max_gap = 0.5     # values pointing opposite ways and further apart than this -> 低信心
+forward_weight = 0.5          # forward lens share of fair value when a stock has it
+forward_min_analysts = 3
+
+[score.weights]
+value = 0.35
+quality = 0.25
+growth = 0.15
+momentum = 0.15
+risk = 0.10
+
+[buckets]
+per_bucket = 5
+max_per_group = 2
+runners_up = 5
+buy_min_upside = 0.15
+buy_min_momentum_z = -0.5
+hold_quality_top = 0.30
+hold_upside = [-0.10, 0.15]
+sell_max_upside = -0.15
+sell_quality_bottom = 0.40
+sell_max_momentum_z = -0.5
+sell_largest_n = 400
+
+[fetch]
+fundamentals_refresh_days = 7
+quarters_kept = 7             # report periods fetched for trailing-12-month numbers
+
+[retention]                   # days
+raw = 7
+snapshots = 400
+reports = 90
+logs = 30
+
+[storage]
+warn_gb = 2.0

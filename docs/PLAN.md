@@ -2,7 +2,7 @@
 
 ## Status (update at the end of each phase)
 - Phase 1 Foundation + delivery test: done 2026-10-17 (TEST text + PDF arrived on the phone, PDF opens)
-- Phase 2 CN data + valuation: not started
+- Phase 2 CN data + valuation: done 2026-10-17 (CN picks reviewed; data sources and the valuation method were changed in the review, see Method 4 and Data sources)
 - Phase 3 CN notes + report + keyword: not started
 - Phase 4 US: not started
 - Phase 5 HK + full 45-stock report: not started
@@ -46,12 +46,13 @@ Winsorize each metric at the 2nd and 98th percentile within the market.
 
 ### 4. Fair value (per stock, in its quote currency)
 - Banks, insurers and brokers: justified P/B = (ROE − g) / (r − g). Blend it 50/50 with the P/B the peer group pays for that ROE (a cross-sectional fit of P/B on ROE).
-- Other profitable companies: the P/E the peer group pays for similar ROE and growth (a fit of log P/E on ROE and growth within the group).
+- Other profitable companies: the P/B the peer group pays for similar ROE and growth (a fit of log P/B on ROE and growth within the group). Changed from P/E in the Phase 2 review: in A-shares the P/E fit gets a negative ROE coefficient in every group (low ROE usually means depressed earnings and a high P/E), which made cheap low-ROE stocks look undervalued.
 - Loss-making companies: P/S fitted on gross margin and growth. If no fit is possible, the stock has no fair value and is excluded.
+- Forward lens (added in the Phase 2 review, because trailing numbers make one-off profit spikes look cheap and early fast growth look expensive): for non-financials with at least 3 analysts, also fit log forward P/E (price ÷ next year's consensus EPS) on expected EPS growth (2-year consensus CAGR) within the peer group. Fair value mid = 50/50 trailing and forward value (trailing only when there is no forward lens); the range always covers both. If the two lenses point opposite ways versus the price and differ by more than 50%, mark 低信心. Consensus EPS only; analysts' target prices and ratings are never used.
 - Fair value mid = fitted multiple × the company's own metric.
 - Fair value low/high = from the 25th/75th percentile of the group's fit residuals.
 - r = 10-year government bond yield + equity premium (CN 6%, HK 6%, US 5%). g = min(ROE × retention, 3%). Both are config values.
-- Absolute cross-check: a simple residual-income value at the same r. If the peer value and the absolute value differ by more than 50%, mark the stock 低信心.
+- Absolute cross-check: a simple residual-income value at the same r (excess ROE fades linearly to r over 10 years), kept in the picks CSV for reference. It does not set 低信心 (Phase 2 review: at r ≈ 7.7% the RI value is typically ~1/2.7 of what peers pay, so it flagged 44–79% of the market, including real growth stocks; the forward-lens disagreement is the 低信心 signal instead).
 - Upside = fair value mid / price − 1.
 
 ### 5. Scores (sector-neutral z-scores within each market)
@@ -134,14 +135,14 @@ Each card shows:
 6. Daily schedule + tracking: the 06:30 build works on 2 consecutive days, `track` prints a scorecard, and cleanup keeps data/ + reports/ well under 2 GB.
 
 ## Data sources (free; verify each endpoint while building)
-- CN:
-  - Universe and quotes: the Eastmoney list API push2.eastmoney.com/api/qt/clist/get, which returns all A-shares in pages.
-    - fs = m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23
-    - fields: f12 code, f14 name, f2 price, f6 turnover, f9 P/E, f20 market value, f23 P/B, f37 ROE, f100 industry
-  - Quarterly results for all A-shares: Eastmoney datacenter 业绩报表 (AKShare stock_yjbb_em).
-  - Price history: Eastmoney or Tencent daily kline.
+- CN (changed in Phase 2, see below):
+  - Universe and quotes: Eastmoney datacenter daily valuation table RPT_VALUEANALYSIS_DET (close, total market value, total shares, PE-TTM, PB-MRQ, industry BOARD_NAME = the same industry field as clist f100).
+  - Quarterly results for all A-shares: Eastmoney datacenter 业绩报表 RPT_LICO_FN_CPD; debt/assets from RPT_DMSK_FN_BALANCE; cash dividends from RPT_SHAREBONUS_DET.
+  - Analyst consensus EPS for the next three fiscal years: Eastmoney datacenter 研报一致预期 RPT_WEB_RESPREDICT (one market-wide table, refreshed weekly).
+  - Price history and turnover: 通达信 official daily packages, www.tdx.com.cn/products/data/data/g4day/<YYYYMMDD>.zip (whole market in one ~2.7 MB file per day). Returns are chained as close ÷ exchange prev-close, which is ex-rights adjusted (checked on ex-dividend days).
   - A/H pairs: the Eastmoney AH list.
-  - 10-year yield: ChinaBond.
+  - 10-year yield: the ChinaBond 10-year yield as republished in Eastmoney datacenter RPTA_WEB_TREASURYYIELD (EMM00166466).
+  - Not used (2026-10-17): the push2 list API (clist) and push2delay dropped every connection after ~25 requests; Eastmoney kline is the same push2 family; Tencent's adjusted kline adds dividends instead of compounding them (understates momentum); yield.chinabond.com.cn timed out.
   - Announcements: CNINFO.
   - Backup: the Tushare token in .env.
   - The a-stock-data skill documents many CN endpoints.

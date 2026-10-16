@@ -1,8 +1,8 @@
 .env
 .env.*
-data/
-reports/
-logs/
+/data/
+/reports/
+/logs/
 .venv/
 __pycache__/
 *.pyc

@@ -15,15 +15,18 @@ Rules for coding agents: [AGENTS.md](AGENTS.md).
 
 ## Commands
 ```
+uv run python -m stockreport fetch --market cn   # update data/ (first run backfills ~13 months of prices, ~40 min)
+uv run python -m stockreport run --market cn     # fetch what changed, value, score, pick -> reports/<date>/cn_picks.csv
+uv run python -m stockreport cleanup --dry-run   # what retention would delete, and data/ + reports/ size
 uv run python -m stockreport send --test         # build the TEST report and send text + PDF (asks first)
-uv run python -m stockreport send --test --yes   # same, without the prompt
 node bridge/wechat.mjs status                    # is the bot's reply window open?
 uv run pytest
 ```
-Later phases add `fetch`, `run`, `send`, `listen`, `track` and `cleanup` (see AGENTS.md).
+Weights, thresholds and retention periods are in `config.toml`. Later phases add notes, `listen` and `track`.
 
 ## Layout
-- `stockreport/`: Python package (`deliver.py` talks to WeChat; `render/` builds the HTML, PDF and text summary)
+- `stockreport/`: `fetch/` (one module per source) → `universe.py` → `value.py` → `score.py` → `pick.py`;
+  `deliver.py` talks to WeChat; `render/` builds the HTML, PDF and text summary; `cleanup.py` applies retention
 - `bridge/wechat.mjs`: Node helper with the commands `status`, `poll-messages`, `notify`, `notify-batch`, `send-file`, `send-image`
 - `data/`, `reports/`, `logs/`: caches and outputs (git-ignored)
 

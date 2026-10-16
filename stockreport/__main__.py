@@ -6,11 +6,59 @@ import time
 from datetime import date
 from pathlib import Path
 
+import pandas as pd
+
 from stockreport import deliver
+from stockreport.cleanup import cleanup
+from stockreport.config import CONFIG, DATA, REPORTS, ROOT, setup_logging
+from stockreport.fetch import fetch as fetch_market
+from stockreport.pick import CSV_COLUMNS, pick, print_table
 from stockreport.render import html_to_pdf, render_html, text_summary
 from stockreport.render.testdata import test_report
+from stockreport.score import score
+from stockreport.universe import build_cn
+from stockreport.value import value
 
-ROOT = Path(__file__).resolve().parent.parent
+
+def discount_rate(market: str) -> tuple[float, str]:
+    """r = latest 10-year government yield + the market's equity premium."""
+    rates = pd.read_csv(DATA / "rates.csv", dtype={"date": str})
+    latest = rates[rates["market"] == market].sort_values("date").iloc[-1]
+    return latest["y10"] / 100 + CONFIG["value"]["equity_premium"][market], latest["date"]
+
+
+def run(market: str) -> int:
+    started, today = time.monotonic(), date.today()
+    failed = fetch_market(market, today)
+    universe, info = build_cn(today)
+    r, rate_date = discount_rate(market)
+    df = score(value(universe, r))
+    df["r"], df["price_date"] = r, info["quote_date"]
+    picks = pick(df)
+
+    snap = DATA / "snapshots" / today.isoformat()
+    snap.mkdir(parents=True, exist_ok=True)
+    df.to_csv(snap / f"{market}.csv.gz", compression="gzip")
+    out = REPORTS / today.isoformat()
+    out.mkdir(parents=True, exist_ok=True)
+    picks[CSV_COLUMNS].to_csv(out / f"{market}_picks.csv", index=False, encoding="utf-8-sig")
+
+    print(f"{market.upper()} data: quotes {info['quote_date']}, daily prices {info['price_date']}, "
+          f"10y yield {rate_date} -> r = {r:.2%}")
+    if failed:
+        print(f"WARNING: fetch failed for {', '.join(failed)}; used the last cached data")
+    print("Universe: " + " -> ".join(f"{k} {v}" for k, v in info["stages"].items()))
+    for reason, codes in info["dropped"].items():
+        if codes:
+            print(f"  dropped {len(codes)} ({reason}): {' '.join(codes[:12])}{' ...' if len(codes) > 12 else ''}")
+    print(f"Fair value: {df['fv_mid'].notna().sum()} of {len(df)} valued; "
+          f"methods {df['method'].value_counts().to_dict()}")
+    print_table(picks)
+    print(f"\nWrote {(out / f'{market}_picks.csv').relative_to(ROOT)} and the snapshot "
+          f"{(snap / f'{market}.csv.gz').relative_to(ROOT)}")
+    cleanup()
+    print(f"Done in {time.monotonic() - started:.0f}s")
+    return 0
 
 
 def build_test(today: date) -> tuple[str, Path]:
@@ -74,8 +122,27 @@ def main(argv: list[str] | None = None) -> int:
     send = sub.add_parser("send", help="send the text summary + PDF to WeChat")
     send.add_argument("--test", action="store_true", help="send the TEST report (fake data)")
     send.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
+    fetch = sub.add_parser("fetch", help="update the cached data for a market")
+    fetch.add_argument("--market", choices=["cn", "us", "hk"], required=True)
+    run_p = sub.add_parser("run", help="fetch, value, score and pick (CN only so far)")
+    run_p.add_argument("--market", choices=["cn", "us", "hk"], default="cn")
+    run_p.add_argument("--no-notes", action="store_true", help="skip DeepSeek notes (not built yet)")
+    clean = sub.add_parser("cleanup", help="apply the storage retention periods")
+    clean.add_argument("--dry-run", action="store_true", help="only list what would be deleted")
     args = parser.parse_args(argv)
 
+    if args.command == "run":
+        setup_logging()
+        return run(args.market)
+    if args.command == "cleanup":
+        cleanup(dry_run=args.dry_run)
+        return 0
+    if args.command == "fetch":
+        setup_logging()
+        failed = fetch_market(args.market)
+        if failed:
+            print(f"Failed steps (cached data kept): {', '.join(failed)}", file=sys.stderr)
+        return 1 if failed else 0
     if args.command == "send":
         if not args.test:
             print("Only `send --test` exists until Phase 3.")
