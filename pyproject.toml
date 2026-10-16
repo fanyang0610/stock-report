@@ -1,0 +1,19 @@
+[project]
+name = "stockreport"
+version = "0.1.0"
+description = "Daily US/HK/CN stock picks from peer-group valuation, delivered over WeChat"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "jinja2>=3.1.6",
+    "pandas>=3.0.6",
+    "pytest>=9.1.1",
+    "python-dotenv>=1.2.4",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

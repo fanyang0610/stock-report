@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>{{ r.title }} {{ r.date }}</title>
+<style>
+  @page { size: A4; margin: 12mm 10mm 12mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "PingFang SC", "Hiragino Sans GB", "Heiti SC", sans-serif;
+         font-size: 9.5pt; line-height: 1.45; color: #1f2329; }
+  h1 { font-size: 18pt; margin: 0 0 2mm; }
+  h2 { font-size: 13pt; margin: 0 0 2mm; padding-bottom: 1mm; border-bottom: 2px solid #1f2329; }
+  .sub { color: #646a73; font-size: 9pt; }
+  .test-banner { border: 2px solid #d4380d; color: #d4380d; background: #fff2e8; font-weight: 600;
+                 padding: 2mm 3mm; margin: 3mm 0; }
+  .watermark { position: fixed; top: 45%; left: 0; right: 0; text-align: center; font-size: 72pt;
+               color: rgba(212, 56, 13, 0.08); transform: rotate(-30deg); pointer-events: none; z-index: -1; }
+  section { margin-top: 5mm; }
+  section.market { break-before: page; }
+  table { width: 100%; border-collapse: collapse; }
+  table.cards { table-layout: fixed; }
+  th { text-align: left; font-weight: 600; color: #646a73; font-size: 8.5pt;
+       border-bottom: 1px solid #c9cdd4; padding: 1mm 1.5mm; }
+  td { padding: 1.2mm 1.5mm; vertical-align: top; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .overview td { border-bottom: 1px solid #eef0f3; }
+  tbody.card { break-inside: avoid; }
+  tbody.card tr.head td { border-top: 1px solid #c9cdd4; padding-top: 2mm; }
+  tbody.card tr.body td { padding-bottom: 2.5mm; color: #3c4149; }
+  .ticker { font-weight: 700; }
+  .action { font-weight: 600; white-space: nowrap; }
+  .buy { color: #c41d1d; } .hold { color: #ad6800; } .sell { color: #237804; }
+  .up { color: #c41d1d; } .down { color: #237804; }
+  .tag { display: inline-block; font-size: 8pt; padding: 0 1.5mm; border-radius: 2px; margin-left: 1mm; }
+  .tag.low { background: #f2f3f5; color: #646a73; border: 1px solid #c9cdd4; }
+  .tag.test { background: #fff2e8; color: #d4380d; border: 1px solid #ffbb96; }
+  .label { color: #8f959e; }
+  .bucket-title { font-size: 11pt; font-weight: 700; margin: 4mm 0 1mm; }
+  footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px solid #c9cdd4; color: #646a73; font-size: 8.5pt; }
+</style>
+</head>
+<body>
+{% if r.test %}<div class="watermark">测试数据</div>{% endif %}
+
+<section class="overview">
+  <h1>{{ r.title }}{% if r.test %} <span class="tag test">测试数据</span>{% endif %}</h1>
+  <div class="sub">{{ r.date }} · 美股 / 港股 / A股 · 每市场 买入 / 持有·不追高 / 卖出·回避 各 5 只</div>
+  {% if r.test %}<div class="test-banner">测试数据：本报告所有公司、价格和估值均为虚构，仅用于测试微信发送与手机打开效果。</div>{% endif %}
+  <table class="overview">
+    <thead><tr><th>市场</th><th>分档</th><th>代码</th><th>名称</th><th class="num">现价</th><th class="num">公允价(中)</th><th class="num">空间</th></tr></thead>
+    <tbody>
+    {% for m in r.markets %}{% for key, label in buckets %}{% for p in m.picks if p.bucket == key %}
+      <tr>
+        <td>{{ m.name }}</td><td class="action {{ key }}">{{ label }}</td>
+        <td class="ticker">{{ p.ticker }}</td>
+        <td>{{ p.name }}{% if p.low_conviction %}<span class="tag low">低信心</span>{% endif %}</td>
+        <td class="num">{{ p.price | num }}</td><td class="num">{{ p.fv_mid | num }}</td>
+        <td class="num {{ 'up' if p.upside >= 0 else 'down' }}">{{ p.upside | pct }}</td>
+      </tr>
+    {% endfor %}{% endfor %}{% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% for m in r.markets %}
+<section class="market">
+  <h2>{{ m.name }}{% if r.test %} <span class="tag test">测试数据</span>{% endif %}</h2>
+  <div class="sub">数据日期 {{ m.data_date }} · 计价 {{ m.currency }}</div>
+  {% for key, label in buckets %}
+  <div class="bucket-title {{ key }}">{{ label }}</div>
+  <table class="cards">
+    <colgroup><col style="width:40%"><col style="width:14%"><col style="width:13%"><col style="width:23%"><col style="width:10%"></colgroup>
+    <thead><tr><th>代码 / 名称</th><th>动作</th><th class="num">现价</th><th class="num">公允价 低 / 中 / 高</th><th class="num">空间</th></tr></thead>
+    {% for p in m.picks if p.bucket == key %}
+    <tbody class="card">
+      <tr class="head">
+        <td><span class="ticker">{{ p.ticker }}</span> {{ p.name }}
+          {% if p.low_conviction %}<span class="tag low">低信心</span>{% endif %}
+          {% if r.test %}<span class="tag test">测试数据</span>{% endif %}</td>
+        <td class="action {{ key }}">{{ p.action }}</td>
+        <td class="num">{{ p.price | num }}<br><span class="sub">{{ p.price_date }}</span></td>
+        <td class="num">{{ p.fv_low | num }} / <b>{{ p.fv_mid | num }}</b> / {{ p.fv_high | num }}</td>
+        <td class="num {{ 'up' if p.upside >= 0 else 'down' }}"><b>{{ p.upside | pct }}</b></td>
+      </tr>
+      <tr class="body">
+        <td colspan="5">
+          <span class="label">驱动：</span>{{ p.drivers | join('；') }}　<span class="label">风险：</span>{{ p.risk }}<br>
+          <span class="label">AI 点评：</span>{{ p.note }}<br>
+          <span class="label">复查条件：</span>{{ p.trigger }}
+        </td>
+      </tr>
+    </tbody>
+    {% endfor %}
+  </table>
+  {% endfor %}
+</section>
+{% endfor %}
+
+<footer>
+  {% for m in r.markets %}{{ m.name }} 数据日期 {{ m.data_date }}{% if not loop.last %} · {% endif %}{% endfor %}<br>
+  方法：{{ r.method }}<br>
+  本报告由程序根据公开数据自动生成，不构成投资建议。{% if r.test %}<b>（测试数据）</b>{% endif %}
+</footer>
+</body>
+</html>
