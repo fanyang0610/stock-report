@@ -3,7 +3,7 @@
 ## Status (update at the end of each phase)
 - Phase 1 Foundation + delivery test: done 2026-10-17 (TEST text + PDF arrived on the phone, PDF opens)
 - Phase 2 CN data + valuation: done 2026-10-17 (CN picks reviewed; data sources and the valuation method were changed in the review, see Method 4 and Data sources)
-- Phase 3 CN notes + report + keyword: not started
+- Phase 3 CN notes + report + keyword: done 2026-10-17 (DeepSeek notes in the CN PDF; texting 股票报告 returned the CN summary + PDF in ~4 s; listener cadence changed, see Method 9)
 - Phase 4 US: not started
 - Phase 5 HK + full 45-stock report: not started
 - Phase 6 Daily schedule + tracking: not started
@@ -93,12 +93,18 @@ Each card shows:
   - reason
 - Use a low temperature and validate the JSON.
 - Any flag other than none swaps the pick for the next-ranked candidate; log the swap. Numbers are never changed.
+  - Phase 3: the model is deepseek-flash (GET /models, 2026-10-17), with thinking off and JSON output. one_off_gain also covers profit spikes from a cycle peak or a low base. On the first CN run it flagged 8 names (6 of the 15 picks, plus 2 runners-up), mostly memory-chip and lithium names.
+  - The bench is 10 runners-up per bucket (config `runners_up`), so a flagged pick always has a next-ranked name. If the bench runs out, the flagged pick stays, marked 低信心.
+  - The report and the text summary list every swapped-out name.
 - Cache notes per day and ticker. If the API fails, use template text and still ship the report. Expect up to about 60 calls per daily run.
 
 ### 9. Report and delivery
 - PDF: Jinja2 HTML → PDF via headless Chrome, in the order overview, US, HK, CN. The footer gives the data date per market, a one-line description of the method and "not investment advice".
 - Text summary: 45 lines of "代码 名称 动作 现价→公允价 空间%", grouped by market and bucket, at most 4,000 bytes.
-- Listener: a launchd job runs `listen` every 60 s. It polls, matches the keyword (trailing punctuation trimmed, case-insensitive) and sends the newest report: text first, then the PDF.
+- Listener: a launchd job (StartInterval 10) runs `listen`. It polls, matches the keyword (trailing punctuation trimmed, case-insensitive) and sends the newest report: text first, then the PDF.
+  - Each run polls for ~55 s. The bot server holds an idle poll ~18 s; polls are never cut short by the client.
+  - launchd counts StartInterval from the previous run's exit (measured 2026-10-17), so the next run starts 10 s after one ends and a keyword waits at most ~15 s. Changed in Phase 3: the planned "every 60 s" left a ~60 s gap after each run (a reply took 62 s).
+  - Keywords older than 30 minutes (e.g. sent while the Mac slept) are logged, not answered.
   - It always replies. If today's report isn't ready, it sends the newest one with its date in the title.
   - If a send fails, it retries once and logs the failure.
   - It dedupes by message id, stored in data/state.json.

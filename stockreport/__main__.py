@@ -8,10 +8,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from stockreport import deliver
+from stockreport import deliver, report
 from stockreport.cleanup import cleanup
 from stockreport.config import CONFIG, DATA, REPORTS, ROOT, setup_logging
 from stockreport.fetch import fetch as fetch_market
+from stockreport.listener import listen
 from stockreport.pick import CSV_COLUMNS, pick, print_table
 from stockreport.render import html_to_pdf, render_html, text_summary
 from stockreport.render.testdata import test_report
@@ -27,7 +28,7 @@ def discount_rate(market: str) -> tuple[float, str]:
     return latest["y10"] / 100 + CONFIG["value"]["equity_premium"][market], latest["date"]
 
 
-def run(market: str) -> int:
+def run(market: str, use_ai: bool) -> int:
     started, today = time.monotonic(), date.today()
     failed = fetch_market(market, today)
     universe, info = build_cn(today)
@@ -56,6 +57,9 @@ def run(market: str) -> int:
     print_table(picks)
     print(f"\nWrote {(out / f'{market}_picks.csv').relative_to(ROOT)} and the snapshot "
           f"{(snap / f'{market}.csv.gz').relative_to(ROOT)}")
+    pdf, summary = report.build(today, use_ai)
+    print(f"Wrote {pdf.relative_to(ROOT)} ({pdf.stat().st_size // 1024} KB) and summary.txt "
+          f"({len(summary.encode('utf-8'))} bytes)")
     cleanup()
     print(f"Done in {time.monotonic() - started:.0f}s")
     return 0
@@ -98,20 +102,29 @@ def confirm(prompt: str, assume_yes: bool) -> bool:
         return False
 
 
-def send_test(assume_yes: bool) -> int:
-    today = date.today()
-    summary, pdf = build_test(today)
+def send(test: bool, assume_yes: bool) -> int:
+    """Send the TEST report, or the newest real report, after confirming."""
+    if test:
+        today = date.today()
+        (summary, pdf), what, title = build_test(today), "TEST", f"股票报告_测试_{today:%Y%m%d}.pdf"
+    else:
+        found = report.newest()
+        if not found:
+            print("No report yet: run `run --market cn` first.")
+            return 1
+        day, pdf, summary = found
+        what, title = f"the {day}", f"股票报告_{day.replace('-', '')}.pdf"
     if not wait_for_window():
         print("Still no reply window. Text the bot, then run this again.")
         return 1
     print("Reply window is open.")
-    if not confirm("Send 2 WeChat messages (TEST text summary + TEST PDF)? [y/N] ", assume_yes):
+    if not confirm(f"Send 2 WeChat messages ({what} text summary + PDF)? [y/N] ", assume_yes):
         print("Not sent.")
         return 1
     deliver.send_text(summary)
     print("1/2 text summary sent", flush=True)
     time.sleep(1)
-    deliver.send_file(pdf, title=f"股票报告_测试_{today:%Y%m%d}.pdf")
+    deliver.send_file(pdf, title=title)
     print("2/2 PDF sent. Check your phone: did both arrive, and does the PDF open?")
     return 0
 
@@ -122,18 +135,22 @@ def main(argv: list[str] | None = None) -> int:
     send = sub.add_parser("send", help="send the text summary + PDF to WeChat")
     send.add_argument("--test", action="store_true", help="send the TEST report (fake data)")
     send.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
+    sub.add_parser("listen", help="answer the WeChat keyword for ~55 s (launchd restarts it 10 s after it ends)")
     fetch = sub.add_parser("fetch", help="update the cached data for a market")
     fetch.add_argument("--market", choices=["cn", "us", "hk"], required=True)
-    run_p = sub.add_parser("run", help="fetch, value, score and pick (CN only so far)")
+    run_p = sub.add_parser("run", help="fetch, value, score, pick, write notes and the PDF (CN only so far)")
     run_p.add_argument("--market", choices=["cn", "us", "hk"], default="cn")
-    run_p.add_argument("--no-notes", action="store_true", help="skip DeepSeek notes (not built yet)")
+    run_p.add_argument("--no-notes", action="store_true", help="template notes instead of DeepSeek")
     clean = sub.add_parser("cleanup", help="apply the storage retention periods")
     clean.add_argument("--dry-run", action="store_true", help="only list what would be deleted")
     args = parser.parse_args(argv)
 
     if args.command == "run":
         setup_logging()
-        return run(args.market)
+        return run(args.market, not args.no_notes)
+    if args.command == "listen":
+        setup_logging(console=False)
+        return listen()
     if args.command == "cleanup":
         cleanup(dry_run=args.dry_run)
         return 0
@@ -144,11 +161,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Failed steps (cached data kept): {', '.join(failed)}", file=sys.stderr)
         return 1 if failed else 0
     if args.command == "send":
-        if not args.test:
-            print("Only `send --test` exists until Phase 3.")
-            return 2
         try:
-            return send_test(args.yes)
+            return send(args.test, args.yes)
         except deliver.DeliveryError as e:
             print(f"Delivery failed: {e}", file=sys.stderr)
             return 1

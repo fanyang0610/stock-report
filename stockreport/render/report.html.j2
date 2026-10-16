@@ -15,6 +15,12 @@
                  padding: 2mm 3mm; margin: 3mm 0; }
   .watermark { position: fixed; top: 45%; left: 0; right: 0; text-align: center; font-size: 72pt;
                color: rgba(212, 56, 13, 0.08); transform: rotate(-30deg); pointer-events: none; z-index: -1; }
+  .legend { background: #f7f8fa; border-left: 3px solid #c9cdd4; padding: 2mm 3mm; margin: 3mm 0 4mm;
+            color: #3c4149; font-size: 8.5pt; }
+  .legend p { margin: 0 0 1mm; }
+  .swaps { background: #fffbe6; border-left: 3px solid #d48806; padding: 2mm 3mm; margin: 2mm 0 1mm; font-size: 8.5pt; }
+  .swaps div { margin-top: 0.5mm; }
+  .warn { color: #d4380d; font-weight: 600; }
   section { margin-top: 5mm; }
   section.market { break-before: page; }
   table { width: 100%; border-collapse: collapse; }
@@ -33,6 +39,7 @@
   .up { color: #c41d1d; } .down { color: #237804; }
   .tag { display: inline-block; font-size: 8pt; padding: 0 1.5mm; border-radius: 2px; margin-left: 1mm; }
   .tag.low { background: #f2f3f5; color: #646a73; border: 1px solid #c9cdd4; }
+  .tag.flag { background: #fffbe6; color: #ad6800; border: 1px solid #ffe58f; }
   .tag.test { background: #fff2e8; color: #d4380d; border: 1px solid #ffbb96; }
   .label { color: #8f959e; }
   .bucket-title { font-size: 11pt; font-weight: 700; margin: 4mm 0 1mm; }
@@ -44,8 +51,18 @@
 
 <section class="overview">
   <h1>{{ r.title }}{% if r.test %} <span class="tag test">测试数据</span>{% endif %}</h1>
-  <div class="sub">{{ r.date }} · 美股 / 港股 / A股 · 每市场 买入 / 持有·不追高 / 卖出·回避 各 5 只</div>
+  <div class="sub">{{ r.date }} · {% for m in r.markets %}{{ m.name }}{% if not loop.last %} / {% endif %}{% endfor %}
+    · 每个市场 买入 / 持有·不追高 / 卖出·回避 各 5 只</div>
   {% if r.test %}<div class="test-banner">测试数据：本报告所有公司、价格和估值均为虚构，仅用于测试微信发送与手机打开效果。</div>{% endif %}
+  {% if not r.test %}
+  <div class="legend">
+    <p><b>怎么读：</b>公允价是同行业公司对相近盈利能力和增长所付的估值，给出低 / 中 / 高三档；空间 = 公允价中值 ÷ 现价 − 1。
+      买入：空间 ≥ 15% 且质量、趋势不差；持有·不追高：质量好、价格大致合理；卖出·回避：明显高估且基本面或趋势偏弱。</p>
+    <p><b>低信心：</b>两种估值视角（近期利润 vs 分析师预期）方向相反，或该档合格标的不足 5 只、由排名靠后的标的补足。</p>
+    <p><b>AI 点评：</b>由 DeepSeek 根据卡片上的数字和近 60 日公告标题撰写，不改变任何数字；被它标记为利润一次性/异常、
+      重大交易进行中、退市/ST 风险或数据可疑的标的，已换成同档下一名。</p>
+  </div>
+  {% endif %}
   <table class="overview">
     <thead><tr><th>市场</th><th>分档</th><th>代码</th><th>名称</th><th class="num">现价</th><th class="num">公允价(中)</th><th class="num">空间</th></tr></thead>
     <tbody>
@@ -65,7 +82,13 @@
 {% for m in r.markets %}
 <section class="market">
   <h2>{{ m.name }}{% if r.test %} <span class="tag test">测试数据</span>{% endif %}</h2>
-  <div class="sub">数据日期 {{ m.data_date }} · 计价 {{ m.currency }}</div>
+  <div class="sub">数据日期 {{ m.data_date }} · 计价 {{ m.currency }}{% if m.r %} · 折现率 r = {{ '%.1f' % (m.r * 100) }}%{% endif %}
+    {% if m.ai_notes is defined %} · AI 点评 {{ m.ai_notes }}/{{ m.picks | length }}{% endif %}</div>
+  {% if m.swaps %}
+  <div class="swaps"><b>AI 标记后替换（{{ m.swaps | length }}）</b>
+    {% for s in m.swaps %}<div>{{ s.out }} → {{ s.in }}　<span class="label">{{ s.flag }}：</span>{{ s.reason }}</div>{% endfor %}
+  </div>
+  {% endif %}
   {% for key, label in buckets %}
   <div class="bucket-title {{ key }}">{{ label }}</div>
   <table class="cards">
@@ -76,6 +99,7 @@
       <tr class="head">
         <td><span class="ticker">{{ p.ticker }}</span> {{ p.name }}
           {% if p.low_conviction %}<span class="tag low">低信心</span>{% endif %}
+          {% if p.flag %}<span class="tag flag">AI 标记：{{ p.flag }}</span>{% endif %}
           {% if r.test %}<span class="tag test">测试数据</span>{% endif %}</td>
         <td class="action {{ key }}">{{ p.action }}</td>
         <td class="num">{{ p.price | num }}<br><span class="sub">{{ p.price_date }}</span></td>
@@ -84,8 +108,8 @@
       </tr>
       <tr class="body">
         <td colspan="5">
-          <span class="label">驱动：</span>{{ p.drivers | join('；') }}　<span class="label">风险：</span>{{ p.risk }}<br>
-          <span class="label">AI 点评：</span>{{ p.note }}<br>
+          <span class="label">驱动：</span>{{ p.drivers | join('；') }}　<span class="label">短板：</span>{{ p.risk }}<br>
+          <span class="label">AI 点评：</span>{{ p.note }}{% if p.ai_risk %}　<span class="label">风险：</span>{{ p.ai_risk }}{% endif %}<br>
           <span class="label">复查条件：</span>{{ p.trigger }}
         </td>
       </tr>
@@ -99,6 +123,7 @@
 <footer>
   {% for m in r.markets %}{{ m.name }} 数据日期 {{ m.data_date }}{% if not loop.last %} · {% endif %}{% endfor %}<br>
   方法：{{ r.method }}<br>
+  {% if r.storage_warning %}<span class="warn">{{ r.storage_warning }}</span><br>{% endif %}
   本报告由程序根据公开数据自动生成，不构成投资建议。{% if r.test %}<b>（测试数据）</b>{% endif %}
 </footer>
 </body>

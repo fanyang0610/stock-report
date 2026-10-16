@@ -14,13 +14,13 @@ with open(ROOT / "config.toml", "rb") as f:
     CONFIG = tomllib.load(f)
 
 
-def setup_logging() -> None:
+def setup_logging(console: bool = True) -> None:
     LOGS.mkdir(exist_ok=True)
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s", "%H:%M:%S")
     root = logging.getLogger()
     root.setLevel(logging.INFO)
-    for handler in (logging.FileHandler(LOGS / f"{date.today().isoformat()}.log", encoding="utf-8"),
-                    logging.StreamHandler()):
+    handlers = [logging.FileHandler(LOGS / f"{date.today().isoformat()}.log", encoding="utf-8")]
+    for handler in handlers + ([logging.StreamHandler()] if console else []):
         handler.setFormatter(fmt)
         root.addHandler(handler)
     logging.getLogger("httpx").setLevel(logging.WARNING)

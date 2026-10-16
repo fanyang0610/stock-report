@@ -35,7 +35,7 @@ risk = 0.10
 [buckets]
 per_bucket = 5
 max_per_group = 2
-runners_up = 5
+runners_up = 10            # next-ranked names a flagged pick can be swapped for
 buy_min_upside = 0.15
 buy_min_momentum_z = -0.5
 hold_quality_top = 0.30
@@ -57,3 +57,11 @@ logs = 30
 
 [storage]
 warn_gb = 2.0
+
+[notes]                       # DeepSeek notes (PLAN.md Method section 8)
+base_url = "https://api.deepseek.com"
+model = "deepseek-flash"      # from GET /models on 2026-10-17 (deepseek-flash, deepseek-v4-pro)
+temperature = 0.2
+title_days = 60
+max_titles = 10
+workers = 4

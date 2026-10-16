@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Keyword listener (docs/PLAN.md Method section 9): each `listen` run polls the bot for ~55 s, and
+     launchd starts the next one 10 s after it ends (StartInterval counts from the exit). Install: see README. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.stockreport.listen</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/fanyang/Developer/stock-report/.venv/bin/python</string>
+    <string>-m</string>
+    <string>stockreport</string>
+    <string>listen</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/fanyang/Developer/stock-report</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>StartInterval</key>
+  <integer>10</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/fanyang/Developer/stock-report/logs/launchd-listen.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/fanyang/Developer/stock-report/logs/launchd-listen.log</string>
+</dict>
+</plist>

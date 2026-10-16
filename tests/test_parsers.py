@@ -65,3 +65,42 @@ def test_ttm_is_missing_without_last_years_same_period():
     results = pd.DataFrame({"code": ["A", "A"], "period": ["2026-06-30", "2025-12-31"],
                             "revenue": [60.0, 100.0], "np": [6.0, 10.0]})
     assert pd.isna(ttm(results).loc["A", "revenue_ttm"])
+
+
+def test_cninfo_titles_drop_routine_filings():
+    # Cut from the real 2026-10-17 CNINFO query for 301308 (14 announcements, newest first).
+    from stockreport.fetch.cninfo import parse_titles
+
+    payload = json.loads((SAMPLES / "cninfo_sample.json").read_text(encoding="utf-8"))
+    titles = parse_titles(payload, limit=10)
+    assert titles[0] == "2026-10-15 2026年前三季度业绩预告"  # times are converted to Beijing dates
+    assert not any("翌日披露报表" in t or "董事会会议召开日期" in t for t in titles)
+    assert len(titles) == len(set(titles)) <= 10
+    assert parse_titles(payload, limit=2) == titles[:2]
+
+
+def test_note_reply_is_validated():
+    from stockreport.notes import TooLong, parse_reply
+
+    ok = parse_reply('```json\n{"note": "估值低于同行。", "risk": "周期回落", "flag": "none", "reason": "无"}\n```')
+    assert ok == {"note": "估值低于同行。", "risk": "周期回落", "flag": "none", "reason": "无"}
+    with pytest.raises(ValueError):
+        parse_reply('{"note": "x", "risk": "y", "flag": "buy_more", "reason": ""}')
+    with pytest.raises(ValueError):
+        parse_reply('{"note": "", "risk": "y", "flag": "none", "reason": ""}')
+    with pytest.raises(ValueError):
+        parse_reply("not json")
+    long = '{"note": "%s", "risk": "风险", "flag": "one_off_gain", "reason": "r"}' % ("字" * 70)
+    with pytest.raises(TooLong):
+        parse_reply(long)
+    cut = parse_reply(long, enforce_length=False)
+    assert len(cut["note"]) == 60 and cut["note"].endswith("…") and cut["flag"] == "one_off_gain"
+
+
+def test_keyword_match():
+    from stockreport.listener import is_keyword
+
+    for text in ["股票报告", "股票简报。", " Stock Report! ", "stock  brief？", "股票报告～"]:
+        assert is_keyword(text), text
+    for text in ["股票报告呢", "请发股票报告", "stock", "hi", ""]:
+        assert not is_keyword(text), text

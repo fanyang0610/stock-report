@@ -61,11 +61,12 @@ def status() -> dict:
 
 
 def poll(timeout_ms: int = 30000) -> list[dict]:
-    """New messages from the recipient: [{id, text, receivedAt}]. Polling also refreshes the reply window."""
+    """New messages from the recipient: [{id, text, receivedAt}] (the id has the recipient id taken out).
+    Polling also refreshes the reply window."""
     _, recipient = _config()
     result = _bridge(["poll-messages", str(timeout_ms)], timeout=timeout_ms // 1000 + 30)
     return [
-        {k: m[k] for k in ("id", "text", "receivedAt")}
+        {"id": _scrub(m["id"], recipient), "text": m["text"], "receivedAt": m["receivedAt"]}
         for m in result.get("messages", [])
         if m.get("recipientId") == recipient
     ]

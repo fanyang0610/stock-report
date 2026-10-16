@@ -26,13 +26,20 @@ class Http:
         self._last = 0.0
 
     def get(self, url: str, params: dict | None = None, ok=(200,), tries: int = 4) -> httpx.Response:
+        return self.request("GET", url, params=params, ok=ok, tries=tries)
+
+    def post(self, url: str, data: dict, ok=(200,), tries: int = 4) -> httpx.Response:
+        return self.request("POST", url, data=data, ok=ok, tries=tries)
+
+    def request(self, method: str, url: str, params: dict | None = None, data: dict | None = None,
+                ok=(200,), tries: int = 4) -> httpx.Response:
         err = ""
         for attempt in range(1, tries + 1):
             wait = self.min_interval - (time.monotonic() - self._last)
             if wait > 0:
                 time.sleep(wait + random.uniform(0, 0.3 * self.min_interval))
             try:
-                resp = self.client.get(url, params=params)
+                resp = self.client.request(method, url, params=params, data=data)
                 if resp.status_code in ok:
                     return resp
                 if resp.status_code < 500 and resp.status_code != 429:
