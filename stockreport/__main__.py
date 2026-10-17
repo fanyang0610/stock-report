@@ -1,6 +1,7 @@
 """Command line: uv run python -m stockreport <command>."""
 
 import argparse
+import logging
 import sys
 import time
 from datetime import date
@@ -8,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from stockreport import deliver, report
+from stockreport import deliver, report, track
 from stockreport.cleanup import cleanup
 from stockreport.config import CONFIG, DATA, REPORTS, ROOT, setup_logging
 from stockreport.fetch import fetch as fetch_market
@@ -20,6 +21,7 @@ from stockreport.score import score
 from stockreport.universe import build_cn, build_hk, build_us
 from stockreport.value import value
 
+log = logging.getLogger("stockreport")
 
 def discount_rate(market: str) -> tuple[float, str]:
     """r = latest 10-year government yield + the market's equity premium."""
@@ -28,9 +30,10 @@ def discount_rate(market: str) -> tuple[float, str]:
     return latest["y10"] / 100 + CONFIG["value"]["equity_premium"][market], latest["date"]
 
 
-def run(market: str, use_ai: bool) -> int:
-    started, today = time.monotonic(), date.today()
+def build_market(market: str, today: date) -> None:
+    """Fetch (failed steps keep their cache), value, score and pick one market -> its picks CSV and snapshot."""
     failed = fetch_market(market, today)
+    report.save_failed(today, market, failed)
     universe, info = {"cn": build_cn, "us": build_us, "hk": build_hk}[market](today)
     r, rate_date = discount_rate(market)
     df = score(value(universe, r))
@@ -57,12 +60,23 @@ def run(market: str, use_ai: bool) -> int:
     print_table(picks)
     print(f"\nWrote {(out / f'{market}_picks.csv').relative_to(ROOT)} and the snapshot "
           f"{(snap / f'{market}.csv.gz').relative_to(ROOT)}")
+
+
+def run(markets: list[str], use_ai: bool) -> int:
+    """Build each market, then the report once; a market that fails keeps its newest earlier picks."""
+    started, today, crashed = time.monotonic(), date.today(), []
+    for market in markets:
+        try:
+            build_market(market, today)
+        except Exception:
+            log.exception("%s build failed; the report shows its newest earlier picks", market.upper())
+            crashed.append(market)
     pdf, summary = report.build(today, use_ai)
     print(f"Wrote {pdf.relative_to(ROOT)} ({pdf.stat().st_size // 1024} KB) and summary.txt "
           f"({len(summary.encode('utf-8'))} bytes)")
     cleanup()
-    print(f"Done in {time.monotonic() - started:.0f}s")
-    return 0
+    print(f"Done in {time.monotonic() - started:.0f}s" + (f"; failed: {', '.join(crashed)}" if crashed else ""))
+    return 1 if crashed else 0
 
 
 def build_test(today: date) -> tuple[str, Path]:
@@ -110,7 +124,7 @@ def send(test: bool, assume_yes: bool) -> int:
     else:
         found = report.newest()
         if not found:
-            print("No report yet: run `run --market cn` first.")
+            print("No report yet: run `run` first.")
             return 1
         day, pdf, summary = found
         what, title = f"the {day}", f"股票报告_{day.replace('-', '')}.pdf"
@@ -139,15 +153,18 @@ def main(argv: list[str] | None = None) -> int:
     fetch = sub.add_parser("fetch", help="update the cached data for a market")
     fetch.add_argument("--market", choices=["cn", "us", "hk"], required=True)
     run_p = sub.add_parser("run", help="fetch, value, score, pick, write notes and the PDF")
-    run_p.add_argument("--market", choices=["cn", "us", "hk"], default="cn")
+    run_p.add_argument("--market", choices=["cn", "us", "hk"], help="one market (default: all three)")
     run_p.add_argument("--no-notes", action="store_true", help="template notes instead of DeepSeek")
+    sub.add_parser("track", help="average return of past picks vs each market's index")
     clean = sub.add_parser("cleanup", help="apply the storage retention periods")
     clean.add_argument("--dry-run", action="store_true", help="only list what would be deleted")
     args = parser.parse_args(argv)
 
     if args.command == "run":
         setup_logging()
-        return run(args.market, not args.no_notes)
+        return run([args.market] if args.market else ["cn", "us", "hk"], not args.no_notes)
+    if args.command == "track":
+        return track.scorecard()
     if args.command == "listen":
         setup_logging(console=False)
         return listen()

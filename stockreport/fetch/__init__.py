@@ -143,6 +143,7 @@ def merge(path: Path, new: pd.DataFrame, key: list[str]) -> pd.DataFrame:
 
 
 def steps(market: str, today: date) -> list:
+    from stockreport.track import tracked
     if market == "cn":
         from stockreport.fetch import eastmoney, tdx
         return [("prices", lambda: tdx.update_prices(today)),
@@ -154,7 +155,7 @@ def steps(market: str, today: date) -> list:
     if market == "us":
         from stockreport.fetch import fred, nasdaq, sec, yahoo
         return [("listing", nasdaq.update_list),
-                ("prices", lambda: yahoo.update_prices(today, nasdaq.candidates())),
+                ("prices", lambda: yahoo.update_prices(today, tracked("us", today, nasdaq.candidates()))),
                 ("SEC fundamentals", lambda: sec.update_facts(today, nasdaq.candidates())),
                 ("Yahoo fundamentals for SEC gaps", lambda: yahoo.update_gaps(today, sec.gaps(nasdaq.candidates()))),
                 ("FX", lambda: yahoo.update_fx(set(pd.read_csv(yahoo.GAPS)["currency"].dropna()))),
@@ -164,7 +165,7 @@ def steps(market: str, today: date) -> list:
         from stockreport.fetch import eastmoney, hkgb, yahoo
         return [("company list", lambda: eastmoney.update_hk_list(today)),
                 ("fundamentals", lambda: eastmoney.update_hk_fundamentals(today)),
-                ("prices", lambda: yahoo.update_prices(today, eastmoney.hk_candidates(), "hk")),
+                ("prices", lambda: yahoo.update_prices(today, tracked("hk", today, eastmoney.hk_candidates()), "hk")),
                 ("consensus and reporting currency", lambda: yahoo.update_consensus(today, eastmoney.hk_candidates())),
                 ("FX", lambda: hk_fx(yahoo)),
                 ("US issuer ids", lambda: eastmoney.update_us_orgs(today)),

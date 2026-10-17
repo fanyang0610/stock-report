@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Daily build (docs/PLAN.md Method section 10): `run` for all three markets at 06:30 (the Mac's clock is
+     China Standard Time). It never polls the bot; the listener sends the report. A run missed while the Mac
+     sleeps starts when it wakes. Output goes to logs/<date>-daily.log (removed by cleanup). Install: see README. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.stockreport.daily</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>exec .venv/bin/python -u -m stockreport run &gt;&gt; "logs/$(date +%F)-daily.log" 2&gt;&amp;1</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/fanyang/Developer/stock-report</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>6</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/fanyang/Developer/stock-report/logs/launchd-daily.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/fanyang/Developer/stock-report/logs/launchd-daily.log</string>
+</dict>
+</plist>

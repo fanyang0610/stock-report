@@ -6,7 +6,7 @@
 - Phase 3 CN notes + report + keyword: done 2026-10-17 (DeepSeek notes in the CN PDF; texting 股票报告 returned the CN summary + PDF in ~4 s; listener cadence changed, see Method 9)
 - Phase 4 US: done 2026-10-17 (US picks reviewed; texting 股票报告 returned CN + US; US build from cache 24 s. Review fixes: foreign filers from Yahoo fundamentals instead of FMP, negative-book companies on the forward lens; see Method 4 and Data sources)
 - Phase 5 HK + full 45-stock report: done 2026-10-17 (HK picks reviewed; texting 股票报告 returned the full US + HK + CN report; HK build from cache 44 s; issuer dedupe by Eastmoney ORG_CODE. Review fix: financials valued on peer P/B and the forward lens, no justified P/B (insurers were at +200-316%), see Method 4; HK amounts undo Eastmoney's CNY conversion, see Data sources)
-- Phase 6 Daily schedule + tracking: not started
+- Phase 6 Daily schedule + tracking: code done 2026-10-17, waiting on the 06:30 builds of 2026-10-18 and 2026-10-19 (all three markets in 96 s from cache; the launchd job is installed and a test run exited cleanly in 86 s; `track` prints the scorecard, blank until the first week has passed; data/ + reports/ 42 MB)
 - Delivery format that works on the phone (PDF or image): PDF (A4, headless Chrome 155 with --no-pdf-header-footer, ~460 KB; opens in WeChat on the phone)
 
 ## Decisions
@@ -133,9 +133,14 @@ Each card shows:
 
 ### 10. Schedule and tracking
 - A launchd job runs `run` daily at 06:30 Beijing time: after the US close, and CN/HK use the previous close.
+  - Phase 6: `run` without `--market` builds CN, US and HK, then the report once (`launchd/com.stockreport.daily.plist`, output in logs/<date>-daily.log). It never polls the bot. `run --market X` builds one market and the report. The PDF and summary are written to temporary files and renamed, so the listener never sends a half-written report.
+  - Measured 2026-10-17: 96 s for all three markets from cache, with cached notes. Sundays (weekly fundamentals and consensus) take ~30 min. A run missed while the Mac sleeps starts when it wakes.
 - If a market's fetch fails, reuse its last good data and say so in the report.
+  - Phase 6: failed fetch steps keep their cache and are saved in reports/<date>/fetch_failed.json; the market header, the footer and the text summary say 今日部分数据获取失败（steps），沿用上次的缓存数据. A market whose build fails (or that wasn't run today) shows its newest earlier picks with that day's notes, marked 今日未能更新，沿用 <date> 的选股. The report never fails because of one market.
 - Every run appends its picks to data/picks.csv: date, market, bucket, ticker, price, fair value mid, composite score, conviction.
+  - Phase 6: the final picks after AI swaps and the issuer dedupe, plus name and price_date (the close the pick was priced at). A second run on the same day replaces that day's rows for the market; markets showing earlier picks are not logged again.
 - `track` reports the average return by market and bucket against each market's index (CSI 300, Hang Seng, S&P 500) at 1 week, 1 month and 3 months.
+  - Phase 6: return from the price_date close to the last close on or before 7, 30 and 91 days later (blank until then), plus to date; chained from close / prev_close like momentum, so dividends count; the indexes are price indexes. "vs index" = average of pick return minus index return over the same days (a sell worked if it is negative). Each stock counts once per bucket and price date (weekend runs repeat Friday's picks). US/HK prices of stocks picked in the last 101 days stay updated even if they leave the candidates; CN packages cover the whole market. Prices are kept 385 days, so the scorecard covers picks from about the last year.
 
 ### 11. Storage and cleanup (disk must not grow without limit)
 - Fetch only what changed:
@@ -152,6 +157,7 @@ Each card shows:
 - `cleanup` runs automatically at the end of every `run`. `cleanup --dry-run` lists what would be deleted and the space it would free.
 - After each run, log the total size of data/ + reports/. If it exceeds 2 GB, add a warning line to the report footer.
 - Cleanup only ever deletes inside this project's data/, reports/ and logs/ folders.
+- Phase 6 estimate (2026-10-17): price files ~33 MB (rolling 385 days), snapshots ~1 MB a day × 400 = ~400 MB, reports ~1.7 MB a day × 90 = ~150 MB, raw ~3 MB a day × 7 = ~20 MB; steady state ~0.6 GB of the 2 GB limit.
 
 ## Phases (done when)
 1. Foundation + delivery test: TEST text + PDF arrive on my phone, and I confirm the PDF opens.

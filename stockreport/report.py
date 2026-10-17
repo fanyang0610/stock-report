@@ -1,12 +1,14 @@
 """The report: each market's picks with notes and swaps -> reports/<date>/report.pdf and summary.txt
-(PLAN.md Method sections 7 and 9). Markets without a picks CSV for the day are left out."""
+(PLAN.md Method sections 7, 9 and 10). A market without a picks CSV for the day shows its newest
+earlier one, marked as such; the final picks of the day go to data/picks.csv for `track`."""
 
+import json
 from datetime import date
 from pathlib import Path
 
 import pandas as pd
 
-from stockreport import deliver
+from stockreport import deliver, track
 from stockreport.cleanup import size_of
 from stockreport.config import CONFIG, DATA, REPORTS
 from stockreport.fetch import eastmoney
@@ -49,17 +51,36 @@ def issuers() -> dict[str, pd.Series]:
     return {m: read(p) if p.exists() else pd.Series(dtype=str) for m, p in paths.items()}
 
 
+def save_failed(today: date, market: str, failed: list[str]) -> None:
+    """Remember a market's failed fetch steps for the day's report (an empty list clears them)."""
+    path = REPORTS / today.isoformat() / "fetch_failed.json"
+    state = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state | {market: failed}, ensure_ascii=False), encoding="utf-8")
+
+
+def latest_picks(market: str, today: date) -> Path | None:
+    """Today's picks CSV for the market, else the newest earlier one."""
+    found = [p for p in sorted(REPORTS.glob(f"????-??-??/{market}_picks.csv")) if p.parent.name <= today.isoformat()]
+    return found[-1] if found else None
+
+
 def build(today: date, use_ai: bool = True) -> tuple[Path, str]:
     """Write report.html/.pdf and summary.txt for the day; returns the PDF path and the summary."""
-    out, orgs, kept, done = REPORTS / today.isoformat(), issuers(), {}, {}
+    out, orgs, kept, done, logged = REPORTS / today.isoformat(), issuers(), {}, {}, {}
+    status = out / "fetch_failed.json"
+    failed = json.loads(status.read_text(encoding="utf-8")) if status.exists() else {}
     for code in PRIORITY:
-        path = out / f"{code}_picks.csv"
-        if not path.exists():
+        path = latest_picks(code, today)
+        if not path:
             continue
+        day = date.fromisoformat(path.parent.name)
         picks = pd.read_csv(path, dtype={"code": str, "price_date": str})
         org = picks["code"].map(orgs[code])
         taken = {c: f"同一发行人已在{kept[o]}入选" for c, o in zip(picks["code"], org) if o in kept}
-        final, swaps = annotate(picks, code, today, use_ai, taken)
+        final, swaps = annotate(picks, code, day, use_ai, taken)
+        if day == today:
+            logged[code] = final
         final_org = final["code"].map(orgs[code])
         kept |= {o: f" {MARKETS[code][0]}（{c} {n}）" for o, c, n in zip(final_org, final["code"], final["name"]) if pd.notna(o)}
         for s in swaps:
@@ -67,18 +88,24 @@ def build(today: date, use_ai: bool = True) -> tuple[Path, str]:
         done[code] = {"code": code.upper(), "name": MARKETS[code][0], "currency": MARKETS[code][1],
                       "r": final["r"].iloc[0], "data_date": final["price_date"].max(), "swaps": swaps,
                       "ai_notes": int((final["note_source"] != "template").sum()),
+                      "stale": (f"今日未能更新，沿用 {day} 的选股" if day != today else
+                                f"今日部分数据获取失败（{'、'.join(failed[code])}），沿用上次的缓存数据" if failed.get(code) else ""),
                       "picks": [card(p) for p in final.to_dict("records")]}
     markets = [done[code] for code in MARKETS if code in done]
     if not markets:
-        raise SystemExit(f"no picks CSV in {out}; run `run --market cn` first")
+        raise SystemExit(f"no picks CSV in {REPORTS}; run `run` first")
+    if logged:
+        track.log_picks(today, logged)
     size_gb = (size_of(DATA) + size_of(REPORTS)) / 1e9
     report = {"title": "股票报告", "date": today.isoformat(), "markets": markets, "method": METHOD,
               "storage_warning": (f"注意：data/ + reports/ 已占用 {size_gb:.1f} GB，超过 "
                                   f"{CONFIG['storage']['warn_gb']} GB 上限。")
               if size_gb > CONFIG["storage"]["warn_gb"] else ""}
-    pdf = html_to_pdf(render_html(report, out / "report.html"), out / "report.pdf")
+    out.mkdir(parents=True, exist_ok=True)
+    pdf = html_to_pdf(render_html(report, out / "report.html"), out / "report.tmp.pdf").replace(out / "report.pdf")
     summary = text_summary(report, deliver.MAX_TEXT_BYTES)
-    (out / "summary.txt").write_text(summary, encoding="utf-8")
+    (out / "summary.tmp").write_text(summary, encoding="utf-8")
+    (out / "summary.tmp").replace(out / "summary.txt")  # the listener may send the report at any moment
     return pdf, summary
 
 

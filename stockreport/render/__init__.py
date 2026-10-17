@@ -54,6 +54,8 @@ def text_summary(report: dict, limit: int = 4000) -> str:
         lines.append("以下为虚构数据，仅用于测试发送。")
     for m in report["markets"]:
         lines += ["", f"{m['name']}（数据 {m['data_date']}，{m['currency']}）"]
+        if m.get("stale"):
+            lines.append(f"注意：{m['stale']}")
         for key, label in BUCKETS:
             picks = [p for p in m["picks"] if p["bucket"] == key]
             if not picks:

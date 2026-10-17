@@ -84,6 +84,7 @@
   <h2>{{ m.name }}{% if r.test %} <span class="tag test">测试数据</span>{% endif %}</h2>
   <div class="sub">数据日期 {{ m.data_date }} · 计价 {{ m.currency }}{% if m.r %} · 折现率 r = {{ '%.1f' % (m.r * 100) }}%{% endif %}
     {% if m.ai_notes is defined %} · AI 点评 {{ m.ai_notes }}/{{ m.picks | length }}{% endif %}</div>
+  {% if m.stale %}<div class="warn">{{ m.stale }}</div>{% endif %}
   {% if m.swaps %}
   <div class="swaps"><b>替换（{{ m.swaps | length }}）</b>
     {% for s in m.swaps %}<div>{{ s.out }} → {{ s.in }}　<span class="label">{{ s.flag }}：</span>{{ s.reason }}</div>{% endfor %}
@@ -121,7 +122,7 @@
 {% endfor %}
 
 <footer>
-  {% for m in r.markets %}{{ m.name }} 数据日期 {{ m.data_date }}{% if not loop.last %} · {% endif %}{% endfor %}<br>
+  {% for m in r.markets %}{{ m.name }} 数据日期 {{ m.data_date }}{% if m.stale %}（<span class="warn">{{ m.stale }}</span>）{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}<br>
   方法：{{ r.method }}<br>
   {% if r.storage_warning %}<span class="warn">{{ r.storage_warning }}</span><br>{% endif %}
   本报告由程序根据公开数据自动生成，不构成投资建议。{% if r.test %}<b>（测试数据）</b>{% endif %}
