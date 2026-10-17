@@ -65,6 +65,7 @@ temperature = 0.0
 spike_growth = 1.0            # one_off_gain check 1: net profit growth above this ...
 spike_cash_conv = 0.5         # ... with operating cash flow / net profit below this (non-financials)
 eps_fall = 0.6                # check 2: next year's consensus EPS below this share of trailing EPS
+title_gap = 0.3               # check 3: profit growth minus revenue growth, needed before a one-off in the titles counts
 title_days = 60
 max_titles = 10
 workers = 4

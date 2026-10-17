@@ -94,12 +94,15 @@ Each card shows:
 - Use a low temperature and validate the JSON.
 - Any flag other than none swaps the pick for the next-ranked candidate; log the swap. Numbers are never changed.
   - Phase 3: the model is deepseek-flash (GET /models, 2026-10-17), with thinking off, JSON output and temperature 0.
-  - one_off_gain rules (Phase 3 fix). The first version flagged 8 names inconsistently: it flagged 江波龙 but not 中际旭创, and it flagged 中国人寿 for investment income. Code now computes two checks for buy/hold candidates and gives DeepSeek the yes/no answers; a "yes" must be flagged. Thresholds are in config `[notes]`.
+  - one_off_gain rules (Phase 3 fix). The first version flagged 8 names inconsistently: it flagged 江波龙 but not 中际旭创, and it flagged 中国人寿 for investment income. Prompt rules alone stayed flaky, so code computes three checks for buy/hold candidates, shows them to DeepSeek and enforces them. Thresholds are in config `[notes]`.
     - Check 1: profit growth > 100% and operating cash flow / net profit < 0.5. Not used for banks, brokers and insurers, whose investment and trading income is core business.
     - Check 2: at least 3 analysts and next year's consensus EPS < 60% of trailing EPS.
-    - Otherwise one_off_gain needs a specific one-off item in the titles: an asset or stake sale, investment or fair-value gains, a licence upfront payment or a subsidy.
+    - Checks 1 and 2 always set one_off_gain, in code, even if DeepSeek says none.
+    - Check 3: profit growth at least 30 points above revenue growth. Only then can a one-off item in the titles (an asset or stake sale, investment or fair-value gains, a licence upfront payment, a subsidy) flag a stock.
+    - Title-based flags (one_off_gain via check 3, and pending_deal) must quote a title we sent in the reply's `evidence` field; code clears them otherwise.
     - The sell bucket never uses one_off_gain, enforced in code: a one-off gain only adds to overvaluation.
-    - Measured on 45 CN candidates, 3 fresh runs: every candidate got the same flag in all runs, and every one_off_gain matched a check. Today's CN report swaps 4 picks: 江波龙 and 德明利 (check 1), 荣昌生物 and 三生国健 (check 2). 天齐锂业 is not flagged: cash conversion 0.51, and analysts expect EPS at 1.76× trailing.
+    - Measured on 45 CN candidates, 3 fresh runs: every candidate got the same flag in all runs. Today's CN report swaps 4 picks: 江波龙 and 德明利 (check 1), 荣昌生物 and 三生国健 (check 2). 天齐锂业 is not flagged: cash conversion 0.51, and analysts expect EPS at 1.76× trailing.
+  - Note length: 60 / 30 Chinese characters, with digits, letters and ASCII symbols counted as half. A reply that is still too long after one request to shorten is cut at the last clause break, never mid-phrase (no notes cut in 135 test notes).
   - The bench is 10 runners-up per bucket (config `runners_up`), so a flagged pick always has a next-ranked name. If the bench runs out, the flagged pick stays, marked 低信心.
   - The report and the text summary list every swapped-out name.
 - Cache notes per day and ticker. If the API fails, use template text and still ship the report. Expect up to about 60 calls per daily run.
