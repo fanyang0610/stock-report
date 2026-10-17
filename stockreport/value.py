@@ -3,7 +3,8 @@ cross-check (PLAN.md Method sections 2 and 4). Multiples are fitted in logs, so 
 
 - Trailing lens: today's book and earnings power (P/B on ROE and growth; P/S for loss-makers;
   financials blend a peer P/B with the justified P/B).
-- Forward lens: what peers pay for expected growth, on analyst consensus EPS (no target prices)."""
+- Forward lens: what peers pay for expected growth, on analyst consensus EPS (no target prices).
+  It values a stock alone when the trailing lens can't (negative book value)."""
 
 import numpy as np
 import pandas as pd
@@ -120,6 +121,11 @@ def value(df: pd.DataFrame, r: float) -> pd.DataFrame:
     df["fv_mid"] = t.where(~both, (1 - w) * t + w * f)
     df["fv_low"] = t_lo.where(~both, np.minimum(blend_lo, np.minimum(t, f)))  # range covers both lenses
     df["fv_high"] = t_hi.where(~both, np.maximum(blend_hi, np.maximum(t, f)))
+    alone = t.isna() & f.notna()  # no trailing lens, e.g. negative book value: the forward lens alone
+    df.loc[alone, ["fv_mid", "fv_low", "fv_high"]] = np.column_stack(
+        [f[alone], f[alone] * fwd.loc[alone, "band_lo"], f[alone] * fwd.loc[alone, "band_hi"]])
+    df.loc[alone, ["method", "fit_group", "fit_n"]] = np.column_stack(
+        [np.full(alone.sum(), "fwd P/E"), fwd.loc[alone, "fit_group"], fwd.loc[alone, "fit_n"]])
     df["upside"] = df["fv_mid"] / df["price"] - 1
     df["lenses_agree"] = ~(both & disagree(t, f, df["price"], gap))
 

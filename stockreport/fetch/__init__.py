@@ -4,11 +4,14 @@ import gzip
 import json
 import logging
 import random
+import threading
 import time
-from datetime import date
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date, timedelta
 from pathlib import Path
 
 import httpx
+import pandas as pd
 
 from stockreport.config import CONFIG, DATA
 
@@ -20,8 +23,8 @@ UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
 class Http:
     """Serial requests with a minimum gap between calls, retried with backoff."""
 
-    def __init__(self, min_interval: float = 1.0, timeout: float = 30.0):
-        self.client = httpx.Client(headers={"User-Agent": UA}, timeout=timeout)
+    def __init__(self, min_interval: float = 1.0, timeout: float = 30.0, headers: dict | None = None):
+        self.client = httpx.Client(headers={"User-Agent": UA} | (headers or {}), timeout=timeout)
         self.min_interval = min_interval
         self._last = 0.0
 
@@ -54,6 +57,23 @@ class Http:
         raise RuntimeError(f"giving up on {url}: {err}")
 
 
+def each(make_http, fn, items: list, workers: int):
+    """fn(http, item) for every item on `workers` threads, one Http client per thread, in order.
+    An item that fails yields None (logged), so one bad stock never stops a fetch."""
+    local = threading.local()
+
+    def run(item):
+        if not hasattr(local, "http"):
+            local.http = make_http()
+        try:
+            return fn(local.http, item)
+        except Exception as e:
+            log.warning("%s: %s", item, e)
+            return None
+    with ThreadPoolExecutor(workers) as pool:
+        yield from pool.map(run, items)
+
+
 def save_raw(name: str, payload) -> None:
     """Keep a raw response under data/raw/<date>/ (deleted by cleanup after a few days)."""
     folder = DATA / "raw" / date.today().isoformat()
@@ -73,21 +93,58 @@ def needs_refresh(path: Path, today: date, open_period: bool = False) -> bool:
             or (today - fetched).days >= CONFIG["fetch"]["fundamentals_refresh_days"])
 
 
+def stale(path: Path, codes: list[str], today: date, days: int | None = None) -> list[str]:
+    """Codes missing from a per-stock table (column `fetched`) or fetched more than `days` ago."""
+    days = days or CONFIG["fetch"]["fundamentals_refresh_days"]
+    if not path.exists():
+        return list(codes)
+    fetched = pd.read_csv(path, usecols=["code", "fetched"], dtype=str).set_index("code")["fetched"]
+    cutoff = (today - timedelta(days=days)).isoformat()
+    return [c for c in codes if fetched.get(c, "") <= cutoff]
+
+
+def write(df: pd.DataFrame, path: Path) -> None:
+    """Gzipped CSV, written atomically."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    df.to_csv(tmp, index=False, compression="gzip")
+    tmp.replace(path)
+
+
+def merge(path: Path, new: pd.DataFrame, key: list[str]) -> pd.DataFrame:
+    """Upsert rows into a gzipped CSV table."""
+    old = pd.read_csv(path, dtype={"code": str}) if path.exists() else new.iloc[:0]
+    df = pd.concat([old, new]).drop_duplicates(key, keep="last") if len(new) else old
+    write(df, path)
+    return df
+
+
+def steps(market: str, today: date) -> list:
+    if market == "cn":
+        from stockreport.fetch import eastmoney, tdx
+        return [("prices", lambda: tdx.update_prices(today)),
+                ("quotes", lambda: eastmoney.update_quotes()),
+                ("fundamentals", lambda: eastmoney.update_fundamentals(today)),
+                ("dividends", lambda: eastmoney.update_dividends(today)),
+                ("consensus", lambda: eastmoney.update_consensus(today)),
+                ("10y yield", lambda: eastmoney.update_yield())]
+    if market == "us":
+        from stockreport.fetch import fred, nasdaq, sec, yahoo
+        return [("listing", nasdaq.update_list),
+                ("prices", lambda: yahoo.update_prices(today, nasdaq.candidates())),
+                ("SEC fundamentals", lambda: sec.update_facts(today, nasdaq.candidates())),
+                ("Yahoo fundamentals for SEC gaps", lambda: yahoo.update_gaps(today, sec.gaps(nasdaq.candidates()))),
+                ("FX", lambda: yahoo.update_fx(set(pd.read_csv(yahoo.GAPS)["currency"].dropna()))),
+                ("consensus", lambda: nasdaq.update_consensus(today, nasdaq.candidates())),
+                ("10y yield", fred.update_yield)]
+    raise SystemExit(f"market {market!r} is not built yet")
+
+
 def fetch(market: str, today: date | None = None) -> list[str]:
     """Update all cached data for a market. Returns the steps that failed (cache is kept for those)."""
-    from stockreport.fetch import eastmoney, tdx
-
     today = today or date.today()
-    if market != "cn":
-        raise SystemExit(f"market {market!r} is not built yet (Phase 2 covers cn only)")
-    steps = [("prices", lambda: tdx.update_prices(today)),
-             ("quotes", lambda: eastmoney.update_quotes()),
-             ("fundamentals", lambda: eastmoney.update_fundamentals(today)),
-             ("dividends", lambda: eastmoney.update_dividends(today)),
-             ("consensus", lambda: eastmoney.update_consensus(today)),
-             ("10y yield", lambda: eastmoney.update_yield())]
     failed = []
-    for name, step in steps:
+    for name, step in steps(market, today):
         try:
             step()
         except Exception as e:  # keep going: the last good cache is used for this step

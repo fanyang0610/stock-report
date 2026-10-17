@@ -12,9 +12,12 @@ import pandas as pd
 from dotenv import dotenv_values
 
 from stockreport.config import CONFIG, REPORTS, ROOT
-from stockreport.fetch import cninfo
+from stockreport.fetch import cninfo, sec
 
 log = logging.getLogger(__name__)
+# Announcement titles per market: org_ids() -> {code: id}, titles(code, id, today, days, limit)
+TITLE_SOURCES = {"cn": cninfo, "us": sec}
+UNITS = {"cn": "亿元", "us": "亿美元", "hk": "亿港元"}  # revenue and profit in the quote currency
 FLAGS = ("none", "one_off_gain", "pending_deal", "delisting_or_st", "data_suspect")
 FLAG_WORDS = {"one_off_gain": "利润一次性/异常", "pending_deal": "重大交易进行中",
               "delisting_or_st": "退市/ST 风险", "data_suspect": "数据可疑"}
@@ -74,7 +77,7 @@ def checks(row: pd.Series) -> list[str]:
     return [first, second, third]
 
 
-def card_numbers(row: pd.Series) -> str:
+def card_numbers(row: pd.Series, unit: str = "亿元") -> str:
     """The numbers DeepSeek sees: the card plus the metrics behind it."""
     num = lambda x, d=2: "无" if pd.isna(x) else f"{x:,.{d}f}"
     financial = row["method"] == "P/B+justified"  # margins, cash flow and leverage mean little for banks/brokers/insurers
@@ -85,8 +88,8 @@ def card_numbers(row: pd.Series) -> str:
         f"{num(row['fv_mid'])} / {num(row['fv_high'])}；空间 {pct(row['upside'])}",
         f"估值方法：{row['method']}；按近期利润/净资产的公允价 {num(row['fv_trailing'])}；"
         f"按分析师一致预期 EPS 的公允价 {num(row['fv_forward'])}（覆盖分析师 {num(row['analysts'], 0)} 家）",
-        f"最新报告期 {row['period']}；近 12 个月营收 {num(row['revenue_ttm'] / 1e8)} 亿元，"
-        f"净利润 {num(row['np_ttm'] / 1e8)} 亿元",
+        f"最新报告期 {row['period']}；近 12 个月营收 {num(row['revenue_ttm'] / 1e8)} {unit}，"
+        f"净利润 {num(row['np_ttm'] / 1e8)} {unit}",
         f"营收同比 {pct(row['rev_growth'])}；净利润同比 {pct(row['np_growth'])}；ROE {pct(row['roe'])}"
         + ("" if financial else f"；毛利率 {pct(row['gross_margin'])}"),
         ("" if financial else f"经营现金流/净利润 {num(row['cash_conv'])}；资产负债率 {pct(row['debt_ratio'])}；")
@@ -186,7 +189,7 @@ class Notes:
     With use_ai off, every pick gets the template note and that file is neither read nor written."""
 
     def __init__(self, market: str, today: date, use_ai: bool):
-        self.today = today
+        self.today, self.unit, self.source = today, UNITS[market], TITLE_SOURCES.get(market)
         self.path = REPORTS / today.isoformat() / f"{market}_notes.json"
         self.cache, self.client, self.org_ids = {}, None, {}
         if not use_ai:
@@ -200,25 +203,25 @@ class Notes:
         else:
             log.warning("DEEPSEEK_API_KEY is missing from .env; using template notes")
         try:
-            self.org_ids = cninfo.org_ids() if market == "cn" and key else {}
+            self.org_ids = self.source.org_ids() if self.source and key else {}
         except Exception as e:
-            log.warning("CNINFO stock list failed (%s); notes get no announcement titles", e)
+            log.warning("%s stock list failed (%s); notes get no announcement titles", market, e)
 
     def titles(self, code: str) -> list[str]:
         if code not in self.org_ids:
             return []
         cfg = CONFIG["notes"]
         try:
-            return cninfo.titles(code, self.org_ids[code], self.today, cfg["title_days"], cfg["max_titles"])
+            return self.source.titles(code, self.org_ids[code], self.today, cfg["title_days"], cfg["max_titles"])
         except Exception as e:
-            log.warning("CNINFO titles for %s failed: %s", code, e)
+            log.warning("titles for %s failed: %s", code, e)
             return []
 
     def fetch(self, row: pd.Series, titles: list[str]) -> dict:
         """Ask DeepSeek; touches no shared state, so it can run in worker threads."""
         if not self.client:
             return template_note(row)
-        content = card_numbers(row) + "\n近 60 日公告标题：\n" + ("\n".join(titles) or "（无）")
+        content = card_numbers(row, self.unit) + "\n近 60 日公告标题：\n" + ("\n".join(titles) or "（无）")
         try:
             note = ask(self.client, content) | {"source": CONFIG["notes"]["model"], "titles": titles}
         except RuntimeError as e:

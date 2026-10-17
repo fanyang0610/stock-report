@@ -105,3 +105,14 @@ def test_fair_value_blends_both_lenses_and_its_range_covers_them():
     lo = df.loc[both, ["fv_trailing", "fv_forward"]].min(axis=1)
     hi = df.loc[both, ["fv_trailing", "fv_forward"]].max(axis=1)
     assert (df.loc[both, "fv_low"] <= lo + 1e-9).all() and (df.loc[both, "fv_high"] >= hi - 1e-9).all()
+
+
+def test_negative_book_is_valued_on_the_forward_lens_alone():
+    df = load_sample()
+    code = df[~df["financial"] & (df["np_ttm"] > 0) & (df["analysts"] >= 3) & (df["eps_e2"] > 0)
+              & df["fwd_growth"].notna()].index[0]
+    df.loc[code, ["bps", "pb", "roe"]] = [-5.0, np.nan, np.nan]  # buybacks took book value below zero
+    row = value(df, R).loc[code]
+    assert np.isnan(row["fv_trailing"]) and row["method"] == "fwd P/E"
+    assert row["fv_mid"] == pytest.approx(row["fv_forward"])
+    assert row["fv_low"] < row["fv_mid"] < row["fv_high"]

@@ -5,6 +5,7 @@ top_n = 800
 min_listing_days = 365
 history_days = 385            # calendar days of daily prices kept (12-1 momentum needs ~252 trading days)
 exclude_name_patterns = ["ST", "退"]
+us_candidates = 1100          # US: largest ordinary shares whose prices and fundamentals are kept (top_n after filters)
 
 [universe.min_turnover]       # 20-day average daily turnover, quote currency
 cn = 50_000_000
@@ -14,6 +15,10 @@ us = 10_000_000
 [peers]
 min_group_size = 8
 financial_industries = ["银行", "证券", "保险"]   # substring match on the industry name
+# US: exact Nasdaq industries. "Specialty Insurers" is left out: in the US universe it holds the insurance
+# brokers (Marsh, Aon, Gallagher, WTW, Brown & Brown), fee businesses valued like other companies.
+financial_industries_us = ["Major Banks", "Commercial Banks", "Savings Institutions", "Investment Bankers/Brokers/Service",
+                           "Property-Casualty Insurers", "Life Insurance", "Accident &Health Insurance"]
 
 [value]
 equity_premium = { cn = 0.06, hk = 0.06, us = 0.05 }

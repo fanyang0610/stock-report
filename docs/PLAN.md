@@ -4,7 +4,7 @@
 - Phase 1 Foundation + delivery test: done 2026-10-17 (TEST text + PDF arrived on the phone, PDF opens)
 - Phase 2 CN data + valuation: done 2026-10-17 (CN picks reviewed; data sources and the valuation method were changed in the review, see Method 4 and Data sources)
 - Phase 3 CN notes + report + keyword: done 2026-10-17 (DeepSeek notes in the CN PDF; texting 股票报告 returned the CN summary + PDF in ~4 s; listener cadence changed, see Method 9)
-- Phase 4 US: not started
+- Phase 4 US: done 2026-10-17 (US picks reviewed; texting 股票报告 returned CN + US; US build from cache 24 s. Review fixes: foreign filers from Yahoo fundamentals instead of FMP, negative-book companies on the forward lens; see Method 4 and Data sources)
 - Phase 5 HK + full 45-stock report: not started
 - Phase 6 Daily schedule + tracking: not started
 - Delivery format that works on the phone (PDF or image): PDF (A4, headless Chrome 155 with --no-pdf-header-footer, ~460 KB; opens in WeChat on the phone)
@@ -28,11 +28,13 @@
 - Exclude:
   - CN: ST/*ST, delisting-period and suspended stocks, and stocks listed under 1 year.
   - HK/US: non-ordinary securities (ETFs, funds, warrants, preferreds, SPACs, OTC) and stocks listed under 1 year.
+  - US (Phase 4): preferreds, notes, units and fractional depositary shares are dropped by listing name (ADRs, MLP common units and names that say ordinary/common shares stay); only the most traded share class per issuer (SEC CIK) is kept, e.g. GOOGL not GOOG.
 - Liquidity: 20-day average daily turnover of at least ¥50m (CN), HK$20m (HK) or US$10m (US). These are config values.
 - Keep the top 800 by total market value.
 
 ### 2. Peer groups
 Use the industry from the data source (the Eastmoney industry field in v1). Merge groups with fewer than 8 members into the nearest broader group, or compare them market-wide.
+- US (Phase 4): the Nasdaq screener industry; a non-financial industry with fewer than 8 members in the universe becomes "<Nasdaq sector> (other)". Banks, brokers and insurers are an exact list of Nasdaq industries (config `financial_industries_us`). "Specialty Insurers" is left out: in the US universe it holds the insurance brokers (Marsh, Aon, Gallagher, WTW, Brown & Brown), which the insurer method valued on goodwill-heavy books (Gallagher at -67%).
 
 ### 3. Metrics
 Use the latest data, trailing 12 months where possible:
@@ -48,6 +50,7 @@ Winsorize each metric at the 2nd and 98th percentile within the market.
 - Banks, insurers and brokers: justified P/B = (ROE − g) / (r − g). Blend it 50/50 with the P/B the peer group pays for that ROE (a cross-sectional fit of P/B on ROE).
 - Other profitable companies: the P/B the peer group pays for similar ROE and growth (a fit of log P/B on ROE and growth within the group). Changed from P/E in the Phase 2 review: in A-shares the P/E fit gets a negative ROE coefficient in every group (low ROE usually means depressed earnings and a high P/E), which made cheap low-ROE stocks look undervalued.
 - Loss-making companies: P/S fitted on gross margin and growth. If no fit is possible, the stock has no fair value and is excluded.
+- Negative book value (added in the Phase 4 review): P/B means nothing, so a profitable company with negative equity (mostly US buyback stocks: ABBV, MCD, BKNG, HLT, LOW, PM...) is valued on the forward lens alone, at normal conviction, and has no ROE (quality comes from margin, cash conversion and leverage). Without 3 analysts it has no fair value. Before, these were dropped: 35 of the US top 800. No CN stock is affected today.
 - Forward lens (added in the Phase 2 review, because trailing numbers make one-off profit spikes look cheap and early fast growth look expensive): for non-financials with at least 3 analysts, also fit log forward P/E (price ÷ next year's consensus EPS) on expected EPS growth (2-year consensus CAGR) within the peer group. Fair value mid = 50/50 trailing and forward value (trailing only when there is no forward lens); the range always covers both. If the two lenses point opposite ways versus the price and differ by more than 50%, mark 低信心. Consensus EPS only; analysts' target prices and ratings are never used.
 - Fair value mid = fitted multiple × the company's own metric.
 - Fair value low/high = from the 25th/75th percentile of the group's fit residuals.
@@ -86,6 +89,7 @@ Each card shows:
 ### 8. AI notes (DeepSeek)
 - Use the OpenAI-compatible API with base URL https://api.deepseek.com. Check their docs for the current chat model name. The key is DEEPSEEK_API_KEY in .env.
 - Input per pick: the card's numbers plus up to 10 announcement/news titles from the last 60 days (CN: CNINFO; US: SEC filing list; HK: HKEXnews).
+  - US (Phase 4): the SEC list has no headlines, only form types and 8-K item numbers, so a title is "date form: description" (e.g. "8-K: Results of operations", "DEFM14A: Merger proxy"). Routine forms (insider trades, 13G, prospectuses) are skipped, and so are the bare 8-K labels 7.01 "Reg FD disclosure" and 8.01 "Other events": DeepSeek cited "Other events" as one-off-gain evidence for Incyte. Revenue and profit are shown to DeepSeek in 亿美元.
 - Output JSON:
   - note: at most 60 Chinese characters
   - risk: at most 30 characters
@@ -161,13 +165,16 @@ Each card shows:
   - Announcements: CNINFO.
   - Backup: the Tushare token in .env.
   - The a-stock-data skill documents many CN endpoints.
-- US:
-  - Universe: the same Eastmoney list (fs = m:105,m:106,m:107) or the Nasdaq screener.
-  - Trailing-12-month fundamentals: SEC companyfacts per company from data.sec.gov, at most 10 requests per second, with User-Agent = SEC_USER_AGENT from .env. These files are large, so extract the fields and delete the raw files in the same run; refresh weekly.
-  - Gaps (e.g. foreign filers): the free FMP key (FMP_API_KEY, about 250 calls per day).
-  - Price history: the Yahoo chart API.
+- US (verified in Phase 4, 2026-10-17):
+  - Universe: the Nasdaq screener, api.nasdaq.com/api/screener/stocks?tableonly=true&download=true (every NASDAQ/NYSE/AMEX listing in one call: price, market value, sector, industry). Its market value is company-wide on every share class and ADR, so shares = market value / price; its price can lag Yahoo by a day, so market value is rescaled to Yahoo's close and a stock whose screener price matches none of Yahoo's last 3 closes within 1% is dropped. The Eastmoney list (push2 clist) is blocked, as for CN. The 1,100 largest ordinary shares are kept up to date (config `us_candidates`).
+  - Trailing-12-month fundamentals: SEC companyfacts (data.sec.gov/api/xbrl/companyfacts), 4 at a time, at most ~8 requests/s, User-Agent = SEC_USER_AGENT from .env; refreshed weekly per company (~5 min for 1,100). Files are 1-8 MB: they are parsed in memory and never written to disk. TTM = year-to-date + last fiscal year - same YTD a year earlier (the CN formula); growth = TTM vs the TTM a year earlier. Concepts are merged per period in a preference order because companies switch tags between filings; banks without a revenue total get net interest income + noninterest income.
+  - Gaps (changed in the Phase 4 review): Yahoo fundamentals-timeseries (ws/fundamentals-timeseries/v1/finance/timeseries), one call per company, weekly, for companies SEC can't cover: no recent us-gaap 10-Q/10-K (foreign filers), no CIK, or a missing field (e.g. MLPs report partners' capital). It gives TTM revenue / profit / gross profit / operating cash flow and the balance sheet in the reporting currency; growth is TTM vs the TTM a year earlier, else the fiscal year a year earlier, else the same quarter a year earlier, else the last two fiscal years (semiannual reporters). 259 of 262 gap companies covered on 2026-10-17 (~80 s); 796 of the top 800 have complete data.
+  - Not used: FMP's free key. It served 7 of 184 gap companies (402 "premium" for ASML, NVO, SAP, AZN, SHEL, HSBC, TM, RY...) and stops at ~250 calls a day, which dropped 168 of the top 800.
+  - Analyst consensus EPS (added in Phase 4, for the forward lens and check 2): Nasdaq api/analyst/<symbol>/earnings-forecast, the first three fiscal years not yet reported; analysts = estimates behind next year's EPS. 2-4 s per call, so 4 at a time, weekly (~13 min for 1,100).
+  - Price history and dividends: the Yahoo chart API (v8/finance/chart), one call per stock, incremental. It answers 429 to a full browser User-Agent but works with "Mozilla/5.0". Returns come from the adjusted close inside each response (splits and dividends included), stored as close + implied prev_close like the CN table. Trading calendar: ^GSPC (stored as SPX).
   - 10-year yield: FRED DGS10 (FRED_API_KEY).
-  - Headlines: the SEC filing list.
+  - FX for gap companies reporting in another currency: Yahoo "<CUR>=X" (21 currencies on 2026-10-17; ECB rates via frankfurter have no TWD, CLP, COP, PEN or KZT).
+  - Headlines: the SEC filing list (data.sec.gov/submissions), see Method 8.
 - HK:
   - Universe and quotes: the Eastmoney list (fs = m:128+t:3,m:128+t:4,m:128+t:1).
   - Fundamentals: Eastmoney HK financial indicators per stock, for the screened names only (AKShare has wrappers).

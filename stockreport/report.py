@@ -14,7 +14,7 @@ from stockreport.render import html_to_pdf, render_html, text_summary
 
 MARKETS = [("us", "美股 US", "USD"), ("hk", "港股 HK", "HKD"), ("cn", "A股 CN", "CNY")]  # PDF order
 METHOD = ("各市场取市值前 800（剔除 ST、上市不满 1 年和成交过少的股票），在行业同业组内估值：盈利公司看同业为同等 "
-          "ROE 和增长支付的 P/B，并与按分析师一致预期 EPS 的远期 P/E 各占一半；亏损公司用 P/S；银行、券商、保险用"
+          "ROE 和增长支付的 P/B，并与按分析师一致预期 EPS 的远期 P/E 各占一半；净资产为负时只用远期 P/E；亏损公司用 P/S；银行、券商、保险用"
           "同业 P/B 与合理 P/B 各半。再按价值、质量、成长、动量、风险综合打分，每档取 5 只。")
 
 

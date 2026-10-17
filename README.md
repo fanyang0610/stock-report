@@ -10,13 +10,14 @@ Rules for coding agents: [AGENTS.md](AGENTS.md).
 - The `cli-wechat-bridge` npm package installed globally at `~/.npm-global/lib/node_modules/`
   and logged in to the bot (`wechat-setup`).
 - `.env` in the project root (never committed) with at least `EQUITYSIGNALS_WECHAT_RECIPIENT_ID`;
-  later phases also use `DEEPSEEK_API_KEY`, `FRED_API_KEY`, `FMP_API_KEY`, `SEC_USER_AGENT`, `TUSHARE_TOKEN`.
+  later phases also use `DEEPSEEK_API_KEY`, `FRED_API_KEY`, `SEC_USER_AGENT` (name + contact email, required by SEC), `TUSHARE_TOKEN`.
 - `uv sync`
 
 ## Commands
 ```
 uv run python -m stockreport fetch --market cn   # update data/ (first run backfills ~13 months of prices, ~40 min)
 uv run python -m stockreport run --market cn     # fetch, value, pick, DeepSeek notes -> reports/<date>/report.pdf + summary.txt
+uv run python -m stockreport run --market us     # same for US (first fetch: ~6 min prices, ~5 min SEC, ~13 min consensus)
 uv run python -m stockreport run --no-notes      # same with template notes (no DeepSeek calls)
 uv run python -m stockreport send                # send the newest report's text + PDF (asks first); --test sends fake data
 uv run python -m stockreport listen              # answer the keyword for ~55 s (launchd restarts it 10 s after it ends)
