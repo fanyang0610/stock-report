@@ -2,9 +2,10 @@
 cross-check (PLAN.md Method sections 2 and 4). Multiples are fitted in logs, so residuals are relative.
 
 - Trailing lens: today's book and earnings power (P/B on ROE and growth; P/S for loss-makers;
-  financials blend a peer P/B with the justified P/B).
-- Forward lens: what peers pay for expected growth, on analyst consensus EPS (no target prices).
-  It values a stock alone when the trailing lens can't (negative book value)."""
+  P/B on ROE for banks, insurers and brokers).
+- Forward lens: what peers pay for expected growth, on analyst consensus EPS (no target prices), for
+  financials too: it tempers a one-year ROE spike such as insurers' investment gains. It values a
+  stock alone when the trailing lens can't (negative book value)."""
 
 import numpy as np
 import pandas as pd
@@ -41,10 +42,6 @@ def residual_income(bps, roe, r, retention, years: int):
     return value
 
 
-def justified_pb(roe, g, r):
-    return (np.asarray(roe) - g) / (r - g)
-
-
 def disagree(a: pd.Series, b: pd.Series, price: pd.Series, max_gap: float) -> pd.Series:
     """Two values that point opposite ways versus the price and are more than max_gap apart."""
     return (np.sign(a / price - 1) != np.sign(b / price - 1)) & ((a / b - 1).abs() > max_gap)
@@ -77,8 +74,11 @@ def fit_lens(df: pd.DataFrame, multiple: str, xs: list[str], base: str,
 # trailing lens: method -> (multiple, regressors, per-share base, stocks the fit is estimated on, stocks it values)
 # Profitable non-financials use P/B on ROE and growth, not P/E: in A-shares a P/E fit gets a negative
 # ROE coefficient (depressed earnings inflate P/E), which made cheap low-ROE stocks look undervalued.
+# Financials have no absolute anchor (the justified P/B was dropped in the Phase 5 review): with one
+# market-wide r it turned whole-sector discounts into upside, e.g. Chinese insurers at +200-300%.
 METHODS = {
-    "P/B+justified": ("pb", ["roe"], "bps", lambda d: d["financial"], lambda d: d["financial"]),
+    "P/B on ROE": ("pb", ["roe"], "bps", lambda d: d["financial"] & (d["np_ttm"] > 0),
+                   lambda d: d["financial"] & (d["np_ttm"] > 0)),
     "P/B": ("pb", ["roe", "growth"], "bps", lambda d: ~d["financial"] & (d["np_ttm"] > 0),
             lambda d: ~d["financial"] & (d["np_ttm"] > 0)),
     "P/S": ("ps", ["gross_margin", "growth"], "sps_ttm", lambda d: ~d["financial"],
@@ -93,22 +93,17 @@ def value(df: pd.DataFrame, r: float) -> pd.DataFrame:
     df = df.copy()
     df["growth"] = df[cfg["growth_metric"]]
     df["peer_group"] = peer_groups(df, min_size)
-    df["g"] = np.minimum(df["roe"] * df["retention"], cfg["g_cap"])
     df["method"], df["fit_group"], df["fit_n"] = None, None, np.nan
 
     trail = pd.DataFrame(np.nan, index=df.index, columns=["mid", "band_lo", "band_hi"])
     for method, (multiple, xs, base, fit_on, applies) in METHODS.items():
         lens = fit_lens(df, multiple, xs, base, fit_on(df), applies(df), min_size)
-        if method == "P/B+justified":  # 50/50 with the justified P/B (ROE - g) / (r - g)
-            jpb = justified_pb(df["roe"], df["g"], r)
-            lens["mid"] = (0.5 * lens["mid"] + 0.5 * jpb * df["bps"]).where(jpb > 0)
         rows = lens["mid"].notna()
         trail.loc[rows] = lens.loc[rows, ["mid", "band_lo", "band_hi"]].to_numpy()
         df.loc[rows, "method"] = method
         df.loc[rows, ["fit_group", "fit_n"]] = lens.loc[rows, ["fit_group", "fit_n"]].to_numpy()
 
-    has_forecast = (~df["financial"] & (df["analysts"] >= cfg["forward_min_analysts"])
-                    & (df["eps_e2"] > 0) & df["fwd_growth"].notna())
+    has_forecast = (df["analysts"] >= cfg["forward_min_analysts"]) & (df["eps_e2"] > 0) & df["fwd_growth"].notna()
     fwd = fit_lens(df, "fwd_pe", ["fwd_growth"], "eps_e2", has_forecast, has_forecast, min_size)
 
     w, gap = cfg["forward_weight"], cfg["cross_check_max_gap"]

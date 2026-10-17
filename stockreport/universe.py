@@ -4,12 +4,13 @@ trailing metrics every later step uses (PLAN.md Method sections 1 and 3)."""
 import logging
 import re
 from datetime import date, timedelta
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from stockreport.config import CONFIG, DATA
-from stockreport.fetch import nasdaq, sec, tdx, yahoo
+from stockreport.fetch import eastmoney, nasdaq, sec, tdx, yahoo
 
 log = logging.getLogger(__name__)
 A_SHARE = re.compile(r"^(60[0-5]\d{3}|68[89]\d{3}|00[0-3]\d{3}|30[01]\d{3})$")
@@ -17,29 +18,28 @@ WINSORIZED = ["pe", "pb", "ps", "ey", "by", "roe", "rev_growth", "np_growth", "g
               "debt_ratio", "cash_conv", "div_yield", "mom_12_1", "vol_1y", "fwd_pe", "fwd_growth"]
 
 
-def load_results() -> pd.DataFrame:
-    frames = []
-    for path in sorted((DATA / "fundamentals").glob("cn_results_*.csv.gz")):
-        df = pd.read_csv(path, dtype={"code": str, "notice_date": str})
-        df["period"] = path.name[len("cn_results_"):-len(".csv.gz")]
-        frames.append(df)
-    return pd.concat(frames, ignore_index=True)
+def load_results(table: str = "results") -> pd.DataFrame:
+    """All saved CN report periods of a table (cn_<table>_<period>.csv.gz), with a period column."""
+    paths = sorted((DATA / "fundamentals").glob(f"cn_{table}_*.csv.gz"))
+    return pd.concat([pd.read_csv(p, dtype={"code": str, "notice_date": str}).assign(period=p.name[4 + len(table):-7])
+                      for p in paths], ignore_index=True)
 
 
 def ttm(results: pd.DataFrame) -> pd.DataFrame:
     """Latest report per stock, plus trailing-12-month revenue and profit:
-    TTM = year-to-date + last full year - same period of last year."""
+    TTM = year-to-date + last full year - same period of last year. The fiscal year starts on the
+    row's `start` date when there is one (HK: March, June... year ends), else on January 1 (CN)."""
     results = results.dropna(subset=["revenue", "np"])
     latest = results.loc[results.groupby("code")["period"].idxmax()].copy()
-    year = latest["period"].str[:4].astype(int) - 1
-    latest["fy_period"] = year.astype(str) + "-12-31"
-    latest["prior_period"] = year.astype(str) + latest["period"].str[4:]
+    start = pd.to_datetime(latest["start"] if "start" in latest else latest["period"].str[:4] + "-01-01")
+    latest["fy_period"] = (start - pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d")
+    latest["prior_period"] = (latest["period"].str[:4].astype(int) - 1).astype(str) + latest["period"].str[4:]
     keyed = results.set_index(["code", "period"])[["revenue", "np"]]
     for tag, col in (("fy", "fy_period"), ("prior", "prior_period")):
         other = keyed.reindex(pd.MultiIndex.from_arrays([latest["code"], latest[col]]))
         latest[f"revenue_{tag}"] = other["revenue"].to_numpy()
         latest[f"np_{tag}"] = other["np"].to_numpy()
-    annual = latest["period"].str.endswith("12-31")
+    annual = (pd.to_datetime(latest["period"]) - start).dt.days > 350
     for col in ("revenue", "np"):
         latest[f"{col}_ttm"] = np.where(annual, latest[col], latest[col] + latest[f"{col}_fy"] - latest[f"{col}_prior"])
     return latest.set_index("code")
@@ -66,6 +66,14 @@ def price_metrics(prices: pd.DataFrame, codes: list[str], index: str = "CSI300")
     out["vol_1y"] = year.std() * np.sqrt(252)
     out.loc[year.count() < 120, "vol_1y"] = np.nan
     return out
+
+
+def dividends(path: Path, today: date) -> pd.Series:
+    """Cash dividends per share (quote currency) with ex-dates in the last 365 days."""
+    if not path.exists():
+        return pd.Series(dtype=float)
+    div = pd.read_csv(path, dtype={"code": str, "ex_date": str})
+    return div[div["ex_date"] > (today - timedelta(days=365)).isoformat()].groupby("code")["dps"].sum()
 
 
 def winsorize(df: pd.DataFrame, cols: list[str], lo: float, hi: float) -> pd.DataFrame:
@@ -154,22 +162,10 @@ def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
     fund = ttm(load_results())
     df = df.join(fund[["period", "notice_date", "revenue_ttm", "np_ttm", "bps", "eps", "ocfps",
                        "gross_margin", "rev_yoy", "np_yoy"]])
-    balance = []
-    for path in sorted((DATA / "fundamentals").glob("cn_balance_*.csv.gz")):
-        b = pd.read_csv(path, dtype={"code": str})
-        b["bperiod"] = path.name[len("cn_balance_"):-len(".csv.gz")]
-        balance.append(b)
-    balance = pd.concat(balance).dropna(subset=["debt_ratio"]).sort_values("bperiod")
+    balance = load_results("balance").dropna(subset=["debt_ratio"]).sort_values("period")
     df["debt_ratio"] = balance.groupby("code")["debt_ratio"].last().reindex(df.index) / 100
-    div = pd.read_csv(DATA / "fundamentals" / "cn_dividends.csv.gz", dtype={"code": str, "ex_date": str})
-    div = div[div["ex_date"] > (today - timedelta(days=365)).isoformat()]
-    df["dps_ttm"] = div.groupby("code")["dps"].sum().reindex(df.index).fillna(0)
-    cons_path = DATA / "fundamentals" / "cn_consensus.csv.gz"
-    cons = pd.read_csv(cons_path, dtype={"code": str}).set_index("code") if cons_path.exists() else pd.DataFrame()
-    df = df.join(cons.reindex(columns=["analysts", "eps_e1", "eps_e2", "eps_e3"]))
-    df["analysts"] = df["analysts"].fillna(0)
-
-    df = ratios(df)
+    df["dps_ttm"] = dividends(DATA / "fundamentals" / "cn_dividends.csv.gz", today).reindex(df.index).fillna(0)
+    df = ratios(join_consensus(df, DATA / "fundamentals" / "cn_consensus.csv.gz", ["analysts", "eps_e1", "eps_e2", "eps_e3"]))
     df["rev_growth"] = df["rev_yoy"] / 100
     df["np_growth"] = df["np_yoy"] / 100
     df["gross_margin"] = df["gross_margin"] / 100
@@ -198,15 +194,21 @@ def us_fundamentals() -> pd.DataFrame:
     facts = facts[sec.covered(facts)].assign(source="SEC", currency="USD")
     gaps = read(yahoo.GAPS) if yahoo.GAPS.exists() else pd.DataFrame(columns=["code", "yahoo"])
     gaps = gaps[gaps["yahoo"] == "ok"].assign(source="Yahoo").reindex(columns=["code"] + cols)
-    fx = pd.read_csv(yahoo.FX).set_index("currency")["per_usd"] if yahoo.FX.exists() else pd.Series(dtype=float)
-    gaps[money] = gaps[money].div(gaps["currency"].map(lambda c: 1.0 if c == "USD" else fx.get(c, np.nan)), axis=0)
+    gaps[money] = gaps[money].div(gaps["currency"].map(yahoo.load_fx()), axis=0)
     both = pd.concat([facts, gaps[~gaps["code"].isin(facts["code"])]])
     return both.set_index("code")[cols]
 
 
+def join_consensus(df: pd.DataFrame, path: Path, cols: list[str]) -> pd.DataFrame:
+    cons = pd.read_csv(path, dtype={"code": str}).set_index("code") if path.exists() else pd.DataFrame()
+    df = df.join(cons.reindex(columns=cols))
+    df["analysts"] = df["analysts"].fillna(0)
+    return df
+
+
 def build_us(today: date) -> tuple[pd.DataFrame, dict]:
     prices = yahoo.load_prices()
-    last = prices.loc[prices["code"] == yahoo.INDEX[1], "date"].max()
+    last = prices.loc[prices["code"] == yahoo.MARKETS["us"][1], "date"].max()
     info = {"quote_date": last, "price_date": last, "stages": {}, "dropped": {}}
     codes = nasdaq.candidates()
     df = nasdaq.load_list().drop_duplicates("code").set_index("code").loc[codes]
@@ -223,20 +225,15 @@ def build_us(today: date) -> tuple[pd.DataFrame, dict]:
     df["shares"] = df["mcap"] / df["last"]  # the screener's market value is company-wide; its price can lag a day
     df["mcap"] = df["shares"] * df["price"]
     df = top_by_value(df, info)
-    df = df.join(price_metrics(prices, list(df.index), index=yahoo.INDEX[1]))
+    df = df.join(price_metrics(prices, list(df.index), index=yahoo.MARKETS["us"][1]))
     df = df.join(us_fundamentals())
     df["bps"] = df["equity"] / df["shares"]
     df["debt_ratio"] = df["liabilities"] / df["assets"]
     df["gross_margin"] = df["gp_ttm"] / df["revenue_ttm"]
     df["cash_conv"] = (df["ocf_ttm"] / df["np_ttm"]).where(df["np_ttm"] > 0)
     df["rev_growth"], df["np_growth"] = df["rev_yoy"], df["np_yoy"]
-    div = pd.read_csv(yahoo.DIVIDENDS, dtype={"code": str, "ex_date": str}) if yahoo.DIVIDENDS.exists() else None
-    div = div[div["ex_date"] > (today - timedelta(days=365)).isoformat()] if div is not None else pd.DataFrame(columns=["code", "dps"])
-    df["dps_ttm"] = div.groupby("code")["dps"].sum().reindex(df.index).fillna(0)
-    cons = pd.read_csv(nasdaq.CONSENSUS, dtype={"code": str}).set_index("code") if nasdaq.CONSENSUS.exists() else pd.DataFrame()
-    df = df.join(cons.reindex(columns=["analysts", "eps_e1", "eps_e2", "eps_e3"]))
-    df["analysts"] = df["analysts"].fillna(0)
-    df = ratios(df)
+    df["dps_ttm"] = dividends(Path(str(yahoo.DIVIDENDS).format("us")), today).reindex(df.index).fillna(0)
+    df = ratios(join_consensus(df, nasdaq.CONSENSUS, ["analysts", "eps_e1", "eps_e2", "eps_e3"]))
 
     listed_px = (closes.loc[df.index].div(df["last"], axis=0) - 1).abs().min(axis=1)
     checks = {
@@ -251,3 +248,53 @@ def build_us(today: date) -> tuple[pd.DataFrame, dict]:
     df.loc[small, "industry"] = np.where(df.loc[small, "sector"] != "", df.loc[small, "sector"] + " (other)", "Miscellaneous")
     df.loc[df["industry"] == "", "industry"] = "Miscellaneous"
     return df, info
+
+
+def hk_fundamentals(currency: pd.Series) -> pd.DataFrame:
+    """The latest Eastmoney report per company with TTM revenue and profit, in HKD. Eastmoney converts
+    every company's amounts to CNY at each period-end rate: they go back to the reporting currency at
+    that rate (Yahoo's close, ~0.5% from Eastmoney's) before the TTM sum, then to HKD at today's rate."""
+    rows = pd.read_csv(eastmoney.HK_RESULTS, dtype={"code": str, "period": str, "start": str, "date_type": str})
+    rows["currency"] = rows["code"].map(currency)
+    rows = rows[rows["currency"].notna()]
+    rows[["revenue", "np", "bps"]] = rows[["revenue", "np", "bps"]].div(yahoo.cny_per(rows["currency"], rows["period"]), axis=0)
+    df, fx = ttm(rows), yahoo.load_fx()
+    df[["revenue_ttm", "np_ttm", "bps"]] = df[["revenue_ttm", "np_ttm", "bps"]].mul(df["currency"].map(fx["HKD"] / fx), axis=0)
+    return df
+
+
+def build_hk(today: date) -> tuple[pd.DataFrame, dict]:
+    prices = yahoo.load_prices("hk")
+    last = prices.loc[prices["code"] == yahoo.MARKETS["hk"][1], "date"].max()
+    info = {"quote_date": last, "price_date": last, "stages": {}, "dropped": {}}
+    codes = eastmoney.hk_candidates()
+    df = eastmoney.load_hk_list().drop_duplicates("code").set_index("code").loc[codes]
+    info["stages"][f"ordinary shares (largest {len(codes)})"] = len(df)
+    df = screen(df, prices, today, "hk", info)
+    cons = join_consensus(df[[]], yahoo.CONSENSUS, ["analysts", "currency", "report_currency", "eps_e0", "eps_e1", "eps_e2"])
+    df = df.join(hk_fundamentals(cons["report_currency"].dropna()).drop(columns="currency"))
+    df["price"] = prices[prices["date"] == last].set_index("code")["close"].reindex(df.index)
+    df["mcap"] = df["price"] * df["shares"]  # all issued shares (H + A + unlisted) at the HK price
+    df = top_by_value(df, info)
+    df = df.join(price_metrics(prices, list(df.index), index=yahoo.MARKETS["hk"][1]))
+    df["gross_margin"], df["debt_ratio"] = df["gross_margin"] / 100, df["debt_ratio"] / 100
+    df["cash_conv"] = (df["ocf"] / df["np"]).where(df["np"] > 0)
+    df["rev_growth"], df["np_growth"] = df["rev_yoy"] / 100, df["np_yoy"] / 100  # year to date, reporting currency
+    df["dps_ttm"] = dividends(Path(str(yahoo.DIVIDENDS).format("hk")), today).reindex(df.index).fillna(0)
+    est, fx = ["eps_e0", "eps_e1", "eps_e2"], yahoo.load_fx()
+    cons[est] = cons[est].mul(cons["currency"].map(fx["HKD"] / fx), axis=0)
+    df = ratios(df.join(cons[["analysts"] + est]).assign(eps_e3=np.nan, notice_date=None))  # no filing dates
+    # Yahoo has two estimate years, so the 2-year expected EPS growth runs from last year's actual to next year
+    df["fwd_growth"] = (df["eps_e2"] / df["eps_e0"]).where((df["eps_e0"] > 0) & (df["eps_e2"] > 0)) ** 0.5 - 1
+    df["financial"] = df["industry_type"].fillna("").str.split("-").str[-1].isin(CONFIG["peers"]["financial_industries_hk"])
+
+    checks = {
+        "no reporting currency (Yahoo)": cons["report_currency"].reindex(df.index).isna(),
+        "missing fundamentals": df[["np_ttm", "revenue_ttm", "bps", "rev_growth", "np_growth"]].isna().any(axis=1),
+        "no report in the last 300 days": pd.to_datetime(df["period"]) < pd.Timestamp(today - timedelta(days=300)),
+        "missing price history": df[["mom_12_1", "vol_1y"]].isna().any(axis=1),
+        "P/E disagrees with source": df["pe_ttm_em"].notna() & (((df["pe_ttm_em"] > 0) != (df["np_ttm"] > 0))
+                                                              | ((df["pe"] / df["pe_ttm_em"]).sub(1).abs() > 0.5)),
+        "P/B disagrees with source": (df["pb"] / df["pb_ttm_em"]).sub(1).abs() > 0.5,
+    }
+    return finish(df, info, checks)

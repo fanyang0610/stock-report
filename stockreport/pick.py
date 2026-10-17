@@ -78,7 +78,7 @@ CSV_COLUMNS = [
     "bucket", "action", "role", "rank", "tier", "conviction", "code", "name", "industry", "peer_group",
     "price", "price_date", "fv_low", "fv_mid", "fv_high", "upside", "method", "fit_group", "fit_n",
     "fv_trailing", "fv_forward", "lenses_agree", "analysts", "eps_e2", "fwd_pe", "fwd_growth",
-    "ri_value", "ri_gap", "cross_check_ok", "r", "g", "mcap", "mcap_rank", "turnover_20d",
+    "ri_value", "ri_gap", "cross_check_ok", "r", "mcap", "mcap_rank", "turnover_20d",
     "pe", "pb", "ps", "ey", "by", "roe", "rev_growth", "np_growth", "gross_margin", "debt_ratio",
     "cash_conv", "div_yield", "mom_12_1", "vol_1y", "period", "notice_date", "np_ttm", "revenue_ttm",
     "eps_ttm", "bps", "z_value", "z_quality", "z_growth", "z_momentum", "z_risk", "composite",

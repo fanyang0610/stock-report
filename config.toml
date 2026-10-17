@@ -6,6 +6,7 @@ min_listing_days = 365
 history_days = 385            # calendar days of daily prices kept (12-1 momentum needs ~252 trading days)
 exclude_name_patterns = ["ST", "退"]
 us_candidates = 1100          # US: largest ordinary shares whose prices and fundamentals are kept (top_n after filters)
+hk_candidates = 1200          # HK: largest ordinary shares whose prices and consensus are kept (top_n after filters)
 
 [universe.min_turnover]       # 20-day average daily turnover, quote currency
 cn = 50_000_000
@@ -19,10 +20,13 @@ financial_industries = ["银行", "证券", "保险"]   # substring match on the
 # brokers (Marsh, Aon, Gallagher, WTW, Brown & Brown), fee businesses valued like other companies.
 financial_industries_us = ["Major Banks", "Commercial Banks", "Savings Institutions", "Investment Bankers/Brokers/Service",
                            "Property-Casualty Insurers", "Life Insurance", "Accident &Health Insurance"]
+# HK: exact sub-industries (last level of Eastmoney's HK industry type): banks, insurers and brokers.
+# HKEX, asset managers, lessors and consumer lenders are valued like other companies, as in CN and US.
+financial_industries_hk = ["区域性银行", "综合性银行", "人寿与健康保险", "再保险", "多元化保险", "财产与意外伤害保险",
+                           "投资银行业与经纪业", "综合性资本市场"]
 
 [value]
 equity_premium = { cn = 0.06, hk = 0.06, us = 0.05 }
-g_cap = 0.03
 winsor = [0.02, 0.98]
 growth_metric = "rev_growth"  # growth regressor in the P/E and P/S fits
 ri_fade_years = 10            # residual income: ROE fades linearly to r over this many years

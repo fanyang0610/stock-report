@@ -3,16 +3,14 @@ and recent filing titles from the submissions list for the AI notes. At most 10 
 User-Agent SEC_USER_AGENT from .env. companyfacts files are several MB each: they are parsed in memory
 and never written to disk; only the extracted row per company is kept (refreshed weekly)."""
 
-import logging
 from datetime import date, timedelta
 
 import pandas as pd
 from dotenv import dotenv_values
 
 from stockreport.config import DATA, ROOT
-from stockreport.fetch import Http, each, merge, stale, write
+from stockreport.fetch import Http, stale, upsert_each, write
 
-log = logging.getLogger(__name__)
 TICKERS = "https://www.sec.gov/files/company_tickers_exchange.json"
 FACTS = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
 SUBMISSIONS = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
@@ -184,14 +182,7 @@ def update_facts(today: date, codes: list[str]) -> None:
     update_ciks(today)
     cik = load_ciks()
     todo = [(c, int(cik[c]), today) for c in stale(TABLE, codes, today) if c in cik.index]
-    rows = []
-    for i, row in enumerate(each(make_http, facts, todo, workers=4), 1):
-        if row:
-            rows.append(row | {"fetched": today.isoformat()})
-        if i % 100 == 0 or i == len(todo):
-            merge(TABLE, pd.DataFrame(rows), ["code"])
-            rows = []
-            log.info("sec facts: %d of %d companies", i, len(todo))
+    upsert_each(TABLE, make_http, facts, todo, today, 4, "sec facts")
 
 
 def org_ids() -> dict[str, int]:

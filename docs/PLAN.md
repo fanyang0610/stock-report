@@ -5,7 +5,7 @@
 - Phase 2 CN data + valuation: done 2026-10-17 (CN picks reviewed; data sources and the valuation method were changed in the review, see Method 4 and Data sources)
 - Phase 3 CN notes + report + keyword: done 2026-10-17 (DeepSeek notes in the CN PDF; texting 股票报告 returned the CN summary + PDF in ~4 s; listener cadence changed, see Method 9)
 - Phase 4 US: done 2026-10-17 (US picks reviewed; texting 股票报告 returned CN + US; US build from cache 24 s. Review fixes: foreign filers from Yahoo fundamentals instead of FMP, negative-book companies on the forward lens; see Method 4 and Data sources)
-- Phase 5 HK + full 45-stock report: not started
+- Phase 5 HK + full 45-stock report: done 2026-10-17 (HK picks reviewed; texting 股票报告 returned the full US + HK + CN report; HK build from cache 44 s; issuer dedupe by Eastmoney ORG_CODE. Review fix: financials valued on peer P/B and the forward lens, no justified P/B (insurers were at +200-316%), see Method 4; HK amounts undo Eastmoney's CNY conversion, see Data sources)
 - Phase 6 Daily schedule + tracking: not started
 - Delivery format that works on the phone (PDF or image): PDF (A4, headless Chrome 155 with --no-pdf-header-footer, ~460 KB; opens in WeChat on the phone)
 
@@ -29,11 +29,14 @@
   - CN: ST/*ST, delisting-period and suspended stocks, and stocks listed under 1 year.
   - HK/US: non-ordinary securities (ETFs, funds, warrants, preferreds, SPACs, OTC) and stocks listed under 1 year.
   - US (Phase 4): preferreds, notes, units and fractional depositary shares are dropped by listing name (ADRs, MLP common units and names that say ordinary/common shares stay); only the most traded share class per issuer (SEC CIK) is kept, e.g. GOOGL not GOOG.
+  - HK (Phase 5): ordinary shares are Eastmoney company profiles with an organisation type (REITs, ETFs and other funds have none), without the RMB counters (8xxxx). Market value = all issued shares (H + A + unlisted domestic shares) × the HK price, as Eastmoney counts it. Privatised and merged names still in Eastmoney's list (Hang Seng Bank, Haitong, Dongfeng, ESR...) have no Yahoo prices and fall out at "traded on the last day".
 - Liquidity: 20-day average daily turnover of at least ¥50m (CN), HK$20m (HK) or US$10m (US). These are config values.
 - Keep the top 800 by total market value.
+  - HK (Phase 5): only 413 of the 941 HK stocks listed a year or more pass HK$20m (2026-10-17), so the HK universe is ~410 names, not 800; 407 have complete data (dropped: 1 without a reporting currency from Yahoo, 3 with missing results, 2 with short price history).
 
 ### 2. Peer groups
 Use the industry from the data source (the Eastmoney industry field in v1). Merge groups with fewer than 8 members into the nearest broader group, or compare them market-wide.
+- HK (Phase 5): the Eastmoney HK industry (BELONG_INDUSTRY, ~30 Hang Seng-style groups); groups under 8 are compared market-wide. Banks, insurers and brokers are an exact list of sub-industries, the last level of Eastmoney's GICS-style HK industry type (config `financial_industries_hk`). HKEX, asset managers, lessors and consumer lenders are valued like other companies, as in CN and US.
 - US (Phase 4): the Nasdaq screener industry; a non-financial industry with fewer than 8 members in the universe becomes "<Nasdaq sector> (other)". Banks, brokers and insurers are an exact list of Nasdaq industries (config `financial_industries_us`). "Specialty Insurers" is left out: in the US universe it holds the insurance brokers (Marsh, Aon, Gallagher, WTW, Brown & Brown), which the insurer method valued on goodwill-heavy books (Gallagher at -67%).
 
 ### 3. Metrics
@@ -47,14 +50,16 @@ Use the latest data, trailing 12 months where possible:
 Winsorize each metric at the 2nd and 98th percentile within the market.
 
 ### 4. Fair value (per stock, in its quote currency)
-- Banks, insurers and brokers: justified P/B = (ROE − g) / (r − g). Blend it 50/50 with the P/B the peer group pays for that ROE (a cross-sectional fit of P/B on ROE).
+- Banks, insurers and brokers: the P/B the peer group pays for that ROE (a cross-sectional fit of log P/B on ROE), plus the forward lens like other companies. Loss-making financials have no trailing value.
+  - Changed in the Phase 5 review: until then this was blended 50/50 with the justified P/B = (ROE − g) / (r − g), and financials had no forward lens. That put Chinese insurers at +200-316% (中国人寿 H +238%, 中国太平 +316%, 中国人寿 A +192%), for two reasons. (1) It is an absolute anchor with one market-wide r, while each market prices its financials at its own implied cost of equity (Chinese banks ~13%, Chinese insurers ~20%, US banks ~8%), so whole-sector discounts became stock "upside": the median financial showed +42% in CN and +37% in HK, -12% in the US (peer-only: +9%, +10%, +3%). (2) It is a perpetuity on one year's ROE, and insurers' 32-37% TTM ROE is 2026 investment gains; analysts expect 16-28% next year. Now the largest insurer upsides are +44% (CN, 中国太保), +47% (HK, 中国人保), +56% (US, Everest), and 中国人寿 is +8% (A) / +4% (H).
 - Other profitable companies: the P/B the peer group pays for similar ROE and growth (a fit of log P/B on ROE and growth within the group). Changed from P/E in the Phase 2 review: in A-shares the P/E fit gets a negative ROE coefficient in every group (low ROE usually means depressed earnings and a high P/E), which made cheap low-ROE stocks look undervalued.
 - Loss-making companies: P/S fitted on gross margin and growth. If no fit is possible, the stock has no fair value and is excluded.
 - Negative book value (added in the Phase 4 review): P/B means nothing, so a profitable company with negative equity (mostly US buyback stocks: ABBV, MCD, BKNG, HLT, LOW, PM...) is valued on the forward lens alone, at normal conviction, and has no ROE (quality comes from margin, cash conversion and leverage). Without 3 analysts it has no fair value. Before, these were dropped: 35 of the US top 800. No CN stock is affected today.
 - Forward lens (added in the Phase 2 review, because trailing numbers make one-off profit spikes look cheap and early fast growth look expensive): for non-financials with at least 3 analysts, also fit log forward P/E (price ÷ next year's consensus EPS) on expected EPS growth (2-year consensus CAGR) within the peer group. Fair value mid = 50/50 trailing and forward value (trailing only when there is no forward lens); the range always covers both. If the two lenses point opposite ways versus the price and differ by more than 50%, mark 低信心. Consensus EPS only; analysts' target prices and ratings are never used.
+- HK forward lens (Phase 5): Yahoo has consensus EPS for this and next fiscal year only, so expected EPS growth is the 2-year CAGR from last year's actual EPS (Yahoo's own, often adjusted) to next year's consensus; forward P/E is on next year's consensus, as in CN and US.
 - Fair value mid = fitted multiple × the company's own metric.
 - Fair value low/high = from the 25th/75th percentile of the group's fit residuals.
-- r = 10-year government bond yield + equity premium (CN 6%, HK 6%, US 5%). g = min(ROE × retention, 3%). Both are config values.
+- r = 10-year government bond yield + equity premium (CN 6%, HK 6%, US 5%), a config value. It is only used by the residual-income cross-check.
 - Absolute cross-check: a simple residual-income value at the same r (excess ROE fades linearly to r over 10 years), kept in the picks CSV for reference. It does not set 低信心 (Phase 2 review: at r ≈ 7.7% the RI value is typically ~1/2.7 of what peers pay, so it flagged 44–79% of the market, including real growth stocks; the forward-lens disagreement is the 低信心 signal instead).
 - Upside = fair value mid / price − 1.
 
@@ -73,6 +78,8 @@ Composite = 0.35 value + 0.25 quality + 0.15 growth + 0.15 momentum + 0.10 risk.
 - 卖出/回避 SELL: upside ≤ −15%, plus at least one of: quality in the bottom 40%, momentum z ≤ −0.5, or falling profits. The stock must be among the market's 400 largest. Take the 5 with the lowest composite score.
 - At most 2 stocks per peer group per bucket, and each stock in only one bucket.
 - One issuer appears only once in the whole report. A/H pairs come from Eastmoney's AH list; US ADR ↔ HK pairs come from a small CSV in data/ref/.
+  - Changed in Phase 5: both come from Eastmoney's company id (ORG_CODE), which is the same for every listing of one issuer (601939 and 00939; BABA and 09988; HSBC and 00005), so no hand-made CSV is needed. The AH list is the blocked push2 API.
+  - Which listing stays: CN, then US, then HK. When an issuer is picked in two markets, the A-share (the primary listing of an A/H issuer) or the US listing (the China ADRs listed in New York first; most of their HK lines are secondary listings) stays, and the HK pick is swapped for the next HK runner-up the same way as an AI flag, listed in the report as 其他市场已入选.
 - If a bucket has fewer than 5 qualifying names, fill it with the next-ranked ones and mark them 低信心.
 
 ### 7. Stock cards
@@ -89,6 +96,7 @@ Each card shows:
 ### 8. AI notes (DeepSeek)
 - Use the OpenAI-compatible API with base URL https://api.deepseek.com. Check their docs for the current chat model name. The key is DEEPSEEK_API_KEY in .env.
 - Input per pick: the card's numbers plus up to 10 announcement/news titles from the last 60 days (CN: CNINFO; US: SEC filing list; HK: HKEXnews).
+  - HK (Phase 5): HKEXnews title search in Chinese (traditional characters). Routine filings are skipped: next-day disclosures, monthly returns, share-award grants, board lists, letters and forms to holders, and the governance rules A+H issuers repost from their A-share filings ("海外監管公告").
   - US (Phase 4): the SEC list has no headlines, only form types and 8-K item numbers, so a title is "date form: description" (e.g. "8-K: Results of operations", "DEFM14A: Merger proxy"). Routine forms (insider trades, 13G, prospectuses) are skipped, and so are the bare 8-K labels 7.01 "Reg FD disclosure" and 8.01 "Other events": DeepSeek cited "Other events" as one-off-gain evidence for Incyte. Revenue and profit are shown to DeepSeek in 亿美元.
 - Output JSON:
   - note: at most 60 Chinese characters
@@ -175,11 +183,17 @@ Each card shows:
   - 10-year yield: FRED DGS10 (FRED_API_KEY).
   - FX for gap companies reporting in another currency: Yahoo "<CUR>=X" (21 currencies on 2026-10-17; ECB rates via frankfurter have no TWD, CLP, COP, PEN or KZT).
   - Headlines: the SEC filing list (data.sec.gov/submissions), see Method 8.
-- HK:
-  - Universe and quotes: the Eastmoney list (fs = m:128+t:3,m:128+t:4,m:128+t:1).
-  - Fundamentals: Eastmoney HK financial indicators per stock, for the screened names only (AKShare has wrappers).
-  - 10-year yield: HK government bond (hkgb.gov.hk).
-  - Headlines: HKEXnews titles.
+- HK (verified in Phase 5, 2026-10-17):
+  - Company list: Eastmoney datacenter RPT_HKF10_INFO_ORGPROFILE (every HK profile: name, ORG_CODE, industry, GICS-style industry type, organisation type, listing date; ~7,000 rows incl. delisted names, weekly). The Eastmoney list (push2 clist, fs = m:128+t:3,m:128+t:4,m:128+t:1) is blocked, as for CN and US.
+  - Results: Eastmoney datacenter RPT_HKF10_FN_MAININDICATOR, one market-wide table filtered by report date (periods ending in the last ~2.2 years, ~12,500 rows; weekly, daily in March, April and August): year-to-date revenue and profit, growth (in the reporting currency, like Eastmoney's CN 业绩报表), BPS, gross margin, operating cash flow, debt/assets, issued shares, and Eastmoney's market value, PE-TTM and PB for the candidate list and the consistency checks. The 1,200 largest ordinary shares by that market value are kept up to date (config `hk_candidates`). TTM = year-to-date + last fiscal year - same period a year earlier, on each company's own fiscal year (the row's start date: March, June... year ends).
+  - Its amounts are all in CNY, converted at each period-end rate (HSBC and AIA at 7.0288 CNY per USD for FY2025), and no field names the reporting currency. About 30% of HK companies report in HKD or USD; with the 2026 RMB move, reading their amounts as CNY at today's rate would overstate profit and book by 2-6%. So each row goes back to the reporting currency (Yahoo's, below) at that period end's rate (Yahoo '<CUR>CNY=X' close, ~0.5% from Eastmoney's rates), the TTM is summed there, and converted to HKD at today's rate.
+  - Not Yahoo fundamentals-timeseries: its HK trailing series stops at December 2025 for 563 of 1,154 candidates (half-year interims are missing), so the TTM would be six months stale.
+  - Consensus EPS and the reporting currency: Yahoo quoteSummary earningsTrend + earnings (this and next fiscal year, last year's actual, analyst count, estimate currency; financialCurrency), one call per stock, weekly (~8 min for 1,200); it needs Yahoo's A3 cookie (from fc.yahoo.com) and the crumb for it. Eastmoney's RPT_WEB_RESPREDICT has no HK rows. 384 of the 1,200 candidates have 3+ analysts (2026-10-17).
+  - Price history and dividends: the Yahoo chart API (symbol 0700.HK), as for US; trading calendar ^HSI (stored as HSI). ~9 min for the first 385 days of 1,200 stocks.
+  - 10-year yield: hkgb.gov.hk daily closing reference pricings workbook (HKD_DailyClosingReferencePricings_IBPandGSBP.xls, benchmark 10-year), read with xlrd. The HKMA API (api.hkma.gov.hk, IBP/GSBP) stops at June 2026 (monthly bulletin) and answered 405 after ~7 quick calls.
+  - Issuer ids for the dedupe: ORG_CODE from the HK profiles above, the CN quotes (RPT_VALUEANALYSIS_DET) and Eastmoney RPT_USF10_INFO_ORGPROFILE (every US ticker, weekly).
+  - Headlines: HKEXnews titleSearchServlet.do with the stockId from activestock_sehk_c.json.
+  - FX: Yahoo "<CUR>=X" for HKD and the reporting and estimate currencies (CNY, USD, SGD, JPY, EUR...), and ~900 days of daily "<CUR>CNY=X" closes for the period-end rates.
 - FX, only needed when a company reports in a different currency from the one it trades in: ECB rates via api.frankfurter.dev.
 - Legacy references (read only), all under ~/Developer/EquitySignalsClawbot-legacy/:
   - Sources/EquitySignalsClawbotCore/PublicUniverse.swift (around line 1310, the Eastmoney list call)

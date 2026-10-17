@@ -63,7 +63,9 @@ def text_summary(report: dict, limit: int = 4000) -> str:
                 flag = " 低信心" if p.get("low_conviction") else ""
                 lines.append(f"{p['ticker']} {p['name']} {p['action']} "
                              f"{p['price']:,.2f}→{p['fv_mid']:,.2f} {p['upside']:+.1%}{flag}")
-        if m.get("swaps"):
-            lines.append("AI 标记后替换：" + "、".join(s["out"].split(" ", 1)[-1] for s in m["swaps"]))
+        for ai, label in ((True, "AI 标记后替换："), (False, "其他市场已入选、不重复列出：")):
+            out = [s["out"].split(" ", 1)[-1] for s in m.get("swaps", []) if s.get("ai", True) == ai]
+            if out:
+                lines.append(label + "、".join(out))
     lines += ["", "详见 PDF。非投资建议。"]
     return fit_bytes(lines, limit)

@@ -74,6 +74,19 @@ def each(make_http, fn, items: list, workers: int):
         yield from pool.map(run, items)
 
 
+def upsert_each(path: Path, make_http, fn, todo: list, today: date, workers: int, label: str) -> None:
+    """Rows from fn(http, item) for every item, stamped `fetched` = today and upserted into the
+    per-stock table every 100 items, so an interrupted fetch keeps what it got."""
+    rows = []
+    for i, row in enumerate(each(make_http, fn, todo, workers), 1):
+        if row:
+            rows.append(row | {"fetched": today.isoformat()})
+        if rows and (i % 100 == 0 or i == len(todo)):
+            merge(path, pd.DataFrame(rows), ["code"])
+            rows = []
+            log.info("%s: %d of %d", label, i, len(todo))
+
+
 def save_raw(name: str, payload) -> None:
     """Keep a raw response under data/raw/<date>/ (deleted by cleanup after a few days)."""
     folder = DATA / "raw" / date.today().isoformat()
@@ -111,6 +124,16 @@ def write(df: pd.DataFrame, path: Path) -> None:
     tmp.replace(path)
 
 
+def save_rates(new: pd.DataFrame, market: str) -> None:
+    """Upsert 10-year yields (date, market, y10 in %) into data/rates.csv."""
+    if new.empty:
+        raise RuntimeError(f"no recent {market.upper()} 10-year yield")
+    path = DATA / "rates.csv"
+    old = pd.read_csv(path, dtype={"date": str}) if path.exists() else new.iloc[:0]
+    df = pd.concat([old, new]).drop_duplicates(["date", "market"], keep="last").sort_values(["market", "date"])
+    df.to_csv(path, index=False)
+
+
 def merge(path: Path, new: pd.DataFrame, key: list[str]) -> pd.DataFrame:
     """Upsert rows into a gzipped CSV table."""
     old = pd.read_csv(path, dtype={"code": str}) if path.exists() else new.iloc[:0]
@@ -137,7 +160,24 @@ def steps(market: str, today: date) -> list:
                 ("FX", lambda: yahoo.update_fx(set(pd.read_csv(yahoo.GAPS)["currency"].dropna()))),
                 ("consensus", lambda: nasdaq.update_consensus(today, nasdaq.candidates())),
                 ("10y yield", fred.update_yield)]
-    raise SystemExit(f"market {market!r} is not built yet")
+    if market == "hk":
+        from stockreport.fetch import eastmoney, hkgb, yahoo
+        return [("company list", lambda: eastmoney.update_hk_list(today)),
+                ("fundamentals", lambda: eastmoney.update_hk_fundamentals(today)),
+                ("prices", lambda: yahoo.update_prices(today, eastmoney.hk_candidates(), "hk")),
+                ("consensus and reporting currency", lambda: yahoo.update_consensus(today, eastmoney.hk_candidates())),
+                ("FX", lambda: hk_fx(yahoo)),
+                ("US issuer ids", lambda: eastmoney.update_us_orgs(today)),
+                ("10y yield", hkgb.update_yield)]
+    raise SystemExit(f"unknown market {market!r}")
+
+
+def hk_fx(yahoo) -> None:
+    """Today's rates for HKD and the HK reporting and estimate currencies, and their CNY history."""
+    cons = pd.read_csv(yahoo.CONSENSUS)
+    currencies = set(cons["currency"].dropna()) | set(cons["report_currency"].dropna())
+    yahoo.update_fx(currencies | {"HKD"})
+    yahoo.update_cny_rates(currencies)
 
 
 def fetch(market: str, today: date | None = None) -> list[str]:

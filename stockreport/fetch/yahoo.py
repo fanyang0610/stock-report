@@ -1,30 +1,38 @@
 """Yahoo (query1.finance.yahoo.com). Yahoo answers 429 to a full browser User-Agent; a bare one works.
-- Chart API (v8/finance/chart): US daily prices and dividends, one call per stock, updated incrementally.
+- Chart API (v8/finance/chart): US and HK daily prices and dividends, one call per stock, updated incrementally.
   Daily returns come from the adjusted close inside each response, so splits and dividends between
   fetches never break the chain; they are stored as close and an implied prev_close (like the CN table).
 - Fundamentals timeseries: trailing-12-month numbers for the companies SEC companyfacts can't cover
   (mostly foreign filers), in their reporting currency. Weekly per company.
-- '<CUR>=X' FX rates for those reporting currencies."""
+- '<CUR>=X' FX rates for those reporting currencies (and HK's), and daily '<CUR>CNY=X' history to undo
+  Eastmoney's conversion of HK companies' figures to CNY at each period-end rate.
+- quoteSummary: HK consensus EPS for this and next fiscal year, and the reporting currency (needs a
+  cookie + crumb)."""
 
 import logging
 import time
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 import pandas as pd
 
 from stockreport.config import CONFIG, DATA
-from stockreport.fetch import Http, each, merge, stale, write
+from stockreport.fetch import Http, each, merge, stale, upsert_each, write
 
 log = logging.getLogger(__name__)
 URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 TIMESERIES = "https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/{symbol}"
-PRICES, DIVIDENDS = DATA / "prices" / "us.csv.gz", DATA / "fundamentals" / "us_dividends.csv.gz"
-GAPS, FX = DATA / "fundamentals" / "us_yahoo.csv.gz", DATA / "fx.csv"
+SUMMARY = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}"
+PRICES, DIVIDENDS = DATA / "prices" / "{}.csv.gz", DATA / "fundamentals" / "{}_dividends.csv.gz"
+GAPS, FX, CONSENSUS = DATA / "fundamentals" / "us_yahoo.csv.gz", DATA / "fx.csv", DATA / "fundamentals" / "hk_consensus.csv.gz"
+FX_CNY = DATA / "fx_cny.csv.gz"
 FIELDS = {"revenue": "TotalRevenue", "np": "NetIncomeCommonStockholders", "gp": "GrossProfit",
           "ocf": "OperatingCashFlow", "equity": "StockholdersEquity",
           "liabilities": "TotalLiabilitiesNetMinorityInterest", "assets": "TotalAssets"}
 MAX_AGE_DAYS = 200  # same freshness rule as SEC
-INDEX = ("^GSPC", "SPX")  # S&P 500: the trading calendar (and the benchmark in Phase 6)
+# market -> (index symbol, its code in the price table, ticker -> Yahoo symbol); the index is the
+# trading calendar (and the benchmark in Phase 6): S&P 500, Hang Seng
+MARKETS = {"us": ("^GSPC", "SPX", lambda c: c.replace(".", "-")), "hk": ("^HSI", "HSI", lambda c: f"{int(c):04d}.HK")}
 make_http = lambda: Http(min_interval=0.3, headers={"User-Agent": "Mozilla/5.0"})
 
 
@@ -62,20 +70,21 @@ def chart(client: Http, job: tuple[str, str, date]) -> tuple[pd.DataFrame, pd.Da
     return parse_chart(code, resp.json())
 
 
-def load_prices() -> pd.DataFrame:
-    return pd.read_csv(PRICES, dtype={"code": str, "date": str})
+def load_prices(market: str = "us") -> pd.DataFrame:
+    return pd.read_csv(str(PRICES).format(market), dtype={"code": str, "date": str})
 
 
-def update_prices(today: date, codes: list[str]) -> None:
+def update_prices(today: date, codes: list[str], market: str = "us") -> None:
     """Append the days since each stock's last stored day; new stocks get `history_days` of history."""
     keep_from = today - timedelta(days=CONFIG["universe"]["history_days"])
-    old = load_prices() if PRICES.exists() else pd.DataFrame(columns=["date", "code"])
+    path, (index_symbol, index_code, symbol) = Path(str(PRICES).format(market)), MARKETS[market]
+    old = load_prices(market) if path.exists() else pd.DataFrame(columns=["date", "code"])
     last = old.groupby("code")["date"].max()
     start = lambda c: date.fromisoformat(last[c]) - timedelta(days=10) if c in last else keep_from
-    index, _ = chart(make_http(), (INDEX[1], INDEX[0], start(INDEX[1])))
+    index, _ = chart(make_http(), (index_code, index_symbol, start(index_code)))
     latest = index["date"].max()
-    todo = [(c, c.replace(".", "-"), start(c)) for c in codes if last.get(c, "") < latest]
-    log.info("yahoo prices: %d of %d stocks to update to %s", len(todo), len(codes), latest)
+    todo = [(c, symbol(c), start(c)) for c in codes if last.get(c, "") < latest]
+    log.info("yahoo %s prices: %d of %d stocks to update to %s", market, len(todo), len(codes), latest)
     frames, divs = [old, index], []
     for i, got in enumerate(each(make_http, chart, todo, workers=2), 1):
         if got:
@@ -84,9 +93,15 @@ def update_prices(today: date, codes: list[str]) -> None:
         if i % 200 == 0:
             log.info("yahoo prices: %d of %d", i, len(todo))
     df = pd.concat(frames).drop_duplicates(["date", "code"], keep="last")
-    write(df[df["date"] >= keep_from.isoformat()].sort_values(["date", "code"]), PRICES)
+    write(df[df["date"] >= keep_from.isoformat()].sort_values(["date", "code"]), path)
     if divs:
-        merge(DIVIDENDS, pd.concat(divs), ["code", "ex_date"])
+        merge(Path(str(DIVIDENDS).format(market)), pd.concat(divs), ["code", "ex_date"])
+
+
+def load_fx() -> pd.Series:
+    """Units of each currency per US dollar (USD = 1)."""
+    fx = pd.read_csv(FX).set_index("currency")["per_usd"] if FX.exists() else pd.Series(dtype=float)
+    return pd.concat([fx, pd.Series({"USD": 1.0})])
 
 
 def update_fx(currencies: set[str]) -> None:
@@ -146,7 +161,59 @@ def timeseries(client: Http, job: tuple[str, date]) -> dict:
 
 def update_gaps(today: date, codes: list[str]) -> None:
     """Weekly per company, for the codes SEC has no recent quarterly numbers for."""
-    rows = [r | {"fetched": today.isoformat()} for r in each(make_http, timeseries, [(c, today) for c in stale(GAPS, codes, today)], workers=2) if r]
-    if rows:
-        merge(GAPS, pd.DataFrame(rows), ["code"])
-        log.info("yahoo fundamentals: %d gap companies, %s", len(rows), pd.Series([r["yahoo"] for r in rows]).value_counts().to_dict())
+    upsert_each(GAPS, make_http, timeseries, [(c, today) for c in stale(GAPS, codes, today)], today, 2, "yahoo fundamentals")
+
+
+def crumb_http() -> Http:
+    """quoteSummary needs Yahoo's A3 cookie (set by fc.yahoo.com, itself a 404) and the crumb for it."""
+    http = make_http()
+    http.client.get("https://fc.yahoo.com")
+    http.crumb = http.get("https://query1.finance.yahoo.com/v1/test/getcrumb").text
+    return http
+
+
+def parse_trend(code: str, payload: dict) -> dict:
+    """The reporting currency, and consensus EPS for the current fiscal year (0y) and the next (+1y)
+    with last year's actual EPS (0y's yearAgoEps), in the estimate currency; analysts = estimates
+    behind next year's EPS."""
+    result = (payload.get("quoteSummary") or {}).get("result") or [{}]
+    trend = {t["period"]: t for t in (result[0].get("earningsTrend") or {}).get("trend", [])}
+    est = lambda period, key: ((trend.get(period, {}).get("earningsEstimate") or {}).get(key) or {}).get("raw")
+    row = {"code": code, "analysts": 0, "report_currency": (result[0].get("earnings") or {}).get("financialCurrency")}
+    if None in (est("0y", "avg"), est("+1y", "avg"), est("0y", "yearAgoEps")):
+        return row
+    return row | {"analysts": est("+1y", "numberOfAnalysts") or 0, "e1_year": trend["0y"]["endDate"][:7],
+                  "eps_e0": est("0y", "yearAgoEps"), "eps_e1": est("0y", "avg"), "eps_e2": est("+1y", "avg"),
+                  "currency": trend["0y"]["earningsEstimate"].get("earningsCurrency")}
+
+
+def trend(client: Http, code: str) -> dict:
+    payload = client.get(SUMMARY.format(symbol=MARKETS["hk"][2](code)), ok=(200, 404),
+                         params={"modules": "earningsTrend,earnings", "crumb": client.crumb}).json()
+    return parse_trend(code, payload)
+
+
+def update_consensus(today: date, codes: list[str]) -> None:
+    """HK consensus EPS and reporting currency, weekly per stock; no estimates: analysts = 0."""
+    upsert_each(CONSENSUS, crumb_http, trend, stale(CONSENSUS, codes, today), today, 2, "hk consensus")
+
+
+def update_cny_rates(currencies: set[str], days: int = 900) -> None:
+    """Daily CNY per unit of each currency for the last `days` days ('<CUR>CNY=X' closes)."""
+    client, frames = make_http(), []
+    for cur in sorted(set(currencies) - {"CNY"}):
+        res = client.get(URL.format(symbol=f"{cur}CNY=X"), params={"period1": int(time.time()) - days * 86400,
+                                                                   "period2": int(time.time()), "interval": "1d"})
+        res = res.json()["chart"]["result"][0]
+        day = lambda ts: (datetime.fromtimestamp(ts, timezone.utc) + timedelta(seconds=res["meta"]["gmtoffset"])).date()
+        frames.append(pd.DataFrame({"currency": cur, "date": [day(t).isoformat() for t in res["timestamp"]],
+                                    "close": res["indicators"]["quote"][0]["close"]}).dropna())
+    write(pd.concat(frames), FX_CNY)
+
+
+def cny_per(currency: pd.Series, day: pd.Series) -> pd.Series:
+    """CNY per unit of `currency` at the last close on or before `day` (1 for CNY)."""
+    rates = pd.read_csv(FX_CNY, parse_dates=["date"]).sort_values("date")
+    rows = pd.DataFrame({"row": range(len(day)), "currency": currency.to_numpy(), "date": pd.to_datetime(day.to_numpy())})
+    rate = pd.merge_asof(rows.sort_values("date"), rates, on="date", by="currency").sort_values("row")["close"]
+    return pd.Series(rate.to_numpy(), index=currency.index).where(currency != "CNY", 1.0)

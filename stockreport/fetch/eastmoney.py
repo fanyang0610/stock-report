@@ -1,5 +1,7 @@
 """Eastmoney datacenter (datacenter-web.eastmoney.com): CN daily valuation, quarterly results,
-balance sheets, dividends and the ChinaBond 10-year yield it republishes."""
+balance sheets, dividends and the ChinaBond 10-year yield it republishes; the HK company list and
+main indicators; and Eastmoney's company id (ORG_CODE), which is the same for every listing of one
+issuer (A/H pairs, US ADRs and their HK lines), for the cross-market issuer dedupe."""
 
 import logging
 from datetime import date, timedelta
@@ -7,7 +9,7 @@ from datetime import date, timedelta
 import pandas as pd
 
 from stockreport.config import CONFIG, DATA
-from stockreport.fetch import Http, needs_refresh, save_raw
+from stockreport.fetch import Http, needs_refresh, save_raw, save_rates, write
 
 log = logging.getLogger(__name__)
 URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
@@ -39,31 +41,25 @@ def datacenter(report: str, filter_str: str, columns: str, sort: str = "SECURITY
     return rows
 
 
-def _write(df: pd.DataFrame, path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    df.to_csv(tmp, index=False, compression="gzip")
-    tmp.replace(path)
-
-
 def update_quotes() -> None:
     """Latest daily close, market value, PE/PB/PS and industry for every A-share."""
     path = DATA / "quotes" / "cn.csv.gz"
     latest = datacenter("RPT_VALUEANALYSIS_DET", "", "TRADE_DATE", sort="TRADE_DATE",
                         sort_type="-1", page_size=1, max_pages=1)[0]["TRADE_DATE"][:10]
-    if path.exists() and pd.read_csv(path, nrows=1, dtype=str)["trade_date"].iloc[0] == latest:
+    old = pd.read_csv(path, nrows=1, dtype=str) if path.exists() else None
+    if old is not None and old["trade_date"].iloc[0] == latest and "org_code" in old:
         return
     rows = datacenter("RPT_VALUEANALYSIS_DET", f"(TRADE_DATE='{latest}')",
-                      "SECURITY_CODE,SECURITY_NAME_ABBR,BOARD_NAME,CLOSE_PRICE,TOTAL_MARKET_CAP,"
+                      "SECURITY_CODE,SECURITY_NAME_ABBR,ORG_CODE,BOARD_NAME,CLOSE_PRICE,TOTAL_MARKET_CAP,"
                       "TOTAL_SHARES,PE_TTM,PB_MRQ,PS_TTM,TRADE_DATE", raw="cn_quotes")
     df = pd.DataFrame(rows).rename(columns={
-        "SECURITY_CODE": "code", "SECURITY_NAME_ABBR": "name", "BOARD_NAME": "industry",
+        "SECURITY_CODE": "code", "SECURITY_NAME_ABBR": "name", "ORG_CODE": "org_code", "BOARD_NAME": "industry",
         "CLOSE_PRICE": "close", "TOTAL_MARKET_CAP": "mcap", "TOTAL_SHARES": "shares",
         "PE_TTM": "pe_ttm_em", "PB_MRQ": "pb_mrq_em", "PS_TTM": "ps_ttm_em", "TRADE_DATE": "trade_date"})
     df["trade_date"] = df["trade_date"].str[:10]
     if len(df) < 4000:
         raise RuntimeError(f"only {len(df)} quotes for {latest}; the source may still be updating")
-    _write(df, path)
+    write(df, path)
     log.info("cn quotes: %d stocks for %s", len(df), latest)
 
 
@@ -97,7 +93,7 @@ def update_fundamentals(today: date) -> None:
                                              "PARENT_NETPROFIT", "YSTZ", "SJLTZ", "BPS", "MGJYXJJE", "XSMLL"])
             df.columns = ["code", "notice_date", "eps", "revenue", "np", "rev_yoy", "np_yoy", "bps", "ocfps", "gross_margin"]
             df["notice_date"] = df["notice_date"].str[:10]
-            _write(df, path)
+            write(df, path)
             log.info("cn results %s: %d rows", p, len(df))
         path = DATA / "fundamentals" / f"cn_balance_{p}.csv.gz"
         if i < 3 and needs_refresh(path, today, opened):  # leverage only needs the latest periods
@@ -105,7 +101,7 @@ def update_fundamentals(today: date) -> None:
                               "SECURITY_CODE,DEBT_ASSET_RATIO", raw=f"cn_balance_{p}")
             df = pd.DataFrame(rows, columns=["SECURITY_CODE", "DEBT_ASSET_RATIO"])
             df.columns = ["code", "debt_ratio"]
-            _write(df, path)
+            write(df, path)
             log.info("cn balance %s: %d rows", p, len(df))
 
 
@@ -123,7 +119,7 @@ def update_dividends(today: date) -> None:
     df.columns = ["code", "ex_date", "dps"]
     df["ex_date"] = df["ex_date"].str[:10]
     df["dps"] = df["dps"] / 10  # source is per 10 shares
-    _write(df, path)
+    write(df, path)
     log.info("cn dividends: %d rows since %s", len(df), start)
 
 
@@ -151,7 +147,7 @@ def update_consensus(today: date) -> None:
         return
     rows = datacenter("RPT_WEB_RESPREDICT", "", ",".join(CONSENSUS_FIELDS), raw="cn_consensus")
     df = consensus_table(rows)
-    _write(df, path)
+    write(df, path)
     log.info("cn consensus: %d stocks with three estimate years", len(df))
 
 
@@ -159,11 +155,69 @@ def update_yield() -> None:
     """ChinaBond 10-year government bond yield (%), as republished by Eastmoney."""
     rows = datacenter("RPTA_WEB_TREASURYYIELD", "", "SOLAR_DATE,EMM00166466", sort="SOLAR_DATE",
                       sort_type="-1", page_size=20, max_pages=1)
-    new = pd.DataFrame([{"date": r["SOLAR_DATE"][:10], "market": "cn", "y10": r["EMM00166466"]}
-                        for r in rows if r["EMM00166466"] is not None])
-    if new.empty:
-        raise RuntimeError("no CN 10-year yield in the last 20 days")
-    path = DATA / "rates.csv"
-    old = pd.read_csv(path, dtype={"date": str}) if path.exists() else new.iloc[:0]
-    df = pd.concat([old, new]).drop_duplicates(["date", "market"], keep="last").sort_values(["market", "date"])
-    df.to_csv(path, index=False)
+    save_rates(pd.DataFrame([{"date": r["SOLAR_DATE"][:10], "market": "cn", "y10": r["EMM00166466"]}
+                             for r in rows if r["EMM00166466"] is not None]), "cn")
+
+
+HK_LIST, HK_RESULTS = DATA / "quotes" / "hk_list.csv.gz", DATA / "fundamentals" / "hk_results.csv.gz"
+US_ORGS = DATA / "fundamentals" / "us_org.csv.gz"
+HK_FIELDS = {"SECURITY_CODE": "code", "REPORT_DATE": "period", "START_DATE": "start", "DATE_TYPE_CODE": "date_type",
+             "OPERATE_INCOME": "revenue", "HOLDER_PROFIT": "np", "OPERATE_INCOME_YOY": "rev_yoy",
+             "HOLDER_PROFIT_YOY": "np_yoy", "GROSS_PROFIT_RATIO": "gross_margin", "BPS": "bps",
+             "NETCASH_OPERATE": "ocf", "DEBT_ASSET_RATIO": "debt_ratio", "ISSUED_COMMON_SHARES": "shares",
+             "TOTAL_MARKET_CAP": "mcap_em", "PE_TTM": "pe_ttm_em", "PB_TTM": "pb_ttm_em"}
+
+
+def update_hk_list(today: date) -> None:
+    """Every HK company profile: name, org code, industry and listing date (weekly). REITs, ETFs and
+    other funds have no organisation type."""
+    if not needs_refresh(HK_LIST, today):
+        return
+    rows = datacenter("RPT_HKF10_INFO_ORGPROFILE", "", "SECURITY_CODE,SECURITY_NAME_ABBR,ORG_CODE,BELONG_INDUSTRY,"
+                      "INDUSTRY_TYPE,ORG_TYPE,LISTING_DATE")
+    df = pd.DataFrame(rows)
+    df.columns = ["code", "name", "org_code", "industry", "industry_type", "org_type", "listing_date"]
+    write(df.assign(listing_date=df["listing_date"].str[:10]), HK_LIST)
+    log.info("hk list: %d company profiles", len(df))
+
+
+def hk_results(rows: list[dict]) -> pd.DataFrame:
+    """Main-indicator rows -> a table keyed by code and period end. Money is in CNY: Eastmoney converts
+    every company's figures at each period's rate; its growth rates are in the reporting currency."""
+    df = pd.DataFrame(rows, columns=list(HK_FIELDS)).rename(columns=HK_FIELDS)
+    df["period"], df["start"] = df["period"].str[:10], df["start"].str[:10]
+    return df
+
+
+def update_hk_fundamentals(today: date) -> None:
+    """Main indicators of every HK company for periods ending in the last ~2.2 years: one market-wide
+    table, weekly, and daily in the results seasons (March, April, August)."""
+    if not needs_refresh(HK_RESULTS, today, open_period=today.month in (3, 4, 8)):
+        return
+    since = (today - timedelta(days=800)).isoformat()
+    df = hk_results(datacenter("RPT_HKF10_FN_MAININDICATOR", f"(REPORT_DATE>='{since}')", ",".join(HK_FIELDS),
+                               sort="SECURITY_CODE,REPORT_DATE", sort_type="1,1"))
+    write(df, HK_RESULTS)
+    log.info("hk results: %d rows for %d companies since %s", len(df), df["code"].nunique(), since)
+
+
+def load_hk_list() -> pd.DataFrame:
+    return pd.read_csv(HK_LIST, dtype={"code": str, "org_code": str})
+
+
+def hk_candidates() -> list[str]:
+    """Ordinary shares (an organisation type, and not an RMB counter 8xxxx), largest first by
+    Eastmoney's latest market value: the stocks whose prices are kept up to date."""
+    lst = load_hk_list()
+    lst = lst[lst["org_type"].notna() & (lst["code"] < "10000")]
+    fund = pd.read_csv(HK_RESULTS, dtype={"code": str, "period": str}).sort_values("period")
+    mcap = fund.groupby("code")["mcap_em"].last().reindex(lst["code"])
+    return list(mcap.sort_values(ascending=False).dropna().index[:CONFIG["universe"]["hk_candidates"]])
+
+
+def update_us_orgs(today: date) -> None:
+    """US ticker -> Eastmoney org code (weekly), to find the HK line of a US-listed issuer."""
+    if not needs_refresh(US_ORGS, today):
+        return
+    df = pd.DataFrame(datacenter("RPT_USF10_INFO_ORGPROFILE", "", "SECURITY_CODE,ORG_CODE"))
+    write(df.set_axis(["code", "org_code"], axis=1), US_ORGS)

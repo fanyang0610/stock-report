@@ -17,7 +17,7 @@ from stockreport.pick import CSV_COLUMNS, pick, print_table
 from stockreport.render import html_to_pdf, render_html, text_summary
 from stockreport.render.testdata import test_report
 from stockreport.score import score
-from stockreport.universe import build_cn, build_us
+from stockreport.universe import build_cn, build_hk, build_us
 from stockreport.value import value
 
 
@@ -31,7 +31,7 @@ def discount_rate(market: str) -> tuple[float, str]:
 def run(market: str, use_ai: bool) -> int:
     started, today = time.monotonic(), date.today()
     failed = fetch_market(market, today)
-    universe, info = {"cn": build_cn, "us": build_us}[market](today)
+    universe, info = {"cn": build_cn, "us": build_us, "hk": build_hk}[market](today)
     r, rate_date = discount_rate(market)
     df = score(value(universe, r))
     df["r"], df["price_date"] = r, info["quote_date"]
@@ -138,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("listen", help="answer the WeChat keyword for ~55 s (launchd restarts it 10 s after it ends)")
     fetch = sub.add_parser("fetch", help="update the cached data for a market")
     fetch.add_argument("--market", choices=["cn", "us", "hk"], required=True)
-    run_p = sub.add_parser("run", help="fetch, value, score, pick, write notes and the PDF (CN and US so far)")
+    run_p = sub.add_parser("run", help="fetch, value, score, pick, write notes and the PDF")
     run_p.add_argument("--market", choices=["cn", "us", "hk"], default="cn")
     run_p.add_argument("--no-notes", action="store_true", help="template notes instead of DeepSeek")
     clean = sub.add_parser("cleanup", help="apply the storage retention periods")

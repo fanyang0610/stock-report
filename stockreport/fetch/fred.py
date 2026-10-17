@@ -3,8 +3,8 @@
 import pandas as pd
 from dotenv import dotenv_values
 
-from stockreport.config import DATA, ROOT
-from stockreport.fetch import Http
+from stockreport.config import ROOT
+from stockreport.fetch import Http, save_rates
 
 URL = "https://api.stlouisfed.org/fred/series/observations"
 http = Http(min_interval=0.5)
@@ -22,10 +22,4 @@ def update_yield() -> None:
         raise RuntimeError("FRED_API_KEY is missing from .env")
     resp = http.get(URL, params={"series_id": "DGS10", "api_key": key, "file_type": "json",
                                  "sort_order": "desc", "limit": 20})
-    new = parse_observations(resp.json(), "us")
-    if new.empty:
-        raise RuntimeError("no US 10-year yield in the last 20 observations")
-    path = DATA / "rates.csv"
-    old = pd.read_csv(path, dtype={"date": str}) if path.exists() else new.iloc[:0]
-    df = pd.concat([old, new]).drop_duplicates(["date", "market"], keep="last").sort_values(["market", "date"])
-    df.to_csv(path, index=False)
+    save_rates(parse_observations(resp.json(), "us"), "us")

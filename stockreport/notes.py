@@ -12,15 +12,15 @@ import pandas as pd
 from dotenv import dotenv_values
 
 from stockreport.config import CONFIG, REPORTS, ROOT
-from stockreport.fetch import cninfo, sec
+from stockreport.fetch import cninfo, hkex, sec
 
 log = logging.getLogger(__name__)
 # Announcement titles per market: org_ids() -> {code: id}, titles(code, id, today, days, limit)
-TITLE_SOURCES = {"cn": cninfo, "us": sec}
+TITLE_SOURCES = {"cn": cninfo, "us": sec, "hk": hkex}
 UNITS = {"cn": "亿元", "us": "亿美元", "hk": "亿港元"}  # revenue and profit in the quote currency
 FLAGS = ("none", "one_off_gain", "pending_deal", "delisting_or_st", "data_suspect")
 FLAG_WORDS = {"one_off_gain": "利润一次性/异常", "pending_deal": "重大交易进行中",
-              "delisting_or_st": "退市/ST 风险", "data_suspect": "数据可疑"}
+              "delisting_or_st": "退市/ST 风险", "data_suspect": "数据可疑", "dual_listed": "其他市场已入选"}
 NOTE_MAX, RISK_MAX = 60, 30
 
 SYSTEM = """你是 A 股研究助理，为程序生成的选股卡片写简短中文点评。卡片上的所有数字都由程序根据公开数据计算，你不能修改它们。
@@ -51,7 +51,7 @@ def spike(row: pd.Series) -> dict:
     cfg, min_analysts = CONFIG["notes"], CONFIG["value"]["forward_min_analysts"]
     out = {"c1": None, "c2": None, "ratio": None,
            "c3": bool(row["np_growth"] - row["rev_growth"] >= cfg["title_gap"])}
-    if row["method"] != "P/B+justified" and pd.notna(row["cash_conv"]) and row["np_ttm"] > 0:
+    if row["method"] != "P/B on ROE" and pd.notna(row["cash_conv"]) and row["np_ttm"] > 0:
         out["c1"] = bool(row["np_growth"] > cfg["spike_growth"] and row["cash_conv"] < cfg["spike_cash_conv"])
     if row["analysts"] >= min_analysts and row["eps_ttm"] > 0 and pd.notna(row["eps_e2"]):
         out["ratio"] = row["eps_e2"] / row["eps_ttm"]
@@ -80,7 +80,7 @@ def checks(row: pd.Series) -> list[str]:
 def card_numbers(row: pd.Series, unit: str = "亿元") -> str:
     """The numbers DeepSeek sees: the card plus the metrics behind it."""
     num = lambda x, d=2: "无" if pd.isna(x) else f"{x:,.{d}f}"
-    financial = row["method"] == "P/B+justified"  # margins, cash flow and leverage mean little for banks/brokers/insurers
+    financial = row["method"] == "P/B on ROE"  # margins, cash flow and leverage mean little for banks/brokers/insurers
     lines = [
         f"股票：{row['code']} {row['name']}（行业：{row['industry']}）",
         f"动作：{row['action']}；信心：{row['conviction']}",
@@ -253,11 +253,15 @@ class Notes:
         return self.cache[row["code"]]
 
 
-def annotate(picks: pd.DataFrame, market: str, today: date, use_ai: bool = True) -> tuple[pd.DataFrame, list[dict]]:
+def annotate(picks: pd.DataFrame, market: str, today: date, use_ai: bool = True,
+             taken: dict[str, str] | None = None) -> tuple[pd.DataFrame, list[dict]]:
     """Final picks with notes, and the swaps made. A flagged pick is replaced by the next runner-up
-    in its bucket that isn't flagged; if none is left, it stays, marked 低信心."""
-    notes = Notes(market, today, use_ai)
-    todo = [r for _, r in picks[picks["role"] == "pick"].iterrows() if r["code"] not in notes.cache]
+    in its bucket that isn't flagged; if none is left, it stays, marked 低信心. Names whose issuer is
+    already picked in another market (`taken`: code -> reason) are swapped out the same way and
+    never asked about."""
+    notes, taken = Notes(market, today, use_ai), taken or {}
+    picks = picks[(picks["role"] == "pick") | ~picks["code"].isin(taken)]
+    todo = [r for _, r in picks[picks["role"] == "pick"].iterrows() if r["code"] not in notes.cache | taken]
     titles = {r["code"]: notes.titles(r["code"]) for r in todo}  # one at a time, politely
     with ThreadPoolExecutor(CONFIG["notes"]["workers"]) as pool:
         for row, note in zip(todo, pool.map(lambda r: notes.fetch(r, titles[r["code"]]), todo)):
@@ -267,7 +271,7 @@ def annotate(picks: pd.DataFrame, market: str, today: date, use_ai: bool = True)
     for bucket, part in picks.groupby("bucket", sort=False):
         bench = [r for _, r in part[part["role"] == "runner_up"].sort_values("rank").iterrows()]
         for _, row in part[part["role"] == "pick"].sort_values("rank").iterrows():
-            note = notes.get(row)
+            note = {"flag": "dual_listed", "reason": taken[row["code"]]} if row["code"] in taken else notes.get(row)
             while note["flag"] != "none" and bench:
                 nxt = bench.pop(0)
                 swaps.append({"bucket": bucket, "out": f"{row['code']} {row['name']}", "flag": note["flag"],

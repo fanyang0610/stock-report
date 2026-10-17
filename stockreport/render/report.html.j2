@@ -85,7 +85,7 @@
   <div class="sub">数据日期 {{ m.data_date }} · 计价 {{ m.currency }}{% if m.r %} · 折现率 r = {{ '%.1f' % (m.r * 100) }}%{% endif %}
     {% if m.ai_notes is defined %} · AI 点评 {{ m.ai_notes }}/{{ m.picks | length }}{% endif %}</div>
   {% if m.swaps %}
-  <div class="swaps"><b>AI 标记后替换（{{ m.swaps | length }}）</b>
+  <div class="swaps"><b>替换（{{ m.swaps | length }}）</b>
     {% for s in m.swaps %}<div>{{ s.out }} → {{ s.in }}　<span class="label">{{ s.flag }}：</span>{{ s.reason }}</div>{% endfor %}
   </div>
   {% endif %}

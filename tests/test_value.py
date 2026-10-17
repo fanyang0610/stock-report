@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from stockreport.value import disagree, fit, justified_pb, peer_groups, predict, residual_income, value
+from stockreport.value import disagree, fit, peer_groups, predict, residual_income, value
 
 SAMPLE = Path(__file__).parent / "data" / "cn_sample.csv"
 R = 0.0765  # 1.65% ChinaBond 10y (2026-10-16) + 6% premium
@@ -20,10 +20,6 @@ def test_fit_recovers_known_coefficients():
     y = 1.0 + 2.0 * x[:, 0] - 0.5 * x[:, 1]
     assert fit(y, x) == pytest.approx([1.0, 2.0, -0.5])
     assert predict(fit(y, x), x) == pytest.approx(y)
-
-
-def test_justified_pb():
-    assert justified_pb(0.12, 0.03, 0.08) == pytest.approx(1.8)
 
 
 def test_residual_income():
@@ -51,8 +47,7 @@ def test_fair_value_on_saved_sample():
     assert len(valued) >= 0.9 * len(df)
     assert (valued["fv_low"] < valued["fv_mid"]).all() and (valued["fv_mid"] < valued["fv_high"]).all()
     assert valued["upside"].to_numpy() == pytest.approx((valued["fv_mid"] / valued["price"] - 1).to_numpy())
-    assert (df["g"] <= 0.03 + 1e-12).all()
-    assert set(df.loc[df["financial"], "method"].dropna()) == {"P/B+justified"}
+    assert set(df.loc[df["financial"] & (df["np_ttm"] > 0), "method"].dropna()) <= {"P/B on ROE"}
     assert set(df.loc[~df["financial"] & (df["np_ttm"] > 0), "method"].dropna()) == {"P/B"}
     assert set(df.loc[~df["financial"] & (df["np_ttm"] <= 0), "method"].dropna()) == {"P/S"}
 
@@ -67,15 +62,18 @@ def test_trailing_lens_is_the_groups_fitted_pb_times_own_book():
     assert members["fv_trailing"].to_numpy() == pytest.approx(expected.to_numpy())
 
 
-def test_bank_fair_value_blends_justified_and_peer_pb():
-    df = value(load_sample(), R)
-    banks = df[df["method"] == "P/B+justified"]
+def test_financials_are_valued_on_what_peers_pay_for_their_roe():
+    df = load_sample()
+    loser = df.index[df["financial"]][0]
+    df.loc[loser, ["np_ttm", "roe"]] = [-1e8, -0.02]  # a loss-making bank gets no trailing value
+    df = value(df, R)
+    banks = df[df["method"] == "P/B on ROE"]
     members = banks[banks["fit_group"] == banks["fit_group"].iloc[0]]
     coef = fit(np.log(members["pb"]), members[["roe"]].to_numpy())
     peer = np.exp(predict(coef, members[["roe"]].to_numpy())) * members["bps"]
-    just = justified_pb(members["roe"], members["g"], R) * members["bps"]
-    assert members["fv_trailing"].to_numpy() == pytest.approx((0.5 * peer + 0.5 * just).to_numpy())
-    assert members["fv_forward"].isna().all()  # no forward lens for financials
+    assert members["fv_trailing"].to_numpy() == pytest.approx(peer.to_numpy())  # no absolute anchor
+    assert np.isnan(df.loc[loser, "fv_trailing"])
+    assert df.loc[df["financial"], "fv_forward"].notna().any()  # financials have the forward lens too
 
 
 def test_disagree_needs_opposite_directions_and_a_wide_gap():

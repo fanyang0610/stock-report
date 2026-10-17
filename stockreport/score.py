@@ -1,7 +1,6 @@
 """Sector-neutral z-scores within a market, the composite score and plain-word drivers
 (PLAN.md Method sections 5 and 7)."""
 
-import numpy as np
 import pandas as pd
 
 from stockreport.config import CONFIG

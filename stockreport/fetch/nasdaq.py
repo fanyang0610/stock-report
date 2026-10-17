@@ -9,7 +9,7 @@ from datetime import date, datetime
 import pandas as pd
 
 from stockreport.config import CONFIG, DATA
-from stockreport.fetch import Http, each, merge, stale, write
+from stockreport.fetch import Http, stale, upsert_each, write
 
 log = logging.getLogger(__name__)
 SCREENER = "https://api.nasdaq.com/api/screener/stocks"
@@ -94,12 +94,5 @@ def forecast(client: Http, code: str) -> dict:
 def update_consensus(today: date, codes: list[str]) -> None:
     """Weekly per stock (4 at a time: each call takes 2-4 s); a stock without three years of
     estimates is stored with analysts = 0, a failed one is retried next run."""
-    todo, rows = stale(CONSENSUS, codes, today), []
     make = lambda: Http(min_interval=0.5, headers={"Accept": "application/json"})
-    for i, row in enumerate(each(make, forecast, todo, workers=4), 1):
-        if row:
-            rows.append(row | {"fetched": today.isoformat()})
-        if i % 100 == 0 or i == len(todo):  # checkpoint
-            merge(CONSENSUS, pd.DataFrame(rows), ["code"])
-            rows = []
-            log.info("us consensus: %d of %d stocks", i, len(todo))
+    upsert_each(CONSENSUS, make, forecast, stale(CONSENSUS, codes, today), today, 4, "us consensus")

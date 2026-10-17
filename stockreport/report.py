@@ -9,13 +9,18 @@ import pandas as pd
 from stockreport import deliver
 from stockreport.cleanup import size_of
 from stockreport.config import CONFIG, DATA, REPORTS
+from stockreport.fetch import eastmoney
 from stockreport.notes import FLAG_WORDS, annotate
 from stockreport.render import html_to_pdf, render_html, text_summary
 
-MARKETS = [("us", "美股 US", "USD"), ("hk", "港股 HK", "HKD"), ("cn", "A股 CN", "CNY")]  # PDF order
+MARKETS = {"us": ("美股 US", "USD"), "hk": ("港股 HK", "HKD"), "cn": ("A股 CN", "CNY")}  # PDF order
+# An issuer picked in two markets keeps the listing first in this order and is swapped out of the
+# other (PLAN.md Method 6): the A-share is the primary listing of an A/H issuer, and the US-listed
+# China ADRs listed in New York first (their HK lines are mostly secondary listings).
+PRIORITY = ["cn", "us", "hk"]
 METHOD = ("各市场取市值前 800（剔除 ST、上市不满 1 年和成交过少的股票），在行业同业组内估值：盈利公司看同业为同等 "
-          "ROE 和增长支付的 P/B，并与按分析师一致预期 EPS 的远期 P/E 各占一半；净资产为负时只用远期 P/E；亏损公司用 P/S；银行、券商、保险用"
-          "同业 P/B 与合理 P/B 各半。再按价值、质量、成长、动量、风险综合打分，每档取 5 只。")
+          "ROE 和增长支付的 P/B（银行、券商、保险只看 ROE），并与按分析师一致预期 EPS 的远期 P/E 各占一半；净资产为负时只用远期 P/E；"
+          "亏损公司用 P/S。再按价值、质量、成长、动量、风险综合打分，每档取 5 只。")
 
 
 def trigger(p: dict) -> str:
@@ -37,21 +42,33 @@ def card(p: dict) -> dict:
             "low_conviction": p["conviction"] == "低信心", "flag": FLAG_WORDS.get(p["flag"])}
 
 
+def issuers() -> dict[str, pd.Series]:
+    """Ticker -> Eastmoney org code per market: one id for every listing of the same issuer."""
+    paths = {"cn": DATA / "quotes" / "cn.csv.gz", "us": eastmoney.US_ORGS, "hk": eastmoney.HK_LIST}
+    read = lambda p: pd.read_csv(p, usecols=["code", "org_code"], dtype=str).drop_duplicates("code").set_index("code")["org_code"]
+    return {m: read(p) if p.exists() else pd.Series(dtype=str) for m, p in paths.items()}
+
+
 def build(today: date, use_ai: bool = True) -> tuple[Path, str]:
     """Write report.html/.pdf and summary.txt for the day; returns the PDF path and the summary."""
-    out = REPORTS / today.isoformat()
-    markets = []
-    for code, name, currency in MARKETS:
+    out, orgs, kept, done = REPORTS / today.isoformat(), issuers(), {}, {}
+    for code in PRIORITY:
         path = out / f"{code}_picks.csv"
         if not path.exists():
             continue
-        final, swaps = annotate(pd.read_csv(path, dtype={"code": str, "price_date": str}), code, today, use_ai)
+        picks = pd.read_csv(path, dtype={"code": str, "price_date": str})
+        org = picks["code"].map(orgs[code])
+        taken = {c: f"同一发行人已在{kept[o]}入选" for c, o in zip(picks["code"], org) if o in kept}
+        final, swaps = annotate(picks, code, today, use_ai, taken)
+        final_org = final["code"].map(orgs[code])
+        kept |= {o: f" {MARKETS[code][0]}（{c} {n}）" for o, c, n in zip(final_org, final["code"], final["name"]) if pd.notna(o)}
         for s in swaps:
-            s["flag"] = FLAG_WORDS[s["flag"]]
-        markets.append({"code": code.upper(), "name": name, "currency": currency, "r": final["r"].iloc[0],
-                        "data_date": final["price_date"].max(), "swaps": swaps,
-                        "ai_notes": int((final["note_source"] != "template").sum()),
-                        "picks": [card(p) for p in final.to_dict("records")]})
+            s["ai"], s["flag"] = s["flag"] != "dual_listed", FLAG_WORDS[s["flag"]]
+        done[code] = {"code": code.upper(), "name": MARKETS[code][0], "currency": MARKETS[code][1],
+                      "r": final["r"].iloc[0], "data_date": final["price_date"].max(), "swaps": swaps,
+                      "ai_notes": int((final["note_source"] != "template").sum()),
+                      "picks": [card(p) for p in final.to_dict("records")]}
+    markets = [done[code] for code in MARKETS if code in done]
     if not markets:
         raise SystemExit(f"no picks CSV in {out}; run `run --market cn` first")
     size_gb = (size_of(DATA) + size_of(REPORTS)) / 1e9
