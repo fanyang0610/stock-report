@@ -26,22 +26,24 @@ def load_results(table: str = "results") -> pd.DataFrame:
 
 
 def ttm(results: pd.DataFrame) -> pd.DataFrame:
-    """Latest report per stock, plus trailing-12-month revenue and profit:
-    TTM = year-to-date + last full year - same period of last year. The fiscal year starts on the
-    row's `start` date when there is one (HK: March, June... year ends), else on January 1 (CN)."""
+    """Latest report per stock, plus trailing-12-month revenue and profit (and 扣非 EPS where the
+    table has it): TTM = year-to-date + last full year - same period of last year. The fiscal year
+    starts on the row's `start` date when there is one (HK: March, June... year ends), else on
+    January 1 (CN)."""
     results = results.dropna(subset=["revenue", "np"])
+    cols = ["revenue", "np"] + (["eps_deduct"] if "eps_deduct" in results else [])
     latest = results.loc[results.groupby("code")["period"].idxmax()].copy()
     start = pd.to_datetime(latest["start"] if "start" in latest else latest["period"].str[:4] + "-01-01")
     latest["fy_period"] = (start - pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d")
     latest["prior_period"] = (latest["period"].str[:4].astype(int) - 1).astype(str) + latest["period"].str[4:]
-    keyed = results.set_index(["code", "period"])[["revenue", "np"]]
+    keyed = results.set_index(["code", "period"])[cols]
     for tag, col in (("fy", "fy_period"), ("prior", "prior_period")):
         other = keyed.reindex(pd.MultiIndex.from_arrays([latest["code"], latest[col]]))
-        latest[f"revenue_{tag}"] = other["revenue"].to_numpy()
-        latest[f"np_{tag}"] = other["np"].to_numpy()
+        for c in cols:
+            latest[f"{c}_{tag}"] = other[c].to_numpy()
     annual = (pd.to_datetime(latest["period"]) - start).dt.days > 350
-    for col in ("revenue", "np"):
-        latest[f"{col}_ttm"] = np.where(annual, latest[col], latest[col] + latest[f"{col}_fy"] - latest[f"{col}_prior"])
+    for c in cols:
+        latest[f"{c}_ttm"] = np.where(annual, latest[c], latest[c] + latest[f"{c}_fy"] - latest[f"{c}_prior"])
     return latest.set_index("code")
 
 
@@ -129,7 +131,10 @@ def ratios(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def finish(df: pd.DataFrame, info: dict, checks: dict) -> tuple[pd.DataFrame, dict]:
-    """Drop stocks failing a check (first failing reason is recorded), then winsorize."""
+    """Drop stocks failing a check (first failing reason is recorded), clip cash conversion, then
+    winsorize. Cash conversion explodes when profit is tiny (兖煤澳大利亚 31.6) and mixes consolidated
+    cash flow with attributable profit, so it is clipped and left out below a minimum net margin."""
+    cfg = CONFIG["universe"]
     bad = pd.Series(False, index=df.index)
     for reason, mask in checks.items():
         mask = mask.fillna(False) & ~bad
@@ -137,6 +142,8 @@ def finish(df: pd.DataFrame, info: dict, checks: dict) -> tuple[pd.DataFrame, di
         bad |= mask
     df = df[~bad].copy()
     info["stages"]["complete, consistent data"] = len(df)
+    margin = df["np_ttm"] / df["revenue_ttm"].where(df["revenue_ttm"] > 0)
+    df["cash_conv"] = df["cash_conv"].clip(*cfg["cash_conv_range"]).where(margin >= cfg["cash_conv_min_margin"])
     lo, hi = CONFIG["value"]["winsor"]
     return winsorize(df, WINSORIZED, lo, hi), info
 
@@ -160,8 +167,8 @@ def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
     df["tdx_close"] = prices[prices["date"] == last].set_index("code")["close"].reindex(df.index)
     df = df.join(price_metrics(prices, list(df.index)))
     fund = ttm(load_results())
-    df = df.join(fund[["period", "notice_date", "revenue_ttm", "np_ttm", "bps", "eps", "ocfps",
-                       "gross_margin", "rev_yoy", "np_yoy"]])
+    df = df.join(fund.reindex(columns=["period", "notice_date", "revenue_ttm", "np_ttm", "bps", "eps", "ocfps",
+                                       "gross_margin", "rev_yoy", "np_yoy", "eps_deduct_ttm"]))  # 扣非 TTM: for v2
     balance = load_results("balance").dropna(subset=["debt_ratio"]).sort_values("period")
     df["debt_ratio"] = balance.groupby("code")["debt_ratio"].last().reindex(df.index) / 100
     df["dps_ttm"] = dividends(DATA / "fundamentals" / "cn_dividends.csv.gz", today).reindex(df.index).fillna(0)

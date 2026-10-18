@@ -13,6 +13,7 @@ from stockreport.cleanup import size_of
 from stockreport.config import CONFIG, DATA, REPORTS
 from stockreport.fetch import eastmoney
 from stockreport.notes import FLAG_WORDS, annotate
+from stockreport.pick import BUCKETS
 from stockreport.render import html_to_pdf, render_html, text_summary
 
 MARKETS = {"us": ("美股 US", "USD"), "hk": ("港股 HK", "HKD"), "cn": ("A股 CN", "CNY")}  # PDF order
@@ -37,7 +38,8 @@ def trigger(p: dict) -> str:
 
 
 def card(p: dict) -> dict:
-    return {"ticker": p["code"], "name": p["name"], "bucket": p["bucket"], "action": p["action"],
+    """The label comes from the bucket, so picks CSVs from before the rename read 买入 / 持有 / 卖出 too."""
+    return {"ticker": p["code"], "name": p["name"], "bucket": p["bucket"], "action": BUCKETS[p["bucket"]],
             "price": p["price"], "price_date": p["price_date"], "fv_low": p["fv_low"], "fv_mid": p["fv_mid"],
             "fv_high": p["fv_high"], "upside": p["upside"], "drivers": str(p["drivers"]).split("；"),
             "risk": p["key_risk"], "ai_risk": p["ai_risk"], "note": p["note"], "trigger": trigger(p),
@@ -88,6 +90,8 @@ def build(today: date, use_ai: bool = True) -> tuple[Path, str]:
         done[code] = {"code": code.upper(), "name": MARKETS[code][0], "currency": MARKETS[code][1],
                       "r": final["r"].iloc[0], "data_date": final["price_date"].max(), "swaps": swaps,
                       "ai_notes": int((final["note_source"] != "template").sum()),
+                      "excluded": [{"code": e["code"], "name": e["name"], "action": BUCKETS[e["bucket"]],
+                                    "reason": e["exclusion"]} for e in picks[picks["role"] == "excluded"].to_dict("records")],
                       "stale": (f"今日未能更新，沿用 {day} 的选股" if day != today else
                                 f"今日部分数据获取失败（{'、'.join(failed[code])}），沿用上次的缓存数据" if failed.get(code) else ""),
                       "picks": [card(p) for p in final.to_dict("records")]}

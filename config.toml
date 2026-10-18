@@ -7,6 +7,8 @@ history_days = 385            # calendar days of daily prices kept (12-1 momentu
 exclude_name_patterns = ["ST", "退"]
 us_candidates = 1100          # US: largest ordinary shares whose prices and fundamentals are kept (top_n after filters)
 hk_candidates = 1200          # HK: largest ordinary shares whose prices and consensus are kept (top_n after filters)
+cash_conv_range = [-1.0, 3.0] # operating cash flow / net profit is clipped to this range ...
+cash_conv_min_margin = 0.02   # ... and left out (NaN) when the net margin is below this
 
 [universe.min_turnover]       # 20-day average daily turnover, quote currency
 cn = 50_000_000

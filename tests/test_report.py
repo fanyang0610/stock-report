@@ -1,4 +1,5 @@
-"""End-to-end dry run: picks CSV -> notes (one flagged pick, no network) -> PDF + text summary + data/picks.csv."""
+"""End-to-end dry run: picks CSV -> notes (one flagged pick, no network) -> PDF + text summary + data/picks.csv.
+The picks sample is from before the bucket rename (持有/不追高, 卖出/回避): the report shows the new names."""
 
 import json
 from datetime import date
@@ -7,6 +8,9 @@ from pathlib import Path
 import pandas as pd
 
 from stockreport import notes, report, track
+from stockreport.pick import CSV_COLUMNS, pick
+from stockreport.score import score
+from stockreport.value import value
 
 SAMPLES = Path(__file__).parent / "data"
 DAY = date(2026, 10, 17)
@@ -38,8 +42,8 @@ def test_report_dry_run(tmp_path, monkeypatch):
     lines = summary.splitlines()
     assert lines[0] == "股票报告 2026-10-17"
     assert len([x for x in lines if " 买入 " in x]) == 5
-    assert len([x for x in lines if " 持有/不追高 " in x]) == 5
-    assert len([x for x in lines if " 卖出/回避 " in x]) == 5
+    assert len([x for x in lines if " 持有 " in x]) == 5
+    assert len([x for x in lines if " 卖出 " in x]) == 5
     assert "301308" not in "".join(x for x in lines if " 买入 " in x)  # swapped out ...
     assert any(x.startswith("000792 盐湖股份 买入") for x in lines)   # ... for the first runner-up
     assert lines[-3] == "AI 标记后替换：江波龙"
@@ -71,7 +75,28 @@ def test_issuer_picked_in_two_markets_is_listed_once(tmp_path, monkeypatch):
     monkeypatch.setattr(report, "issuers", lambda: {"cn": same, "hk": same, "us": pd.Series(dtype=str)})
     pdf, summary = build(tmp_path, monkeypatch, ["cn", "hk"])
     hk, cn = summary.split("港股 HK")[1].split("A股 CN")
-    assert "603259" not in hk and "600061 国投资本 持有/不追高" in hk  # the next HK hold moves up
+    assert "603259" not in hk and "600061 国投资本 持有" in hk  # the next HK hold moves up
     assert "其他市场已入选、不重复列出：药明康德" in hk and "AI 标记后替换：江波龙" in hk
-    assert "603259 药明康德 持有/不追高" in cn and "其他市场已入选" not in cn
+    assert "603259 药明康德 持有" in cn and "其他市场已入选" not in cn
     assert "同一发行人已在 A股 CN（603259 药明康德）入选" in (tmp_path / DAY.isoformat() / "report.html").read_text(encoding="utf-8")
+
+
+def test_no_notes_run_still_applies_checks_1_2(tmp_path, monkeypatch):
+    # A picks CSV as `run` writes it today (CN sample), and no DeepSeek at all: 寒武纪 and 中微公司 (profit
+    # +123% / +300% on cash conversion 0.13 / 0.17) never reach the report's picks and are listed instead.
+    scored = score(value(pd.read_csv(SAMPLES / "cn_sample.csv", dtype={"code": str}).set_index("code"), 0.0765))
+    folder = tmp_path / DAY.isoformat()
+    folder.mkdir()
+    pick(scored).assign(r=0.0765, price_date="2026-10-16").reindex(columns=CSV_COLUMNS).to_csv(
+        folder / "cn_picks.csv", index=False, encoding="utf-8-sig")
+    monkeypatch.setattr(report, "REPORTS", tmp_path)
+    monkeypatch.setattr(track, "PICKS_LOG", tmp_path / "picks.csv")
+    monkeypatch.setattr(report, "issuers", lambda: {m: pd.Series(dtype=str) for m in ("cn", "hk", "us")})
+    pdf, summary = report.build(DAY, use_ai=False)
+    lines = summary.splitlines()
+    for label in ("买入", "持有", "卖出"):
+        assert len([x for x in lines if f" {label} " in x]) == 5
+    assert "利润异常已剔除：寒武纪、中微公司" in lines and "688256" not in summary and "688012" not in summary
+    html = (folder / "report.html").read_text(encoding="utf-8")
+    assert "利润异常已剔除（2）" in html and "688012 中微公司（持有候选）" in html
+    assert set(track.load()["ticker"]).isdisjoint({"688256", "688012"})

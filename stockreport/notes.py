@@ -13,6 +13,7 @@ from dotenv import dotenv_values
 
 from stockreport.config import CONFIG, REPORTS, ROOT
 from stockreport.fetch import cninfo, hkex, sec
+from stockreport.pick import BUCKETS, one_off
 
 log = logging.getLogger(__name__)
 # Announcement titles per market: org_ids() -> {code: id}, titles(code, id, today, days, limit)
@@ -26,7 +27,7 @@ NOTE_MAX, RISK_MAX = 60, 30
 SYSTEM = """你是 A 股研究助理，为程序生成的选股卡片写简短中文点评。卡片上的所有数字都由程序根据公开数据计算，你不能修改它们。
 规则：
 1. 只依据给出的数字和公告标题。不得给出任何新的价格、目标价、公允价、盈利预测或评分；可以引用给出的数字。
-2. note：一到两句话，不超过 60 个字（汉字和中文标点算 1 个字，数字、字母和英文符号算半个字），说明这个动作（买入 / 持有·不追高 / 卖出·回避）的主要依据和最需要注意的地方。
+2. note：一到两句话，不超过 60 个字（汉字和中文标点算 1 个字，数字、字母和英文符号算半个字），说明这个动作（买入 / 持有 / 卖出）的主要依据和最需要注意的地方。
 3. risk：不超过 30 个字（同样计算），最主要的风险。
 4. flag 只能取以下之一，只有当数字或公告标题给出明确依据时才标记，否则为 none：
    - one_off_gain：近期利润不能代表正常盈利水平。满足以下任一条就必须标记：检查一为"是"；检查二为"是"；检查三为"是"，且公告标题显示明确的一次性收益（出售资产或子公司、投资收益、公允价值变动、授权或许可首付款、政府补助等），它很可能是利润大增的主要来源。检查三为"否"时，公告里的一次性收益不足以标记。仅凭增速高、处于周期行业或行情好不标记。银行、券商、保险的投资和交易收益属于主营业务，不算一次性收益。卖出档不标记 one_off_gain（一次性收益只会让高估更明显）。
@@ -44,19 +45,13 @@ def pct(x) -> str:
 
 
 def spike(row: pd.Series) -> dict:
-    """The one_off_gain checks for a buy or hold candidate, computed from the data so the flag is
-    applied the same way to every stock (None = not applicable; thresholds in config.toml [notes]).
-    1: profit jump without cash; 2: analysts expect profit to fall back; 3: profit outgrew revenue,
-    the precondition for a one-off item in the announcement titles to count."""
-    cfg, min_analysts = CONFIG["notes"], CONFIG["value"]["forward_min_analysts"]
-    out = {"c1": None, "c2": None, "ratio": None,
-           "c3": bool(row["np_growth"] - row["rev_growth"] >= cfg["title_gap"])}
-    if row["method"] != "P/B on ROE" and pd.notna(row["cash_conv"]) and row["np_ttm"] > 0:
-        out["c1"] = bool(row["np_growth"] > cfg["spike_growth"] and row["cash_conv"] < cfg["spike_cash_conv"])
-    if row["analysts"] >= min_analysts and row["eps_ttm"] > 0 and pd.notna(row["eps_e2"]):
-        out["ratio"] = row["eps_e2"] / row["eps_ttm"]
-        out["c2"] = bool(out["ratio"] < cfg["eps_fall"])
-    return out
+    """pick.one_off for one candidate, as plain values (None = not applicable). Checks 1-2 already
+    removed buy and hold candidates at pick time; here they explain the numbers to DeepSeek, and
+    check 3 decides whether a one-off item in the titles may flag a stock."""
+    c = one_off(pd.DataFrame([row]).infer_objects()).iloc[0]
+    plain = lambda v: None if pd.isna(v) else bool(v)
+    return {"c1": plain(c["c1"]), "c2": plain(c["c2"]), "c3": bool(c["c3"]),
+            "ratio": None if pd.isna(c["eps_ratio"]) else float(c["eps_ratio"])}
 
 
 def checks(row: pd.Series) -> list[str]:
@@ -83,7 +78,7 @@ def card_numbers(row: pd.Series, unit: str = "亿元") -> str:
     financial = row["method"] == "P/B on ROE"  # margins, cash flow and leverage mean little for banks/brokers/insurers
     lines = [
         f"股票：{row['code']} {row['name']}（行业：{row['industry']}）",
-        f"动作：{row['action']}；信心：{row['conviction']}",
+        f"动作：{BUCKETS[row['bucket']]}；信心：{row['conviction']}",
         f"现价 {num(row['price'])}（{row['price_date']}）；公允价 低/中/高 {num(row['fv_low'])} / "
         f"{num(row['fv_mid'])} / {num(row['fv_high'])}；空间 {pct(row['upside'])}",
         f"估值方法：{row['method']}；按近期利润/净资产的公允价 {num(row['fv_trailing'])}；"
@@ -230,13 +225,6 @@ class Notes:
         if why := unsupported(row, note, titles):
             log.info("%s %s: %s ignored, %s: %s", row["code"], row["name"], note["flag"], why, note["reason"])
             note["flag"], note["reason"] = "none", "无"
-        c = spike(row)
-        if row["bucket"] != "sell" and note["flag"] == "none" and (c["c1"] or c["c2"]):  # checks 1-2 always flag
-            note["flag"] = "one_off_gain"
-            note["reason"] = (f"{row['analysts']:.0f} 家分析师预期明年 EPS 只有近 12 个月的 {c['ratio']:.2f} 倍，近期利润难以持续。"
-                              if c["c2"] else f"净利润同比 {row['np_growth']:+.0%}，但经营现金流/净利润只有 "
-                              f"{row['cash_conv']:.2f}，利润缺少现金支撑。")
-            log.info("%s %s: one_off_gain set by check %d", row["code"], row["name"], 2 if c["c2"] else 1)
         return note
 
     def store(self, code: str, note: dict) -> None:

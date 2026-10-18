@@ -5,9 +5,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from stockreport.fetch.eastmoney import consensus_table, is_open, quarter_ends
+from stockreport.fetch.eastmoney import consensus_table, forecast_table, is_open, quarter_ends, results_table
 from stockreport.fetch.tdx import parse_package
-from stockreport.universe import ttm
+from stockreport.universe import WINSORIZED, finish, ttm
 
 SAMPLES = Path(__file__).parent / "data"
 
@@ -146,3 +146,36 @@ def test_flags_need_a_check_or_a_quoted_title():
     # 药明康德: a real asset-sale title, but profit (+29%) grew slower than revenue (+39%)
     assert unsupported(picks.loc["603259"], note("one_off_gain", "关于出售部分股票资产的公告"), titles) != ""
     assert unsupported(picks.loc["301308"], note("one_off_gain"), titles) == ""  # 江波龙 passes check 1
+
+
+def test_ttm_includes_deducted_eps_when_the_table_has_it():
+    results = pd.DataFrame({"code": ["A"] * 3, "period": ["2026-06-30", "2025-12-31", "2025-06-30"],
+                            "revenue": [60.0, 100.0, 50.0], "np": [6.0, 10.0, 4.0], "eps_deduct": [0.5, 0.8, 0.3]})
+    assert ttm(results).loc["A", "eps_deduct_ttm"] == pytest.approx(1.0)  # 0.5 + 0.8 - 0.3
+    assert "eps_deduct_ttm" not in ttm(results.drop(columns="eps_deduct"))
+
+
+def test_cash_conversion_is_clipped_and_needs_a_margin():
+    # 兖煤澳大利亚-like: profit down 90%, cash conversion 31.6; a near-zero margin makes the ratio meaningless.
+    df = pd.DataFrame({c: [0.1] * 4 for c in WINSORIZED}, index=list("ABCD"))
+    df["cash_conv"] = [31.6, -5.0, 0.8, 2.0]
+    df["np_ttm"], df["revenue_ttm"] = [10.0, 10.0, 10.0, 1.0], [100.0, 100.0, 100.0, 100.0]
+    out, _ = finish(df, {"stages": {}, "dropped": {}}, {})
+    assert out["cash_conv"].tolist()[:3] == pytest.approx([3.0, -1.0, 0.8], abs=0.1)  # after the 2/98% winsor
+    assert pd.isna(out.loc["D", "cash_conv"])  # net margin 1% < 2%
+
+
+def test_results_table_keeps_deducted_eps_and_roe():
+    rows = json.loads((SAMPLES / "cn_history_sample.json").read_text(encoding="utf-8"))["annual"]  # FY2025, real rows
+    df = results_table(rows).set_index("code")
+    assert df.loc["600519", ["eps", "eps_deduct", "roe"]].tolist() == pytest.approx([65.66, 65.64, 32.53])
+    assert df.loc["002466", "eps_deduct"] == pytest.approx(0.22) and df.loc["002466", "notice_date"] == "2026-03-28"
+
+
+def test_forecast_table_one_row_per_indicator():
+    rows = json.loads((SAMPLES / "cn_history_sample.json").read_text(encoding="utf-8"))["forecasts"]
+    df = forecast_table(rows)
+    assert len(df) == 3 and set(df["code"]) == {"300505"} and set(df["period"]) == {"2026-09-30"}
+    profit = df[df["item"] == "归属于上市公司股东的净利润"].iloc[0]
+    assert (profit["type"], profit["amount_low"], profit["amount_high"]) == ("略减", 160000000, 180000000)
+    assert (profit["yoy_low"], profit["yoy_high"], profit["notice_date"]) == (-47.44, -40.87, "2026-10-10")

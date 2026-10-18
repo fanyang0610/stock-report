@@ -30,16 +30,20 @@ def neutral_z(x: pd.Series, groups: pd.Series) -> pd.Series:
 
 
 def _component(df: pd.DataFrame, items: list, rows: pd.Series) -> pd.Series:
+    """Mean of the metrics' z-scores, standardized within `rows`: an average of four metrics spreads
+    less than one metric alone, so financials (quality = ROE only) would otherwise crowd the top."""
     sub = df[rows]
     zs = [neutral_z(sign * sub[metric], sub["peer_group"]) for metric, sign in items]
-    return pd.concat(zs, axis=1).mean(axis=1)
+    mean = pd.concat(zs, axis=1).mean(axis=1)
+    sd = mean.std()
+    return (mean - mean.mean()) / sd if sd > 0 else mean * 0
 
 
 def score(df: pd.DataFrame) -> pd.DataFrame:
     weights = CONFIG["score"]["weights"]
     df = df.copy()
     fin = df["financial"].astype(bool)
-    for comp, items in COMPONENTS.items():
+    for comp, items in COMPONENTS.items():  # financials and the rest standardized apart, then combined
         raw = pd.concat([_component(df, items, ~fin), _component(df, FINANCIAL.get(comp, items), fin)])
         raw = raw.reindex(df.index)
         df[f"z_{comp}"] = ((raw - raw.mean()) / raw.std()).clip(-3, 3)

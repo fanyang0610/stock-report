@@ -1,7 +1,9 @@
 """Eastmoney datacenter (datacenter-web.eastmoney.com): CN daily valuation, quarterly results,
 balance sheets, dividends and the ChinaBond 10-year yield it republishes; the HK company list and
 main indicators; and Eastmoney's company id (ORG_CODE), which is the same for every listing of one
-issuer (A/H pairs, US ADRs and their HK lines), for the cross-market issuer dedupe."""
+issuer (A/H pairs, US ADRs and their HK lines), for the cross-market issuer dedupe.
+History (data/history/): CN annual results since 2015 with 扣非 EPS, the CN valuation table at every
+half-year end since 2018-12, HK main indicators since 2015, and the market-wide 业绩预告 table."""
 
 import logging
 from datetime import date, timedelta
@@ -9,7 +11,7 @@ from datetime import date, timedelta
 import pandas as pd
 
 from stockreport.config import CONFIG, DATA
-from stockreport.fetch import Http, needs_refresh, save_raw, save_rates, write
+from stockreport.fetch import HISTORY, Http, merge, needs_refresh, save_raw, save_rates, write
 
 log = logging.getLogger(__name__)
 URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
@@ -80,19 +82,27 @@ def is_open(period: date, today: date) -> bool:
     return period < today <= deadline + timedelta(days=7)
 
 
+CN_RESULTS = {"SECURITY_CODE": "code", "NOTICE_DATE": "notice_date", "BASIC_EPS": "eps", "DEDUCT_BASIC_EPS": "eps_deduct",
+              "TOTAL_OPERATE_INCOME": "revenue", "PARENT_NETPROFIT": "np", "YSTZ": "rev_yoy", "SJLTZ": "np_yoy",
+              "BPS": "bps", "MGJYXJJE": "ocfps", "XSMLL": "gross_margin", "WEIGHTAVG_ROE": "roe"}  # eps_deduct: 扣非 EPS
+
+
+def results_table(rows: list[dict]) -> pd.DataFrame:
+    """业绩报表 rows -> code, notice date, EPS and 扣非 EPS, revenue, profit, growth (%), BPS,
+    operating cash flow per share, gross margin (%) and weighted ROE (%)."""
+    df = pd.DataFrame(rows, columns=list(CN_RESULTS)).rename(columns=CN_RESULTS)
+    df["notice_date"] = df["notice_date"].str[:10]
+    return df
+
+
 def update_fundamentals(today: date) -> None:
     """Quarterly results (业绩报表) and balance sheets for the last few report periods."""
     for i, period in enumerate(quarter_ends(today, CONFIG["fetch"]["quarters_kept"])):
         p, opened = period.isoformat(), is_open(period, today)
         path = DATA / "fundamentals" / f"cn_results_{p}.csv.gz"
         if needs_refresh(path, today, opened):
-            rows = datacenter("RPT_LICO_FN_CPD", f"(REPORTDATE='{p}'){A_SHARES}",
-                              "SECURITY_CODE,NOTICE_DATE,BASIC_EPS,TOTAL_OPERATE_INCOME,PARENT_NETPROFIT,"
-                              "YSTZ,SJLTZ,BPS,MGJYXJJE,XSMLL", raw=f"cn_results_{p}")
-            df = pd.DataFrame(rows, columns=["SECURITY_CODE", "NOTICE_DATE", "BASIC_EPS", "TOTAL_OPERATE_INCOME",
-                                             "PARENT_NETPROFIT", "YSTZ", "SJLTZ", "BPS", "MGJYXJJE", "XSMLL"])
-            df.columns = ["code", "notice_date", "eps", "revenue", "np", "rev_yoy", "np_yoy", "bps", "ocfps", "gross_margin"]
-            df["notice_date"] = df["notice_date"].str[:10]
+            df = results_table(datacenter("RPT_LICO_FN_CPD", f"(REPORTDATE='{p}'){A_SHARES}", ",".join(CN_RESULTS),
+                                          raw=f"cn_results_{p}"))
             write(df, path)
             log.info("cn results %s: %d rows", p, len(df))
         path = DATA / "fundamentals" / f"cn_balance_{p}.csv.gz"
@@ -159,13 +169,75 @@ def update_yield() -> None:
                              for r in rows if r["EMM00166466"] is not None]), "cn")
 
 
+CN_ANNUAL, CN_VALUATION = HISTORY / "cn_annual.csv.gz", HISTORY / "cn_valuation.csv.gz"
+CN_FORECASTS = HISTORY / "cn_forecasts.csv.gz"
+VALUATION_FIELDS = {"SECURITY_CODE": "code", "TRADE_DATE": "trade_date", "CLOSE_PRICE": "close",
+                    "TOTAL_MARKET_CAP": "mcap", "TOTAL_SHARES": "shares", "PE_TTM": "pe_ttm", "PB_MRQ": "pb_mrq", "PS_TTM": "ps_ttm"}
+FORECAST_FIELDS = {"SECURITY_CODE": "code", "SECURITY_NAME_ABBR": "name", "NOTICE_DATE": "notice_date",
+                   "REPORT_DATE": "period", "PREDICT_FINANCE_CODE": "item_code", "PREDICT_FINANCE": "item",
+                   "PREDICT_TYPE": "type", "PREDICT_AMT_LOWER": "amount_low", "PREDICT_AMT_UPPER": "amount_high",
+                   "ADD_AMP_LOWER": "yoy_low", "ADD_AMP_UPPER": "yoy_high", "PREYEAR_SAME_PERIOD": "prior_year"}
+
+
+def periods_in(path, column: str = "period") -> set[str]:
+    return set(pd.read_csv(path, usecols=[column], dtype=str)[column]) if path.exists() else set()
+
+
+def update_cn_history(today: date) -> None:
+    """Annual results for every fiscal year since 2015 (each fetched once; the latest again every week
+    while its reports are still coming in), and the valuation table on the last trading day of every
+    half-year since 2018-12 (Eastmoney has nothing earlier)."""
+    have, frames = periods_in(CN_ANNUAL), []
+    for year in range(2015, today.year):
+        period = date(year, 12, 31)
+        if period.isoformat() not in have or (is_open(period, today) and needs_refresh(CN_ANNUAL, today)):
+            rows = datacenter("RPT_LICO_FN_CPD", f"(REPORTDATE='{period}'){A_SHARES}", ",".join(CN_RESULTS))
+            frames.append(results_table(rows).assign(period=period.isoformat()))
+            log.info("cn annual %s: %d rows", period, len(rows))
+    if frames:
+        merge(CN_ANNUAL, pd.concat(frames), ["code", "period"])
+    have, frames = periods_in(CN_VALUATION), []
+    ends = [date(y, m, d) for y in range(2018, today.year + 1) for m, d in ((6, 30), (12, 31))]
+    for end in [e for e in ends if date(2018, 12, 1) < e < today and e.isoformat() not in have]:
+        for back in range(8):  # holidays: step back to the last trading day
+            day = (end - timedelta(days=back)).isoformat()
+            if rows := datacenter("RPT_VALUEANALYSIS_DET", f"(TRADE_DATE='{day}')", ",".join(VALUATION_FIELDS)):
+                df = pd.DataFrame(rows, columns=list(VALUATION_FIELDS)).rename(columns=VALUATION_FIELDS)
+                frames.append(df.assign(trade_date=day, period=end.isoformat()))
+                log.info("cn valuation %s: %d rows", day, len(rows))
+                break
+    if frames:
+        merge(CN_VALUATION, pd.concat(frames), ["code", "period"])
+
+
+def forecast_table(rows: list[dict]) -> pd.DataFrame:
+    """业绩预告 rows -> one row per stock, period, indicator and notice: the range of the amount and of
+    the change on a year earlier (%), the type (预增, 扭亏, ...) and last year's figure."""
+    df = pd.DataFrame(rows, columns=list(FORECAST_FIELDS)).rename(columns=FORECAST_FIELDS)
+    df["notice_date"], df["period"] = df["notice_date"].str[:10], df["period"].str[:10]
+    return df
+
+
+def update_forecasts(today: date, backfill_days: int = 400) -> None:
+    """The market-wide 业绩预告 table, daily from a week before the newest stored notice (the first
+    time, the last `backfill_days` days)."""
+    have = periods_in(CN_FORECASTS, "notice_date")
+    since = (date.fromisoformat(max(have)) - timedelta(days=7) if have else today - timedelta(days=backfill_days)).isoformat()
+    rows = datacenter("RPT_PUBLIC_OP_NEWPREDICT", f"(NOTICE_DATE>='{since}')", ",".join(FORECAST_FIELDS),
+                      sort="NOTICE_DATE,SECURITY_CODE,REPORT_DATE,PREDICT_FINANCE_CODE", sort_type="1,1,1,1")
+    merge(CN_FORECASTS, forecast_table(rows), ["code", "period", "item_code", "notice_date"])
+    log.info("cn forecasts: %d rows since %s", len(rows), since)
+
+
 HK_LIST, HK_RESULTS = DATA / "quotes" / "hk_list.csv.gz", DATA / "fundamentals" / "hk_results.csv.gz"
-US_ORGS = DATA / "fundamentals" / "us_org.csv.gz"
+US_ORGS, HK_HISTORY = DATA / "fundamentals" / "us_org.csv.gz", HISTORY / "hk_results.csv.gz"
 HK_FIELDS = {"SECURITY_CODE": "code", "REPORT_DATE": "period", "START_DATE": "start", "DATE_TYPE_CODE": "date_type",
              "OPERATE_INCOME": "revenue", "HOLDER_PROFIT": "np", "OPERATE_INCOME_YOY": "rev_yoy",
              "HOLDER_PROFIT_YOY": "np_yoy", "GROSS_PROFIT_RATIO": "gross_margin", "BPS": "bps",
              "NETCASH_OPERATE": "ocf", "DEBT_ASSET_RATIO": "debt_ratio", "ISSUED_COMMON_SHARES": "shares",
+             "BASIC_EPS": "eps", "ROE_AVG": "roe",
              "TOTAL_MARKET_CAP": "mcap_em", "PE_TTM": "pe_ttm_em", "PB_TTM": "pb_ttm_em"}
+HK_CURRENT = ["mcap_em", "pe_ttm_em", "pb_ttm_em"]  # today's values on every row: not history
 
 
 def update_hk_list(today: date) -> None:
@@ -199,6 +271,22 @@ def update_hk_fundamentals(today: date) -> None:
                                sort="SECURITY_CODE,REPORT_DATE", sort_type="1,1"))
     write(df, HK_RESULTS)
     log.info("hk results: %d rows for %d companies since %s", len(df), df["code"].nunique(), since)
+
+
+def update_hk_history(today: date) -> None:
+    """Main indicators of every HK company since 2015 (amounts in CNY, as in the weekly table): fetched
+    once, then topped up from the weekly table whenever it is newer, with no extra calls."""
+    if not HK_HISTORY.exists():
+        df = hk_results(datacenter("RPT_HKF10_FN_MAININDICATOR", "(REPORT_DATE>='2015-01-01')", ",".join(HK_FIELDS),
+                                   sort="SECURITY_CODE,REPORT_DATE", sort_type="1,1", max_pages=400))
+        write(df.drop(columns=HK_CURRENT), HK_HISTORY)
+        log.info("hk history: %d rows for %d companies", len(df), df["code"].nunique())
+        return
+    if HK_RESULTS.stat().st_mtime <= HK_HISTORY.stat().st_mtime:
+        return
+    weekly = pd.read_csv(HK_RESULTS, dtype={"code": str, "period": str, "start": str, "date_type": str})
+    if "roe" in weekly:  # a weekly table fetched before Phase 7 has no eps/roe: wait for the next one
+        merge(HK_HISTORY, weekly.drop(columns=HK_CURRENT), ["code", "period", "date_type"])
 
 
 def load_hk_list() -> pd.DataFrame:

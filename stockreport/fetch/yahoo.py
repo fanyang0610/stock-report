@@ -7,7 +7,10 @@
 - '<CUR>=X' FX rates for those reporting currencies (and HK's), and daily '<CUR>CNY=X' history to undo
   Eastmoney's conversion of HK companies' figures to CNY at each period-end rate.
 - quoteSummary: HK consensus EPS for this and next fiscal year, and the reporting currency (needs a
-  cookie + crumb)."""
+  cookie + crumb).
+- History (weekly, on Sundays): annual results for the US companies SEC has no annual history for
+  (Yahoo keeps 4-5 years), and ~11 years of month-end closes, monthly returns and splits for US/HK
+  stocks, their index and the FX rates own-history P/B needs (HKDCNY, US reporting currencies)."""
 
 import logging
 import time
@@ -17,7 +20,7 @@ from pathlib import Path
 import pandas as pd
 
 from stockreport.config import CONFIG, DATA
-from stockreport.fetch import Http, each, merge, stale, upsert_each, write
+from stockreport.fetch import HISTORY, Http, each, merge, stale, upsert_each, write
 
 log = logging.getLogger(__name__)
 URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
@@ -26,6 +29,14 @@ SUMMARY = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}"
 PRICES, DIVIDENDS = DATA / "prices" / "{}.csv.gz", DATA / "fundamentals" / "{}_dividends.csv.gz"
 GAPS, FX, CONSENSUS = DATA / "fundamentals" / "us_yahoo.csv.gz", DATA / "fx.csv", DATA / "fundamentals" / "hk_consensus.csv.gz"
 FX_CNY = DATA / "fx_cny.csv.gz"
+MONTHLY, SPLITS = HISTORY / "{}_monthly.csv.gz", HISTORY / "{}_splits.csv.gz"
+HISTORY_YEARS = 11
+# annual history columns as in sec.TAXONOMIES; capex and dividends paid are negative in Yahoo, stored positive
+ANNUAL_FIELDS = {"revenue": "TotalRevenue", "gp": "GrossProfit", "op_income": "OperatingIncome", "ni": "NetIncome",
+                 "ni_common": "NetIncomeCommonStockholders", "ni_cont": "NetIncomeContinuousOperations",
+                 "ocf": "OperatingCashFlow", "capex": "CapitalExpenditure", "div": "CashDividendsPaid",
+                 "dil_shares": "DilutedAverageShares", "equity": "StockholdersEquity", "pref": "PreferredStockEquity",
+                 "assets": "TotalAssets", "liabilities": "TotalLiabilitiesNetMinorityInterest", "shares": "OrdinarySharesNumber"}
 FIELDS = {"revenue": "TotalRevenue", "np": "NetIncomeCommonStockholders", "gp": "GrossProfit",
           "ocf": "OperatingCashFlow", "equity": "StockholdersEquity",
           "liabilities": "TotalLiabilitiesNetMinorityInterest", "assets": "TotalAssets"}
@@ -217,3 +228,92 @@ def cny_per(currency: pd.Series, day: pd.Series) -> pd.Series:
     rows = pd.DataFrame({"row": range(len(day)), "currency": currency.to_numpy(), "date": pd.to_datetime(day.to_numpy())})
     rate = pd.merge_asof(rows.sort_values("date"), rates, on="date", by="currency").sort_values("row")["close"]
     return pd.Series(rate.to_numpy(), index=currency.index).where(currency != "CNY", 1.0)
+
+
+def parse_annual(code: str, payload: dict) -> list[dict]:
+    """One row per fiscal year (asOfDate) in the reporting currency, columns as in the SEC history."""
+    by = {}
+    for item in payload["timeseries"]["result"]:
+        name = item["meta"]["type"][0]
+        key = next((k for k, t in ANNUAL_FIELDS.items() if "annual" + t == name), None)
+        for v in item.get(name) or []:
+            if v and key:
+                row = by.setdefault(v["asOfDate"], {"code": code, "fy_end": v["asOfDate"], "source": "Yahoo"})
+                row["currency"] = row.get("currency") or v.get("currencyCode")
+                row[key] = abs(v["reportedValue"]["raw"]) if key in ("capex", "div") else v["reportedValue"]["raw"]
+    return [by[k] for k in sorted(by)]
+
+
+def annual_series(client: Http, code: str) -> list[dict]:
+    types = ",".join("annual" + t for t in ANNUAL_FIELDS.values())
+    payload = client.get(TIMESERIES.format(symbol=code.replace(".", "-")), params={
+        "type": types, "period1": int(time.time()) - HISTORY_YEARS * 365 * 86400, "period2": int(time.time())}).json()
+    return parse_annual(code, payload)
+
+
+def update_annual(today: date, codes: list[str], path: Path, days: int = 90) -> None:
+    """Sundays: Yahoo annual results for `codes` (the companies SEC has no annual history for) that
+    have none yet or were fetched more than `days` ago, upserted into the US annual history."""
+    if today.weekday() != 6 and path.exists():
+        return
+    todo, rows = stale(path, codes, today, days), []
+    for got in each(make_http, annual_series, todo, 2):
+        rows += [r | {"fetched": today.isoformat()} for r in got or []]
+    if rows:
+        merge(path, pd.DataFrame(rows), ["code", "fy_end"])
+    log.info("yahoo annual history: %d rows for %d of %d companies", len(rows), len({r["code"] for r in rows}), len(todo))
+
+
+def parse_monthly(code: str, payload: dict, now: float | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Complete months only (code, month, close, ret) and splits (code, date, ratio). Yahoo divides closes
+    before a split by its ratio; close here is as traded (the ratios of later splits multiplied back), so
+    it matches the per-share book value reported at the time. ret is the month's total return (adjclose)."""
+    res = payload["chart"]["result"][0]
+    offset = timedelta(seconds=res["meta"].get("gmtoffset", 0), hours=12)  # bars start at local midnight; DST moves it an hour
+    local = lambda ts: datetime.fromtimestamp(ts, timezone.utc) + offset
+    df = pd.DataFrame({"month": [local(t).strftime("%Y-%m") for t in res.get("timestamp") or []],
+                       "close": res["indicators"]["quote"][0]["close"], "adj": res["indicators"]["adjclose"][0]["adjclose"]})
+    df = df.dropna().drop_duplicates("month")
+    df = df[df["month"] < local(now or time.time()).strftime("%Y-%m")].reset_index(drop=True)  # the current month isn't over
+    splits = pd.DataFrame([{"code": code, "date": local(s["date"]).date().isoformat(), "ratio": s["numerator"] / s["denominator"]}
+                           for s in (res.get("events") or {}).get("splits", {}).values()], columns=["code", "date", "ratio"])
+    for day, ratio in zip(splits["date"], splits["ratio"]):
+        df.loc[df["month"] < day[:7], "close"] *= ratio
+    df["ret"] = df["adj"] / df["adj"].shift(1) - 1
+    return df.assign(code=code)[["code", "month", "close", "ret"]].round({"close": 4, "ret": 6}), splits
+
+
+def monthly(client: Http, job: tuple[str, str, date]) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+    code, symbol, start = job
+    resp = client.get(URL.format(symbol=symbol), ok=(200, 404), params={
+        "period1": int(datetime(start.year, start.month, 1, tzinfo=timezone.utc).timestamp()),
+        "period2": int(time.time()), "interval": "1mo", "events": "div,split"})
+    return parse_monthly(code, resp.json()) if resp.status_code == 200 else None
+
+
+def update_monthly(today: date, market: str, codes: list[str], fx: set[str] = frozenset()) -> None:
+    """Sundays (or when missing): months since each code's last stored one, ~11 years for new codes;
+    the index under its price-table code and FX rates under their Yahoo symbols (e.g. HKDCNY=X).
+    Saved every 300 codes, so an interrupted run keeps what it got."""
+    path, (index_symbol, index_code, symbol) = Path(str(MONTHLY).format(market)), MARKETS[market]
+    if path.exists() and today.weekday() != 6:
+        return
+    old = pd.read_csv(path, dtype={"code": str, "month": str}) if path.exists() else pd.DataFrame(columns=["code", "month"])
+    last, done = old.groupby("code")["month"].max(), (today.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    first = date(today.year - HISTORY_YEARS, today.month, 1)
+    jobs = [(c, symbol(c)) for c in codes] + [(index_code, index_symbol)] + [(f, f) for f in sorted(fx)]
+    todo = [(c, s, date.fromisoformat(last[c] + "-01") if c in last else first) for c, s in jobs if last.get(c, "") < done]
+    frames, splits, updated = [old], [], 0
+    for i, got in enumerate(each(make_http, monthly, todo, 2), 1):
+        if got:
+            frames.append(got[0])
+            splits.append(got[1])
+            updated += 1
+        if i % 300 == 0 or i == len(todo):
+            frames = [pd.concat(frames).drop_duplicates(["code", "month"]).sort_values(["code", "month"])]  # stored months win
+            write(frames[0], path)
+            if splits:
+                merge(Path(str(SPLITS).format(market)), pd.concat(splits), ["code", "date"])
+                splits = []
+            log.info("yahoo %s monthly: %d of %d", market, i, len(todo))
+    log.info("yahoo %s monthly: %d of %d codes updated to %s", market, updated, len(todo), done)

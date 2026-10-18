@@ -4,8 +4,8 @@ from datetime import date, timedelta
 
 _ROWS = [  # bucket, action, price, fair value low/mid/high
     ("buy", "买入", 100.0, 112.0, 125.0, 140.0),
-    ("hold", "持有/不追高", 50.0, 45.0, 52.0, 58.0),
-    ("sell", "卖出/回避", 80.0, 52.0, 60.0, 68.0),
+    ("hold", "持有", 50.0, 45.0, 52.0, 58.0),
+    ("sell", "卖出", 80.0, 52.0, 60.0, 68.0),
 ]
 _MARKETS = [("US", "美股 US", "USD"), ("HK", "港股 HK", "HKD"), ("CN", "A股 CN", "CNY")]
 _NAMES = ["测试公司甲", "测试公司乙", "测试公司丙"]

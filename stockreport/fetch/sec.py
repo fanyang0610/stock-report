@@ -1,7 +1,8 @@
 """SEC EDGAR (data.sec.gov): trailing-12-month US fundamentals from companyfacts (XBRL, us-gaap, USD),
-and recent filing titles from the submissions list for the AI notes. At most 10 requests/s, with the
-User-Agent SEC_USER_AGENT from .env. companyfacts files are several MB each: they are parsed in memory
-and never written to disk; only the extracted row per company is kept (refreshed weekly)."""
+annual history from the same files (10-K, 20-F and 40-F, us-gaap or ifrs-full, in the reporting
+currency), and recent filing titles from the submissions list for the AI notes. At most 10 requests/s,
+with the User-Agent SEC_USER_AGENT from .env. companyfacts files are several MB each: they are parsed
+in memory and never written to disk; only the extracted rows per company are kept (refreshed weekly)."""
 
 from datetime import date, timedelta
 
@@ -9,12 +10,13 @@ import pandas as pd
 from dotenv import dotenv_values
 
 from stockreport.config import DATA, ROOT
-from stockreport.fetch import Http, stale, upsert_each, write
+from stockreport.fetch import HISTORY, Http, stale, upsert_each, write
 
 TICKERS = "https://www.sec.gov/files/company_tickers_exchange.json"
 FACTS = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
 SUBMISSIONS = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
 CIKS, TABLE = DATA / "fundamentals" / "us_cik.csv.gz", DATA / "fundamentals" / "us_facts.csv.gz"
+ANNUAL = HISTORY / "us_annual.csv.gz"  # one row per company and fiscal year (SEC, else Yahoo)
 # Concepts in order of preference. Companies switch concepts between filings, so the values of all
 # of them are merged per period, the first concept winning.
 DURATION = {
@@ -34,7 +36,36 @@ INSTANT = {
     "liabilities": ["Liabilities"],
     "assets": ["Assets"],
 }
-MAX_AGE_DAYS = 200  # no 10-Q/10-K period this recent (e.g. 20-F/40-F filers): a gap, filled from FMP
+MAX_AGE_DAYS = 200  # no 10-Q/10-K period this recent (e.g. 20-F/40-F filers): a gap, filled from Yahoo
+# Annual history: fiscal-year concepts per taxonomy (durations, instants), merged per year like DURATION.
+# 20-F filers report in us-gaap (ASML, BABA) or ifrs-full (TSM, NVO), often in their own currency.
+ANNUAL_FORMS, HISTORY_FROM = ("10-K", "20-F", "40-F"), "2015-01-01"
+TAXONOMIES = {
+    "us-gaap": ({"revenue": DURATION["revenue"], "nii": DURATION["nii"], "nonint": DURATION["nonint"],
+                 "gp": DURATION["gp"], "cost": DURATION["cost"], "op_income": ["OperatingIncomeLoss"],
+                 "ni": DURATION["np"], "ni_common": ["NetIncomeLossAvailableToCommonStockholdersBasic"],
+                 "ni_cont": ["IncomeLossFromContinuingOperations",
+                             "IncomeLossFromContinuingOperationsIncludingPortionAttributableToNoncontrollingInterest"],
+                 "ocf": DURATION["ocf"], "capex": ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"],
+                 "div": ["PaymentsOfDividendsCommonStock", "PaymentsOfDividends"],
+                 "dil_shares": ["WeightedAverageNumberOfDilutedSharesOutstanding"]},
+                {"equity": INSTANT["equity"] + ["PartnersCapital", "PartnersCapitalIncludingPortionAttributableToNoncontrollingInterest"],
+                 "pref": ["PreferredStockValue"], "assets": ["Assets"],  # partners' capital: MLPs (EPD, MPLX)
+                 "liabilities": ["Liabilities"], "shares": ["CommonStockSharesOutstanding"]}),
+    "ifrs-full": ({"revenue": ["Revenue", "RevenueFromContractsWithCustomers"], "gp": ["GrossProfit"], "cost": ["CostOfSales"],
+                   "op_income": ["ProfitLossFromOperatingActivities"],
+                   "ni": ["ProfitLossAttributableToOwnersOfParent", "ProfitLoss"],
+                   "ni_cont": ["ProfitLossFromContinuingOperationsAttributableToOwnersOfParent",
+                               "ProfitLossFromContinuingOperations"],
+                   "ocf": ["CashFlowsFromUsedInOperatingActivities"],
+                   "capex": ["PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities",
+                             "PurchaseOfPropertyPlantAndEquipment"],
+                   "div": ["DividendsPaidClassifiedAsFinancingActivities", "DividendsPaid"],
+                   "dil_shares": ["AdjustedWeightedAverageShares"]},
+                  {"equity": ["EquityAttributableToOwnersOfParent", "Equity"], "assets": ["Assets"],
+                   "liabilities": ["Liabilities"], "shares": ["NumberOfSharesOutstanding"]}),
+}
+SHARE_UNITS = ("dil_shares", "shares")
 # Filing titles for the AI notes: the forms that say something about the business, and 8-K items
 # (the filing list only has item numbers, not headlines).
 FORMS = {"10-Q": "Quarterly report", "10-K": "Annual report", "20-F": "Annual report", "40-F": "Annual report",
@@ -145,6 +176,61 @@ def parse_facts(code: str, payload: dict, today: date) -> dict:
                   "np_yoy": growth(row["np_ttm"], row["np_prior"])}
 
 
+def annual(tax: dict, names: list[str], unit: str, instant: bool = False) -> dict[str, float]:
+    """Fiscal-year end -> value from annual reports (10-K, 20-F, 40-F): durations of 350-380 days or
+    instants, the most recently filed figure (restatements win), the first concept in `names` per year."""
+    out = {}
+    for name in names:
+        best = {}
+        for f in tax.get(name, {}).get("units", {}).get(unit, []):
+            if (f.get("form", "").startswith(ANNUAL_FORMS) and ("start" not in f) == instant
+                    and (instant or 350 <= days(f["start"], f["end"]) <= 380)):
+                if f["end"] not in best or f["filed"] > best[f["end"]][0]:
+                    best[f["end"]] = (f["filed"], f["val"])
+        for end, (_, val) in best.items():
+            out.setdefault(end, val)
+    return out
+
+
+def parse_annual(code: str, payload: dict) -> list[dict]:
+    """One row per fiscal year since 2015, in the taxonomy and currency with the most annual profit
+    years, then facts (TSM: ifrs-full in TWD, which every 20-F repeats as comparatives, not its USD
+    convenience figures); filed = when the year was first reported. Capex and dividends paid are
+    positive, as SEC reports them."""
+    facts, best = payload.get("facts", {}), (0, 0, "", "")
+    for name, (dur, _) in TAXONOMIES.items():
+        tax = facts.get(name, {})
+        for unit in sorted({u for c in dur["ni"] for u in tax.get(c, {}).get("units", {})}):
+            n = sum(f.get("form", "").startswith(ANNUAL_FORMS) for c in dur["ni"] for f in tax.get(c, {}).get("units", {}).get(unit, []))
+            best = max(best, (len(annual(tax, dur["ni"], unit)), n, name, unit))
+    if not best[0]:
+        return []
+    _, _, name, unit = best
+    tax, (dur, inst) = facts[name], TAXONOMIES[name]
+    series = {k: annual(tax, c, "shares" if k in SHARE_UNITS else unit) for k, c in dur.items()}
+    series |= {k: annual(tax, c, "shares" if k in SHARE_UNITS else unit, instant=True) for k, c in inst.items()}
+    filed = {}
+    for c in dur["ni"]:
+        for f in tax.get(c, {}).get("units", {}).get(unit, []):
+            if f.get("form", "").startswith(ANNUAL_FORMS) and "start" in f:
+                filed[f["end"]] = min(filed.get(f["end"], f["filed"]), f["filed"])
+    cover = [(f["end"], f["val"]) for f in facts.get("dei", {}).get("EntityCommonStockSharesOutstanding", {})
+             .get("units", {}).get("shares", []) if f.get("form", "").startswith(ANNUAL_FORMS)]
+    rows = []
+    for end in sorted(e for e in series["ni"] if e >= HISTORY_FROM):
+        get = lambda k: series[k].get(end, next((v for e, v in series[k].items() if abs(days(e, end)) <= 7), None))
+        row = {"code": code, "fy_end": end, "filed": filed.get(end), "source": "SEC", "taxonomy": name,
+               "currency": unit} | {k: get(k) for k in series}
+        if row["revenue"] is None and None not in (row.get("nii"), row.get("nonint")):
+            row["revenue"] = row["nii"] + row["nonint"]
+        if row["gp"] is None and None not in (row["revenue"], row["cost"]):
+            row["gp"] = row["revenue"] - row["cost"]
+        if row["shares"] is None:  # the cover page count, a few weeks after the year end
+            row["shares"] = next((v for e, v in cover if 0 <= days(end, e) <= 120), None)
+        rows.append({k: v for k, v in row.items() if k not in ("nii", "nonint", "cost")})
+    return rows
+
+
 def update_ciks(today: date) -> pd.DataFrame:
     if not CIKS.exists() or (today - date.fromtimestamp(CIKS.stat().st_mtime)).days >= 7:
         payload = make_http().get(TICKERS).json()
@@ -171,18 +257,38 @@ def gaps(codes: list[str]) -> list[str]:
     return [c for c in codes if c not in done]
 
 
-def facts(client: Http, job: tuple[str, int, date]) -> dict:
+def facts(client: Http, job: tuple[str, int, date]) -> tuple[dict, list[dict]]:
     code, cik, today = job
     resp = client.get(FACTS.format(cik=cik), ok=(200, 404))  # 404: no XBRL facts at all (some foreign filers)
-    return parse_facts(code, resp.json() if resp.status_code == 200 else {"cik": cik}, today)
+    payload = resp.json() if resp.status_code == 200 else {"cik": cik}
+    years = parse_annual(code, payload)
+    roe_years = sum(r["ni"] is not None and r["equity"] is not None for r in years)
+    return parse_facts(code, payload, today) | {"annual_years": roe_years}, years
 
 
 def update_facts(today: date, codes: list[str]) -> None:
-    """Weekly per company (4 at a time, under SEC's 10 requests/s)."""
+    """Weekly per company (4 at a time, under SEC's 10 requests/s); the same files give the annual
+    history. Companies read before the history existed (no annual_years) are read again once."""
     update_ciks(today)
     cik = load_ciks()
-    todo = [(c, int(cik[c]), today) for c in stale(TABLE, codes, today) if c in cik.index]
-    upsert_each(TABLE, make_http, facts, todo, today, 4, "sec facts")
+    table = pd.read_csv(TABLE, dtype={"code": str}) if TABLE.exists() else pd.DataFrame(columns=["code"])
+    again = set(stale(TABLE, codes, today)) | set(table.loc[table.reindex(columns=["annual_years"])["annual_years"].isna(), "code"])
+    todo = [(c, int(cik[c]), today) for c in codes if c in again and c in cik.index]
+    upsert_each(TABLE, make_http, facts, todo, today, 4, "sec facts", history=ANNUAL)
+
+
+def annual_gaps(codes: list[str]) -> list[str]:
+    """Codes SEC has no annual history for (no CIK, no XBRL facts or no annual report): Yahoo's turn."""
+    table = pd.read_csv(TABLE, dtype={"code": str}) if TABLE.exists() else pd.DataFrame(columns=["code"])
+    years = table.set_index("code").reindex(columns=["annual_years"])["annual_years"]
+    return [c for c in codes if not years.get(c, 0) > 0]
+
+
+def history_currencies() -> set[str]:
+    """Reporting currencies in the US annual history other than USD (for their monthly FX)."""
+    if not ANNUAL.exists():
+        return set()
+    return set(pd.read_csv(ANNUAL, usecols=["currency"])["currency"].dropna()) - {"USD"}
 
 
 def org_ids() -> dict[str, int]:

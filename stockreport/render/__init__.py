@@ -6,8 +6,10 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from stockreport.pick import BUCKETS as LABELS
+
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-BUCKETS = [("buy", "买入"), ("hold", "持有/不追高"), ("sell", "卖出/回避")]
+BUCKETS = list(LABELS.items())  # [("buy", "买入"), ("hold", "持有"), ("sell", "卖出")]
 
 _env = Environment(
     loader=FileSystemLoader(Path(__file__).parent),
@@ -65,6 +67,8 @@ def text_summary(report: dict, limit: int = 4000) -> str:
                 flag = " 低信心" if p.get("low_conviction") else ""
                 lines.append(f"{p['ticker']} {p['name']} {p['action']} "
                              f"{p['price']:,.2f}→{p['fv_mid']:,.2f} {p['upside']:+.1%}{flag}")
+        if m.get("excluded"):
+            lines.append("利润异常已剔除：" + "、".join(e["name"] for e in m["excluded"]))
         for ai, label in ((True, "AI 标记后替换："), (False, "其他市场已入选、不重复列出：")):
             out = [s["out"].split(" ", 1)[-1] for s in m.get("swaps", []) if s.get("ai", True) == ai]
             if out:

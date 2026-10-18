@@ -16,6 +16,7 @@ import pandas as pd
 from stockreport.config import CONFIG, DATA
 
 log = logging.getLogger(__name__)
+HISTORY = DATA / "history"  # multi-year tables for valuation v2 (PLAN.md Storage)
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 
@@ -74,16 +75,22 @@ def each(make_http, fn, items: list, workers: int):
         yield from pool.map(run, items)
 
 
-def upsert_each(path: Path, make_http, fn, todo: list, today: date, workers: int, label: str) -> None:
+def upsert_each(path: Path, make_http, fn, todo: list, today: date, workers: int, label: str,
+                history: Path | None = None) -> None:
     """Rows from fn(http, item) for every item, stamped `fetched` = today and upserted into the
-    per-stock table every 100 items, so an interrupted fetch keeps what it got."""
-    rows = []
-    for i, row in enumerate(each(make_http, fn, todo, workers), 1):
+    per-stock table every 100 items, so an interrupted fetch keeps what it got. With `history`, fn
+    returns (row, yearly rows) and the yearly rows go to that table (keyed by code and fy_end) first."""
+    rows, years = [], []
+    for i, got in enumerate(each(make_http, fn, todo, workers), 1):
+        row, more = got if history and got else (got, [])
         if row:
             rows.append(row | {"fetched": today.isoformat()})
+            years += [r | {"fetched": today.isoformat()} for r in more]
         if rows and (i % 100 == 0 or i == len(todo)):
+            if years:
+                merge(history, pd.DataFrame(years), ["code", "fy_end"])
             merge(path, pd.DataFrame(rows), ["code"])
-            rows = []
+            rows, years = [], []
             log.info("%s: %d of %d", label, i, len(todo))
 
 
@@ -111,7 +118,7 @@ def stale(path: Path, codes: list[str], today: date, days: int | None = None) ->
     days = days or CONFIG["fetch"]["fundamentals_refresh_days"]
     if not path.exists():
         return list(codes)
-    fetched = pd.read_csv(path, usecols=["code", "fetched"], dtype=str).set_index("code")["fetched"]
+    fetched = pd.read_csv(path, usecols=["code", "fetched"], dtype=str).groupby("code")["fetched"].max()
     cutoff = (today - timedelta(days=days)).isoformat()
     return [c for c in codes if fetched.get(c, "") <= cutoff]
 
@@ -135,11 +142,22 @@ def save_rates(new: pd.DataFrame, market: str) -> None:
 
 
 def merge(path: Path, new: pd.DataFrame, key: list[str]) -> pd.DataFrame:
-    """Upsert rows into a gzipped CSV table."""
-    old = pd.read_csv(path, dtype={"code": str}) if path.exists() else new.iloc[:0]
+    """Upsert rows into a gzipped CSV table (key columns are compared as text, e.g. "004")."""
+    old = pd.read_csv(path, dtype={"code": str} | dict.fromkeys(key, str)) if path.exists() else new.iloc[:0]
     df = pd.concat([old, new]).drop_duplicates(key, keep="last") if len(new) else old
     write(df, path)
     return df
+
+
+def snapshot(src: Path, market: str, today: date, days: int = 7) -> None:
+    """Append the market's consensus table to data/history/<market>_consensus.csv.gz once a week
+    (column `snapshot`), so estimate revisions have a record."""
+    dest = HISTORY / f"{market}_consensus.csv.gz"
+    if not src.exists() or (dest.exists() and (today - date.fromtimestamp(dest.stat().st_mtime)).days < days):
+        return
+    new = pd.read_csv(src, dtype={"code": str}).assign(snapshot=today.isoformat())
+    old = pd.read_csv(dest, dtype={"code": str, "snapshot": str}) if dest.exists() else new.iloc[:0]
+    write(pd.concat([old[old["snapshot"] != today.isoformat()], new]), dest)
 
 
 def steps(market: str, today: date) -> list:
@@ -151,7 +169,10 @@ def steps(market: str, today: date) -> list:
                 ("fundamentals", lambda: eastmoney.update_fundamentals(today)),
                 ("dividends", lambda: eastmoney.update_dividends(today)),
                 ("consensus", lambda: eastmoney.update_consensus(today)),
-                ("10y yield", lambda: eastmoney.update_yield())]
+                ("10y yield", lambda: eastmoney.update_yield()),
+                ("history", lambda: eastmoney.update_cn_history(today)),
+                ("pre-announcements", lambda: eastmoney.update_forecasts(today)),
+                ("consensus snapshot", lambda: snapshot(DATA / "fundamentals" / "cn_consensus.csv.gz", "cn", today))]
     if market == "us":
         from stockreport.fetch import fred, nasdaq, sec, yahoo
         return [("listing", nasdaq.update_list),
@@ -160,7 +181,11 @@ def steps(market: str, today: date) -> list:
                 ("Yahoo fundamentals for SEC gaps", lambda: yahoo.update_gaps(today, sec.gaps(nasdaq.candidates()))),
                 ("FX", lambda: yahoo.update_fx(set(pd.read_csv(yahoo.GAPS)["currency"].dropna()))),
                 ("consensus", lambda: nasdaq.update_consensus(today, nasdaq.candidates())),
-                ("10y yield", fred.update_yield)]
+                ("10y yield", fred.update_yield),
+                ("Yahoo annual history", lambda: yahoo.update_annual(today, sec.annual_gaps(nasdaq.candidates()), sec.ANNUAL)),
+                ("monthly prices", lambda: yahoo.update_monthly(
+                    today, "us", nasdaq.candidates(), {f"{c}=X" for c in sec.history_currencies()})),
+                ("consensus snapshot", lambda: snapshot(nasdaq.CONSENSUS, "us", today))]
     if market == "hk":
         from stockreport.fetch import eastmoney, hkgb, yahoo
         return [("company list", lambda: eastmoney.update_hk_list(today)),
@@ -169,7 +194,10 @@ def steps(market: str, today: date) -> list:
                 ("consensus and reporting currency", lambda: yahoo.update_consensus(today, eastmoney.hk_candidates())),
                 ("FX", lambda: hk_fx(yahoo)),
                 ("US issuer ids", lambda: eastmoney.update_us_orgs(today)),
-                ("10y yield", hkgb.update_yield)]
+                ("10y yield", hkgb.update_yield),
+                ("history", lambda: eastmoney.update_hk_history(today)),
+                ("monthly prices", lambda: yahoo.update_monthly(today, "hk", eastmoney.hk_candidates(), {"HKDCNY=X"})),
+                ("consensus snapshot", lambda: snapshot(yahoo.CONSENSUS, "hk", today))]
     raise SystemExit(f"unknown market {market!r}")
 
 

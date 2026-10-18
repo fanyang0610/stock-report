@@ -52,15 +52,16 @@
 <section class="overview">
   <h1>{{ r.title }}{% if r.test %} <span class="tag test">测试数据</span>{% endif %}</h1>
   <div class="sub">{{ r.date }} · {% for m in r.markets %}{{ m.name }}{% if not loop.last %} / {% endif %}{% endfor %}
-    · 每个市场 买入 / 持有·不追高 / 卖出·回避 各 5 只</div>
+    · 每个市场 买入 / 持有 / 卖出 各 5 只</div>
   {% if r.test %}<div class="test-banner">测试数据：本报告所有公司、价格和估值均为虚构，仅用于测试微信发送与手机打开效果。</div>{% endif %}
   {% if not r.test %}
   <div class="legend">
     <p><b>怎么读：</b>公允价是同行业公司对相近盈利能力和增长所付的估值，给出低 / 中 / 高三档；空间 = 公允价中值 ÷ 现价 − 1。
-      买入：空间 ≥ 15% 且质量、趋势不差；持有·不追高：质量好、价格大致合理；卖出·回避：明显高估且基本面或趋势偏弱。</p>
+      买入：空间 ≥ 15% 且质量、趋势不差；持有：质量好、价格大致合理；卖出：明显高估且基本面或趋势偏弱。</p>
     <p><b>低信心：</b>两种估值视角（近期利润 vs 分析师预期）方向相反，或该档合格标的不足 5 只、由排名靠后的标的补足。</p>
     <p><b>AI 点评：</b>由 DeepSeek 根据卡片上的数字和近 60 日公告标题撰写，不改变任何数字；被它标记为利润一次性/异常、
       重大交易进行中、退市/ST 风险或数据可疑的标的，已换成同档下一名。</p>
+    <p><b>利润异常剔除：</b>净利润暴增但经营现金流不足，或分析师预期明年 EPS 明显回落的买入、持有候选，由程序在选股时直接剔除，不依赖 AI。</p>
   </div>
   {% endif %}
   <table class="overview">
@@ -85,6 +86,11 @@
   <div class="sub">数据日期 {{ m.data_date }} · 计价 {{ m.currency }}{% if m.r %} · 折现率 r = {{ '%.1f' % (m.r * 100) }}%{% endif %}
     {% if m.ai_notes is defined %} · AI 点评 {{ m.ai_notes }}/{{ m.picks | length }}{% endif %}</div>
   {% if m.stale %}<div class="warn">{{ m.stale }}</div>{% endif %}
+  {% if m.excluded %}
+  <div class="swaps"><b>利润异常已剔除（{{ m.excluded | length }}）</b>
+    {% for e in m.excluded %}<div>{{ e.code }} {{ e.name }}（{{ e.action }}候选）　{{ e.reason }}</div>{% endfor %}
+  </div>
+  {% endif %}
   {% if m.swaps %}
   <div class="swaps"><b>替换（{{ m.swaps | length }}）</b>
     {% for s in m.swaps %}<div>{{ s.out }} → {{ s.in }}　<span class="label">{{ s.flag }}：</span>{{ s.reason }}</div>{% endfor %}
