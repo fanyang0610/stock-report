@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from stockreport import deliver, report, track
+from stockreport import deliver, report, shadow, track
 from stockreport.cleanup import cleanup
 from stockreport.config import CONFIG, DATA, REPORTS, ROOT, setup_logging
 from stockreport.fetch import fetch as fetch_market
@@ -42,7 +42,6 @@ def build_market(market: str, today: date) -> None:
 
     snap = DATA / "snapshots" / today.isoformat()
     snap.mkdir(parents=True, exist_ok=True)
-    df.to_csv(snap / f"{market}.csv.gz", compression="gzip")
     out = REPORTS / today.isoformat()
     out.mkdir(parents=True, exist_ok=True)
     picks[CSV_COLUMNS].to_csv(out / f"{market}_picks.csv", index=False, encoding="utf-8-sig")
@@ -58,8 +57,31 @@ def build_market(market: str, today: date) -> None:
     print(f"Fair value: {df['fv_mid'].notna().sum()} of {len(df)} valued; "
           f"methods {df['method'].value_counts().to_dict()}")
     print_table(picks)
+    try:  # valuation v2 in shadow mode: its columns go into the snapshot, the report stays v1
+        df = shadow.run(df, picks, market, today)
+    except Exception:
+        log.exception("%s valuation v2 (shadow) failed; v1 is unaffected", market.upper())
+    df.to_csv(snap / f"{market}.csv.gz", compression="gzip")
     print(f"\nWrote {(out / f'{market}_picks.csv').relative_to(ROOT)} and the snapshot "
           f"{(snap / f'{market}.csv.gz').relative_to(ROOT)}")
+
+
+def shadow_only(markets: list[str], day: str | None) -> int:
+    """Valuation v2 on a saved snapshot and its picks CSV (default: the newest), without fetching:
+    prints the v2 lists and the comparison and writes the v2 columns back into the snapshot."""
+    days = sorted(p.name for p in (DATA / "snapshots").iterdir() if p.is_dir())
+    day = day or days[-1]
+    started = time.monotonic()
+    for market in markets:
+        path, picks = DATA / "snapshots" / day / f"{market}.csv.gz", REPORTS / day / f"{market}_picks.csv"
+        if not path.exists() or not picks.exists():
+            print(f"{market.upper()}: no snapshot or picks for {day}")
+            continue
+        df = pd.read_csv(path, dtype={"code": str, "period": str, "notice_date": str}).set_index("code")
+        df = shadow.run(df, pd.read_csv(picks, dtype={"code": str}), market, date.fromisoformat(day))
+        df.to_csv(path, compression="gzip")
+    print(f"\nv2 for {', '.join(m.upper() for m in markets)} on {day} in {time.monotonic() - started:.1f}s")
+    return 0
 
 
 def run(markets: list[str], use_ai: bool) -> int:
@@ -156,6 +178,9 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--market", choices=["cn", "us", "hk"], help="one market (default: all three)")
     run_p.add_argument("--no-notes", action="store_true", help="template notes instead of DeepSeek")
     sub.add_parser("track", help="average return of past picks vs each market's index")
+    v2 = sub.add_parser("v2", help="valuation v2 (shadow) on a saved snapshot: v2 lists and the v1/v2 comparison")
+    v2.add_argument("--market", choices=["cn", "us", "hk"], help="one market (default: all three)")
+    v2.add_argument("--date", help="snapshot date YYYY-MM-DD (default: the newest)")
     clean = sub.add_parser("cleanup", help="apply the storage retention periods")
     clean.add_argument("--dry-run", action="store_true", help="only list what would be deleted")
     args = parser.parse_args(argv)
@@ -163,6 +188,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "run":
         setup_logging()
         return run([args.market] if args.market else ["cn", "us", "hk"], not args.no_notes)
+    if args.command == "v2":
+        return shadow_only([args.market] if args.market else ["cn", "us", "hk"], args.date)
     if args.command == "track":
         return track.scorecard()
     if args.command == "listen":
