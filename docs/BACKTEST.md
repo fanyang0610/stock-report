@@ -38,7 +38,7 @@ data/backtest/results.md.
 
 | | CN (main test) | US (secondary) | HK (secondary) |
 |---|---|---|---|
-| Dates | month ends 2019-01..2026-09 | 2018-01..2026-09 | 2016-10..2026-09 |
+| Dates | month ends 2019-01..2026-09 | 2018-01..2026-09 (A4 says 2016: the SEC table starts with FY2015, so growth exists from early 2017 and the universe has under 300 names until 2017-12; built from 2016-10, scored from 2018-01) | 2016-10..2026-09 |
 | Prices, returns | Eastmoney valuation history daily (2018-01-02 on; its CHANGE_RATE is close ÷ ex-rights prev-close: identical to the 通达信 packages on all 197,636 overlapping rows), 通达信 daily packages from 2021-08-13 (the archive's first day) | Yahoo month-end total returns (current candidates) | Yahoo month-end total returns (current candidates) |
 | Fundamentals | 业绩报表 every quarter since 2009, used after its NOTICE_DATE; balance sheets when that period's results were out | annual SEC/Yahoo reports after the filing date (no quarterly history: trailing = last fiscal year) | Eastmoney main indicators, public 90 days after the period (A4) |
 | Universe | Eastmoney's stocks that day, listed ≥ 1 year, ¥50m turnover (通达信 period only), ST names out (通达信 names, 2021-08+), top 800 by market value: 738-800 a date | today's candidates with 2 annual reports, top 800: 314 (2018) to 733 | today's candidates, top 410 by market value (the HK$20m turnover screen needs volumes the monthly table lacks; ~410 pass it today): 337-394 |
@@ -243,9 +243,13 @@ is blank before a stock's FY2025 report. About 185 stocks a month had 3+ brokers
 
 ## 9. Limits
 
-- **No consensus history.** The production versions of v1 (forward lens, check 2) and v2 (consensus years 1-3,
-  haircut, analyst confirmation of regime breaks) weren't tested before 2026. The backtest scores their
-  no-consensus cores. Confidence is mostly 低 there (53-63% of valued stocks; production 29-36%).
+- **No consensus history.** The switch rule was evaluated on the no-forecast versions of v1 and v2. The
+  forecast-dependent pieces weren't tested before 2026, and the 2026 window is too short to test them:
+  - v1: the forward lens and check 2;
+  - v2: consensus years 1-3 and their haircut, analyst confirmation of regime breaks, revisions in the ranking.
+
+  They go to `track --signal` on the live snapshots (section 11). Confidence is mostly 低 in the backtest (53-63%
+  of stocks; production 29-36%).
 - **Survivorship.**
   - CN: Eastmoney's tables drop delisted companies (乐视网 and 康得新 are missing from 2019 rows). In the
     通达信 period, 0-170 A-shares traded on a month end (70 on average) are missing from Eastmoney's table that
@@ -284,7 +288,11 @@ as the backtest (stockreport/signal.py):
 - v1's and v2's rank IC at 1, 3 and 12 months;
 - the buckets against the equal-weight snapshot universe and the index;
 - v2 buys by confidence;
-- checks 1-2, excluded against replacements, with the analyst split.
+- checks 1-2, excluded against replacements, with the analyst split;
+- the forecast-dependent pieces the backtest couldn't test: v2's rank correlation among stocks with 3+
+  analysts, with the haircut (history weight ≥ 0.5) and without it; analyst-confirmed regime breaks we call
+  cheap against those we call dear; the rank correlation of the 4-week consensus revision (from 2026-11-15),
+  the evidence for putting revisions in the buy ranking.
 
 It is blank until the first snapshot (2026-10-18) is a month old.
 

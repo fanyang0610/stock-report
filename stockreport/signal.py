@@ -133,9 +133,36 @@ def check_events(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["date", "code", "role"] + [f"ex_{h}" for h in HORIZONS])
 
 
+def forecast_pieces(df: pd.DataFrame, market: str, h: str) -> list[str]:
+    """The parts of v2 the backtest couldn't test (no consensus history; docs/BACKTEST.md): its value on
+    consensus years 1-3 with and without the haircut (history weight ≥ 0.5 pulls consensus toward the normal
+    path), analyst-confirmed regime breaks (did the ones we call cheap beat the ones we call dear?), and
+    whether 4-week consensus revisions rank stocks (a candidate for the buy ranking)."""
+    from stockreport import history
+    out, ret, ex = [], f"ret_{h}", f"ex_{h}"
+    cons = df[df["analysts"] >= 3]
+    for label, part in (("haircut (history weight ≥ 0.5)", cons[cons["v2_w_hist"] >= 0.5]),
+                        ("no haircut", cons[cons["v2_w_hist"] < 0.5])):
+        s = summarize(rank_ic(part, "v2_upside", ret), HORIZONS[h])
+        out.append(f"{h} rank IC v2 upside, 3+ analysts, {label}: {s['mean']:+.3f} ({s['n']} dates)")
+    brk = df[df["v2_break_confirmed"].eq(True)].dropna(subset=[ex])
+    if len(brk):
+        side = np.where(brk["v2_upside"] > 0, "cheap", "dear")
+        out.append(f"{h} confirmed regime breaks vs the universe: " + ", ".join(
+            f"{k} {v['mean']:+.1%} ({v['count']:.0f})" for k, v in brk.groupby(side)[ex].agg(["mean", "count"]).iterrows()))
+    rev = pd.concat([history.revisions(market, date.fromisoformat(d)).rename("revision").to_frame().assign(date=d)
+                     for d in df["date"].unique()]).rename_axis("code").reset_index()
+    if len(rev):
+        s = summarize(rank_ic(df.merge(rev, on=["date", "code"]), "revision", ret), HORIZONS[h])
+        out.append(f"{h} rank IC of the 4-week consensus revision: {s['mean']:+.3f} ({s['n']} dates)")
+    return out
+
+
 def report(market: str, df: pd.DataFrame) -> None:
-    """The same tables the backtest reports, for v1 and v2, at every horizon that has returns yet."""
+    """The same tables the backtest reports, for v1 and v2, at every horizon that has returns yet, plus
+    the forecast-dependent pieces the backtest couldn't test."""
     print(f"\n== {market.upper()}: {df['date'].nunique()} snapshots with v2 columns, {df['date'].min()} to {df['date'].max()}")
+    ev = check_events(df) if df["ret_1m"].notna().any() else pd.DataFrame()
     for h in HORIZONS:
         if df[f"ret_{h}"].notna().sum() == 0:
             print(f"{h}: no returns yet (the first snapshot reaches {h} later)")
@@ -146,7 +173,6 @@ def report(market: str, df: pd.DataFrame) -> None:
         for name, col in (("v1", "v1_bucket"), ("v2", "v2_bucket")):
             if col in df and df[col].notna().any():
                 print(f"{h} {name} buckets:\n{bucket_table(df, col, h).round(3).to_string()}")
-        ev = check_events(df)
         if len(ev):
             t = ev.groupby("role")[f"ex_{h}"].agg(["count", "mean"]).rename(columns={"mean": "vs universe"})
             print(f"{h} checks 1-2, names they excluded vs the names that took their places:\n{t.round(3).to_string()}")
@@ -154,3 +180,4 @@ def report(market: str, df: pd.DataFrame) -> None:
             buys = df[df["v2_bucket"] == "buy"]
             print(f"{h} v2 buys beating the universe by confidence: "
                   + ", ".join(f"{k} {v:.0%}" for k, v in (buys[f"ex_{h}"] > 0).groupby(buys["v2_confidence"]).mean().items()))
+        print("\n".join(forecast_pieces(df, market, h)))
