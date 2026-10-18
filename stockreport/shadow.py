@@ -63,7 +63,9 @@ def value(df: pd.DataFrame, market: str, today: date,
     d = engine.value(df, h, market)
     b = regime.test(d, h, d["eps_core"] * df["shares"] / df["revenue_ttm"].where(df["revenue_ttm"] > 0))
     theme = themes(df, market)
-    gauge = regime.capex_gauge(history.us_annual(today))
+    # no US annual table yet (the first build after Phase 7 values CN before the US backfill): no capex evidence
+    us_table = history.HISTORY / "us_annual.csv.gz"
+    gauge = regime.capex_gauge(history.us_annual(today)) if us_table.exists() else np.nan
     b["p"], b["p_why"] = regime.probability(b, d, h, rates, h.get("pre_type", pd.Series(dtype=object)),
                                             theme == "ai", gauge)
     v = d.join(b).join(regime.scenarios(b, d, h, df["price"], d["r_req"], engine.G_LONG[market], market))
