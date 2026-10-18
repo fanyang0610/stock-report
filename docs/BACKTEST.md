@@ -14,6 +14,8 @@ data/backtest/results.md.
     +30.6%). Its 高 picks were right 55% of the time, its 低 picks 57% (only 7 picks).
   - Without the floor, v2 passed in CN and HK, not in the US (v1's rank correlation is higher). Its 高 picks were
     right 67% of the time (81), its 低 picks 33% (3).
+  - **Your decision (2026-10-18): v1 keeps the report.** v2 stays in shadow mode with the size floor, and
+    `track --signal` collects live evidence before the switch is revisited.
 - **What it is a test of.** There is no free consensus history (section 2), so both methods ran without
   consensus: v1 without its forward lens and check 2, v2 on its ROE path. The US and HK universes are today's
   listings, and CN misses the companies delisted since (section 9).
