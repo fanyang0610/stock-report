@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from stockreport.config import CONFIG
-from stockreport.engine import ri, solve, R_RANGE
+from stockreport.engine import fade_years, ri, solve, R_RANGE
 
 STEP, NEW_MIN, REV_SHIFT, CONFIRM = 0.12, 0.18, 0.15, 0.5  # the base-rate episodes' move (history.episodes)
 PHI_NEW = CONFIG["v2"]["phi_new"]  # per market: persistence floor under the new regime (Phase 9: measured)
@@ -107,9 +107,9 @@ def scenarios(b: pd.DataFrame, d: pd.DataFrame, h: pd.DataFrame, price: pd.Serie
     bb, pp = b[rows], b.loc[rows, "p"].to_numpy()
     new = dd.assign(g0=np.where(bb["break_dir"] == "down", np.minimum(dd["g0"], h.loc[rows, "rev_g3"].clip(-0.1)), dd["g0"]))
     phi = dd["phi"].to_numpy()
-    floor = PHI_NEW[market] if isinstance(PHI_NEW, dict) else PHI_NEW
-    v_new = lambda rr: ri(rr, new, g_long, w=0.0, nn=bb["roe_new"].to_numpy(), phi=np.maximum(phi, floor))
-    v_old = lambda rr: ri(rr, dd, g_long, w=1.0, nn=bb["roe_old"].to_numpy(), phi=np.minimum(phi, PHI_OLD))
+    floor, years = (PHI_NEW[market] if isinstance(PHI_NEW, dict) else PHI_NEW), fade_years(market)
+    v_new = lambda rr: ri(rr, new, g_long, w=0.0, nn=bb["roe_new"].to_numpy(), phi=np.maximum(phi, floor), years=years)
+    v_old = lambda rr: ri(rr, dd, g_long, w=1.0, nn=bb["roe_old"].to_numpy(), phi=np.minimum(phi, PHI_OLD), years=years)
     rr, px = r[rows].to_numpy(), price[rows].to_numpy()
     vn, vo = np.maximum(v_new(rr), 0), np.maximum(v_old(rr), 0)
     out.loc[rows, "v_new"], out.loc[rows, "v_old"] = vn, vo

@@ -9,7 +9,9 @@ import pandas as pd
 from stockreport.config import CONFIG
 
 G_LONG = CONFIG["v2"]["long_growth"]  # long-run nominal growth
-FADE_YEARS = CONFIG["v2"]["fade_years"]  # years 4.. over which ROE fades to its long-run level (Phase 9: 3)
+FADE_YEARS = CONFIG["v2"]["fade_years"]  # per market: years after year 3 over which ROE fades to its long-run level
+COUNTRY_LAMBDA = CONFIG["v2"]["country_lambda"]  # share of a listing country's implied premium (US: foreign listings)
+HOME = "United States"  # the US universe's own country; ADRs and other foreign listings carry their country's premium
 HAIRCUT = np.array([0.1, 0.25, 0.5])  # consensus years 1-3 pulled toward the normal path at full history weight
 MIN_SPREAD = 0.03  # terminal r − g
 LAMBDA = CONFIG["v2"]["lambda"]  # share of an industry's implied premium accepted as its risk
@@ -86,10 +88,14 @@ def normal(d: pd.DataFrame, h: pd.DataFrame, financial: pd.Series, np_ttm: pd.Se
     return d.assign(g0=g0)
 
 
-def ri(r, d: pd.DataFrame, g_long: float, w=None, nn=None, phi=None) -> np.ndarray:
+def fade_years(market: str) -> int:
+    return FADE_YEARS[market] if isinstance(FADE_YEARS, dict) else FADE_YEARS  # the backtest sets one for all
+
+
+def ri(r, d: pd.DataFrame, g_long: float, w=None, nn=None, phi=None, years: int = 10) -> np.ndarray:
     """Three-stage residual-income value per share at discount rate r (scalar or per stock).
     Years 1-3: consensus EPS (pulled toward the ROE path from today to normal by w × HAIRCUT), else that
-    path. Years 4-13: ROE fades linearly from w × normal + (1 − w) × year 3's to r + φ × (normal − r),
+    path. Then ROE fades linearly over `years` (config fade_years) from w × normal + (1 − w) × year 3's to r + φ × (normal − r),
     so a cyclical's peak ends after year 3 (the prototype's rule). Book grows at most at the
     sustainable rate g (consensus growth fading to g_long; the rest is paid out). Terminal: the last
     excess return as a perpetuity growing at g_long, with r − g at least MIN_SPREAD."""
@@ -110,11 +116,11 @@ def ri(r, d: pd.DataFrame, g_long: float, w=None, nn=None, phi=None) -> np.ndarr
         b = b * (1 + np.minimum(g0, np.maximum(roe, -0.5)))
     long_ = r + phi * (nn - r)
     start = w * nn + (1 - w) * np.clip(roe, -0.5, 1.5)  # a cyclical restarts from its normal ROE in year 4
-    for k in range(1, FADE_YEARS + 1):
-        roe = start + (long_ - start) * k / FADE_YEARS
+    for k in range(1, years + 1):
+        roe = start + (long_ - start) * k / years
         disc = disc / (1 + r)
         v = v + (roe - r) * b * disc
-        b = b * (1 + np.minimum(g0 + (g_long - g0) * k / FADE_YEARS, np.maximum(roe, -0.5)))
+        b = b * (1 + np.minimum(g0 + (g_long - g0) * k / years, np.maximum(roe, -0.5)))
     return v + (long_ - r) * b / np.maximum(r - g_long, MIN_SPREAD) * disc
 
 
@@ -144,10 +150,13 @@ def implied_roe(d: pd.DataFrame, price: np.ndarray, r: np.ndarray) -> np.ndarray
 
 
 def required(icc: pd.Series, well: pd.Series, industry: pd.Series, g_long: float,
-             r_config: float = np.nan) -> tuple[pd.Series, float]:
+             r_config: float = np.nan, country: pd.Series | None = None) -> tuple[pd.Series, float]:
     """r = the market's implied return (median expected return of well-covered stocks; with DISCOUNT
     "configured", the 10-year yield + premium instead) plus LAMBDA × the industry's implied premium
-    (industries with 5+ valued stocks), within −3 / +6 points of the market."""
+    (industries with 5+ valued stocks) plus, for a foreign listing, COUNTRY_LAMBDA × its country's
+    premium over home listings (countries with 5+ valued listings; the rest pooled), within −3 / +6
+    points of the market. A Colombian oil producer or a Japanese lessor trades at its home market's
+    discount: at the US rate it looked cheap (Phase 9 review: foreign buys trailed US buys by 11 points)."""
     inside = icc.between(R_RANGE[0] + 1e-3, R_RANGE[1] - 1e-3)
     r_mkt = float(icc[well & inside].median())
     premium_base = r_mkt
@@ -156,7 +165,21 @@ def required(icc: pd.Series, well: pd.Series, industry: pd.Series, g_long: float
     by = icc[inside].groupby(industry[inside])
     premium = (by.median() - premium_base).where(by.count() >= 5)
     r = r_mkt + LAMBDA * industry.map(premium).fillna(0.0)
+    if country is not None and COUNTRY_LAMBDA:
+        r = r + COUNTRY_LAMBDA * country_premium(icc[inside], country.fillna(HOME))
     return r.clip(r_mkt - 0.03, r_mkt + 0.06).clip(lower=g_long + MIN_SPREAD), r_mkt
+
+
+def country_premium(icc: pd.Series, country: pd.Series) -> pd.Series:
+    """Per stock: its listing country's median implied return minus home listings' (0 at home)."""
+    c = country.reindex(icc.index)
+    home = icc[c == HOME].median()
+    by = icc.groupby(c).agg(["median", "count"])
+    small = by.index[(by["count"] < 5) & (by.index != HOME)]
+    pooled = icc[c.isin(small)].median() - home if len(small) else 0.0
+    prem = (by["median"] - home).where(by["count"] >= 5, pooled)
+    prem[HOME] = 0.0
+    return country.map(prem).fillna(pooled).where(country != HOME, 0.0)
 
 
 def value(df: pd.DataFrame, h: pd.DataFrame, market: str) -> pd.DataFrame:
@@ -167,14 +190,17 @@ def value(df: pd.DataFrame, h: pd.DataFrame, market: str) -> pd.DataFrame:
     d["g0"] = d["g0"].fillna(g_long)  # no consensus growth and no revenue history (foreign banks via Yahoo)
     d["valued"] = (d["bps_c"] > 0) & d["roe_norm"].notna() & d["roe_cur"].notna() & (d["archetype"] != "pre-profit")
     ok = d["valued"].to_numpy()
-    icc = solve(lambda r: ri(r, d, g_long), price, *R_RANGE)
+    years = fade_years(market)
+    icc = solve(lambda r: ri(r, d, g_long, years=years), price, *R_RANGE)
     d["icc"] = np.where(ok, icc, np.nan)
     well = d["has_cons"] & (h["n_years"] >= 5)
     if well.sum() < 30:  # no consensus (the backtest's history has none): stocks with 5+ years of history
         well = h["n_years"] >= 5
-    d["r_req"], r_mkt = required(d["icc"], well, df["industry"], g_long, float(df["r"].iloc[0]) if "r" in df else np.nan)
+    country = df["country"] if market == "us" and "country" in df else None
+    d["r_req"], r_mkt = required(d["icc"], well, df["industry"], g_long, float(df["r"].iloc[0]) if "r" in df else np.nan,
+                                 country)
     d["r_mkt"] = r_mkt
-    d["v_intrinsic"] = np.where(ok, ri(d["r_req"].to_numpy(), d, g_long), np.nan)
+    d["v_intrinsic"] = np.where(ok, ri(d["r_req"].to_numpy(), d, g_long, years=years), np.nan)
     # no positive value: without a positive normal ROE there is no sustainable profit (pre-profit); with
     # one, a return far below r on a growing book (a weak bank) simply has no value the model can state
     worthless = d["valued"] & ~(d["v_intrinsic"] > 0)

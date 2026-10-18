@@ -23,7 +23,8 @@ log = logging.getLogger("backtest.run")
 IN_SAMPLE_END = "2023-12-31"  # calibrate on month ends up to here, check on the rest (A4)
 START = {"us": "2018-01"}  # the SEC table starts with FY2015 and growth needs two years: ~400 US names from 2018
 V1_COLS = ["upside", "composite", "z_value", "z_quality", "z_growth", "z_momentum", "z_risk", "quality_pct", "mom_12_1",
-           "np_growth", "cash_conv", "eps_ttm", "eps_e2", "analysts", "mcap_rank", "industry", "financial", "price"]
+           "np_growth", "cash_conv", "eps_ttm", "eps_e2", "analysts", "mcap_rank", "industry", "financial", "price",
+           "ey", "by", "mcap"]
 V2_COLS = ["archetype", "upside", "v_final", "v_intrinsic", "v_used", "v_peer", "v_own", "icc_final", "r_req", "r_mkt",
            "dispersion", "confidence", "conf_points", "screen_ok", "bucket", "tier", "w_hist", "roe_norm", "roe_cur",
            "break_dir", "break_confirmed", "p", "phi", "eps_core", "bps_c", "g0"]
@@ -140,9 +141,12 @@ def frame(market: str, data: dict, **kw) -> pd.DataFrame:
     """One row per date and stock: v1 and v2 signals and buckets (v2 with the constants in kw) and the
     later returns."""
     rows = []
+    country = panel.today_snapshot("us")["country"] if market == "us" else None
     with params(**kw):
         for m, d in data.items():
             s, fwd = d["snap"], d["fwd"]
+            if country is not None and "country" not in s:  # snapshots built before the country premium
+                s = s.assign(country=country.reindex(s.index))
             v, *_ = shadow.value(s, market, day_of(market, m), loaded=d["loaded"])
             f = s[V1_COLS].join(v[V2_COLS].add_prefix("v2_")).join(fwd)
             picks = d["picks"]["both"]

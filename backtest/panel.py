@@ -290,7 +290,7 @@ def us_snapshot(month: str, mon: Monthly, today_snap: pd.DataFrame, books: pd.Da
     last, prev = a.groupby("code").last(), a.groupby("code").nth(-2).set_index("code")
     fx = {c[:3]: mon.close.at[month, c] for c in mon.close.columns if c.endswith("=X")}
     rate = last["currency"].map(lambda c: 1.0 if c == "USD" else fx.get(c, np.nan))
-    df = today_snap.loc[last.index.intersection(codes), ["name", "sector", "industry_raw", "financial"]].copy()
+    df = today_snap.loc[last.index.intersection(codes), ["name", "sector", "industry_raw", "financial", "country"]].copy()
     df["price"] = mon.today_units(month, df.index)
     df["shares"] = last["units"]
     df["mcap"] = df["price"] * df["shares"]
@@ -367,7 +367,7 @@ def today_snapshot(market: str) -> pd.DataFrame:
         lst = nasdaq.load_list().drop_duplicates("code").set_index("code")
         lst = lst[lst["last"] > 0]
         out = pd.DataFrame({"name": lst["name"], "sector": lst["sector"].fillna(""), "industry_raw": lst["industry"].fillna(""),
-                            "shares": lst["mcap"] / lst["last"]})
+                            "shares": lst["mcap"] / lst["last"], "country": lst["country"]})
         out["financial"] = out["industry_raw"].isin(CONFIG["peers"]["financial_industries_us"])
         out = out[out["shares"] > 0]
         # one share class per issuer (SEC CIK): today's universe's choice first, else the larger

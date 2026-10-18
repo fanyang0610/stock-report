@@ -10,7 +10,7 @@ data/backtest/results.md.
 
 - **Switch rule (A4): met.** Out of sample, calibrated v2 beats v1 on both the 12-month rank correlation and the
   buy − sell spread in CN and HK, not in the US (v1's rank correlation is higher). v2's 高 buy and sell picks did
-  the right thing 72% of the time (74 picks), its 低 picks 33% (only 3 picks: v2 rarely fills with 低).
+  the right thing 67% of the time (81 picks), its 低 picks 33% (only 3 picks: v2 rarely fills with 低).
 - **What it is a test of.** There is no free consensus history (section 2), so both methods ran without
   consensus: v1 without its forward lens and check 2, v2 on its ROE path. The US and HK universes are today's
   listings, and CN misses the companies delisted since (section 9).
@@ -33,6 +33,14 @@ data/backtest/results.md.
   measures them on every snapshot.
 - **News test (section 8).** Moves with news did not continue and moves without news did not reverse. News should
   label moves, not enter the score.
+- **US review (section 12, after your question on the US buys).**
+  - v2 is mostly a value screen. In the backtest its ranking correlates 0.65-0.84 with plain earnings yield. What
+    it adds beyond plain earnings and book yield is not significant (out of sample: CN +0.018, US −0.063, HK
+    −0.023), though its buckets beat plain-cheapness buckets in CN and HK.
+  - Three biases are fixed: foreign listings now carry their country's premium; the US keeps a 10-year fade;
+    the expected-return rule, which favoured short-duration stocks, is gone.
+  - Today's US buys: Incyte, Merck, Ecopetrol, Target, ORIX. MSFT (+64%) and META (+60%) now qualify but rank
+    lower on momentum; NVDA (+97%) and TSM (+67%) fail the momentum floor.
 
 ## 2. Data, point-in-time
 
@@ -52,36 +60,55 @@ What doesn't exist for free (probed 2026-10-18):
   years only. The Tushare token has no API access.
 - **CNINFO's whole history.** The market-wide announcement query stops after ~80 pages a day.
 
-Downloads: ~2.8 GB of 通达信 packages, parsed in memory, never stored. data/backtest is 0.73 GB, so data/ + reports/
-is 0.78 GB.
+Downloads: ~2.8 GB of 通达信 packages, parsed in memory, never stored. data/backtest is 0.81 GB, so data/ + reports/
+is 0.87 GB.
 
 ## 3. v1 vs v2 out of sample (2024-01..2026-09)
 
 Rank correlation (IC) of the upside with later returns, mean over dates (t-statistic). Buckets: average return
-of the 5 picks minus the equal-weight universe. v2 = calibrated (config.toml now); "v2 (Phase 8)" = the first
-guesses.
+of the 5 picks minus the equal-weight universe. Rows:
+- v2: calibrated, config.toml now, including the US review;
+- v2 (Phase 8): the first guesses;
+- E/P and B/P: plain benchmarks that rank on earnings or book yield, buying the 5 cheapest (2 per industry) and
+  selling the 5 dearest among the 400 largest.
 
 | | IC 1m | IC 3m | IC 12m | buy 12m | sell 12m | buy − sell 12m | buy hit 12m | buy vs index 12m |
 |---|---|---|---|---|---|---|---|---|
 | **CN** v1 | +0.031 (1.2) | +0.040 (1.0) | −0.009 (−0.2) | −0.9% | +3.0% | −4.0% (−0.2) | 37% | +6.7% |
-| CN v2 | +0.045 (1.0) | +0.075 (1.2) | −0.003 (0.0) | −1.3% | −19.2% | +17.9% (1.4) | 50% | +6.4% |
+| CN v2 | +0.045 (1.0) | +0.075 (1.2) | −0.003 (0.0) | −2.0% | −19.2% | +17.2% (1.3) | 48% | +5.7% |
 | CN v2 (Phase 8) | +0.042 | +0.063 | −0.029 | −9.5% | −10.8% | +1.3% | 36% | −1.8% |
+| CN E/P | +0.045 | +0.068 | −0.041 | −13.8% | −21.4% | +7.6% | 29% | −6.1% |
+| CN B/P | +0.038 | +0.064 | −0.003 | −17.3% | +24.8% | −42.1% | 25% | −9.7% |
 | **US** v1 | +0.018 (1.0) | +0.039 (1.7) | +0.076 (1.6) | +2.7% | +1.3% | +1.4% (0.1) | 50% | +5.8% |
-| US v2 | +0.013 (0.6) | +0.037 (1.1) | +0.067 (1.1) | +3.1% | −8.3% | +11.4% (0.7) | 54% | +6.2% |
+| US v2 | +0.013 (0.6) | +0.036 (1.1) | +0.060 (1.0) | +5.1% | −9.0% | +14.1% (1.0) | 56% | +8.2% |
 | US v2 (Phase 8) | +0.012 | +0.035 | +0.064 | +4.2% | −8.4% | +12.7% | 52% | +7.3% |
+| US E/P | +0.023 | +0.049 | +0.075 | +14.1% | +13.4% | +0.7% | 66% | +17.2% |
+| US B/P | +0.035 | +0.076 | +0.160 (2.5) | +21.2% | −8.4% | +29.6% (1.4) | 74% | +24.3% |
 | **HK** v1 | +0.043 (2.4) | +0.067 (2.5) | +0.049 (1.5) | +8.5% | −22.1% | +30.6% (1.3) | 49% | +14.8% |
 | HK v2 | +0.048 (2.1) | +0.087 (2.6) | +0.099 (2.5) | +22.1% | −11.8% | +33.9% (1.7) | 59% | +28.4% |
 | HK v2 (Phase 8) | +0.042 | +0.079 | +0.083 | +14.0% | −13.0% | +27.0% | 67% | +20.3% |
+| HK E/P | +0.072 | +0.116 | +0.116 | −12.3% | −5.6% | −6.7% | 28% | −6.0% |
+| HK B/P | +0.057 | +0.090 | +0.110 | −10.8% | −22.3% | +11.5% | 28% | −4.5% |
 
-In-sample (for reference): IC 12m v1 / v2: CN +0.084 / +0.135, US −0.003 / +0.054, HK +0.074 / +0.131;
-buy − sell 12m: CN −4.4% / +3.5%, US −3.4% / +6.8%, HK +12.1% / +1.9%. v2's expected return over its required
-return ranks about as well as its upside: IC 12m CN −0.019, US +0.086, HK +0.113 out of sample.
+In-sample (for reference), IC 12m and buy − sell 12m:
+
+| | v1 | v2 | E/P | B/P |
+|---|---|---|---|---|
+| CN | +0.084 / −4.4% | +0.135 / +3.3% | +0.087 / −10.5% | +0.152 / −4.5% |
+| US | −0.003 / −3.4% | +0.056 / +5.1% | −0.039 / 0.0% | −0.027 / +17.1% |
+| HK | +0.074 / +12.1% | +0.131 / +1.9% | +0.080 / −14.6% | +0.092 / −0.9% |
+
+- **Ranking:** v2 ranks about as well as the better of plain earnings and book yield, not better.
+- **Buckets:** in CN and HK, v2's (quality screen, confidence, momentum) beat plain cheapness in both samples.
+  In the US, plain book yield's buckets were far better out of sample (+29.6% against +14.1%), though not in
+  the ranking in-sample.
+- **US caveat:** today's listings only (section 9), so it says little.
 
 ## 4. Calibration (config.toml `[v2]`)
 
-All five changes together, averaged over the three markets: IC 12m in-sample +0.094 → +0.107, out of sample
-+0.039 → +0.054; buy − sell 12m in-sample 5.2% → 4.1%, out of sample 13.7% → 21.1% (v1: IC +0.052 / +0.039,
-buy − sell 1.4% / 9.4%).
+All changes together (including the US review), averaged over the three markets: IC 12m in-sample +0.094 →
++0.107, out of sample +0.039 → +0.052; buy 12m 3.4% → 2.7% in-sample, 2.9% → 8.4% out of sample; buy − sell 12m
+5.2% → 3.4% in-sample, 13.7% → 21.7% out of sample (v1: IC +0.052 / +0.039, buy − sell 1.4% / 9.4%).
 
 Return grids re-ran v2 with one value changed at a time; the score is the in-sample 12-month IC averaged over
 the three markets (buy-bucket return for the momentum settings). A value replaces the Phase 8 guess only if it
@@ -92,7 +119,9 @@ their numbers.
 | Parameter | Phase 8 | In-sample evidence | Chosen | Out of sample |
 |---|---|---|---|---|
 | φ (long-run share of excess ROE) | 0.15 + 0.45 × stability + 0.2 × margin, all markets | Panel: the share of a normal excess ROE still there after k years is CN 0.70, 0.54, 0.44, 0.37, 0.31, 0.24, 0.21, 0.18 (k = 1-8) and flat across stability and margin; HK 0.54, 0.34, 0.26 (k = 1-3); US 0.90, 0.78, 0.77. Returns: lower φ +0.002 IC (CN, HK prefer it; the US prefers the formula) | CN, HK: flat 0.2; US: unchanged | flat 0.2 everywhere: +0.025 IC |
-| Fade years (after year 3) | 10 | Returns: 3 years +0.006 IC (CN +0.008, HK +0.011, US −0.002), in the joint run with the other choices; CN's panel curve is near its floor within ~6 years | 3 | +0.002 IC (buy − sell in-sample fell 8.6 → 3.8 points: noted) |
+| Fade years (after year 3) | 10 | Returns: 3 years +0.006 IC (CN +0.008, HK +0.011, US −0.002), in the joint run with the other choices; CN's panel curve is near its floor within ~6 years. Per market (US review): the US in-sample prefers 10 (0.056 vs 0.053) | CN, HK 3; US 10 | CN, HK +0.002 IC each |
+| Country premium (US: foreign listings) | none | Foreign listings: 22% of the US universe, 33% of v2's US buys; those lost 7.3% (79) in-sample and 4.8% (35) out of sample against +3.7% / +7.0% for US buys. The country's median implied return over home listings' (5+ listings, the rest pooled), weight 0 / 0.5 / 1: buy 12m in-sample −0.0% / −0.8% / −0.9% | 1 (your choice; no in-sample gain) | buy 12m +4.3% / +6.4% / +5.1%; foreign buys −5.2% → +0.4%, their share 28% → 23% |
+| Expected return ≥ required ± 2 points for buys and sells | on | The same 20-60% upside is ~2.4 points a year on a low P/B and ~1.1 on a high P/B: the rule favours short duration (MSFT +37% and META +32% failed it). Off: US buy 12m in-sample +1.7% → −0.9%, CN 5.1% → 4.9%, HK unchanged | off (your choice; no in-sample gain) | US buy 12m 5.9% → 5.1%, CN −1.3% → −2.0% |
 | Persistence floor under a new regime (PHI_NEW) | 0.5 | Panel, breaks that kept half their jump after 3 years, share of the new excess left after k years: CN in-sample 0.49 / 0.08 / −0.01 / 0.06 (k = 4-7), HK 0.36 at k = 4, US 1.08 at k = 4 (today's listings only) | CN 0.05, HK 0.1, US 0.5 | CN 0.58 / 0.20 / 0.06 / −0.05; HK 0.20 / 0.11 / 0.25; US 0.92 / 0.86 / 0.89 / 0.94 |
 | Own last boom (log-odds) | ±0.5 | Panel: coefficient ~0 in every market; out-of-sample log loss = the base rate's | 0 | — |
 | Momentum weight in the buy ranking | 0 | Buy return 12m: 0 → 3.4%, 0.25 → 4.8%, 0.5 → 5.7%, 1.0 → 5.3% | 0.5 | 2.9% → 5.8% |
@@ -108,9 +137,9 @@ Confidence and the 12-month expectation (A2.5), out of sample:
 
 | | 高 | 中 | 低 |
 |---|---|---|---|
-| Buy and sell picks right (12 months), all markets | 72% (74 picks) | 64% (553) | 33% (3) |
-| Any valued stock: sign of the upside right (CN / US / HK) | 51% / 53% / 57% | 53% / 58% / 51% | 55% / 57% / 52% |
-| β, share of the log gap closed in 12 months (CN / US / HK) | +0.14 / −0.04 / +0.19 | +0.09 / +0.11 / +0.16 | −0.01 / +0.01 / +0.01 |
+| Buy and sell picks right (12 months), all markets | 67% (81 picks) | 65% (546) | 33% (3) |
+| Any valued stock: sign of the upside right (CN / US / HK) | 51% / 55% / 57% | 53% / 57% / 51% | 55% / 56% / 52% |
+| β, share of the log gap closed in 12 months (CN / US / HK) | +0.14 / −0.01 / +0.19 | +0.09 / +0.10 / +0.16 | −0.01 / +0.01 / +0.01 |
 
 β is small: a +50% upside has meant about +4% over the universe in the next 12 months (CN, HK 高/中), and ~0 at
 低. β by archetype, out of sample: financials +0.09-0.10 in every market; steady −0.02 to +0.03; growth −0.05 to
@@ -268,18 +297,23 @@ is blank before a stock's FY2025 report. About 185 stocks a month had 3+ brokers
 
 ## 10. Today's v2 lists after calibration (2026-10-18 snapshot, `v2 --date 2026-10-18`)
 
-| | Phase 8 | Phase 9 |
+| | Phase 8 | Phase 9 (with the US review) |
 |---|---|---|
-| NVDA | +74% 中 (p 54%) | +42% 中 (p 66%: the own-boom penalty is gone; V_new 562 → 402) |
-| MU | +71% 低 | +99% 低 (p 33% → 45%; V_new unchanged, US floor 0.5) |
+| NVDA | +74% 中 (p 54%) | +97% 中 (p 66%: the own-boom penalty is gone); fails the momentum floor |
+| MU | +71% 低 | +103% 低 (p 33% → 45%; US floor 0.5) |
+| TSM | +67% 高 | +67% 高; fails the momentum floor |
+| MSFT / META | +37% 高 / +32% 高, failed the expected-return rule | +64% 高 / +60% 中, buy candidates ranked 22nd and 30th |
 | 中际旭创 | −20% 中 | −56% 低 (V_new 1,741 → 731: CN breaks fade; p 22%) |
 | 江波龙 / 佰维存储 | −29% / +133% | −39% / +10% |
-| Toyota / CTSH / OMC | +44% 高 / +68% 高 buy / +129% 低 | +45% / +72% buy / +139% 低 |
-| AAPL / 贵州茅台 / 腾讯 | −27% / −18% / +24% | −37% / −34% / −5% (lower φ: CN/HK franchises are worth less) |
+| Toyota / CTSH / OMC | +44% 高 / +68% 高 buy / +129% 低 | +36% (Japan's premium) / +67% / +129% 低 |
+| AAPL / 贵州茅台 / 腾讯 | −27% / −18% / +24% | −27% / −34% / −5% (lower φ: CN/HK franchises are worth less) |
 
-Buys, CN: 天华新能, 九安医疗, 招商证券, 青岛银行, 财通证券. US: CPAY, ORIX, Ecopetrol, CTSH, Franklin. HK: 中国太平,
-中银航空租赁, 中国民航信息网络, 碧桂园服务, 德翔海运. The CN market-implied return fell from 7.7% to 6.1%: with
-less persistence the same prices imply a lower return.
+Buys:
+- **CN:** 天华新能, 九安医疗, 招商证券, 青岛银行, 财通证券.
+- **US:** Incyte, Merck, Ecopetrol, Target, ORIX.
+- **HK:** 中国太平, 中银航空租赁, 中国民航信息网络, 碧桂园服务, 德翔海运.
+
+The CN market-implied return fell from 7.7% to 6.1%: with less persistence the same prices imply a lower return.
 
 ## 11. Signal tracking and rerun
 
@@ -301,9 +335,67 @@ Rerun (≈1.5 h; data/backtest ≈ 0.7 GB):
 ```
 uv run python -m backtest.fetch sw eastmoney tdx reports   # point-in-time CN tables
 uv run python -m backtest.run build cn|us|hk               # snapshots, v1, v2 inputs per month end
-uv run python -m backtest.calibrate grid|grid2|grid3 cn|us|hk
+uv run python -m backtest.calibrate grid|grid2|grid3|grid4 cn|us|hk
 uv run python -m backtest.panels_run cn|us|hk              # regime, persistence, normal-ROE panels
 uv run python -m backtest.news sample                      # CNINFO, ~50 min
 uv run python -m backtest.calibrate compare                # v1 vs v2 (Phase 8 and config.toml)
 uv run python -m backtest.report                           # data/backtest/results.md
 ```
+
+## 12. US review (2026-10-18, after your question on the US buys)
+
+You asked why the US buys were small or foreign names (CPAY, ORIX, Ecopetrol, CTSH, Franklin), with no large
+compounders and no AI leaders.
+
+**What v2 is.** Today's US upside rank-correlates with earnings yield 0.49 and book yield 0.41, with ROE 0.02,
+momentum −0.22 and size −0.09. In the backtest, without consensus, the correlation with earnings yield is
+0.65-0.84 a date. What v2 ranks beyond plain earnings and book yield:
+
+| | CN | US | HK |
+|---|---|---|---|
+| in-sample | +0.027 (0.7) | +0.045 (2.5) | −0.028 (−0.8) |
+| out of sample | +0.018 (0.9) | −0.063 (−1.7) | −0.023 (−0.3) |
+
+The valuation machinery has not shown an edge over plain cheapness. v2's buckets add value in CN and HK
+(section 3).
+
+**Biases found and changed:**
+
+| Bias | Evidence | Change |
+|---|---|---|
+| Foreign listings valued at the US rate | 22% of the US universe, 33% of v2's US buys; those trailed US buys by 11 points in-sample and 12 out of sample | Country premium (config `country_lambda` = 1): the listing country's median implied return over home listings', for countries with 5+ valued listings; the rest pooled. Today: Japan +0.7 points, UK and Ireland +1.1, China +1.9, Brazil +2.5, Canada −0.9, the pool (Colombia, Mexico, Taiwan, ...) +1.1. Ecopetrol's +1.1 is small for Colombian risk; such names would need an external per-country risk premium. |
+| Expected return ≥ required + 2 points | The same 20-60% upside is ~2.4 points a year on a low P/B, ~1.1 on a high P/B. MSFT and META failed it at +37% / +32%. | Removed, for buys and sells; the upside thresholds (+20% / −25%) are the margin. |
+| A 3-year fade chosen on CN and HK | It cut MSFT +64% → +37%, NVDA +97% → +42%, META +60% → +32%. The US in-sample preferred 10 years. | Fade per market: CN, HK 3; US 10. |
+
+**Effect in the US backtest:**
+
+| | in-sample | out of sample |
+|---|---|---|
+| IC 12m | 0.054 → 0.056 | 0.067 → 0.060 |
+| buy 12m | +0.7% → −0.9% | +3.1% → +5.1% |
+| buy − sell 12m | 6.8% → 5.1% | 11.4% → 14.1% |
+| foreign buys' share (no country premium → premium) | 22% → 18% | 28% → 23% |
+
+The two rule changes you chose don't pay in-sample, and do out of sample. Neither moved the US switch result:
+v1's IC is still higher (0.076).
+
+**Not changed, and why:**
+- **Asset-light compounders with small books** (AAPL P/B 45, MA 45, LLY 35, COST 12) stay 27-67% below price
+  under any fade. A residual-income value starts from book value, and buybacks shrink it. Growth is capped at
+  15% fading to 4%, and the prices imply 120-300% ROE for 10 years. This is a limit of book-based valuation.
+  Their confidence is usually 低, and a sell needs deterioration, so v2 rarely sells them (WMT is a sell on its
+  net-margin screen).
+- **NVDA (+97%), TSM (+67%), UNH and AVGO** fail the industry-relative momentum floor (section 6).
+- **The ranking is size-neutral.** The largest companies sit closest to v2's value, and momentum now counts
+  in the ranking. So MSFT (+64% 高) ranks 22nd of 72 buy candidates and META 30th, behind names with larger
+  upside or stronger momentum.
+
+**Today's US lists:**
+- **Buy:** Incyte +70% 中, Merck +52% 高, Ecopetrol +54% 中, Target +26% 高, ORIX +27% 高.
+- **Hold:** Allstate, Progressive, Itaú, Viper Energy, Amer Sports.
+- **Sell:** Salesforce, RTX, Welltower, Ericsson, Phillips 66.
+
+**What the US test can't settle.** The universe is today's survivors: small stocks beat large ones with an IC
+of +0.14, t 3.4, a look-ahead effect. The data is annual and has no consensus. Plain book yield did best out
+of sample. So the backtest can't say whether v2's skepticism about the US compounders is right. Holding the
+market's compounders and AI leaders would be a quality/growth objective, not a parameter of this engine.

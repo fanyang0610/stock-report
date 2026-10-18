@@ -54,6 +54,8 @@ GRID3 = {  # joint check of the chosen values (φ per market, see BACKTEST.md) w
 
 
 def kwargs(name: str, key: str, val, market: str = "") -> dict:
+    if name.startswith("review"):
+        return EXCESS_ON if val == "on" else {} if key == "excess" else {key: val}
     if name.startswith("joint"):
         base = BASE | {"engine__PHI": PHI_MARKET[market]}
         return base | {key: WEIGHT_SETS[val] if key == "anchors__WEIGHTS" else val}
@@ -88,7 +90,9 @@ def grid(market: str, which: str = "grid") -> pd.DataFrame:
     """Every grid value for one market → data/backtest/<which>_<market>.csv."""
     run.panel.setup_history(market)
     data, rows = run.load(market), []
-    for name, options in {"grid": GRID, "grid2": GRID2, "grid3": GRID3}[which].items():
+    for name, options in {"grid": GRID, "grid2": GRID2, "grid3": GRID3, "grid4": GRID4}[which].items():
+        if name == "review: country premium" and market != "us":
+            continue
         for key, val in options:
             f = run.frame(market, data, **kwargs(name, key, val, market))
             rows.append({"param": name, "value": str(val), "market": market} | metrics(f))
@@ -104,7 +108,16 @@ def best(g: pd.DataFrame, param: str, key: str = "in ic 12m") -> str:
 
 
 PHASE8 = {"engine__PHI": (0.15, 0.45, 0.2), "engine__FADE_YEARS": 10, "shadow__MOM_WEIGHT": 0.0,
-          "regime__PHI_NEW": 0.5, "regime__OWN_BOOM": 0.5}  # v2 as Phase 8 left it (config.toml now holds Phase 9's)
+          "regime__PHI_NEW": 0.5, "regime__OWN_BOOM": 0.5, "engine__COUNTRY_LAMBDA": 0.0,
+          "shadow__BUY_MIN_EXCESS": 0.02, "shadow__SELL_MAX_EXCESS": -0.02}  # v2 as Phase 8 left it
+FIRST_CALIBRATION = {"engine__FADE_YEARS": 3, "engine__COUNTRY_LAMBDA": 0.0, "shadow__BUY_MIN_EXCESS": 0.02,
+                     "shadow__SELL_MAX_EXCESS": -0.02}  # Phase 9 before the US review (2026-10-18)
+EXCESS_ON = {"shadow__BUY_MIN_EXCESS": 0.02, "shadow__SELL_MAX_EXCESS": -0.02}
+GRID4 = {  # the US review: per-market fade, the country premium, the duration-dependent excess rule (config = today)
+    "review: fade years": [("engine__FADE_YEARS", x) for x in (10, 5, 3)],
+    "review: country premium": [("engine__COUNTRY_LAMBDA", x) for x in (0.0, 0.5, 1.0)],
+    "review: excess rule": [("excess", x) for x in ("off", "on")],
+}
 
 
 def compare(chosen: dict) -> None:
@@ -115,7 +128,7 @@ def compare(chosen: dict) -> None:
     for m in MARKETS:
         run.panel.setup_history(m)
         data = run.load(m)
-        for label, kw in (("default", PHASE8), ("calibrated", chosen)):
+        for label, kw in (("default", PHASE8), ("first", FIRST_CALIBRATION), ("calibrated", chosen)):
             f = run.frame(m, data, **kw)
             f.to_pickle(out / f"{m}_{label}.pkl")
             rows.append({"market": m, "method": f"v2 {label}"} | metrics(f, "v2"))
@@ -124,7 +137,7 @@ def compare(chosen: dict) -> None:
 
 
 if __name__ == "__main__":
-    if sys.argv[1] in ("grid", "grid2", "grid3"):
+    if sys.argv[1] in ("grid", "grid2", "grid3", "grid4"):
         grid(sys.argv[2], sys.argv[1])
     elif sys.argv[1] == "compare":
         compare(json.loads(sys.argv[2]) if len(sys.argv) > 2 else {})

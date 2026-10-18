@@ -14,6 +14,10 @@ from stockreport.pick import BUCKETS
 
 MOM_FLOOR = CONFIG["v2"]["momentum_floor"]  # buy floor on momentum z: "industry" (v1's z), "market" or "none"
 MOM_WEIGHT = CONFIG["v2"]["momentum_weight"]  # weight of that momentum z next to the standardized buy key
+# Phase 8 also asked buys for an expected return 2+ points above the required return (sells 2+ below). That
+# favours short-duration stocks: the same 20-60% upside is ~2.4 points a year on a low P/B, ~1.1 on a high one,
+# so MSFT (+37%) and META (+32%) failed it. Phase 9 review: off; the upside thresholds are the margin.
+BUY_MIN_EXCESS, SELL_MAX_EXCESS = CONFIG["v2"].get("buy_min_excess"), CONFIG["v2"].get("sell_max_excess")
 
 COLUMNS = ["archetype", "eps_core", "bps_c", "roe_cur", "roe_c3", "w_hist", "roe_norm", "structural_decline", "phi",
            "g0", "icc", "icc_final", "r_req", "r_mkt", "v_intrinsic", "v_used", "roe_implied", "v_peer", "v_own", "v_comb",
@@ -92,17 +96,19 @@ def buckets(v: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
     mom = momentum(df)
     cw = np.log1p(up.clip(lower=-0.99)) * (1 - v["dispersion"].clip(upper=0.5))
     rank_key = cw / cw[ok].std() + MOM_WEIGHT * mom.fillna(0) if MOM_WEIGHT else cw  # buys only
-    excess = v["icc_final"] - v["r_req"]
+    excess = (v["icc_final"] - v["r_req"]).fillna(0)
+    ex_buy = excess >= BUY_MIN_EXCESS if BUY_MIN_EXCESS is not None else True
+    ex_sell = excess <= SELL_MAX_EXCESS if SELL_MAX_EXCESS is not None else True
     largest = df["mcap_rank"] <= CONFIG["buckets"]["sell_largest_n"]
     weak = (df["z_momentum"] <= -0.5) | (df["np_growth"] < 0) | ~passed
     hold_band = c["hold_max_abs_upside"]
     rules = {
-        "buy": [(ok & (up >= c["buy_min_upside"]) & (excess >= c["buy_min_excess"]) & good & passed
+        "buy": [(ok & (up >= c["buy_min_upside"]) & ex_buy & good & passed
                  & ((mom >= -0.5) | (MOM_FLOOR == "none")), rank_key, False),
                 (ok & (up >= 0.15) & passed, rank_key, False), (ok & (up > 0), rank_key, False)],
         "hold": [(ok & (df["quality_pct"] >= 0.7) & passed & (up.abs() <= hold_band) & good, df["z_quality"], False),
                  (ok & passed & (up.abs() <= hold_band + 0.05), df["z_quality"], False), (ok & (up.abs() < 0.25), df["z_quality"], False)],
-        "sell": [(ok & (up <= c["sell_max_upside"]) & (excess <= c["sell_max_excess"]) & good & largest & weak, cw, True),
+        "sell": [(ok & (up <= c["sell_max_upside"]) & ex_sell & good & largest & weak, cw, True),
                  (ok & (up <= -0.15) & largest, cw, True), (ok & (up < 0) & largest, cw, True)],
     }
     chosen, taken = {k: [] for k in BUCKETS}, set()
