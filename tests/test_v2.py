@@ -116,3 +116,15 @@ def test_split_factor_picks_the_later_splits_that_match():
     assert history.closest(splits, "2020-01-26", 24.3e9 / 612e6) == 40
     assert history.closest(splits, "2021-01-31", 24.3e9 / 2479e6) == 10
     assert history.closest(splits, "2025-01-26", 24.3e9 / 24.48e9) == 1
+
+
+def test_small_industry_keeps_its_own_median_level():
+    # 16 stocks on log P/B = 1 + 5 × ROE and a 3-stock industry at half that P/B: the small industry takes the
+    # pooled slope at its own median level, so its middle member's peer value is its own price (book 10)
+    roe = list(np.linspace(0.05, 0.20, 16)) + [0.08, 0.12, 0.16]
+    pb = [np.exp(1 + 5 * r) for r in roe[:16]] + [0.5 * np.exp(1 + 5 * r) for r in roe[16:]]
+    df = pd.DataFrame({"price": [10 * p for p in pb], "financial": True, "industry": ["big"] * 16 + ["small"] * 3})
+    d = pd.DataFrame({"bps_c": 10.0, "roe_norm": roe, "g_exp": 0.03, "valued": True}, index=df.index)
+    v = anchors.peer(df, d, pd.Series("", df.index))
+    assert v[17] == pytest.approx(df["price"][17])
+    assert (v[16:] / df["price"][16:]).between(0.9, 1.1).all()

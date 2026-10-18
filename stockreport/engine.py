@@ -18,7 +18,8 @@ R_RANGE = (-0.05, 0.40)  # expected-return search range; a result on the edge me
 
 def earnings(df: pd.DataFrame, market: str) -> pd.DataFrame:
     """Earnings base: CN on 扣非 EPS (updated by a newer 业绩预告), US less preferred dividends over book
-    net of preferred equity. Current ROE = median of the trailing ROE and consensus years 2 and 3 on
+    net of preferred equity. Expected growth: consensus EPS growth with 5+ analysts (config), else the
+    5-year revenue growth. Current ROE = median of the trailing ROE and consensus years 2 and 3 on
     today's book, robust to one-offs: year 1 mostly overlaps the trailing 12 months, so a one-off in the
     current year would count twice (Gilead's 2026 in-process R&D charge is in both)."""
     d = pd.DataFrame(index=df.index)
@@ -34,8 +35,10 @@ def earnings(df: pd.DataFrame, market: str) -> pd.DataFrame:
     d["roe_ttm"] = d["eps_core"] / book
     cons_roe = pd.concat([d["roe_ttm"], d["e2"] / book, d["e3"] / book], axis=1).median(axis=1)
     d["roe_cur"] = cons_roe.where(d["has_cons"], d["roe_ttm"]).clip(-0.5, 1.5)
-    d["g_cons"] = df["fwd_growth"].where(d["has_cons"])
-    d["roe_c3"] = (d["e3"] / (book * (1 + d["g_cons"].clip(0, 0.15)) ** 2)).where(d["has_cons"])
+    # growth from consensus needs more analysts than the EPS years do: 3 analysts put Toyota's year-3 EPS
+    # 37% above year 2, which held its book growth at the 15% cap for a decade
+    d["g_cons"] = df["fwd_growth"].where(d["has_cons"] & (df["analysts"] >= CONFIG["v2"]["growth_min_analysts"]))
+    d["roe_c3"] = (d["e3"] / (book * (1 + df["fwd_growth"].clip(0, 0.15).fillna(0)) ** 2)).where(d["has_cons"])
     d["g_exp"] = d["g_cons"].fillna(df["rev_cagr_5y"])
     return d
 
@@ -151,6 +154,7 @@ def value(df: pd.DataFrame, h: pd.DataFrame, market: str) -> pd.DataFrame:
     implied ROE. `df` is the v1 snapshot, `h` the history features (history.load)."""
     d = normal(earnings(df.join(h), market), h, df["financial"].astype(bool), df["np_ttm"])
     g_long, price = G_LONG[market], df["price"].to_numpy(float)
+    d["g0"] = d["g0"].fillna(g_long)  # no consensus growth and no revenue history (foreign banks via Yahoo)
     d["valued"] = (d["bps_c"] > 0) & d["roe_norm"].notna() & d["roe_cur"].notna() & (d["archetype"] != "pre-profit")
     ok = d["valued"].to_numpy()
     icc = solve(lambda r: ri(r, d, g_long), price, *R_RANGE)

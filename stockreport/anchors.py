@@ -6,7 +6,7 @@ sets the confidence (高 / 中 / 低). First-guess weights and points, for Phase
 import numpy as np
 import pandas as pd
 
-MIN_GROUP, SHRINK = 15, 10  # peer fits need 15 members; a smaller group keeps n/(n+10) of its own level
+MIN_GROUP, MIN_OWN, SHRINK = 15, 3, 10  # own fit from 15 members; own level from 3; below that n/(n+10) of it
 WEIGHTS = {"steady": [0.6, 0.3, 0.1], "cyclical": [0.5, 0.1, 0.4], "financial": [0.55, 0.3, 0.15]}  # intrinsic/peer/own
 
 
@@ -26,9 +26,11 @@ def fit(y: np.ndarray, x: np.ndarray) -> np.ndarray:
 
 def peer(df: pd.DataFrame, d: pd.DataFrame, parent: pd.Series) -> pd.Series:
     """Repaired peer value: log P/B (on book net of preferred) fitted on normal ROE and expected growth
-    (bounded) within the industry when it has 15+ valued members; a smaller industry uses its parent
-    sector's fit (the market's when the parent is small too, financials apart) plus n/(n+10) of its
-    own mean residual. Financials on normal ROE alone."""
+    (bounded) within the industry when it has 15+ valued members. A smaller industry takes the slopes of
+    its parent sector's fit (the market's when the parent is small too, financials apart) at its own
+    median level (the median residual of its 3+ valued members; with 1-2, n/(n+10) of their mean): with
+    a share of the level only, Toyota borrowed most of the Industrials sector's 4.6× book. Financials on
+    normal ROE alone."""
     pb = np.log((df["price"] / d["bps_c"]).where(d["bps_c"] > 0))
     x = pd.DataFrame({"roe": d["roe_norm"].clip(-0.1, 0.5), "g": d["g_exp"].clip(-0.1, 0.3).fillna(0.03)})
     fin = df["financial"].astype(bool)
@@ -49,7 +51,10 @@ def peer(df: pd.DataFrame, d: pd.DataFrame, parent: pd.Series) -> pd.Series:
         pred = lambda idx: coef[0] + x.loc[idx, cols].to_numpy() @ coef[1:]
         if shift is None:
             resid = pb[rows] - pred(rows) if len(rows) else pd.Series(dtype=float)
-            shift = len(rows) / (len(rows) + SHRINK) * resid.mean() if len(rows) else 0.0
+            if len(rows) >= MIN_OWN:
+                shift = resid.median()
+            else:
+                shift = len(rows) / (len(rows) + SHRINK) * resid.mean() if len(rows) else 0.0
         target = members.index[d.loc[members.index, "valued"]]
         out[target] = np.exp(pred(target) + shift) * d.loc[target, "bps_c"]
     return out

@@ -84,6 +84,7 @@ workers = 4
 [v2]                          # valuation v2 in shadow mode (docs/REVIEW.md A2; first guesses until the Phase 9 backtest)
 lambda = 0.5                  # share of an industry's implied premium over the market's implied return accepted as risk
 long_growth = { cn = 0.03, hk = 0.03, us = 0.04 }
+growth_min_analysts = 5       # consensus EPS growth sets expected and book growth only with this many analysts
 buy_min_upside = 0.20
 buy_min_excess = 0.02         # expected return at least this far above the required return
 hold_max_abs_upside = 0.15
