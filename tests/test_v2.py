@@ -144,3 +144,13 @@ def test_country_premium_for_foreign_listings():
     country = pd.Series(["United States"] * 6 + ["Japan"] * 5 + ["Colombia", "Chile"])
     prem = engine.country_premium(icc, country)
     assert prem.tolist() == pytest.approx([0.0] * 6 + [0.02] * 5 + [0.04, 0.04])
+
+
+def test_buys_only_from_the_largest_and_us_listings(monkeypatch):
+    from stockreport import shadow
+    monkeypatch.setattr(shadow, "BUY_LARGEST", {"us": 300, "cn": 300, "hk": 200})
+    monkeypatch.setattr(shadow, "BUY_HOME_ONLY", True)
+    df = pd.DataFrame({"mcap_rank": [10, 250, 299, 301], "country": ["United States", "Japan", None, "United States"]},
+                      index=["A", "B", "C", "D"])
+    assert shadow.buy_universe(df, "us").tolist() == [True, False, True, False]  # no country: a home listing
+    assert shadow.buy_universe(df, "hk").tolist() == [True, False, False, False]  # HK: the 200 largest, any country

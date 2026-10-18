@@ -18,6 +18,10 @@ MOM_WEIGHT = CONFIG["v2"]["momentum_weight"]  # weight of that momentum z next t
 # favours short-duration stocks: the same 20-60% upside is ~2.4 points a year on a low P/B, ~1.1 on a high one,
 # so MSFT (+37%) and META (+32%) failed it. Phase 9 review: off; the upside thresholds are the margin.
 BUY_MIN_EXCESS, SELL_MAX_EXCESS = CONFIG["v2"].get("buy_min_excess"), CONFIG["v2"].get("sell_max_excess")
+# Buys only among the largest companies (per market) and, in the US, among US listings: ranking by the largest
+# estimated gaps picked noisy mid/small and foreign names (Phase 9 review: 13 of 15 buys outside the top 100).
+BUY_LARGEST = CONFIG["v2"].get("buy_largest_n")  # {market: n} or None
+BUY_HOME_ONLY = CONFIG["v2"].get("buy_home_only", False)
 
 COLUMNS = ["archetype", "eps_core", "bps_c", "roe_cur", "roe_c3", "w_hist", "roe_norm", "structural_decline", "phi",
            "g0", "icc", "icc_final", "r_req", "r_mkt", "v_intrinsic", "v_used", "roe_implied", "v_peer", "v_own", "v_comb",
@@ -79,19 +83,30 @@ def value(df: pd.DataFrame, market: str, today: date,
     v["upside"] = v["v_final"] / df["price"] - 1
     v = v.join(anchors.screen(df, h))
     v = v.join(anchors.confidence(v, h, df["analysts"], df["price"]))
-    return v.join(buckets(v, df)), h, rates, gauge
+    return v.join(buckets(v, df, market)), h, rates, gauge
 
 
-def buckets(v: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
+def buy_universe(df: pd.DataFrame, market: str) -> pd.Series:
+    """Stocks a buy may come from: the market's largest (config buy_largest_n) and, in the US, home listings."""
+    out = pd.Series(True, df.index)
+    if BUY_LARGEST:
+        out &= df["mcap_rank"] <= BUY_LARGEST[market]
+    if BUY_HOME_ONLY and market == "us" and "country" in df:
+        out &= df["country"].fillna(engine.HOME) == engine.HOME
+    return out
+
+
+def buckets(v: pd.DataFrame, df: pd.DataFrame, market: str = "cn") -> pd.DataFrame:
     """买入 / 持有 / 卖出 (A2.3), 5 each, strict rules first and relaxed fills marked 低信心; at most 2 per
     industry per bucket, each stock once; pre-profit names never get a call.
-    Buy: upside ≥ 20%, expected return ≥ required + 2 points, confidence 中/高, quality screen passed,
-    momentum z ≥ −0.5; ranked by confidence-weighted upside. Hold: quality in the top 30%, screen passed,
-    |upside| ≤ 15%, confidence 中/高; ranked by quality. Sell: upside ≤ −25%, expected return ≤ required
-    − 2 points, confidence 中/高, among the 400 largest, and deterioration (momentum z ≤ −0.5, falling
-    profit or a screen failure); ranked by confidence-weighted downside."""
+    Buy: among the largest companies (US: US listings), upside ≥ 20%, confidence 中/高, quality screen passed,
+    momentum z ≥ −0.5; ranked by confidence-weighted upside plus momentum. Hold: quality in the top 30%,
+    screen passed, |upside| ≤ 15%, confidence 中/高; ranked by quality. Sell: upside ≤ −25%, confidence
+    中/高, among the 400 largest, and deterioration (momentum z ≤ −0.5, falling profit or a screen
+    failure); ranked by confidence-weighted downside."""
     c, n, cap = CONFIG["v2"], CONFIG["buckets"]["per_bucket"], CONFIG["buckets"]["max_per_group"]
     ok = v["v_final"].notna() & (v["archetype"] != "pre-profit")
+    can_buy = ok & buy_universe(df, market)
     up, good, passed = v["upside"], v["confidence"].isin(["高", "中"]), v["screen_ok"]
     mom = momentum(df)
     cw = np.log1p(up.clip(lower=-0.99)) * (1 - v["dispersion"].clip(upper=0.5))
@@ -103,9 +118,9 @@ def buckets(v: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
     weak = (df["z_momentum"] <= -0.5) | (df["np_growth"] < 0) | ~passed
     hold_band = c["hold_max_abs_upside"]
     rules = {
-        "buy": [(ok & (up >= c["buy_min_upside"]) & ex_buy & good & passed
+        "buy": [(can_buy & (up >= c["buy_min_upside"]) & ex_buy & good & passed
                  & ((mom >= -0.5) | (MOM_FLOOR == "none")), rank_key, False),
-                (ok & (up >= 0.15) & passed, rank_key, False), (ok & (up > 0), rank_key, False)],
+                (can_buy & (up >= 0.15) & passed, rank_key, False), (can_buy & (up > 0), rank_key, False)],
         "hold": [(ok & (df["quality_pct"] >= 0.7) & passed & (up.abs() <= hold_band) & good, df["z_quality"], False),
                  (ok & passed & (up.abs() <= hold_band + 0.05), df["z_quality"], False), (ok & (up.abs() < 0.25), df["z_quality"], False)],
         "sell": [(ok & (up <= c["sell_max_upside"]) & ex_sell & good & largest & weak, cw, True),

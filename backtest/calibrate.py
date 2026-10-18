@@ -109,9 +109,12 @@ def best(g: pd.DataFrame, param: str, key: str = "in ic 12m") -> str:
 
 PHASE8 = {"engine__PHI": (0.15, 0.45, 0.2), "engine__FADE_YEARS": 10, "shadow__MOM_WEIGHT": 0.0,
           "regime__PHI_NEW": 0.5, "regime__OWN_BOOM": 0.5, "engine__COUNTRY_LAMBDA": 0.0,
-          "shadow__BUY_MIN_EXCESS": 0.02, "shadow__SELL_MAX_EXCESS": -0.02}  # v2 as Phase 8 left it
+          "shadow__BUY_MIN_EXCESS": 0.02, "shadow__SELL_MAX_EXCESS": -0.02,
+          "shadow__BUY_LARGEST": None, "shadow__BUY_HOME_ONLY": False}  # v2 as Phase 8 left it
+NO_FLOOR = {"shadow__BUY_LARGEST": None, "shadow__BUY_HOME_ONLY": False}
 FIRST_CALIBRATION = {"engine__FADE_YEARS": 3, "engine__COUNTRY_LAMBDA": 0.0, "shadow__BUY_MIN_EXCESS": 0.02,
-                     "shadow__SELL_MAX_EXCESS": -0.02}  # Phase 9 before the US review (2026-10-18)
+                     "shadow__SELL_MAX_EXCESS": -0.02} | NO_FLOOR  # Phase 9 before the US review (2026-10-18)
+REVIEW = NO_FLOOR  # after the US review, before the size floor
 EXCESS_ON = {"shadow__BUY_MIN_EXCESS": 0.02, "shadow__SELL_MAX_EXCESS": -0.02}
 GRID4 = {  # the US review: per-market fade, the country premium, the duration-dependent excess rule (config = today)
     "review: fade years": [("engine__FADE_YEARS", x) for x in (10, 5, 3)],
@@ -128,7 +131,7 @@ def compare(chosen: dict) -> None:
     for m in MARKETS:
         run.panel.setup_history(m)
         data = run.load(m)
-        for label, kw in (("default", PHASE8), ("first", FIRST_CALIBRATION), ("calibrated", chosen)):
+        for label, kw in (("default", PHASE8), ("first", FIRST_CALIBRATION), ("review", REVIEW), ("calibrated", chosen)):
             f = run.frame(m, data, **kw)
             f.to_pickle(out / f"{m}_{label}.pkl")
             rows.append({"market": m, "method": f"v2 {label}"} | metrics(f, "v2"))

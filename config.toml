@@ -93,6 +93,8 @@ phi_new = { cn = 0.05, hk = 0.1, us = 0.5 }   # persistence floor under a new re
 own_boom_weight = 0.0         # log-odds for the stock's own last boom (was ±0.5; no out-of-sample power)
 growth_min_analysts = 5       # consensus EPS growth sets expected and book growth only with this many analysts
 buy_min_upside = 0.20
+buy_largest_n = { cn = 300, hk = 200, us = 300 }   # buys only among the market's largest companies (your choice, Phase 9 review)
+buy_home_only = true          # US buys only among US listings (foreign buys trailed US buys by 11-12 points in the backtest)
 momentum_floor = "industry"   # buy floor momentum z ≥ −0.5: "industry" (v1's industry-relative z), "market" or "none"
 momentum_weight = 0.5         # momentum z added to the buy ranking (confidence-weighted upside in sd units; Phase 9)
 hold_max_abs_upside = 0.15
