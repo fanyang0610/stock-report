@@ -81,6 +81,17 @@ title_days = 60
 max_titles = 10
 workers = 4
 
+[crosscheck]                  # data cross-checks and drift alarms (PLAN.md Method 13)
+cn_tencent = 1200             # CN: the largest A-shares Tencent's quotes are fetched for (the universe reached rank 842)
+agree = 0.01                  # two sources within this agree (financial-data) ...
+large = 0.05                  # ... above this a figure isn't usable (counts: agree / small gap / large gap)
+drop_gap = 0.2                # a valuation input this far off its second source (and unconfirmed) drops the stock
+                              # (rule 5). 0.05 = financial-data's rule; measured 5-15% gaps are mostly definitions
+                              # (minority interests, perpetuals, financials' revenue): PLAN.md Method 13
+units_ratio = 20              # consensus EPS this many times off the trailing EPS on a 5%+ net margin: a units error
+basis_ratio = 2               # this year's consensus this far from the trailing EPS: adjusted vs GAAP (counted only)
+drift = { value = 0.05, profit = 0.05, book = 0.05, consensus = 0.2, fair_value = 0.3 }  # day-over-day alarms
+
 [v2]                          # valuation v2 in shadow mode (docs/REVIEW.md A2; first guesses until the Phase 9 backtest)
 lambda = 0.5                  # share of an industry's implied premium over the market's implied return accepted as risk
 discount = "implied"          # required return base: "implied" (the market's implied return) or "configured" (10-year + premium)

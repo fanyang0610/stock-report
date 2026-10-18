@@ -65,6 +65,12 @@ def update_quotes() -> None:
     log.info("cn quotes: %d stocks for %s", len(df), latest)
 
 
+def cn_largest() -> list[str]:
+    """The largest A-shares by today's market value: the ones Tencent's quotes cross-check."""
+    quotes = pd.read_csv(DATA / "quotes" / "cn.csv.gz", dtype={"code": str})
+    return list(quotes.sort_values("mcap", ascending=False)["code"].head(CONFIG["crosscheck"]["cn_tencent"]))
+
+
 def quarter_ends(today: date, n: int) -> list[date]:
     ends, y, q = [], today.year, (today.month - 1) // 3  # q = quarters completed this year
     while len(ends) < n:

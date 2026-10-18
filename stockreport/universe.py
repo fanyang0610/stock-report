@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from stockreport import crosscheck
 from stockreport.config import CONFIG, DATA
 from stockreport.fetch import eastmoney, nasdaq, sec, tdx, yahoo
 
@@ -172,7 +173,8 @@ def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
     balance = load_results("balance").dropna(subset=["debt_ratio"]).sort_values("period")
     df["debt_ratio"] = balance.groupby("code")["debt_ratio"].last().reindex(df.index) / 100
     df["dps_ttm"] = dividends(DATA / "fundamentals" / "cn_dividends.csv.gz", today).reindex(df.index).fillna(0)
-    df = ratios(join_consensus(df, DATA / "fundamentals" / "cn_consensus.csv.gz", ["analysts", "eps_e1", "eps_e2", "eps_e3"]))
+    df = ratios(join_consensus(df, DATA / "fundamentals" / "cn_consensus.csv.gz",
+                               ["analysts", "e1_year", "eps_e1", "eps_e2", "eps_e3"]))
     df["rev_growth"] = df["rev_yoy"] / 100
     df["np_growth"] = df["np_yoy"] / 100
     df["gross_margin"] = df["gross_margin"] / 100
@@ -188,7 +190,7 @@ def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
                                                               | ((df["pe"] / df["pe_ttm_em"]).sub(1).abs() > 0.5)),
         "P/B disagrees with source": (df["pb"] / df["pb_mrq_em"]).sub(1).abs() > 0.5,
     }
-    return finish(df, info, checks)
+    return finish(df, info, checks | crosscheck.checks(df, "cn", info))
 
 
 def us_fundamentals() -> pd.DataFrame:
@@ -240,7 +242,7 @@ def build_us(today: date) -> tuple[pd.DataFrame, dict]:
     df["cash_conv"] = (df["ocf_ttm"] / df["np_ttm"]).where(df["np_ttm"] > 0)
     df["rev_growth"], df["np_growth"] = df["rev_yoy"], df["np_yoy"]
     df["dps_ttm"] = dividends(Path(str(yahoo.DIVIDENDS).format("us")), today).reindex(df.index).fillna(0)
-    df = ratios(join_consensus(df, nasdaq.CONSENSUS, ["analysts", "eps_e1", "eps_e2", "eps_e3"]))
+    df = ratios(join_consensus(df, nasdaq.CONSENSUS, ["analysts", "e1_year", "eps_e1", "eps_e2", "eps_e3"]))
 
     listed_px = (closes.loc[df.index].div(df["last"], axis=0) - 1).abs().min(axis=1)
     checks = {
@@ -249,7 +251,7 @@ def build_us(today: date) -> tuple[pd.DataFrame, dict]:
         "missing price history": df[["mom_12_1", "vol_1y"]].isna().any(axis=1),
         "listing price vs Yahoo closes differ >1%": listed_px > 0.01,
     }
-    df, info = finish(df, info, checks)
+    df, info = finish(df, info, checks | crosscheck.checks(df, "us", info))
     df["financial"] = df["industry"].isin(CONFIG["peers"]["financial_industries_us"])
     small = (df.groupby("industry")["industry"].transform("size") < CONFIG["peers"]["min_group_size"]) & ~df["financial"]
     df.loc[small, "industry"] = np.where(df.loc[small, "sector"] != "", df.loc[small, "sector"] + " (other)", "Miscellaneous")
@@ -278,7 +280,8 @@ def build_hk(today: date) -> tuple[pd.DataFrame, dict]:
     df = eastmoney.load_hk_list().drop_duplicates("code").set_index("code").loc[codes]
     info["stages"][f"ordinary shares (largest {len(codes)})"] = len(df)
     df = screen(df, prices, today, "hk", info)
-    cons = join_consensus(df[[]], yahoo.CONSENSUS, ["analysts", "currency", "report_currency", "eps_e0", "eps_e1", "eps_e2"])
+    cons = join_consensus(df[[]], yahoo.CONSENSUS, ["analysts", "e1_year", "currency", "report_currency",
+                                                    "eps_e0", "eps_e1", "eps_e2"])
     df = df.join(hk_fundamentals(cons["report_currency"].dropna()).drop(columns="currency"))
     df["price"] = prices[prices["date"] == last].set_index("code")["close"].reindex(df.index)
     df["mcap"] = df["price"] * df["shares"]  # all issued shares (H + A + unlisted) at the HK price
@@ -290,7 +293,7 @@ def build_hk(today: date) -> tuple[pd.DataFrame, dict]:
     df["dps_ttm"] = dividends(Path(str(yahoo.DIVIDENDS).format("hk")), today).reindex(df.index).fillna(0)
     est, fx = ["eps_e0", "eps_e1", "eps_e2"], yahoo.load_fx()
     cons[est] = cons[est].mul(cons["currency"].map(fx["HKD"] / fx), axis=0)
-    df = ratios(df.join(cons[["analysts"] + est]).assign(eps_e3=np.nan, notice_date=None))  # no filing dates
+    df = ratios(df.join(cons[["analysts", "e1_year"] + est]).assign(eps_e3=np.nan, notice_date=None))  # no filing dates
     # Yahoo has two estimate years, so the 2-year expected EPS growth runs from last year's actual to next year
     df["fwd_growth"] = (df["eps_e2"] / df["eps_e0"]).where((df["eps_e0"] > 0) & (df["eps_e2"] > 0)) ** 0.5 - 1
     df["financial"] = df["industry_type"].fillna("").str.split("-").str[-1].isin(CONFIG["peers"]["financial_industries_hk"])
@@ -304,4 +307,4 @@ def build_hk(today: date) -> tuple[pd.DataFrame, dict]:
                                                               | ((df["pe"] / df["pe_ttm_em"]).sub(1).abs() > 0.5)),
         "P/B disagrees with source": (df["pb"] / df["pb_ttm_em"]).sub(1).abs() > 0.5,
     }
-    return finish(df, info, checks)
+    return finish(df, info, checks | crosscheck.checks(df, "hk", info))

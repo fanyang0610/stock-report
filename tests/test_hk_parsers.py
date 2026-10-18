@@ -29,10 +29,12 @@ def test_hk_amounts_back_in_the_reporting_currency_then_hkd(tmp_path, monkeypatc
 
 
 def test_trend_takes_this_and_next_fiscal_year():
-    row = yahoo.parse_trend("00939", load("hk_trend_sample.json"))  # CCB, real reply 2026-10-17
+    row = yahoo.parse_trend("00939", load("hk_trend_sample.json"))  # CCB, real reply 2026-10-17 (no key statistics)
+    no_stats = dict.fromkeys(["bvps_y", "eps_ttm_y", "shares_y", "period_y"])
     assert row == {"code": "00939", "analysts": 12, "report_currency": "CNY", "e1_year": "2026-12", "eps_e0": 1.3,
-                   "eps_e1": 1.32888, "eps_e2": 1.39175, "currency": "CNY"}
-    assert yahoo.parse_trend("X", {"quoteSummary": {"result": None}}) == {"code": "X", "analysts": 0, "report_currency": None}
+                   "eps_e1": 1.32888, "eps_e2": 1.39175, "currency": "CNY"} | no_stats
+    assert yahoo.parse_trend("X", {"quoteSummary": {"result": None}}) == {"code": "X", "analysts": 0,
+                                                                         "report_currency": None} | no_stats
 
 
 def test_hkex_titles_skip_routine_filings():

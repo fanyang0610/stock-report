@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from stockreport import deliver, report, shadow, track
+from stockreport import crosscheck, deliver, report, shadow, track
 from stockreport.cleanup import cleanup
 from stockreport.config import CONFIG, DATA, REPORTS, ROOT, setup_logging
 from stockreport.fetch import fetch as fetch_market
@@ -39,6 +39,11 @@ def build_market(market: str, today: date) -> None:
     df = score(value(universe, r))
     df["r"], df["price_date"] = r, info["quote_date"]
     picks = pick(df)
+    try:  # alarms only: a failure is logged and never stops the build
+        drift = crosscheck.drift(df, market, today)
+    except Exception:
+        log.exception("%s drift alarms failed", market.upper())
+        drift = ["Drift alarms failed (see the log)"]
 
     snap = DATA / "snapshots" / today.isoformat()
     snap.mkdir(parents=True, exist_ok=True)
@@ -54,8 +59,10 @@ def build_market(market: str, today: date) -> None:
     for reason, codes in info["dropped"].items():
         if codes:
             print(f"  dropped {len(codes)} ({reason}): {' '.join(codes[:12])}{' ...' if len(codes) > 12 else ''}")
+    print("\n".join(info.get("checks", [])))
     print(f"Fair value: {df['fv_mid'].notna().sum()} of {len(df)} valued; "
           f"methods {df['method'].value_counts().to_dict()}")
+    print("\n".join(drift))
     print_table(picks)
     try:  # valuation v2 in shadow mode: its columns go into the snapshot, the report stays v1
         df = shadow.run(df, picks, market, today)

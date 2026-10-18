@@ -97,3 +97,9 @@ def test_yahoo_fundamentals_for_sec_gaps():
     ry = yahoo.parse_timeseries("RY", s["RY"], day)  # latest quarter vs the same quarter a year earlier
     assert ry["np_yoy"] == pytest.approx(5.877 / 5.29 - 1, abs=2e-3)
     assert yahoo.parse_timeseries("RY", s["RY"], date(2027, 6, 1))["yahoo"] == "no recent TTM"
+
+
+def test_timeseries_net_income_and_shares_for_the_cross_checks():
+    row = yahoo.parse_timeseries("SOFI", load("us_yahoo_timeseries_sofi_sample.json"), date(2026, 10, 19))  # real reply
+    assert row["revenue_ttm"] == pytest.approx(4305695000) and row["ni_ttm"] == pytest.approx(636264000)
+    assert row["shares"] == pytest.approx(1290312404) and row["period"] == "2026-06-30"

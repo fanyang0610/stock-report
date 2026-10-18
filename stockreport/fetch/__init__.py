@@ -163,9 +163,10 @@ def snapshot(src: Path, market: str, today: date, days: int = 7) -> None:
 def steps(market: str, today: date) -> list:
     from stockreport.track import tracked
     if market == "cn":
-        from stockreport.fetch import eastmoney, tdx
+        from stockreport.fetch import eastmoney, tdx, tencent
         return [("prices", lambda: tdx.update_prices(today)),
                 ("quotes", lambda: eastmoney.update_quotes()),
+                ("Tencent quotes", lambda: tencent.update_quotes(eastmoney.cn_largest())),
                 ("fundamentals", lambda: eastmoney.update_fundamentals(today)),
                 ("dividends", lambda: eastmoney.update_dividends(today)),
                 ("consensus", lambda: eastmoney.update_consensus(today)),
@@ -178,7 +179,7 @@ def steps(market: str, today: date) -> list:
         return [("listing", nasdaq.update_list),
                 ("prices", lambda: yahoo.update_prices(today, tracked("us", today, nasdaq.candidates()))),
                 ("SEC fundamentals", lambda: sec.update_facts(today, nasdaq.candidates())),
-                ("Yahoo fundamentals for SEC gaps", lambda: yahoo.update_gaps(today, sec.gaps(nasdaq.candidates()))),
+                ("Yahoo fundamentals", lambda: yahoo.update_gaps(today, us_yahoo_codes(sec, nasdaq))),
                 ("FX", lambda: yahoo.update_fx(set(pd.read_csv(yahoo.GAPS)["currency"].dropna()))),
                 ("consensus", lambda: nasdaq.update_consensus(today, nasdaq.candidates())),
                 ("10y yield", fred.update_yield),
@@ -199,6 +200,12 @@ def steps(market: str, today: date) -> list:
                 ("monthly prices", lambda: yahoo.update_monthly(today, "hk", eastmoney.hk_candidates(), {"HKDCNY=X"})),
                 ("consensus snapshot", lambda: snapshot(yahoo.CONSENSUS, "hk", today))]
     raise SystemExit(f"unknown market {market!r}")
+
+
+def us_yahoo_codes(sec, nasdaq) -> list[str]:
+    """The companies SEC can't cover first (Yahoo values them), then the rest (Yahoo is their second source)."""
+    gaps = sec.gaps(nasdaq.candidates())
+    return gaps + [c for c in nasdaq.candidates() if c not in set(gaps)]
 
 
 def hk_fx(yahoo) -> None:

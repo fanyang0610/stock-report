@@ -37,9 +37,11 @@ ANNUAL_FIELDS = {"revenue": "TotalRevenue", "gp": "GrossProfit", "op_income": "O
                  "ocf": "OperatingCashFlow", "capex": "CapitalExpenditure", "div": "CashDividendsPaid",
                  "dil_shares": "DilutedAverageShares", "equity": "StockholdersEquity", "pref": "PreferredStockEquity",
                  "assets": "TotalAssets", "liabilities": "TotalLiabilitiesNetMinorityInterest", "shares": "OrdinarySharesNumber"}
+# ni (net income before preferred dividends, like SEC's NetIncomeLoss) and shares: for the US cross-checks
 FIELDS = {"revenue": "TotalRevenue", "np": "NetIncomeCommonStockholders", "gp": "GrossProfit",
           "ocf": "OperatingCashFlow", "equity": "StockholdersEquity",
-          "liabilities": "TotalLiabilitiesNetMinorityInterest", "assets": "TotalAssets"}
+          "liabilities": "TotalLiabilitiesNetMinorityInterest", "assets": "TotalAssets",
+          "ni": "NetIncome", "shares": "OrdinarySharesNumber"}
 MAX_AGE_DAYS = 200  # same freshness rule as SEC
 # market -> (index symbol, its code in the price table, ticker -> Yahoo symbol); the index is the
 # trading calendar (and the benchmark in Phase 6): S&P 500, Hang Seng
@@ -145,9 +147,9 @@ def parse_timeseries(code: str, payload: dict, today: date) -> dict:
         return {"code": code, "yahoo": "no recent TTM"}
     end = date.fromisoformat(profit[-1][0])
     row = {"code": code, "yahoo": "ok", "period": end.isoformat(), "currency": profit[-1][2]}
-    for key in ("revenue", "np", "gp", "ocf"):
+    for key in ("revenue", "np", "gp", "ocf", "ni"):
         row[f"{key}_ttm"] = near("trailing" + FIELDS[key], end)
-    for key in ("equity", "liabilities", "assets"):
+    for key in ("equity", "liabilities", "assets", "shares"):
         points = series.get("quarterly" + FIELDS[key]) or series.get("annual" + FIELDS[key]) or []
         row[key] = points[-1][1] if points and abs((date.fromisoformat(points[-1][0]) - end).days) <= MAX_AGE_DAYS else None
     year_ago = end - timedelta(days=365)
@@ -171,7 +173,8 @@ def timeseries(client: Http, job: tuple[str, date]) -> dict:
 
 
 def update_gaps(today: date, codes: list[str]) -> None:
-    """Weekly per company, for the codes SEC has no recent quarterly numbers for."""
+    """Weekly per company: the codes SEC has no recent quarterly numbers for first, then the rest of the
+    candidates, whose Yahoo numbers are only the second source of the cross-checks."""
     upsert_each(GAPS, make_http, timeseries, [(c, today) for c in stale(GAPS, codes, today)], today, 2, "yahoo fundamentals")
 
 
@@ -186,11 +189,19 @@ def crumb_http() -> Http:
 def parse_trend(code: str, payload: dict) -> dict:
     """The reporting currency, and consensus EPS for the current fiscal year (0y) and the next (+1y)
     with last year's actual EPS (0y's yearAgoEps), in the estimate currency; analysts = estimates
-    behind next year's EPS."""
+    behind next year's EPS. Key statistics for the cross-checks: book value and trailing EPS per share in
+    HKD (the quote currency), the shares Yahoo's market value counts, and the latest reported period."""
     result = (payload.get("quoteSummary") or {}).get("result") or [{}]
     trend = {t["period"]: t for t in (result[0].get("earningsTrend") or {}).get("trend", [])}
     est = lambda period, key: ((trend.get(period, {}).get("earningsEstimate") or {}).get(key) or {}).get("raw")
-    row = {"code": code, "analysts": 0, "report_currency": (result[0].get("earnings") or {}).get("financialCurrency")}
+    stats, detail = result[0].get("defaultKeyStatistics") or {}, result[0].get("summaryDetail") or {}
+    hkd = detail.get("currency") == "HKD"
+    stat = lambda d, key: (d.get(key) or {}).get("raw") if hkd and isinstance(d.get(key), dict) else None
+    quarter = stat(stats, "mostRecentQuarter")
+    row = {"code": code, "analysts": 0, "report_currency": (result[0].get("earnings") or {}).get("financialCurrency"),
+           "bvps_y": stat(stats, "bookValue"), "eps_ttm_y": stat(stats, "trailingEps"),
+           "shares_y": stat(stats, "impliedSharesOutstanding"),
+           "period_y": datetime.fromtimestamp(quarter, timezone.utc).date().isoformat() if quarter else None}
     if None in (est("0y", "avg"), est("+1y", "avg"), est("0y", "yearAgoEps")):
         return row
     return row | {"analysts": est("+1y", "numberOfAnalysts") or 0, "e1_year": trend["0y"]["endDate"][:7],
@@ -200,13 +211,18 @@ def parse_trend(code: str, payload: dict) -> dict:
 
 def trend(client: Http, code: str) -> dict:
     payload = client.get(SUMMARY.format(symbol=MARKETS["hk"][2](code)), ok=(200, 404),
-                         params={"modules": "earningsTrend,earnings", "crumb": client.crumb}).json()
+                         params={"modules": "earningsTrend,earnings,defaultKeyStatistics,summaryDetail",
+                                 "crumb": client.crumb}).json()
     return parse_trend(code, payload)
 
 
 def update_consensus(today: date, codes: list[str]) -> None:
-    """HK consensus EPS and reporting currency, weekly per stock; no estimates: analysts = 0."""
-    upsert_each(CONSENSUS, crumb_http, trend, stale(CONSENSUS, codes, today), today, 2, "hk consensus")
+    """HK consensus EPS, reporting currency and key statistics, weekly per stock; no estimates: analysts = 0.
+    A table fetched before the key statistics were added (Phase 12) is fetched again for every stock."""
+    todo = stale(CONSENSUS, codes, today)
+    if CONSENSUS.exists() and "bvps_y" not in pd.read_csv(CONSENSUS, nrows=0).columns:
+        todo = list(codes)
+    upsert_each(CONSENSUS, crumb_http, trend, todo, today, 2, "hk consensus")
 
 
 def update_cny_rates(currencies: set[str], days: int = 900) -> None:
