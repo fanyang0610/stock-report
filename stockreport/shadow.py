@@ -12,6 +12,9 @@ from stockreport import anchors, engine, history, regime
 from stockreport.config import CONFIG
 from stockreport.pick import BUCKETS
 
+MOM_FLOOR = CONFIG["v2"]["momentum_floor"]  # buy floor on momentum z: "industry" (v1's z), "market" or "none"
+MOM_WEIGHT = CONFIG["v2"]["momentum_weight"]  # weight of that momentum z next to the standardized buy key
+
 COLUMNS = ["archetype", "eps_core", "bps_c", "roe_cur", "roe_c3", "w_hist", "roe_norm", "structural_decline", "phi",
            "g0", "icc", "icc_final", "r_req", "r_mkt", "v_intrinsic", "v_used", "roe_implied", "v_peer", "v_own", "v_comb",
            "v_final", "upside", "dispersion", "n_anchors", "screen_fails", "dilution", "conf_points", "confidence",
@@ -44,17 +47,18 @@ def own_anchor(df: pd.DataFrame, h: pd.DataFrame, v: pd.DataFrame, market: str) 
     return pb * v["bps_c"].where(v["bps_c"] > 0)
 
 
-def value(df: pd.DataFrame, market: str, today: date) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, float]:
+def value(df: pd.DataFrame, market: str, today: date,
+          loaded: tuple | None = None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, float]:
     """The v2 frame for one market's snapshot `df` (v1 columns), with the history features, the base
-    rates and the capex gauge it used."""
-    h, rates = history.load(market, df, today)
+    rates and the capex gauge it used (`loaded`: history.load's result, when the caller has it)."""
+    h, rates = loaded or history.load(market, df, today)
     d = engine.value(df, h, market)
     b = regime.test(d, h, d["eps_core"] * df["shares"] / df["revenue_ttm"].where(df["revenue_ttm"] > 0))
     theme = themes(df, market)
-    gauge = regime.capex_gauge(history.us_annual())
+    gauge = regime.capex_gauge(history.us_annual(today))
     b["p"], b["p_why"] = regime.probability(b, d, h, rates, h.get("pre_type", pd.Series(dtype=object)),
                                             theme == "ai", gauge)
-    v = d.join(b).join(regime.scenarios(b, d, h, df["price"], d["r_req"], engine.G_LONG[market]))
+    v = d.join(b).join(regime.scenarios(b, d, h, df["price"], d["r_req"], engine.G_LONG[market], market))
     v["theme"], v["dilution"] = theme, h.get("dilution")
     v["v_own"] = own_anchor(df, h, v, market)
     if market == "us":
@@ -84,15 +88,18 @@ def buckets(v: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
     profit or a screen failure); ranked by confidence-weighted downside."""
     c, n, cap = CONFIG["v2"], CONFIG["buckets"]["per_bucket"], CONFIG["buckets"]["max_per_group"]
     ok = v["v_final"].notna() & (v["archetype"] != "pre-profit")
-    up, mom, good, passed = v["upside"], df["z_momentum"], v["confidence"].isin(["高", "中"]), v["screen_ok"]
+    up, good, passed = v["upside"], v["confidence"].isin(["高", "中"]), v["screen_ok"]
+    mom = momentum(df)
     cw = np.log1p(up.clip(lower=-0.99)) * (1 - v["dispersion"].clip(upper=0.5))
+    rank_key = cw / cw[ok].std() + MOM_WEIGHT * mom.fillna(0) if MOM_WEIGHT else cw  # buys only
     excess = v["icc_final"] - v["r_req"]
     largest = df["mcap_rank"] <= CONFIG["buckets"]["sell_largest_n"]
-    weak = (mom <= -0.5) | (df["np_growth"] < 0) | ~passed
+    weak = (df["z_momentum"] <= -0.5) | (df["np_growth"] < 0) | ~passed
     hold_band = c["hold_max_abs_upside"]
     rules = {
-        "buy": [(ok & (up >= c["buy_min_upside"]) & (excess >= c["buy_min_excess"]) & good & passed & (mom >= -0.5), cw, False),
-                (ok & (up >= 0.15) & passed, cw, False), (ok & (up > 0), cw, False)],
+        "buy": [(ok & (up >= c["buy_min_upside"]) & (excess >= c["buy_min_excess"]) & good & passed
+                 & ((mom >= -0.5) | (MOM_FLOOR == "none")), rank_key, False),
+                (ok & (up >= 0.15) & passed, rank_key, False), (ok & (up > 0), rank_key, False)],
         "hold": [(ok & (df["quality_pct"] >= 0.7) & passed & (up.abs() <= hold_band) & good, df["z_quality"], False),
                  (ok & passed & (up.abs() <= hold_band + 0.05), df["z_quality"], False), (ok & (up.abs() < 0.25), df["z_quality"], False)],
         "sell": [(ok & (up <= c["sell_max_upside"]) & (excess <= c["sell_max_excess"]) & good & largest & weak, cw, True),
@@ -114,6 +121,15 @@ def buckets(v: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
                         for bucket, items in chosen.items() for i, (code, tier) in enumerate(items, start=1)],
                        columns=["code", "bucket", "rank", "tier", "conviction"])
     return out.set_index("code").reindex(v.index)
+
+
+def momentum(df: pd.DataFrame) -> pd.Series:
+    """Momentum z for the buy floor and ranking: v1's industry-relative z, or the 12-1 month return
+    standardized across the whole market."""
+    if MOM_FLOOR == "industry":
+        return df["z_momentum"]
+    m = df["mom_12_1"]
+    return ((m - m.mean()) / m.std()).clip(-3, 3)
 
 
 def verdict(v: pd.Series) -> str:

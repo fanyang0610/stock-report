@@ -9,6 +9,7 @@ docs/PLAN.md has the method, the phases and the current status. Do only the phas
 ## Layout
 stockreport/fetch/ (one module per data source) → universe.py → value.py → score.py → pick.py → notes.py (DeepSeek) → render/ (HTML → PDF) → deliver.py; plus listener.py and track.py.
 Valuation v2 runs in shadow mode after pick.py (Phase 8, docs/PLAN.md Method 12): history.py → engine.py → regime.py → anchors.py → shadow.py.
+signal.py scores signals (the backtest and `track --signal`). backtest/ (outside the app) is the Phase 9 backtest; docs/BACKTEST.md has its results and commands.
 bridge/wechat.mjs is the WeChat helper (Node). data/ is the daily cache and reports/ the outputs; both are git-ignored.
 
 ## Rules
@@ -30,6 +31,6 @@ uv run python -m stockreport run [--market cn|us|hk] [--no-notes]   # picks + no
 uv run python -m stockreport send [--test]                          # text summary + PDF to WeChat
 uv run python -m stockreport listen                                 # keyword listener (launchd)
 uv run python -m stockreport v2 [--market cn|us|hk] [--date D]      # valuation v2 (shadow) on a saved snapshot
-uv run python -m stockreport track                                  # performance scorecard
+uv run python -m stockreport track [--signal]                       # performance scorecard (--signal: v1/v2 signals on the snapshots)
 uv run python -m stockreport cleanup [--dry-run]                    # apply storage retention
 uv run pytest

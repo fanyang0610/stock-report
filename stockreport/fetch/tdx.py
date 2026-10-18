@@ -22,9 +22,10 @@ INDEXES = {("sh", "000300"): "CSI300"}
 http = Http(min_interval=0.3, timeout=90)
 
 
-def parse_package(content: bytes, ymd: str, min_rows: int = 4000) -> pd.DataFrame:
+def parse_package(content: bytes, ymd: str, min_rows: int = 4000, names: bool = False) -> pd.DataFrame:
     """Each market has a .cod code table (150-byte records) and a .md1 quote file (512-byte blocks).
-    Layout as documented in the a-stock-data skill (from jing2uo/tdx2db)."""
+    Layout as documented in the a-stock-data skill (from jing2uo/tdx2db). names: also the day's
+    security name (GBK at bytes 40-72), which carries the ST prefix of that day (the backtest)."""
     archive = zipfile.ZipFile(io.BytesIO(content))
     rows = []
     for market in ("sh", "sz"):
@@ -45,8 +46,11 @@ def parse_package(content: bytes, ymd: str, min_rows: int = 4000) -> pd.DataFram
             volume = struct.unpack("<Q", block[56:64])[0]
             amount = struct.unpack("<d", block[72:80])[0]
             if close > 0 and prev_close > 0:
-                rows.append((key or code, round(close, 4), round(prev_close, 4), volume, round(amount, 2)))
-    df = pd.DataFrame(rows, columns=["code", "close", "prev_close", "volume", "amount"])
+                name = rec[40:72].split(b"\x00")[0].decode("gbk", "replace").strip() if names else None
+                rows.append((key or code, round(close, 4), round(prev_close, 4), volume, round(amount, 2), name))
+    df = pd.DataFrame(rows, columns=["code", "close", "prev_close", "volume", "amount", "name"])
+    if not names:
+        df = df.drop(columns="name")
     if len(df) < min_rows:
         raise RuntimeError(f"tdx {ymd}: only {len(df)} A-share rows")
     df.insert(0, "date", f"{ymd[:4]}-{ymd[4:6]}-{ymd[6:]}")

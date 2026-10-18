@@ -10,10 +10,13 @@ guesses for Phase 9 to fit."""
 import numpy as np
 import pandas as pd
 
+from stockreport.config import CONFIG
 from stockreport.engine import ri, solve, R_RANGE
 
 STEP, NEW_MIN, REV_SHIFT, CONFIRM = 0.12, 0.18, 0.15, 0.5  # the base-rate episodes' move (history.episodes)
-PHI_NEW, PHI_OLD = 0.5, 0.3  # persistence floor under the new regime, cap under the old one
+PHI_NEW = CONFIG["v2"]["phi_new"]  # per market: persistence floor under the new regime (Phase 9: measured)
+PHI_OLD = 0.3  # persistence cap under the old one
+OWN_BOOM = CONFIG["v2"]["own_boom_weight"]  # log-odds for the stock's own last boom (Phase 9: no predictive power, 0)
 POSITIVE = {"预增", "扭亏", "略增", "续盈"}
 NEGATIVE = {"预减", "首亏", "略减", "续亏"}
 
@@ -58,8 +61,8 @@ def probability(b: pd.DataFrame, d: pd.DataFrame, h: pd.DataFrame, rates: pd.Dat
         notes = [f"基础比率 {base:.0%}（{n} 例{'，周期史' if key[1] == 'cyclical' else ''}）"]
         z = np.log(base / (1 - base))
         kept, year = h.at[code, "past_boom_kept"], h.at[code, "past_boom_year"]
-        if up and pd.notna(kept) and year <= h.at[code, "first_year"] + h.at[code, "n_years"] - 4:
-            z += 0.5 if kept else -0.5
+        if OWN_BOOM and up and pd.notna(kept) and year <= h.at[code, "first_year"] + h.at[code, "n_years"] - 4:
+            z += OWN_BOOM if kept else -OWN_BOOM
             notes.append(f"{year:.0f} 年那轮高 ROE {'延续了' if kept else '三年内回落'}{'+' if kept else '−'}")
         if not up and d.at[code, "structural_decline"]:
             z += 0.8
@@ -91,7 +94,7 @@ def probability(b: pd.DataFrame, d: pd.DataFrame, h: pd.DataFrame, rates: pd.Dat
 
 
 def scenarios(b: pd.DataFrame, d: pd.DataFrame, h: pd.DataFrame, price: pd.Series, r: pd.Series,
-              g_long: float) -> pd.DataFrame:
+              g_long: float, market: str = "us") -> pd.DataFrame:
     """V_new: consensus without a haircut and the post-break normal ROE (today and analysts' year 3), slow
     fade; for a downward break book follows the shrinking revenue. V_old:
     consensus fully pulled toward the old path, the old normal ROE, fast fade. Then the value at our
@@ -104,7 +107,8 @@ def scenarios(b: pd.DataFrame, d: pd.DataFrame, h: pd.DataFrame, price: pd.Serie
     bb, pp = b[rows], b.loc[rows, "p"].to_numpy()
     new = dd.assign(g0=np.where(bb["break_dir"] == "down", np.minimum(dd["g0"], h.loc[rows, "rev_g3"].clip(-0.1)), dd["g0"]))
     phi = dd["phi"].to_numpy()
-    v_new = lambda rr: ri(rr, new, g_long, w=0.0, nn=bb["roe_new"].to_numpy(), phi=np.maximum(phi, PHI_NEW))
+    floor = PHI_NEW[market] if isinstance(PHI_NEW, dict) else PHI_NEW
+    v_new = lambda rr: ri(rr, new, g_long, w=0.0, nn=bb["roe_new"].to_numpy(), phi=np.maximum(phi, floor))
     v_old = lambda rr: ri(rr, dd, g_long, w=1.0, nn=bb["roe_old"].to_numpy(), phi=np.minimum(phi, PHI_OLD))
     rr, px = r[rows].to_numpy(), price[rows].to_numpy()
     vn, vo = np.maximum(v_new(rr), 0), np.maximum(v_old(rr), 0)

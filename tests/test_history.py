@@ -78,3 +78,18 @@ def test_upsert_each_writes_the_yearly_rows(tmp_path):
     years = pd.read_csv(history)
     assert years["code"].tolist() == ["A", "B"] and (years["fetched"] == "2026-10-18").all()
     assert fetch.stale(history, ["A", "B", "C"], date(2026, 10, 18), days=90) == ["C"]
+
+
+def test_history_is_point_in_time(tmp_path, monkeypatch):
+    """The backtest runs v2 on past days: a report filed after `today` must not be used (Phase 9)."""
+    from stockreport import history
+    rows = [{"code": "X", "fy_end": f"{y}-12-31", "filed": f"{y + 1}-02-20", "currency": "USD", "ni": 10.0 * y,
+             "equity": 100.0, "shares": 10.0} for y in (2020, 2021, 2022)]
+    rows.append({"code": "Y", "fy_end": "2022-12-31", "filed": None, "currency": "USD", "ni": 1.0, "equity": 5.0, "shares": 1.0})
+    pd.DataFrame(rows).to_csv(tmp_path / "us_annual.csv.gz", index=False, compression="gzip")
+    monkeypatch.setattr(history, "HISTORY", tmp_path)
+    assert history.us_annual(date(2022, 6, 30))["fy_end"].tolist() == ["2020-12-31", "2021-12-31"]
+    assert history.us_annual(date(2023, 3, 1))["fy_end"].tolist() == ["2020-12-31", "2021-12-31", "2022-12-31"]
+    # no filing date: public 90 days after the year end
+    assert history.us_annual(date(2023, 3, 31))["code"].tolist().count("Y") == 1
+    assert history.us_annual(date(2023, 3, 30))["code"].tolist().count("Y") == 0

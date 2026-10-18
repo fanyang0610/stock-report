@@ -57,13 +57,14 @@ def tiers(df: pd.DataFrame) -> dict[str, list[tuple[pd.Series, str, bool]]]:
     }
 
 
-def pick(df: pd.DataFrame) -> pd.DataFrame:
+def pick(df: pd.DataFrame, use: tuple[str, ...] = ("c1", "c2")) -> pd.DataFrame:
     """Picks plus runners-up, and the excluded names. Each stock in one bucket only; at most N per
-    industry per bucket. The sell bucket ignores checks 1-2: a one-off gain only adds to overvaluation."""
+    industry per bucket. The sell bucket ignores checks 1-2: a one-off gain only adds to overvaluation.
+    `use`: the checks that exclude (the backtest and `track --signal` also run with one or none)."""
     c = CONFIG["buckets"]
     df = df[df["fv_mid"].notna()]
     checks = one_off(df)
-    spiked = set(df.index[checks["c1"].eq(True) | checks["c2"].eq(True)])
+    spiked = set(df.index[checks[list(use)].eq(True).any(axis=1)]) if use else set()
     rules = {b: list(enumerate(r, start=1)) for b, r in tiers(df).items()}
     taken: set[str] = set()
     chosen = {b: [] for b in BUCKETS}

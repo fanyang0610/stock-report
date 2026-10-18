@@ -83,10 +83,18 @@ workers = 4
 
 [v2]                          # valuation v2 in shadow mode (docs/REVIEW.md A2; first guesses until the Phase 9 backtest)
 lambda = 0.5                  # share of an industry's implied premium over the market's implied return accepted as risk
+discount = "implied"          # required return base: "implied" (the market's implied return) or "configured" (10-year + premium)
 long_growth = { cn = 0.03, hk = 0.03, us = 0.04 }
+# Phase 9 backtest (docs/BACKTEST.md): excess ROE fades much faster in CN and HK than v2 assumed
+phi = { cn = [0.2, 0.0, 0.0], hk = [0.2, 0.0, 0.0], us = [0.15, 0.45, 0.2] }  # φ = a + b × ROE stability + c × margin/60%
+fade_years = 3                # ROE fades from year 4 to its long-run level over this many years (was 10)
+phi_new = { cn = 0.05, hk = 0.1, us = 0.5 }   # persistence floor under a new regime (breaks that held 3 years)
+own_boom_weight = 0.0         # log-odds for the stock's own last boom (was ±0.5; no out-of-sample power)
 growth_min_analysts = 5       # consensus EPS growth sets expected and book growth only with this many analysts
 buy_min_upside = 0.20
 buy_min_excess = 0.02         # expected return at least this far above the required return
+momentum_floor = "industry"   # buy floor momentum z ≥ −0.5: "industry" (v1's industry-relative z), "market" or "none"
+momentum_weight = 0.5         # momentum z added to the buy ranking (confidence-weighted upside in sd units; Phase 9)
 hold_max_abs_upside = 0.15
 sell_max_upside = -0.25
 sell_max_excess = -0.02

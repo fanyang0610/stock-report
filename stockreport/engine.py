@@ -9,11 +9,15 @@ import pandas as pd
 from stockreport.config import CONFIG
 
 G_LONG = CONFIG["v2"]["long_growth"]  # long-run nominal growth
-FADE_YEARS = 10
+FADE_YEARS = CONFIG["v2"]["fade_years"]  # years 4.. over which ROE fades to its long-run level (Phase 9: 3)
 HAIRCUT = np.array([0.1, 0.25, 0.5])  # consensus years 1-3 pulled toward the normal path at full history weight
 MIN_SPREAD = 0.03  # terminal r − g
 LAMBDA = CONFIG["v2"]["lambda"]  # share of an industry's implied premium accepted as its risk
+DISCOUNT = CONFIG["v2"]["discount"]  # "implied": the market's implied return; "configured": 10-year yield + premium
 R_RANGE = (-0.05, 0.40)  # expected-return search range; a result on the edge means "beyond"
+VOL_BAND = (0.3, 0.7)  # history weight from ROE volatility relative to its level: 0 below 0.3, 1 from 0.3 + 0.7
+CYCLE = (1.0, 0.0, 0.3, 0.6)  # cycle factor: 2+ down years or no growth / grower with early losses / grower / else
+PHI = {m: tuple(v) for m, v in CONFIG["v2"]["phi"].items()}  # per market: φ = a + b × ROE stability + c × margin/60%
 
 
 def earnings(df: pd.DataFrame, market: str) -> pd.DataFrame:
@@ -43,7 +47,7 @@ def earnings(df: pd.DataFrame, market: str) -> pd.DataFrame:
     return d
 
 
-def normal(d: pd.DataFrame, h: pd.DataFrame, financial: pd.Series, np_ttm: pd.Series) -> pd.DataFrame:
+def normal(d: pd.DataFrame, h: pd.DataFrame, financial: pd.Series, np_ttm: pd.Series, market: str = "cn") -> pd.DataFrame:
     """History weight w, normal ROE, archetype, persistence φ and starting book growth.
     w = f(ROE volatility relative to its level) × cycle factor (1.0 with 2+ revenue down years or no
     growth expected; 0.3 for a grower with at most one down year and 15%+ expected growth; else 0.6).
@@ -51,11 +55,11 @@ def normal(d: pd.DataFrame, h: pd.DataFrame, financial: pd.Series, np_ttm: pd.Se
     no steady 5-year decline and analysts' year-3 ROE at least halfway back; else today (or consensus)."""
     rh, rc, c3 = h["roe_hist"], d["roe_cur"], d["roe_c3"]
     rel_vol = h["roe_vol"] / rh.abs().clip(lower=0.05)
-    w_vol = ((rel_vol - 0.3) / 0.7).clip(0, 1).where(h["loss_years"] < 3, 1.0).where(rh.notna(), 0.0)
+    w_vol = ((rel_vol - VOL_BAND[0]) / VOL_BAND[1]).clip(0, 1).where(h["loss_years"] < 3, 1.0).where(rh.notna(), 0.0)
     down, g = h["rev_down_years"], d["g_exp"]
     grower = (down <= 1) & (g >= 0.15)
     # A1: fast growers whose early years lost money are valued on today and consensus
-    cycle = np.select([(down >= 2) | (g < 0.05), grower & h["early_losses_only"].eq(True), grower], [1.0, 0.0, 0.3], 0.6)
+    cycle = np.select([(down >= 2) | (g < 0.05), grower & h["early_losses_only"].eq(True), grower], CYCLE[:3], CYCLE[3])
     d["w_hist"] = (w_vol * cycle).fillna(0.0)
     w = d["w_hist"]
     decline = (h["roe_slope"] < -0.015) & (h["roe_r2"] > 0.5)
@@ -76,7 +80,8 @@ def normal(d: pd.DataFrame, h: pd.DataFrame, financial: pd.Series, np_ttm: pd.Se
     d["archetype"] = np.select([preprofit, financial, w >= 0.6, grower], ["pre-profit", "financial", "cyclical", "growth"], "steady")
     stability = 1 - rel_vol.clip(0, 1).fillna(0.6)
     margin = (h["gm_hist"].clip(0, 0.6) / 0.6).fillna(0.5)
-    d["phi"] = (0.15 + 0.45 * stability + 0.2 * margin).clip(0.1, 0.8)
+    a, b, c = PHI[market] if isinstance(PHI, dict) else PHI  # the backtest sets one tuple for every market
+    d["phi"] = (a + b * stability + c * margin).clip(0.1, 0.8)
     g0 = d["g_cons"].fillna(h["rev_cagr_5y"] * 0.5).clip(0, 0.15)
     return d.assign(g0=g0)
 
@@ -138,13 +143,18 @@ def implied_roe(d: pd.DataFrame, price: np.ndarray, r: np.ndarray) -> np.ndarray
     return -solve(lambda x: value(-x), price, -3.0, 0.5)  # value rises with x: solve on −x
 
 
-def required(icc: pd.Series, well: pd.Series, industry: pd.Series, g_long: float) -> tuple[pd.Series, float]:
-    """r = the market's implied return (median expected return of well-covered stocks) plus LAMBDA × the
-    industry's implied premium (industries with 5+ valued stocks), within −3 / +6 points of the market."""
+def required(icc: pd.Series, well: pd.Series, industry: pd.Series, g_long: float,
+             r_config: float = np.nan) -> tuple[pd.Series, float]:
+    """r = the market's implied return (median expected return of well-covered stocks; with DISCOUNT
+    "configured", the 10-year yield + premium instead) plus LAMBDA × the industry's implied premium
+    (industries with 5+ valued stocks), within −3 / +6 points of the market."""
     inside = icc.between(R_RANGE[0] + 1e-3, R_RANGE[1] - 1e-3)
     r_mkt = float(icc[well & inside].median())
+    premium_base = r_mkt
+    if DISCOUNT == "configured" and np.isfinite(r_config):
+        r_mkt = r_config
     by = icc[inside].groupby(industry[inside])
-    premium = (by.median() - r_mkt).where(by.count() >= 5)
+    premium = (by.median() - premium_base).where(by.count() >= 5)
     r = r_mkt + LAMBDA * industry.map(premium).fillna(0.0)
     return r.clip(r_mkt - 0.03, r_mkt + 0.06).clip(lower=g_long + MIN_SPREAD), r_mkt
 
@@ -152,7 +162,7 @@ def required(icc: pd.Series, well: pd.Series, industry: pd.Series, g_long: float
 def value(df: pd.DataFrame, h: pd.DataFrame, market: str) -> pd.DataFrame:
     """The engine for one market: inputs, intrinsic value at the required return, expected return,
     implied ROE. `df` is the v1 snapshot, `h` the history features (history.load)."""
-    d = normal(earnings(df.join(h), market), h, df["financial"].astype(bool), df["np_ttm"])
+    d = normal(earnings(df.join(h), market), h, df["financial"].astype(bool), df["np_ttm"], market)
     g_long, price = G_LONG[market], df["price"].to_numpy(float)
     d["g0"] = d["g0"].fillna(g_long)  # no consensus growth and no revenue history (foreign banks via Yahoo)
     d["valued"] = (d["bps_c"] > 0) & d["roe_norm"].notna() & d["roe_cur"].notna() & (d["archetype"] != "pre-profit")
@@ -160,7 +170,9 @@ def value(df: pd.DataFrame, h: pd.DataFrame, market: str) -> pd.DataFrame:
     icc = solve(lambda r: ri(r, d, g_long), price, *R_RANGE)
     d["icc"] = np.where(ok, icc, np.nan)
     well = d["has_cons"] & (h["n_years"] >= 5)
-    d["r_req"], r_mkt = required(d["icc"], well, df["industry"], g_long)
+    if well.sum() < 30:  # no consensus (the backtest's history has none): stocks with 5+ years of history
+        well = h["n_years"] >= 5
+    d["r_req"], r_mkt = required(d["icc"], well, df["industry"], g_long, float(df["r"].iloc[0]) if "r" in df else np.nan)
     d["r_mkt"] = r_mkt
     d["v_intrinsic"] = np.where(ok, ri(d["r_req"].to_numpy(), d, g_long), np.nan)
     # no positive value: without a positive normal ROE there is no sustainable profit (pre-profit); with

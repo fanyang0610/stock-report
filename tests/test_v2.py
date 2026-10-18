@@ -33,12 +33,22 @@ def test_residual_income_consensus_years_and_haircut():
     assert engine.ri(0.08, up, 0.03)[0] == pytest.approx(30 + 0.25 / 1.08 ** 3, rel=1e-6)
 
 
-def test_terminal_spread_has_a_floor():
-    # r − g below 3 points is held at 3: at r = 5% and g = 4%, 13 explicit years of 0.5 × 1.04^(t−1),
-    # then the year-14 excess return divided by 0.03, not 0.01
+def test_terminal_spread_has_a_floor(monkeypatch):
+    # r − g below 3 points is held at 3: at r = 5% and g = 4%, with a 10-year fade 13 explicit years of
+    # 0.5 × 1.04^(t−1), then the year-14 excess return divided by 0.03, not 0.01
+    monkeypatch.setattr(engine, "FADE_YEARS", 10)
     v = engine.ri(0.05, inputs(g0=0.04, roe_norm=0.10, roe_cur=0.10), 0.04)[0]
     explicit = sum(0.5 * 1.04 ** (t - 1) / 1.05 ** t for t in range(1, 14))
     assert v == pytest.approx(10 + explicit + 0.5 * 1.04 ** 13 / 0.03 / 1.05 ** 13)
+
+
+def test_short_fade_reaches_the_long_run_level_after_year_6(monkeypatch):
+    # Phase 9's 3-year fade: ROE 30% today and normal, φ = 0 at r = 10% and g = 3%: years 1-3 earn 20 points
+    # of excess on a book growing 3%, years 4-6 fade linearly to r (2/3, 1/3, 0 of it), then nothing
+    monkeypatch.setattr(engine, "FADE_YEARS", 3)
+    v = engine.ri(0.10, inputs(roe_norm=0.30, roe_cur=0.30, phi=0.0), 0.03)[0]
+    share = [1, 1, 1, 2 / 3, 1 / 3, 0]
+    assert v == pytest.approx(10 + sum(0.2 * s * 10 * 1.03 ** t / 1.1 ** (t + 1) for t, s in enumerate(share)))
 
 
 def history_frame() -> tuple[pd.DataFrame, pd.DataFrame]:

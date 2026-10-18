@@ -177,7 +177,9 @@ def main(argv: list[str] | None = None) -> int:
     run_p = sub.add_parser("run", help="fetch, value, score, pick, write notes and the PDF")
     run_p.add_argument("--market", choices=["cn", "us", "hk"], help="one market (default: all three)")
     run_p.add_argument("--no-notes", action="store_true", help="template notes instead of DeepSeek")
-    sub.add_parser("track", help="average return of past picks vs each market's index")
+    track_p = sub.add_parser("track", help="average return of past picks vs each market's index")
+    track_p.add_argument("--signal", action="store_true",
+                         help="score the saved snapshots' v1 and v2 signals as the backtest does (docs/BACKTEST.md)")
     v2 = sub.add_parser("v2", help="valuation v2 (shadow) on a saved snapshot: v2 lists and the v1/v2 comparison")
     v2.add_argument("--market", choices=["cn", "us", "hk"], help="one market (default: all three)")
     v2.add_argument("--date", help="snapshot date YYYY-MM-DD (default: the newest)")
@@ -191,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "v2":
         return shadow_only([args.market] if args.market else ["cn", "us", "hk"], args.date)
     if args.command == "track":
-        return track.scorecard()
+        return track.signals() if args.signal else track.scorecard()
     if args.command == "listen":
         setup_logging(console=False)
         return listen()

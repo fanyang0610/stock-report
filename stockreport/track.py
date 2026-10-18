@@ -92,3 +92,19 @@ def scorecard() -> int:
     print("'vs index' = average of pick return minus the index over the same days; a sell worked if it is negative.\n")
     print(show.to_string())
     return 0
+
+
+def signals() -> int:
+    """`track --signal`: the backtest's measures (stockreport/signal.py) on the live snapshots, v1 and v2."""
+    from stockreport import signal
+    from stockreport.fetch import tdx, yahoo
+    loaders = {"cn": tdx.load_prices, "us": lambda: yahoo.load_prices("us"), "hk": lambda: yahoo.load_prices("hk")}
+    print("Signal tracking on the saved snapshots: rank correlation of v1's and v2's upside with the returns since,\n"
+          "and the buckets against the equal-weight snapshot universe (docs/BACKTEST.md has the backtest's numbers).")
+    for market in INDEX:
+        df = signal.live(market, loaders[market](), INDEX[market])
+        if df.empty:
+            print(f"\n== {market.upper()}: no snapshot with v2 columns yet")
+            continue
+        signal.report(market, df)
+    return 0
