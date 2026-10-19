@@ -86,6 +86,38 @@ def test_bank_revenue_is_net_interest_plus_noninterest_income():
     assert row["revenue_ttm"] == row["nii_ttm"] + row["nonint_ttm"] == pytest.approx(21.367e9)
 
 
+# Real facts (2026-10-19) behind Phase 12's SEC-vs-Yahoo gaps, cut to the TTM to 2026-06-30 (H1 2026 + FY2025 - H1 2025).
+FIXES = load("us_companyfacts_fixes_sample.json")
+facts = lambda code: sec.parse_facts(code, FIXES[code], date(2026, 10, 19))
+
+
+def test_revenue_is_the_concept_the_income_statement_implies_else_the_largest():
+    # No gross profit or operating income: the largest. SoFi's and M&T's ASC 606 revenue is only their fee
+    # revenue; Camden's is the 1% that isn't rent.
+    assert facts("SOFI")["revenue_ttm"] == 2_319_044e3 + 3_613_354e3 - 1_626_703e3  # RevenuesNetOfInterestExpense
+    assert facts("MTB")["revenue_ttm"] == (3_544 + 6_948 - 3_408 + 1_429 + 2_742 - 1_294) * 1e6  # net interest + noninterest
+    assert facts("CPT")["revenue_ttm"] == 781_717e3 + 1_573_544e3 - 787_074e3  # OperatingLeaseLeaseIncome
+    # Williams' ASC 606 total (14.9bn for 2025) is before eliminations: operating income + costs = Revenues.
+    assert facts("WMB")["revenue_ttm"] == (6_083 + 11_950 - 5_829) * 1e6
+    # Centene's gross profit + cost (18.9bn) is its services' only, no concept within 5%: operating income + costs.
+    assert facts("CNC")["revenue_ttm"] == (103_523 + 194_777 - 95_362) * 1e6
+
+
+def test_fiscal_year_comes_from_the_10k():
+    # Comfort Systems' Q1 2026 10-Q tagged Q1 2025 revenue (1.83bn) as the 2025 fiscal year.
+    assert facts("FIX")["revenue_ttm"] == 6_130_988e3 + 9_101_641e3 - 4_004_605e3
+
+
+def test_equity_and_net_income_are_the_parents():
+    # AT&T tags equity only including minorities; Invesco tags no NetIncomeLoss (its profit available to
+    # common is after preferred dividends and the 2025 preferred buyback).
+    assert facts("T")["equity"] == (126_434 - 15_990) * 1e6
+    assert facts("IVZ")["np_ttm"] == pytest.approx(((558.0 + 92.9) + (-174.8 - 106.9) - (464.7 - 31.0)) * 1e6)  # -64.5m
+    # the annual history follows the same rules
+    assert [(r["fy_end"], r["equity"]) for r in sec.parse_annual("T", FIXES["T"])] == [("2025-12-31", (126_491 - 15_958) * 1e6)]
+    assert sec.parse_annual("MTB", FIXES["MTB"])[0]["revenue"] == (6_948 + 2_742) * 1e6
+
+
 def test_yahoo_fundamentals_for_sec_gaps():
     # Real Yahoo fundamentals-timeseries (2026-10-17), one company per growth path.
     s, day = load("us_yahoo_timeseries_sample.json"), date(2026, 10, 17)

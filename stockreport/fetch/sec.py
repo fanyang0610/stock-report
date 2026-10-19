@@ -18,21 +18,27 @@ SUBMISSIONS = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
 CIKS, TABLE = DATA / "fundamentals" / "us_cik.csv.gz", DATA / "fundamentals" / "us_facts.csv.gz"
 ANNUAL = HISTORY / "us_annual.csv.gz"  # one row per company and fiscal year (SEC, else Yahoo)
 # Concepts in order of preference. Companies switch concepts between filings, so the values of all
-# of them are merged per period, the first concept winning.
+# of them are merged per period, the first concept winning; a (total, part) pair stands for total - part.
+# Revenue is chosen per period instead (revenue()): companies also tag parts of it with its concepts (fee revenue
+# in ASC 606 scope at banks and card issuers, a non-interest revenue subtotal, a REIT's non-rent income) and
+# totals before intersegment eliminations (Williams' ASC 606 total, Hasbro's "Revenues").
+PARENT_NI = ("ProfitLoss", "NetIncomeLossAttributableToNoncontrollingInterest")  # no NetIncomeLoss tag (IVZ)
 DURATION = {
-    "np": ["NetIncomeLoss", "NetIncomeLossAvailableToCommonStockholdersBasic", "ProfitLoss"],
+    "np": ["NetIncomeLoss", PARENT_NI, "NetIncomeLossAvailableToCommonStockholdersBasic", "ProfitLoss"],
     "revenue": ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax",
                 "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueNet",
-                "RevenuesNetOfInterestExpense", "RegulatedAndUnregulatedOperatingRevenue"],
-    "nii": ["InterestIncomeExpenseNet"],  # banks without a revenue total: net interest + noninterest income
+                "RevenuesNetOfInterestExpense", "RegulatedAndUnregulatedOperatingRevenue", "OperatingLeaseLeaseIncome"],
+    "nii": ["InterestIncomeExpenseNet"],  # banks: net interest + noninterest income when larger than revenue
     "nonint": ["NoninterestIncome"],
     "gp": ["GrossProfit"],
     "cost": ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"],
     "ocf": ["NetCashProvidedByUsedInOperatingActivities",
             "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"],
 }
+# Equity is the parent's: the total including minorities less the minorities' share when only the total is tagged.
+WITH_NCI = "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"
 INSTANT = {
-    "equity": ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
+    "equity": ["StockholdersEquity", (WITH_NCI, "MinorityInterest"), WITH_NCI],
     "liabilities": ["Liabilities"],
     "assets": ["Assets"],
 }
@@ -49,12 +55,14 @@ TAXONOMIES = {
                  "ocf": DURATION["ocf"], "capex": ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"],
                  "div": ["PaymentsOfDividendsCommonStock", "PaymentsOfDividends"],
                  "dil_shares": ["WeightedAverageNumberOfDilutedSharesOutstanding"]},
-                {"equity": INSTANT["equity"] + ["PartnersCapital", "PartnersCapitalIncludingPortionAttributableToNoncontrollingInterest"],
+                {"equity": INSTANT["equity"] + ["PartnersCapital", ("PartnersCapitalIncludingPortionAttributableToNoncontrollingInterest",
+                                                  "MinorityInterest"), "PartnersCapitalIncludingPortionAttributableToNoncontrollingInterest"],
                  "pref": ["PreferredStockValue"], "assets": ["Assets"],  # partners' capital: MLPs (EPD, MPLX)
                  "liabilities": ["Liabilities"], "shares": ["CommonStockSharesOutstanding"]}),
     "ifrs-full": ({"revenue": ["Revenue", "RevenueFromContractsWithCustomers"], "gp": ["GrossProfit"], "cost": ["CostOfSales"],
                    "op_income": ["ProfitLossFromOperatingActivities"],
-                   "ni": ["ProfitLossAttributableToOwnersOfParent", "ProfitLoss"],
+                   "ni": ["ProfitLossAttributableToOwnersOfParent", ("ProfitLoss", "ProfitLossAttributableToNoncontrollingInterests"),
+                          "ProfitLoss"],
                    "ni_cont": ["ProfitLossFromContinuingOperationsAttributableToOwnersOfParent",
                                "ProfitLossFromContinuingOperations"],
                    "ocf": ["CashFlowsFromUsedInOperatingActivities"],
@@ -62,9 +70,11 @@ TAXONOMIES = {
                              "PurchaseOfPropertyPlantAndEquipment"],
                    "div": ["DividendsPaidClassifiedAsFinancingActivities", "DividendsPaid"],
                    "dil_shares": ["AdjustedWeightedAverageShares"]},
-                  {"equity": ["EquityAttributableToOwnersOfParent", "Equity"], "assets": ["Assets"],
+                  {"equity": ["EquityAttributableToOwnersOfParent", ("Equity", "NoncontrollingInterests"), "Equity"], "assets": ["Assets"],
                    "liabilities": ["Liabilities"], "shares": ["NumberOfSharesOutstanding"]}),
 }
+CHECKS = {"us-gaap": [(["GrossProfit"], DURATION["cost"]), (["OperatingIncomeLoss"], ["CostsAndExpenses"])],
+          "ifrs-full": [(["GrossProfit"], ["CostOfSales"])]}  # revenue = the sum of each pair (revenue())
 SHARE_UNITS = ("dil_shares", "shares")
 # Filing titles for the AI notes: the forms that say something about the business, and 8-K items
 # (the filing list only has item numbers, not headlines).
@@ -103,20 +113,54 @@ def shift(day: str, n: int) -> str:
     return (date.fromisoformat(day) + timedelta(days=n)).isoformat()
 
 
-def values(gaap: dict, names: list[str]) -> dict:
-    """(start, end) -> value from 10-Q/10-K filings in USD, keeping the most recently filed figure
-    (restatements win) and the first concept in `names` that has the period. Instants have start None."""
+def latest(tax: dict, name: str | tuple, unit: str, keep) -> dict:
+    """(start, end) -> one concept's most recently filed value (restatements win) among the facts that pass
+    `keep`; a (total, part) pair gives total - part for the periods that have both. Instants have start None."""
+    if isinstance(name, tuple):
+        total, part = (latest(tax, n, unit, keep) for n in name)
+        return {k: v - part[k] for k, v in total.items() if k in part}
+    best = {}
+    for f in tax.get(name, {}).get("units", {}).get(unit, []):
+        key = (f.get("start"), f["end"])
+        if keep(f) and (key not in best or f["filed"] > best[key][0]):
+            best[key] = (f["filed"], f["val"])
+    return {k: v for k, (_, v) in best.items()}
+
+
+larger = lambda a, b: b if a is None else max(a, b)
+
+
+def merge(per_concept) -> dict:
+    """Per period, the value of the first concept that has it."""
     out = {}
-    for name in names:
-        best = {}
-        for f in gaap.get(name, {}).get("units", {}).get("USD", []):
-            if f.get("form", "").startswith(("10-Q", "10-K")):
-                key = (f.get("start"), f["end"])
-                if key not in best or f["filed"] > best[key][0]:
-                    best[key] = (f["filed"], f["val"])
-        for key, (_, val) in best.items():
-            out.setdefault(key, val)
+    for vals in per_concept:
+        for k, v in vals.items():
+            out.setdefault(k, v)
     return out
+
+
+def revenue(get, names: list, checks: list) -> dict:
+    """Per period, the revenue concept within 5% of the revenue the income statement implies (the first of
+    `checks` with both parts tagged and a concept that close: gross profit + cost of revenue, operating income +
+    total costs and expenses; Centene's gross profit is its services' only), else the largest concept."""
+    per, implied = [get([n]) for n in names], [(get(a), get(b)) for a, b in checks]
+    out = {}
+    for k in set().union(*per):
+        vals, sums = [v[k] for v in per if k in v], [a[k] + b[k] for a, b in implied if k in a and k in b]
+        pick = lambda x: min(vals, key=lambda v: abs(v - x))
+        out[k] = next((pick(x) for x in sums if abs(pick(x) - x) <= 0.05 * abs(x)), max(vals))
+    return out
+
+
+def quarterly(f: dict) -> bool:
+    """10-Q and 10-K figures; a 12-month figure only from the 10-K (a 10-Q once tagged Q1 as the fiscal year)."""
+    form = f.get("form", "")
+    return form.startswith("10-K") or form.startswith("10-Q") and not ("start" in f and days(f["start"], f["end"]) >= 340)
+
+
+def values(gaap: dict, names: list) -> dict:
+    """(start, end) -> value from 10-Q/10-K filings in USD, merged over the concepts in `names`."""
+    return merge(latest(gaap, n, "USD", quarterly) for n in names)
 
 
 def near(vals: dict, end: str, length: int | None, tol: int):
@@ -155,19 +199,20 @@ def parse_facts(code: str, payload: dict, today: date) -> dict:
     if not filed or days(max(filed), today.isoformat()) > MAX_AGE_DAYS:
         return row | {"gap": True}
     end = max(filed)
+    get = lambda names: values(gaap, names)
     for key, names in DURATION.items():
-        vals = values(gaap, names)
+        vals = revenue(get, names, CHECKS["us-gaap"]) if key == "revenue" else get(names)
         row[f"{key}_ttm"], row[f"{key}_prior"] = ttm(vals, end), ttm(vals, shift(end, -364))
     instant = lambda names: near(values(gaap, names), end, None, 5)
     for key, names in INSTANT.items():
         row[key] = instant(names)
     for when in ("ttm", "prior"):
-        if row[f"revenue_{when}"] is None and None not in (row[f"nii_{when}"], row[f"nonint_{when}"]):
-            row[f"revenue_{when}"] = row[f"nii_{when}"] + row[f"nonint_{when}"]
+        if None not in (row[f"nii_{when}"], row[f"nonint_{when}"]):
+            row[f"revenue_{when}"] = larger(row[f"revenue_{when}"], row[f"nii_{when}"] + row[f"nonint_{when}"])
     if row["gp_ttm"] is None and None not in (row["cost_ttm"], row["revenue_ttm"]):
         row["gp_ttm"] = row["revenue_ttm"] - row["cost_ttm"]
     if row["liabilities"] is None:  # total liabilities and equity - equity including minorities
-        total, equity = instant(["LiabilitiesAndStockholdersEquity"]), instant(INSTANT["equity"][::-1])
+        total, equity = instant(["LiabilitiesAndStockholdersEquity"]), instant([WITH_NCI, "StockholdersEquity"])
         row["liabilities"] = None if None in (total, equity) else total - equity
     growth = lambda now, before: None if now is None or not before else (now - before) / abs(before)
     # no TTM profit or revenue (e.g. a new holding-company CIK without a year of history) is a gap too
@@ -176,20 +221,12 @@ def parse_facts(code: str, payload: dict, today: date) -> dict:
                   "np_yoy": growth(row["np_ttm"], row["np_prior"])}
 
 
-def annual(tax: dict, names: list[str], unit: str, instant: bool = False) -> dict[str, float]:
+def annual(tax: dict, names: list, unit: str, instant: bool = False) -> dict[str, float]:
     """Fiscal-year end -> value from annual reports (10-K, 20-F, 40-F): durations of 350-380 days or
-    instants, the most recently filed figure (restatements win), the first concept in `names` per year."""
-    out = {}
-    for name in names:
-        best = {}
-        for f in tax.get(name, {}).get("units", {}).get(unit, []):
-            if (f.get("form", "").startswith(ANNUAL_FORMS) and ("start" not in f) == instant
-                    and (instant or 350 <= days(f["start"], f["end"]) <= 380)):
-                if f["end"] not in best or f["filed"] > best[f["end"]][0]:
-                    best[f["end"]] = (f["filed"], f["val"])
-        for end, (_, val) in best.items():
-            out.setdefault(end, val)
-    return out
+    instants, merged over the concepts in `names` like values()."""
+    keep = lambda f: (f.get("form", "").startswith(ANNUAL_FORMS) and ("start" not in f) == instant
+                      and (instant or 350 <= days(f["start"], f["end"]) <= 380))
+    return {e: v for (_, e), v in merge(latest(tax, n, unit, keep) for n in names).items()}
 
 
 def parse_annual(code: str, payload: dict) -> list[dict]:
@@ -207,7 +244,9 @@ def parse_annual(code: str, payload: dict) -> list[dict]:
         return []
     _, _, name, unit = best
     tax, (dur, inst) = facts[name], TAXONOMIES[name]
-    series = {k: annual(tax, c, "shares" if k in SHARE_UNITS else unit) for k, c in dur.items()}
+    get = lambda names, unit=unit: annual(tax, names, unit)
+    series = {k: revenue(get, c, CHECKS[name]) if k == "revenue" else get(c, "shares" if k in SHARE_UNITS else unit)
+              for k, c in dur.items()}
     series |= {k: annual(tax, c, "shares" if k in SHARE_UNITS else unit, instant=True) for k, c in inst.items()}
     filed = {}
     for c in dur["ni"]:
@@ -221,8 +260,8 @@ def parse_annual(code: str, payload: dict) -> list[dict]:
         get = lambda k: series[k].get(end, next((v for e, v in series[k].items() if abs(days(e, end)) <= 7), None))
         row = {"code": code, "fy_end": end, "filed": filed.get(end), "source": "SEC", "taxonomy": name,
                "currency": unit} | {k: get(k) for k in series}
-        if row["revenue"] is None and None not in (row.get("nii"), row.get("nonint")):
-            row["revenue"] = row["nii"] + row["nonint"]
+        if None not in (row.get("nii"), row.get("nonint")):
+            row["revenue"] = larger(row["revenue"], row["nii"] + row["nonint"])
         if row["gp"] is None and None not in (row["revenue"], row["cost"]):
             row["gp"] = row["revenue"] - row["cost"]
         if row["shares"] is None:  # the cover page count, a few weeks after the year end
