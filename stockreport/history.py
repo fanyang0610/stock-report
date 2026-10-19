@@ -1,6 +1,6 @@
-"""Company history for valuation v2 (docs/REVIEW.md A2.2, A2.7, A2.8), from data/history: yearly core
-ROE, margins, cash flow and revenue summarised per stock, the stock's own P/B over the last 7 years,
-the measured base rates of ROE regime breaks, CN pre-announcements and consensus revisions."""
+"""Company history from data/history: yearly core ROE, margins, cash flow and revenue summarised per stock (the
+v3 inputs and quality screen), the stock's own P/B over the last 7 years (v3's common-sense check), CN
+pre-announcements and consensus revisions. The yearly panels also feed the base rates (baserates.py)."""
 
 import functools
 from datetime import date, timedelta
@@ -90,71 +90,29 @@ def cagr(new: pd.Series, old: pd.Series, n) -> pd.Series:
 
 
 def features(years: pd.DataFrame, codes) -> pd.DataFrame:
-    """Per stock, from its last 10 fiscal years: ROE level, volatility and 5-year trend; loss and revenue
-    down years; margins; 5-year cash conversion and free cash flow; revenue growth; and the regime test's
-    inputs (the last 3 years against the up to 7 before)."""
+    """Per stock, from its last 10 fiscal years: years of history, mean ROE (10 and 5 years), loss years (10 and
+    5), margins, 5-year cash conversion and free cash flow, and 5-year revenue growth (v3's own trend and the
+    quality screen)."""
     y = years[years["code"].isin(set(codes))].sort_values(["code", "year"]).groupby("code").tail(10).copy()
     y["roe"] = y["roe"].clip(*ROE_CLIP)
     y["k"] = y.groupby("code").cumcount(ascending=False)  # 0 = latest fiscal year
-    y["down"] = (y.groupby("code")["rev"].pct_change() < -0.02).astype(float)
     sums = lambda d, cols: d.groupby("code")[cols].sum(min_count=1)
     g, last5, last2 = y.groupby("code"), sums(y[y["k"] < 5], ["ocf", "ni", "fcf"]), sums(y[y["k"] < 2], ["core", "rev"])
-    all10 = sums(y, ["core", "rev"])
+    all10, five = sums(y, ["core", "rev"]), y[y["k"] < 5]
     f = pd.DataFrame({
-        "n_years": g["roe"].count(), "first_year": g["year"].min(), "roe_hist": g["roe"].mean(), "roe_vol": g["roe"].std(),
-        "loss_years": (y["roe"] < 0).groupby(y["code"]).sum(), "rev_down_years": g["down"].sum(),
+        "n_years": g["roe"].count(), "roe_hist": g["roe"].mean(), "loss_years": (y["roe"] < 0).groupby(y["code"]).sum(),
         "margin_hist": all10["core"] / all10["rev"].where(all10["rev"] > 0),
-        "margin_2y": last2["core"] / last2["rev"].where(last2["rev"] > 0), "gm_hist": g["gm"].mean(),
+        "margin_2y": last2["core"] / last2["rev"].where(last2["rev"] > 0),
         "ocf_ni_5y": last5["ocf"] / last5["ni"].where(last5["ni"] > 0), "fcf_5y": last5["fcf"],
         "ocf_2y_pos": y[y["k"] < 2].groupby("code")["ocf"].min() > 0,
+        "roe_5y": five.groupby("code")["roe"].mean().where(five.groupby("code")["roe"].count() >= 3),
+        "loss_5y": (five["roe"] < 0).groupby(five["code"]).sum(),
     })
-    early = y[y["k"] >= 3]
-    five = y[y["k"] < 5]
-    f["roe_5y"] = five.groupby("code")["roe"].mean().where(five.groupby("code")["roe"].count() >= 3)
-    m5 = sums(five, ["core", "rev"])
-    f["margin_5y"] = m5["core"] / m5["rev"].where(m5["rev"] > 0)
-    recent = y[y["k"] < 3]
-    f["early_losses_only"] = (early["roe"] < 0).groupby(early["code"]).any() & ~(recent["roe"] < 0).groupby(recent["code"]).any()
     rev = y.dropna(subset=["rev"]).set_index(["code", "k"])["rev"]
     at = lambda k: rev.xs(k, level="k") if k in rev.index.get_level_values("k") else pd.Series(dtype=float)
-    f["rev_cagr_5y"], f["rev_g3"] = cagr(at(0), at(4), 4), cagr(at(0), at(3), 3)
-    oldest = y.dropna(subset=["rev"]).groupby("code").agg(rev_old=("rev", "first"), k_old=("k", "first"))
-    oldest = oldest[oldest["k_old"] >= 6]  # 3+ years before the last 3
-    f["rev_g_before"] = cagr(at(3).reindex(oldest.index), oldest["rev_old"], oldest["k_old"] - 3)
-    trend = y[(y["k"] < 5) & y["roe"].notna()]
-    trend = trend[trend.groupby("code")["roe"].transform("count") >= 4]
-    x, r = -trend["k"].astype(float), trend["roe"]
-    cov = lambda a, b: (a * b).groupby(trend["code"]).mean() - a.groupby(trend["code"]).mean() * b.groupby(trend["code"]).mean()
-    f["roe_slope"] = cov(x, x).pipe(lambda vx: cov(x, r) / vx)
-    f["roe_r2"] = (cov(x, r) ** 2 / (cov(x, x) * cov(r, r))).where(cov(r, r) > 0)
-    f.loc[f["n_years"] < 4, ["roe_hist", "roe_vol", "margin_hist"]] = np.nan
+    f["rev_cagr_5y"] = cagr(at(0), at(4), 4)
+    f.loc[f["n_years"] < 4, ["roe_hist", "margin_hist"]] = np.nan
     return f
-
-
-def episodes(years: pd.DataFrame) -> pd.DataFrame:
-    """Regime episodes in the whole panel: the first fiscal year of a run whose ROE moved 12+ points away
-    from the mean of the (3 to) 5 years before (up: to 18% or more). kept = 3 years later ROE was still at least
-    half the move away from that mean; cyclical = a loss or 2+ revenue down years in the 5 years before."""
-    y = years.sort_values(["code", "year"]).reset_index(drop=True)
-    y["roe"] = y["roe"].clip(-0.5, 1.0)
-    g = y.groupby("code")
-    y["prior"] = g["roe"].shift(1).groupby(y["code"]).rolling(5, min_periods=3).mean().reset_index(level=0, drop=True)
-    bad = ((g["rev"].pct_change() < -0.02) | (y["roe"] < 0)).astype(float).groupby(y["code"]).shift(1)
-    y["cyclical"] = bad.groupby(y["code"]).rolling(5, min_periods=3).sum().reset_index(level=0, drop=True) >= 2
-    y["move"] = y["roe"] - y["prior"]
-    y["dir"] = np.select([(y["move"] >= 0.12) & (y["roe"] >= 0.18), y["move"] <= -0.12], ["up", "down"], "")
-    first = (y["dir"] != "") & (y["dir"] != y.groupby("code")["dir"].shift(1).fillna(""))
-    later = g["roe"].shift(-3).where(g["year"].shift(-3) == y["year"] + 3)
-    y["kept"] = ((later - y["prior"]) / y["move"] >= 0.5).where(later.notna())
-    return y[first][["code", "year", "dir", "cyclical", "move", "kept"]]
-
-
-def base_rates(eps: pd.DataFrame) -> pd.DataFrame:
-    """Share of episodes that kept at least half of the move after 3 years, by direction and history."""
-    done = eps[eps["kept"].notna()].assign(kept=lambda d: d["kept"].astype(float),
-                                           history=lambda d: np.where(d["cyclical"], "cyclical", "steady"))
-    both = done.assign(history="all")
-    return pd.concat([done, both]).groupby(["dir", "history"])["kept"].agg(["mean", "count"])
 
 
 def splits_after(splits: pd.DataFrame, codes: pd.Series, days: pd.Series) -> np.ndarray:
@@ -175,8 +133,8 @@ def closest(s: pd.DataFrame, day: str, want: float) -> float:
 
 
 def own_pb(books: pd.DataFrame, monthly: pd.DataFrame, splits: pd.DataFrame, today: date) -> pd.DataFrame:
-    """Median P/B per stock over the last 7 years (24+ months) and over the last 3 (12+ months: the
-    window after a regime break). books: code, avail (the day the book is public), book_unit (book per
+    """Median and 10th-90th percentile P/B per stock over the last 7 years (24+ months). books: code, avail (the
+    day the book is public), book_unit (book per
     listed unit in today's units, own currency); monthly: code, month, close (as traded), fx (own
     currency per quote-currency unit)."""
     m = monthly[monthly["month"].between(f"{today.year - 7}-{today.month:02d}", f"{today:%Y-%m}")].copy()
@@ -186,10 +144,14 @@ def own_pb(books: pd.DataFrame, monthly: pd.DataFrame, splits: pd.DataFrame, tod
     m = pd.merge_asof(m.sort_values("day"), books, on="day", by="code")
     m["pb"] = (m["close"] * m["fx"] / m["book_unit"]).where((m["book_unit"] > 0) & (m["close"] > 0))
     m = m.dropna(subset=["pb"])
-    recent = m[m["month"] >= f"{today.year - 3}-{today.month:02d}"].groupby("code")["pb"]
-    out = pd.DataFrame({"own_pb": m.groupby("code")["pb"].median(), "own_pb_n": m.groupby("code")["pb"].count(),
-                        "own_pb_3y": recent.median().where(recent.count() >= 12)})
-    return out[out["own_pb_n"] >= 24]
+    return pb_range(m.groupby("code")["pb"], 24)
+
+
+def pb_range(by, min_n: int) -> pd.DataFrame:
+    """Median, 10th and 90th percentile of each stock's P/B history (min_n observations)."""
+    out = pd.DataFrame({"own_pb": by.median(), "own_pb_lo": by.quantile(0.1), "own_pb_hi": by.quantile(0.9),
+                        "own_pb_n": by.count()})
+    return out[out["own_pb_n"] >= min_n]
 
 
 def us_books(snap: pd.DataFrame, today: date) -> tuple[pd.DataFrame, set, pd.Series]:
@@ -264,15 +226,12 @@ def own_pb_hk(snap: pd.DataFrame, today: date) -> pd.DataFrame:
 
 
 def own_pb_cn(snap: pd.DataFrame, today: date) -> pd.DataFrame:
-    """CN: Eastmoney's P/B (MRQ) on the last trading day of each half-year (6+ in 7 years); the anchor
-    is then price × median / today's Eastmoney P/B, one definition on both sides."""
+    """CN: Eastmoney's P/B (MRQ) on the last trading day of each half-year (6+ in 7 years), to be compared with
+    today's Eastmoney P/B (one definition on both sides)."""
     v = read("cn_valuation")
     v = v[v["code"].isin(snap.index) & (v["pb_mrq"] > 0) & (v["period"] >= f"{today.year - 7}-{today.month:02d}")
           & (v["trade_date"] <= today.isoformat())]
-    recent = v[v["period"] >= f"{today.year - 3}-{today.month:02d}"].groupby("code")["pb_mrq"]
-    out = pd.DataFrame({"own_pb": v.groupby("code")["pb_mrq"].median(), "own_pb_n": v.groupby("code")["pb_mrq"].count(),
-                        "own_pb_3y": recent.median().where(recent.count() >= 4)})
-    return out[out["own_pb_n"] >= 6]
+    return pb_range(v.groupby("code")["pb_mrq"], 6)
 
 
 def preannounced(snap: pd.DataFrame, today: date, max_days: int = 120) -> pd.DataFrame:
@@ -316,9 +275,9 @@ def revisions(market: str, today: date, weeks: int = 4) -> pd.Series:
     return ((now - before) / before.abs()).where(before.abs() > 0.01).dropna()
 
 
-def load(market: str, snap: pd.DataFrame, today: date) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """History features, own P/B, consensus revisions and (CN) pre-announcements per stock, and the
-    market's measured base rates, from what was public on `today` (the backtest runs it on past days)."""
+def load(market: str, snap: pd.DataFrame, today: date) -> pd.DataFrame:
+    """History features, own P/B range, consensus revisions and (CN) pre-announcements / (US) preferred shares
+    per stock, from what was public on `today` (the backtest runs it on past days)."""
     years = YEARS[market]()
     years = years[years["avail"] <= today.isoformat()]
     out = features(years, snap.index).reindex(snap.index)
@@ -328,7 +287,4 @@ def load(market: str, snap: pd.DataFrame, today: date) -> tuple[pd.DataFrame, pd
     if market == "us":
         out = out.join(us_preferred(snap, today))
     out["revision"] = revisions(market, today)
-    eps = episodes(years)
-    past = eps[(eps["dir"] == "up") & eps["kept"].notna()].sort_values("year").groupby("code").last()  # own last boom
-    out["past_boom_year"], out["past_boom_kept"] = past["year"], past["kept"]
-    return out, base_rates(eps)
+    return out

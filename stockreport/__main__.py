@@ -64,10 +64,10 @@ def build_market(market: str, today: date, use_ai: bool = True) -> None:
           f"methods {df['method'].value_counts().to_dict()}")
     print("\n".join(drift))
     print_table(picks)
-    try:  # valuation v2 in shadow mode: its columns go into the snapshot, the report stays v1
+    try:  # valuation v3 (Phase 13) in shadow mode: its columns go into the snapshot, the report stays v1
         df = shadow.run(df, picks, market, today)
     except Exception:
-        log.exception("%s valuation v2 (shadow) failed; v1 is unaffected", market.upper())
+        log.exception("%s valuation v3 (shadow) failed; v1 is unaffected", market.upper())
     df.to_csv(snap / f"{market}.csv.gz", compression="gzip")
     try:  # deep-dive lane (DeepSeek only with notes on): vetoes and 低信心 are applied when the report is built
         deepdive.run(market, today, picks, df, use_ai)
@@ -78,8 +78,8 @@ def build_market(market: str, today: date, use_ai: bool = True) -> None:
 
 
 def shadow_only(markets: list[str], day: str | None) -> int:
-    """Valuation v2 on a saved snapshot and its picks CSV (default: the newest), without fetching:
-    prints the v2 lists and the comparison and writes the v2 columns back into the snapshot."""
+    """Valuation v3 on a saved snapshot and its picks CSV (default: the newest), without fetching: prints the
+    v3 lists and checks and writes the v3 columns back into the snapshot."""
     days = sorted(p.name for p in (DATA / "snapshots").iterdir() if p.is_dir())
     day = day or days[-1]
     started = time.monotonic()
@@ -91,7 +91,7 @@ def shadow_only(markets: list[str], day: str | None) -> int:
         df = pd.read_csv(path, dtype={"code": str, "period": str, "notice_date": str}).set_index("code")
         df = shadow.run(df, pd.read_csv(picks, dtype={"code": str}), market, date.fromisoformat(day))
         df.to_csv(path, compression="gzip")
-    print(f"\nv2 for {', '.join(m.upper() for m in markets)} on {day} in {time.monotonic() - started:.1f}s")
+    print(f"\nv3 for {', '.join(m.upper() for m in markets)} on {day} in {time.monotonic() - started:.1f}s")
     return 0
 
 
@@ -190,10 +190,10 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--no-notes", action="store_true", help="template notes instead of DeepSeek")
     track_p = sub.add_parser("track", help="average return of past picks vs each market's index")
     track_p.add_argument("--signal", action="store_true",
-                         help="score the saved snapshots' v1 and v2 signals as the backtest does (docs/BACKTEST.md)")
-    v2 = sub.add_parser("v2", help="valuation v2 (shadow) on a saved snapshot: v2 lists and the v1/v2 comparison")
-    v2.add_argument("--market", choices=["cn", "us", "hk"], help="one market (default: all three)")
-    v2.add_argument("--date", help="snapshot date YYYY-MM-DD (default: the newest)")
+                         help="score the saved snapshots' v1 and v3 signals as the backtest does (docs/BACKTEST.md)")
+    v3 = sub.add_parser("v3", help="valuation v3 (Phase 13, shadow) on a saved snapshot: v3 lists and checks")
+    v3.add_argument("--market", choices=["cn", "us", "hk"], help="one market (default: all three)")
+    v3.add_argument("--date", help="snapshot date YYYY-MM-DD (default: the newest)")
     verdict = sub.add_parser("verdict", help="your veto or confirm for a stock (no arguments: list those in force)")
     verdict.add_argument("code", nargs="?", help="ticker, e.g. 600519, 00700 or AAPL")
     verdict.add_argument("action", nargs="?", choices=["veto", "confirm"])
@@ -206,7 +206,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "run":
         setup_logging()
         return run([args.market] if args.market else ["cn", "us", "hk"], not args.no_notes)
-    if args.command == "v2":
+    if args.command == "v3":
         return shadow_only([args.market] if args.market else ["cn", "us", "hk"], args.date)
     if args.command == "track":
         return track.signals() if args.signal else track.scorecard()

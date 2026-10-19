@@ -1,131 +1,214 @@
-"""Valuation v2 in shadow mode (Phase 8, docs/REVIEW.md A2): the v2 engine runs next to v1 on the day's
-snapshot, its columns (v2_*) are written into the snapshot, and the run prints the v2 lists, a v1/v2
-comparison and v2's own answer on whether the profit of each name checks 1-2 excluded can last. The
-report stays v1. The lists skip the AI swaps and the cross-market issuer dedupe."""
+"""Valuation v3 (Phase 13, PLAN.md Method 16) in shadow mode next to v1: its columns (v3_*) go into the snapshot
+and the run prints the v3 lists, the common-sense checks and the hand-checked names. The report stays v1 until
+Phase 10. Per stock: the value range, upside, what the price implies and how often similar companies did it,
+the base-rate cell, what peers pay (a cross-check line, never blended), confidence and 需复核 flags. The lists
+skip the AI swaps and the cross-market issuer dedupe."""
 
 from datetime import date
 
 import numpy as np
 import pandas as pd
 
-from stockreport import anchors, engine, history, regime
+from stockreport import baserates as br, history, v3
 from stockreport.config import CONFIG
 from stockreport.pick import BUCKETS
 
-MOM_FLOOR = CONFIG["v2"]["momentum_floor"]  # buy floor on momentum z: "industry" (v1's z), "market" or "none"
-MOM_WEIGHT = CONFIG["v2"]["momentum_weight"]  # weight of that momentum z next to the standardized buy key
-# Phase 8 also asked buys for an expected return 2+ points above the required return (sells 2+ below). That
-# favours short-duration stocks: the same 20-60% upside is ~2.4 points a year on a low P/B, ~1.1 on a high one,
-# so MSFT (+37%) and META (+32%) failed it. Phase 9 review: off; the upside thresholds are the margin.
-BUY_MIN_EXCESS, SELL_MAX_EXCESS = CONFIG["v2"].get("buy_min_excess"), CONFIG["v2"].get("sell_max_excess")
-# Buys only among the largest companies (per market) and, in the US, among US listings: ranking by the largest
-# estimated gaps picked noisy mid/small and foreign names (Phase 9 review: 13 of 15 buys outside the top 100).
-BUY_LARGEST = CONFIG["v2"].get("buy_largest_n")  # {market: n} or None
-BUY_HOME_ONLY = CONFIG["v2"].get("buy_home_only", False)
-
-COLUMNS = ["archetype", "eps_core", "bps_c", "roe_cur", "roe_c3", "w_hist", "roe_norm", "structural_decline", "phi",
-           "g0", "icc", "icc_final", "r_req", "r_mkt", "v_intrinsic", "v_used", "roe_implied", "v_peer", "v_own", "v_comb",
-           "v_final", "upside", "dispersion", "n_anchors", "screen_fails", "dilution", "conf_points", "confidence",
-           "theme", "break_dir", "break_keep", "break_confirmed", "roe_old", "roe_new", "p", "p_why", "v_new",
-           "v_old", "v_regime", "p_market", "bucket", "rank", "tier", "conviction", "verdict"]
+C2 = CONFIG["shadow"]  # bucket rules kept from v2 (Phase 9 calibration): thresholds, momentum, size floor
+HOME = "United States"  # US: foreign listings can't be bought (config buy_home_only)
+HAND = {"us": ["TM", "GM", "F", "STLA", "TSLA", "RACE", "LLY", "JNJ", "NVDA", "MU", "ARM", "CRWD", "JPM"],
+        "cn": ["601668", "601390", "600019", "600519", "300750", "002594", "300308"],
+        "hk": ["00700", "03690", "00941", "02007", "01299"]}  # the Phase 13 hand-check list (PLAN item 13)
+COLUMNS = ["e0", "book", "light", "t0", "g", "roe0", "roe_now", "level", "starts", "base", "s1", "s3", "s5", "s10", "d25", "d50", "d75",
+           "r", "roe_long", "irr", "v_low", "v_mid", "v_high", "upside", "d_implied", "implied_share", "implied_side",
+           "implied_label", "roe_implied", "roe_reached", "implied", "v_peer", "screen_fails", "dilution", "flags", "conf_points",
+           "confidence", "bucket", "rank", "tier", "conviction"]
 
 
-def themes(df: pd.DataFrame, market: str) -> pd.Series:
-    """ai / ai_disrupted from the configured industry substrings (US: the Nasdaq industry before small
-    industries were merged into '<sector> (other)')."""
-    industry = df["industry"].fillna("")
+def parents(df: pd.DataFrame, market: str) -> pd.Series:
+    """The industry's parent sector (US Nasdaq sector, HK first level of the industry type, CN 申万 level 1)."""
     if market == "us":
-        from stockreport.fetch import nasdaq
-        listed = nasdaq.load_list().drop_duplicates("code").set_index("code")["industry"]
-        industry = listed.reindex(df.index).fillna(industry)
-    elif market == "hk":
-        industry = industry + "-" + df["industry_type"].fillna("")
-    tag = pd.Series("", df.index)
-    for name, words in CONFIG["v2"]["themes"].items():
-        tag[industry.str.contains("|".join(words), regex=True) & (tag == "")] = name
-    return tag
+        return df["sector"].fillna("")
+    if market == "hk":
+        return df["industry_type"].fillna("").str.split("-").str[0]
+    return br.sectors("cn").reindex(df.index).fillna("")
 
 
-def own_anchor(df: pd.DataFrame, h: pd.DataFrame, v: pd.DataFrame, market: str) -> pd.Series:
-    """Median own P/B × today's book; the last 3 years only after a confirmed break. CN uses Eastmoney's
-    P/B on both sides: price × median / today's P/B."""
-    pb = h["own_pb_3y"].where(v["break_confirmed"] & h["own_pb_3y"].notna(), h["own_pb"])
-    if market == "cn":
-        return df["price"] * pb / df["pb_mrq_em"].where(df["pb_mrq_em"] > 0)
-    return pb * v["bps_c"].where(v["bps_c"] > 0)
-
-
-def value(df: pd.DataFrame, market: str, today: date,
-          loaded: tuple | None = None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, float]:
-    """The v2 frame for one market's snapshot `df` (v1 columns), with the history features, the base
-    rates and the capex gauge it used (`loaded`: history.load's result, when the caller has it)."""
-    h, rates = loaded or history.load(market, df, today)
-    d = engine.value(df, h, market)
-    b = regime.test(d, h, d["eps_core"] * df["shares"] / df["revenue_ttm"].where(df["revenue_ttm"] > 0))
-    theme = themes(df, market)
-    # no US annual table yet (the first build after Phase 7 values CN before the US backfill): no capex evidence
-    us_table = history.HISTORY / "us_annual.csv.gz"
-    gauge = regime.capex_gauge(history.us_annual(today)) if us_table.exists() else np.nan
-    b["p"], b["p_why"] = regime.probability(b, d, h, rates, h.get("pre_type", pd.Series(dtype=object)),
-                                            theme == "ai", gauge)
-    v = d.join(b).join(regime.scenarios(b, d, h, df["price"], d["r_req"], engine.G_LONG[market], market))
-    v["theme"], v["dilution"] = theme, h.get("dilution")
-    v["v_own"] = own_anchor(df, h, v, market)
-    if market == "us":
-        parent = df["sector"]
-    elif market == "hk":
-        parent = df["industry_type"].fillna("").str.split("-").str[0]
+def load(df: pd.DataFrame, market: str, today: date) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series]:
+    """History features, the base-rate starts (with the market's long-run ROE) and each stock's base-rate sector,
+    from what was public on `today`."""
+    day = today.isoformat()
+    p = br.panel(market)
+    st = br.starts(p, day, market)
+    st.attrs["roe_long"] = v3.roe_long(p, day, market)
+    sec = br.sectors(market)
+    if market == "us":  # keyed by CIK
+        from stockreport.fetch import sec as edgar
+        cik = df["cik"] if "cik" in df else edgar.load_ciks().reindex(df.index)
+        sector = cik.map(lambda c: sec.get(str(int(float(c))), "") if pd.notna(c) and str(c) != "" else "")
     else:
-        parent = pd.Series("全市场", df.index)  # CN: the data has no parent sector
-    v["v_peer"] = anchors.peer(df, d, parent)
-    v["v_used"] = v["v_regime"].where(v["break_confirmed"] & v["v_regime"].notna(), v["v_intrinsic"])
-    v = v.join(anchors.combine(v.assign(v_intrinsic=v["v_used"]), df["price"], v["archetype"], v["w_hist"]))
-    v["v_final"] = v["v_regime"].where(v["break_confirmed"] & v["v_regime"].notna(), v["v_comb"])  # A2.7: one value
-    v["icc_final"] = v["icc_regime"].where(v["break_confirmed"], v["icc"])
-    v["upside"] = v["v_final"] / df["price"] - 1
-    v = v.join(anchors.screen(df, h))
-    v = v.join(anchors.confidence(v, h, df["analysts"], df["price"]))
-    return v.join(buckets(v, df, market)), h, rates, gauge
+        sector = parents(df, market) if market == "hk" else sec.reindex(df.index)
+    return history.load(market, df, today), st, sector.fillna("")
+
+
+def value(df: pd.DataFrame, market: str, today: date, loaded: tuple | None = None) -> pd.DataFrame:
+    """The v3 frame for one market's snapshot `df` (v1 columns)."""
+    h, st, sector = loaded or load(df, market, today)
+    v = v3.value(df, h, st, market, sector)
+    v["base"] = [br.describe(lv, k, market) for lv, k in zip(v["level"], v["key"])]
+    v["implied"] = sentences(v, df, v3.per_market(v3.FADE, market))
+    v["v_peer"] = peer(df, v, parents(df, market))
+    v = v.join(screen(df, h))
+    v["dilution"] = h["dilution"] if "dilution" in h else np.nan  # US: 5-year share count change (deep-dive trigger)
+    v["flags"] = flags(v, df, h)
+    v = v.join(confidence(v, df))
+    return v.join(buckets(v, df, market))
+
+
+def sentences(v: pd.DataFrame, df: pd.DataFrame, fade: int) -> pd.Series:
+    """What the price implies, in one sentence, with how often similar companies did it."""
+    out = pd.Series("", v.index)
+    for code in v.index[v["valued"]]:
+        x, side = v.loc[code], v.at[code, "implied_side"]
+        g, d, cons = f"{x['g']:.0%}".replace("-0%", "0%"), x["d_implied"], x["t0"] == 3
+        if not x["rising"] or side != "inside":
+            head = ("价格隐含利润以年均 " + g + f" 增长超过 {br.DMAX} 年" if side == "above" and x["rising"] else
+                    "价格低于利润增长随即停止的价值 " + f"{x['v_t0']:,.2f}" if side == "below" and x["rising"] else
+                    f"ROE {x['roe_now']:.0%} 时增长不创造价值")
+            text = f"{head}；价格隐含长期 ROE 约 {x['roe_implied']:.0%}（当前 {x['roe_now']:.0%}）"
+            if pd.notna(x["roe_reached"]):
+                text += f"；类似公司 3-5 年后 ROE 到这个水平的 {x['roe_reached']:.0%}"
+        elif cons and d < 1:
+            text = (f"价格隐含利润达不到分析师第 1 年的预测，停在近 12 个月的水平（ROE {x['roe_now']:.0%}）；"
+                    f"历史上类似公司 {x['s1']:.0%} 至少保持了 1 年 {g} 的增长")
+        elif cons and d < 3:
+            text = f"价格隐含只兑现分析师预测的前 {d:.0f} 年；历史上类似公司 {x['implied_share']:.0%} 做到"
+        else:
+            lead = "（前 3 年按分析师预测）" if cons else ""
+            text = (f"价格隐含利润以年均 {g} 增长约 {d:.0f} 年{lead}，之后 ROE 按类似公司的走势变化、{fade} 年后回到"
+                    f"长期水平；历史上类似公司 {x['implied_share']:.0%} 做到")
+        out[code] = text
+    return out
+
+
+def peer(df: pd.DataFrame, v: pd.DataFrame, parent: pd.Series, min_group: int = 8, min_own: int = 3) -> pd.Series:
+    """What peers pay, a cross-check line (never blended): log P/E on core EPS fitted on the growth rate g within the
+    industry (financials: log P/B on ROE) when it has 8+ valued members; a smaller industry takes its parent
+    sector's slope at its own median level (3+ members, else the parent's), never the whole market. A slope of
+    the wrong sign (more growth, a lower multiple) is dropped."""
+    fin = df["financial"].astype(bool)
+    base = v["book"].where(fin, v["e0"])
+    y = np.log((df["price"] / base).where(base > 0))
+    xv = v["roe0"].where(fin, v["g"])
+    usable = v["valued"] & y.notna() & xv.notna()
+    out = pd.Series(np.nan, df.index)
+    for (_, is_fin), part in df.groupby([df["industry"], fin]):
+        rows = part.index[usable[part.index]]
+        sample, shift = rows, 0.0
+        if len(rows) < min_group:
+            sample = usable.index[usable & (parent == parent[part.index[0]]) & (fin == is_fin) & (parent != "")]
+            if len(sample) < min_group:
+                continue
+        b = np.polyfit(xv[sample], y[sample], 1) if xv[sample].std() > 0 else np.array([0.0, y[sample].mean()])
+        if b[0] < 0:
+            b = np.array([0.0, y[sample].median()])
+        if len(rows) < min_group and len(rows) >= min_own:
+            shift = float(np.median(y[rows] - np.polyval(b, xv[rows])))
+        target = part.index[v.loc[part.index, "valued"] & (base[part.index] > 0)]
+        out[target] = np.exp(np.polyval(b, xv[target]) + shift) * base[target]
+    return out
+
+
+def screen(df: pd.DataFrame, h: pd.DataFrame) -> pd.DataFrame:
+    """Quality screen (buy and hold only): 10-year ROE < 8% (exempt: under 10 years of history, gross margin > 30%,
+    operating cash flow positive in the last 2 years); 5-year OCF/NI < 0.7; 5-year free cash flow < 0 (US: the CN
+    and HK tables have no capex); long-run net margin < 5% (exempt: gross margin > 30% and the last 2 years at 5%+
+    or rising; or 10-year ROE > 20% and OCF/NI > 1). Banks, insurers and brokers on ROE alone."""
+    fin, gm = df["financial"].astype(bool), df["gross_margin"]
+    young = (h["n_years"] < 10) & (gm > 0.3) & h["ocf_2y_pos"].eq(True)
+    exempt = ((gm > 0.3) & ((h["margin_2y"] >= 0.05) | (h["margin_2y"] > h["margin_hist"]))) | (
+        (h["roe_hist"] > 0.2) & (h["ocf_ni_5y"] > 1))
+    fails = pd.DataFrame({"ROE<8%": (h["roe_hist"] < 0.08) & ~young, "OCF/NI<0.7": ~fin & (h["ocf_ni_5y"] < 0.7),
+                          "FCF<0": ~fin & (h["fcf_5y"] < 0), "净利率<5%": ~fin & (h["margin_hist"] < 0.05) & ~exempt},
+                         index=df.index).fillna(False)
+    text = fails.apply(lambda r: ",".join(c for c in fails.columns if r[c]), axis=1)
+    return pd.DataFrame({"screen_fails": text, "screen_ok": text == ""}, index=df.index)
+
+
+def flags(v: pd.DataFrame, df: pd.DataFrame, h: pd.DataFrame) -> pd.Series:
+    """Common-sense checks (需复核), each with its reason: value and price an order apart (beyond ±100%) without
+    an implied-expectations label; the stock's industry as a whole far off (median beyond ±30%, 5+ valued); a
+    value implying a P/B outside the stock's own 7-year range by half again; peers paying more than 2× or under
+    ½ of the value."""
+    ok, up = v["valued"], v["upside"]
+    out = pd.Series([[] for _ in v.index], v.index)
+    ind = up[ok].groupby(df["industry"][ok]).agg(["median", "count"])
+    far = ind[(ind["count"] >= 5) & (ind["median"].abs() > 0.3)]["median"]
+    implied_pb = v["v_mid"] / (df["price"] / df["pb_mrq_em"] if "pb_mrq_em" in df else v["book"])
+    pb_lo, pb_hi = h.get("own_pb_lo"), h.get("own_pb_hi")
+    for code in v.index[ok]:
+        if abs(up[code]) > 1 and not v.at[code, "implied_label"]:
+            out[code].append(f"估值与价格相差 {up[code]:+.0%}")
+        if df.at[code, "industry"] in far.index:
+            out[code].append(f"行业整体偏离 {far[df.at[code, 'industry']]:+.0%}")
+        if pb_lo is not None and pd.notna(pb_lo.get(code)) and v.at[code, "book"] > 0 and not v.at[code, "light"]:
+            if implied_pb[code] > 1.5 * pb_hi[code] or implied_pb[code] < pb_lo[code] / 1.5:
+                out[code].append(f"估值隐含 P/B {implied_pb[code]:.1f}，自身 7 年 {pb_lo[code]:.1f}-{pb_hi[code]:.1f}")
+        ratio = v.at[code, "v_peer"] / v.at[code, "v_mid"]
+        if pd.notna(ratio) and (ratio > 2 or ratio < 0.5):
+            out[code].append(f"同行定价是估值的 {ratio:.1f} 倍")
+    return out.map("；".join)
+
+
+def confidence(v: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
+    """Points: the 25-75% range within ±15% of the value +1, wider than ±40% −1; 7+ years of history +1, under 5
+    −1; 5+ analysts +1, under 3 −1; a base-rate cell with the stock's sector and bands +1, market-wide −1; peers
+    within 30% of the value +1, 2× apart −1; an implied-expectations label −1; each 需复核 flag −1 (at most −2).
+    3+ = 高, 1-2 = 中, else 低."""
+    width = (v["v_high"] - v["v_low"]) / v["v_mid"] / 2
+    peer_gap = (v["v_peer"] / v["v_mid"] - 1).abs()
+    s = pd.Series(np.select([width <= 0.15, width > 0.4], [1, -1], 0), v.index)
+    s += np.select([v["n_years"] >= 7, ~(v["n_years"] >= 5)], [1, -1], 0)
+    s += np.select([df["analysts"] >= 5, df["analysts"] < 3], [1, -1], 0)
+    s += np.select([v["level"] <= 1, v["level"] >= 3], [1, -1], 0)
+    s += np.select([peer_gap <= 0.3, peer_gap > 1], [1, -1], 0)
+    s -= (v["implied_label"] != "").astype(int)
+    s -= np.minimum(v["flags"].str.count("；") + (v["flags"] != ""), 2)
+    label = np.select([s >= 3, s >= 1], ["高", "中"], "低")
+    return pd.DataFrame({"conf_points": s, "confidence": np.where(v["valued"], label, "")}, index=v.index)
 
 
 def buy_universe(df: pd.DataFrame, market: str) -> pd.Series:
     """Stocks a buy may come from: the market's largest (config buy_largest_n) and, in the US, home listings."""
     out = pd.Series(True, df.index)
-    if BUY_LARGEST:
-        out &= df["mcap_rank"] <= BUY_LARGEST[market]
-    if BUY_HOME_ONLY and market == "us" and "country" in df:
-        out &= df["country"].fillna(engine.HOME) == engine.HOME
+    if C2.get("buy_largest_n"):
+        out &= df["mcap_rank"] <= C2["buy_largest_n"][market]
+    if C2.get("buy_home_only") and market == "us" and "country" in df:
+        out &= df["country"].fillna(HOME) == HOME
     return out
 
 
 def buckets(v: pd.DataFrame, df: pd.DataFrame, market: str = "cn") -> pd.DataFrame:
-    """买入 / 持有 / 卖出 (A2.3), 5 each, strict rules first and relaxed fills marked 低信心; at most 2 per
-    industry per bucket, each stock once; pre-profit names never get a call.
-    Buy: among the largest companies (US: US listings), upside ≥ 20%, confidence 中/高, quality screen passed,
-    momentum z ≥ −0.5; ranked by confidence-weighted upside plus momentum. Hold: quality in the top 30%,
-    screen passed, |upside| ≤ 15%, confidence 中/高; ranked by quality. Sell: upside ≤ −25%, confidence
-    中/高, among the 400 largest, and deterioration (momentum z ≤ −0.5, falling profit or a screen
-    failure); ranked by confidence-weighted downside."""
-    c, n, cap = CONFIG["v2"], CONFIG["buckets"]["per_bucket"], CONFIG["buckets"]["max_per_group"]
-    ok = v["v_final"].notna() & (v["archetype"] != "pre-profit")
+    """买入 / 持有 / 卖出, 5 each, strict rules first and relaxed fills marked 低信心; at most 2 per industry per
+    bucket, each stock once (v2's rules, Phase 9 calibration). Buy: among the largest (US: home listings), upside
+    ≥ 20%, confidence 中/高, quality screen passed, momentum z ≥ −0.5; ranked by range-weighted upside + 0.5 ×
+    momentum. Hold: quality top 30%, screen passed, |upside| ≤ 15%, 中/高; by quality. Sell: upside ≤ −25%, 中/高,
+    among the 400 largest, and momentum z ≤ −0.5, falling profit or a screen failure."""
+    n, cap = CONFIG["buckets"]["per_bucket"], CONFIG["buckets"]["max_per_group"]
+    ok = v["valued"]
     can_buy = ok & buy_universe(df, market)
-    up, good, passed = v["upside"], v["confidence"].isin(["高", "中"]), v["screen_ok"]
-    mom = momentum(df)
-    cw = np.log1p(up.clip(lower=-0.99)) * (1 - v["dispersion"].clip(upper=0.5))
-    rank_key = cw / cw[ok].std() + MOM_WEIGHT * mom.fillna(0) if MOM_WEIGHT else cw  # buys only
-    excess = (v["icc_final"] - v["r_req"]).fillna(0)
-    ex_buy = excess >= BUY_MIN_EXCESS if BUY_MIN_EXCESS is not None else True
-    ex_sell = excess <= SELL_MAX_EXCESS if SELL_MAX_EXCESS is not None else True
+    up, good, passed, mom = v["upside"], v["confidence"].isin(["高", "中"]), v["screen_ok"], df["z_momentum"]
+    width = (np.log(v["v_high"] / v["v_low"]) / 2).clip(upper=0.5).fillna(0.5)
+    cw = np.log1p(up.clip(lower=-0.99)) * (1 - width)
+    rank_key = cw / cw[ok].std() + C2["momentum_weight"] * mom.fillna(0)
     largest = df["mcap_rank"] <= CONFIG["buckets"]["sell_largest_n"]
-    weak = (df["z_momentum"] <= -0.5) | (df["np_growth"] < 0) | ~passed
-    hold_band = c["hold_max_abs_upside"]
+    weak = (mom <= -0.5) | (df["np_growth"] < 0) | ~passed
+    band = C2["hold_max_abs_upside"]
     rules = {
-        "buy": [(can_buy & (up >= c["buy_min_upside"]) & ex_buy & good & passed
-                 & ((mom >= -0.5) | (MOM_FLOOR == "none")), rank_key, False),
+        "buy": [(can_buy & (up >= C2["buy_min_upside"]) & good & passed & (mom >= -0.5), rank_key, False),
                 (can_buy & (up >= 0.15) & passed, rank_key, False), (can_buy & (up > 0), rank_key, False)],
-        "hold": [(ok & (df["quality_pct"] >= 0.7) & passed & (up.abs() <= hold_band) & good, df["z_quality"], False),
-                 (ok & passed & (up.abs() <= hold_band + 0.05), df["z_quality"], False), (ok & (up.abs() < 0.25), df["z_quality"], False)],
-        "sell": [(ok & (up <= c["sell_max_upside"]) & ex_sell & good & largest & weak, cw, True),
+        "hold": [(ok & (df["quality_pct"] >= 0.7) & passed & (up.abs() <= band) & good, df["z_quality"], False),
+                 (ok & passed & (up.abs() <= band + 0.05), df["z_quality"], False), (ok & (up.abs() < 0.25), df["z_quality"], False)],
+        "sell": [(ok & (up <= C2["sell_max_upside"]) & good & largest & weak, cw, True),
                  (ok & (up <= -0.15) & largest, cw, True), (ok & (up < 0) & largest, cw, True)],
     }
     chosen, taken = {k: [] for k in BUCKETS}, set()
@@ -146,107 +229,60 @@ def buckets(v: pd.DataFrame, df: pd.DataFrame, market: str = "cn") -> pd.DataFra
     return out.set_index("code").reindex(v.index)
 
 
-def momentum(df: pd.DataFrame) -> pd.Series:
-    """Momentum z for the buy floor and ranking: v1's industry-relative z, or the 12-1 month return
-    standardized across the whole market."""
-    if MOM_FLOOR == "industry":
-        return df["z_momentum"]
-    m = df["mom_12_1"]
-    return ((m - m.mean()) / m.std()).clip(-3, 3)
-
-
-def verdict(v: pd.Series) -> str:
-    """v2's own answer on whether a stock's recent profit can last: its normal EPS (normal ROE × book;
-    for a confirmed break the probability-weighted normal ROE) against the trailing core EPS."""
-    if v["archetype"] == "pre-profit" or pd.isna(v["eps_core"]):
-        return "不可持续：无持续盈利史（v2 视为未盈利，不估值）"
-    if pd.isna(v["v_final"]):
-        return "v2 无法估值（账面为负或数据不足）"
-    roe = v["p"] * v["roe_new"] + (1 - v["p"]) * v["roe_old"] if v["break_confirmed"] else v["roe_norm"]
-    normal, eps = roe * v["bps_c"], v["eps_core"]
-    share = normal / eps if eps > 0 else np.nan
-    label = "可持续" if share >= 0.8 else "部分可持续" if share >= 0.5 else "不可持续"
-    c3 = "无（不足 3 家分析师）" if pd.isna(v["roe_c3"]) else f"{v['roe_c3']:.0%}"
-    text = (f"{label}：常态 EPS {normal:.2f} = 近 12 个月核心 EPS {eps:.2f} 的 {share:.0%}（历史权重 {v['w_hist']:.1f}，"
-            f"常态 ROE {roe:.0%}，当前 {v['roe_cur']:.0%}，分析师第 3 年 {c3}）")
-    if v["break_dir"]:
-        side = "向上" if v["break_dir"] == "up" else "向下"
-        text += f"；{side}断层{'已确认' if v['break_confirmed'] else '未获分析师确认'}"
-    if v["break_confirmed"]:
-        text += f"，新水平延续概率 {v['p']:.0%}（{v['p_why']}），市场隐含 {pct(v['p_market'])}"
-    return text + f"；v2 价值 {v['v_final']:.2f}（{v['upside']:+.0%}，把握度 {v['confidence']}）"
-
-
-def pct(x: float) -> str:
-    return "—" if pd.isna(x) else "<0%" if x < 0 else ">100%" if x > 1 else f"{x:.0%}"
-
-
 def run(df: pd.DataFrame, picks: pd.DataFrame, market: str, today: date) -> pd.DataFrame:
-    """The snapshot with the v2 columns, after printing the v2 lists and the comparison."""
-    v, h, rates, gauge = value(df, market, today)
-    excluded = picks.loc[picks["role"] == "excluded", "code"].astype(str).tolist()
-    v["verdict"] = pd.Series({c: verdict(v.loc[c]) for c in excluded if c in v.index}, dtype=object)
-    report(df, picks, v, h, rates, gauge, market)
-    return df.drop(columns=[c for c in df.columns if c.startswith("v2_")]).join(v[COLUMNS].add_prefix("v2_"))
+    """The snapshot with the v3 columns, after printing the v3 lists and checks."""
+    v = value(df, market, today)
+    report(df, picks, v, market)
+    old = [c for c in df.columns if c.startswith(("v2_", "v3_"))]
+    return df.drop(columns=old).join(v[COLUMNS].add_prefix("v3_"))
 
 
-def report(df: pd.DataFrame, picks: pd.DataFrame, v: pd.DataFrame, h: pd.DataFrame, rates: pd.DataFrame, gauge: float,
-           market: str) -> None:
-    valued = v["v_final"].notna()
-    conf = v.loc[valued, "confidence"].value_counts(normalize=True)
-    print(f"\n==== {market.upper()} valuation v2 (shadow; the report stays v1) ====")
-    pre = v["archetype"] == "pre-profit"
-    unvalued = (~valued & ~pre & (v["bps_c"] > 0)).sum()
-    over = ((v["v_final"] > 3 * df["price"]) & (v["confidence"] != "低")).sum()
-    print(f"required return: market-implied {v['r_mkt'].iloc[0]:.2%} (v1 configured {df['r'].iloc[0]:.2%}), λ = "
-          f"{engine.LAMBDA}; valued {valued.sum()} of {len(v)} (pre-profit {pre.sum()}, negative book "
-          f"{(v['bps_c'] <= 0).sum()}, no positive value {unvalued}); confidence 高 {conf.get('高', 0):.0%} "
-          f"中 {conf.get('中', 0):.0%} 低 {conf.get('低', 0):.0%}; above 3× price without 低: {over}")
-    if "pre_eps_ttm" in h:
-        print(f"业绩预告 newer than the latest report moved the earnings base of {h['pre_eps_ttm'].notna().sum()} stocks")
-    med = v.groupby("archetype")["upside"].median()
-    print("archetypes " + ", ".join(f"{a} {k}" + (f" (median upside {med[a]:+.0%})" if pd.notna(med.get(a)) else " (no value)")
-                                    for a, k in v["archetype"].value_counts().items()))
-    up = rates.xs("up")
-    print(f"base rates (kept ≥ half of an ROE jump 3 years later): {up.loc['all', 'mean']:.0%} of {up.loc['all', 'count']:.0f}; "
-          f"cyclical history {up.loc['cyclical', 'mean']:.0%}; US top-10 capex growth {gauge:+.0%}")
+def report(df: pd.DataFrame, picks: pd.DataFrame, v: pd.DataFrame, market: str) -> None:
+    ok, up = v["valued"], v["upside"]
+    shown = ok & (v["implied_label"] == "")
+    conf = v.loc[ok, "confidence"].value_counts(normalize=True)
+    print(f"\n==== {market.upper()} valuation v3 (Phase 13, shadow; the report stays v1) ====")
+    print(f"discount rate {v['r'].iloc[0]:.2%} (market-implied), long-run ROE {v['roe_long'].iloc[0]:.1%}; valued "
+          f"{ok.sum()} of {len(v)} (no profit and no analyst-expected profit within 3 years: {(~v['ok']).sum()}); "
+          f"book-light {(v['light'] & ok).sum()}; confidence 高 {conf.get('高', 0):.0%} 中 {conf.get('中', 0):.0%} 低 {conf.get('低', 0):.0%}")
+    print(f"common-sense checks: median upside {up[ok].median():+.0%} (shown without a label {up[shown].median():+.0%}); "
+          f"beyond ±100%: {(up[ok].abs() > 1).mean():.1%} of valued, {(up[shown].abs() > 1).sum()} shown; labels "
+          + ", ".join(f"{k} {n}" for k, n in v.loc[ok, "implied_label"].replace("", "无").value_counts().items())
+          + f"; 需复核 {(v['flags'] != '').sum()}")
+    ind = up[ok].groupby(df["industry"][ok])
+    t = pd.DataFrame({"median": ind.median(), "n": ind.count(), "high": (v.loc[ok, "implied_label"] == "价格隐含过高").groupby(df["industry"][ok]).sum(),
+                      "low": (v.loc[ok, "implied_label"] == "价格隐含过低").groupby(df["industry"][ok]).sum(),
+                      "d_implied": v.loc[ok, "d_implied"].groupby(df["industry"][ok]).median(),
+                      "d50": v.loc[ok, "d50"].groupby(df["industry"][ok]).median()})
+    far = t[(t["n"] >= 5) & (t["median"].abs() > 0.3)].sort_values("median")
+    print(f"industries (5+ valued) beyond ±30%: {len(far)} of {(t['n'] >= 5).sum()}; why: labels and median implied vs "
+          f"base-rate durations (years)")
+    if len(far):
+        print(far.assign(median=far["median"].map("{:+.0%}".format)).round(1).to_string())
     show = v.join(df[["name", "price"]])
-    cols = {"name": "name", "archetype": "type", "price": "price", "v_used": "intrinsic", "v_peer": "peer",
-            "v_own": "own", "v_final": "v2", "upside": "up", "icc_final": "exp_ret", "r_req": "r", "roe_implied": "impl_roe",
-            "roe_norm": "norm_roe", "confidence": "conf",
-            "conviction": "conviction", "screen_fails": "screen"}
+    cols = ["name", "price", "v_low", "v_mid", "v_high", "upside", "confidence", "implied_label", "conviction", "flags"]
     for bucket, label in BUCKETS.items():
         part = show[show["bucket"] == bucket].sort_values("rank")
-        print(f"\n-- v2 {label} ({len(part)})")
-        print(fmt(part, cols).to_string())
-    breaks = show[show["break_confirmed"]].sort_values("upside")
-    print(f"\n-- confirmed regime breaks ({len(breaks)}): our probability the new level lasts vs the market's")
-    bcols = {"name": "name", "break_dir": "dir", "price": "price", "v_old": "V_old", "v_new": "V_new", "p": "p_ours",
-             "p_market": "p_market", "v_regime": "V_weighted", "v2_up": "up", "p_why": "evidence"}
-    print(fmt(breaks.assign(v2_up=breaks["upside"]), bcols).to_string())
+        print(f"\n-- v3 {label} ({len(part)})")
+        print(fmt(part[cols]).to_string())
+    hand = [c for c in HAND[market] if c in show.index]
+    print("\n-- hand-checked names (PLAN item 13)")
+    for code in hand:
+        x = show.loc[code]
+        val = "无估值（无盈利，也无 3 位以上分析师预期 3 年内盈利）" if not x["valued"] else (
+            f"{x['v_low']:,.2f} / {x['v_mid']:,.2f} / {x['v_high']:,.2f}（{x['upside']:+.0%}，{x['confidence']}）{x['implied_label']}")
+        print(f"{code} {x['name']}: 价格 {x['price']:,.2f}；估值 {val}\n  {x['implied']}\n  基础比率：{x['base']}，"
+              f"{x['starts']:.0f} 例；利润以年均 {x['g']:.0%} 增长 3/5/10 年的比例 {x['s3']:.0%}/{x['s5']:.0%}/{x['s10']:.0%}"
+              + (f"\n  同行定价 {x['v_peer']:,.2f}" if pd.notna(x["v_peer"]) else "") + (f"\n  需复核：{x['flags']}" if x["flags"] else ""))
     v1 = picks[picks["role"] == "pick"].set_index("code")
-    cmp = v1[["bucket", "upside"]].rename(columns={"bucket": "v1", "upside": "v1_up"}).join(show, how="left")
-    print("\n-- v1 picks in v2 (v2 bucket blank = not in the v2 lists)")
-    print(fmt(cmp.assign(v2b=cmp["bucket"].fillna("")), {"name": "name", "v1": "v1", "v1_up": "v1_up", "archetype": "type",
-          "v_final": "v2", "upside": "v2_up", "confidence": "conf", "v2b": "v2_bucket"}).to_string())
     same = {b: len(set(v1.index[v1["bucket"] == b]) & set(v.index[v["bucket"] == b])) for b in BUCKETS}
-    print("same name in v1 and v2: " + ", ".join(f"{BUCKETS[b]} {k}/5" for b, k in same.items()))
-    excl = picks[picks["role"] == "excluded"]
-    if len(excl):
-        print("\n-- excluded by one-off checks 1-2 (v1) and v2's answer on whether the profit can last")
-        for _, row in excl.iterrows():
-            code = str(row["code"])
-            print(f"{code} {row['name']} ({BUCKETS[row['bucket']]} candidate)\n  v1: {row['exclusion']}\n"
-                  f"  v2: {v['verdict'].get(code, '无 v2 数据')}")
+    print("same name in v1 and v3: " + ", ".join(f"{BUCKETS[b]} {k}/5" for b, k in same.items()))
 
 
-def fmt(part: pd.DataFrame, cols: dict) -> pd.DataFrame:
-    out = part.reindex(columns=list(cols)).rename(columns=cols)
-    for c in out.columns:
-        if c in ("up", "v1_up", "v2_up", "exp_ret", "r", "p_ours", "p_market", "impl_roe", "norm_roe"):
-            out[c] = out[c].map(lambda x: "" if pd.isna(x) else pct(x) if c.startswith("p_") else f"{x:+.0%}" if "up" in c else f"{x:.1%}")
-        elif c in ("price", "intrinsic", "peer", "own", "v2", "V_old", "V_new", "V_weighted"):
-            out[c] = out[c].map(lambda x: "" if pd.isna(x) else f"{x:,.2f}")
-        elif c == "name":
-            out[c] = out[c].astype(str).str[:16]
+def fmt(part: pd.DataFrame) -> pd.DataFrame:
+    out = part.copy()
+    out["upside"] = out["upside"].map(lambda x: "" if pd.isna(x) else f"{x:+.0%}")
+    for c in ("price", "v_low", "v_mid", "v_high"):
+        out[c] = out[c].map(lambda x: "" if pd.isna(x) else f"{x:,.2f}")
+    out["name"] = out["name"].astype(str).str[:16]
     return out

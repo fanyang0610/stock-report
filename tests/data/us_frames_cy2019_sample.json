@@ -1,0 +1,190 @@
+{
+"Revenues": {
+"data": [
+{
+"accn": "0001564590-21-033737",
+"cik": 1000045,
+"entityName": "NICHOLAS FINANCIAL, INC.",
+"loc": "US-FL",
+"start": "2019-04-01",
+"end": "2020-03-31",
+"val": 62095000
+},
+{
+"accn": "0000950170-22-000796",
+"cik": 1318605,
+"entityName": "Tesla, Inc.",
+"loc": "US-TX",
+"start": "2019-01-01",
+"end": "2019-12-31",
+"val": 24578000000
+}
+]
+},
+"RevenueFromContractWithCustomerExcludingAssessedTax": {
+"data": [
+{
+"accn": "0001104659-22-025141",
+"cik": 1800,
+"entityName": "Abbott Laboratories",
+"loc": "US-IL",
+"start": "2019-01-01",
+"end": "2019-12-31",
+"val": 31904000000
+},
+{
+"accn": "0000320193-21-000105",
+"cik": 320193,
+"entityName": "Apple Inc.",
+"loc": "US-CA",
+"start": "2018-09-30",
+"end": "2019-09-28",
+"val": 260174000000
+}
+]
+},
+"NetIncomeLoss": {
+"data": [
+{
+"accn": "0001104659-22-081498",
+"cik": 1750,
+"entityName": "AAR CORP",
+"loc": "US-IL",
+"start": "2019-06-01",
+"end": "2020-05-31",
+"val": 4400000
+},
+{
+"accn": "0001104659-22-025141",
+"cik": 1800,
+"entityName": "Abbott Laboratories",
+"loc": "US-IL",
+"start": "2019-01-01",
+"end": "2019-12-31",
+"val": 3687000000
+},
+{
+"accn": "0000320193-21-000105",
+"cik": 320193,
+"entityName": "Apple Inc.",
+"loc": "US-CA",
+"start": "2018-09-30",
+"end": "2019-09-28",
+"val": 55256000000
+},
+{
+"accn": "0001564590-21-033737",
+"cik": 1000045,
+"entityName": "NICHOLAS FINANCIAL, INC.",
+"loc": "US-FL",
+"start": "2019-04-01",
+"end": "2020-03-31",
+"val": 3466000
+},
+{
+"accn": "0000950170-22-000796",
+"cik": 1318605,
+"entityName": "Tesla, Inc.",
+"loc": "US-TX",
+"start": "2019-01-01",
+"end": "2019-12-31",
+"val": -862000000
+}
+]
+},
+"ProfitLoss": {
+"data": [
+{
+"accn": "0001104659-22-081498",
+"cik": 1750,
+"entityName": "AAR CORP",
+"loc": "US-IL",
+"start": "2019-06-01",
+"end": "2020-05-31",
+"val": 4400000
+},
+{
+"accn": "0001104659-22-025141",
+"cik": 1800,
+"entityName": "Abbott Laboratories",
+"loc": "US-IL",
+"start": "2019-01-01",
+"end": "2019-12-31",
+"val": 3687000000
+},
+{
+"accn": "0000950170-22-000796",
+"cik": 1318605,
+"entityName": "Tesla, Inc.",
+"loc": "US-TX",
+"start": "2019-01-01",
+"end": "2019-12-31",
+"val": -775000000
+}
+]
+},
+"StockholdersEquityQ4I": {
+"data": [
+{
+"accn": "0001104659-21-025751",
+"cik": 1800,
+"entityName": "Abbott Laboratories",
+"loc": "US-IL",
+"end": "2019-12-31",
+"val": 31088000000
+},
+{
+"accn": "0000320193-21-000056",
+"cik": 320193,
+"entityName": "Apple Inc.",
+"loc": "US-CA",
+"end": "2019-12-28",
+"val": 89531000000
+},
+{
+"accn": "0001564590-21-005399",
+"cik": 1000045,
+"entityName": "OLD MARKET CAPITAL CORPORATION",
+"loc": "US-NE",
+"end": "2019-12-31",
+"val": 105992000
+},
+{
+"accn": "0001564590-21-004599",
+"cik": 1318605,
+"entityName": "Tesla, Inc.",
+"loc": "US-TX",
+"end": "2019-12-31",
+"val": 6618000000
+}
+]
+},
+"StockholdersEquityIncludingPortionAttributableToNoncontrollingInterestQ4I": {
+"data": [
+{
+"accn": "0001104659-21-040394",
+"cik": 1750,
+"entityName": "AAR CORP.",
+"loc": "US-IL",
+"end": "2019-11-30",
+"val": 921700000
+},
+{
+"accn": "0001104659-21-025751",
+"cik": 1800,
+"entityName": "Abbott Laboratories",
+"loc": "US-IL",
+"end": "2019-12-31",
+"val": 31301000000
+},
+{
+"accn": "0000950170-23-001409",
+"cik": 1318605,
+"entityName": "Tesla, Inc.",
+"loc": "US-TX",
+"end": "2019-12-31",
+"val": 7467000000
+}
+]
+}
+}

@@ -190,11 +190,11 @@ def periods_in(path, column: str = "period") -> set[str]:
 
 
 def update_cn_history(today: date) -> None:
-    """Annual results for every fiscal year since 2015 (each fetched once; the latest again every week
+    """Annual results for every fiscal year since 2009 (each fetched once; the latest again every week
     while its reports are still coming in), and the valuation table on the last trading day of every
     half-year since 2018-12 (Eastmoney has nothing earlier)."""
     have, frames = periods_in(CN_ANNUAL), []
-    for year in range(2015, today.year):
+    for year in range(2009, today.year):  # 2009-2014 for the Phase 13 base rates
         period = date(year, 12, 31)
         if period.isoformat() not in have or (is_open(period, today) and needs_refresh(CN_ANNUAL, today)):
             rows = datacenter("RPT_LICO_FN_CPD", f"(REPORTDATE='{period}'){A_SHARES}", ",".join(CN_RESULTS))

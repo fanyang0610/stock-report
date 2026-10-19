@@ -1,6 +1,6 @@
-"""Run v1 and v2 on every month end of the backtest (Phase 9) and keep, per date and stock, both methods'
-signals and buckets with the later returns. The point-in-time snapshots and v2's history inputs are
-built once per market and cached (data/backtest/snap_<market>.pkl); v2 variants re-run on them.
+"""Point-in-time month-end snapshots for the backtest (Phase 9): v1 (value, score, picks with and without
+checks 1-2) and the history inputs per date, built once per market and cached (data/backtest/snap_<market>.pkl);
+backtest/v3.py runs valuation v3 on them (Phase 13).
 
   uv run python -m backtest.run build cn|us|hk   # snapshots, v1, history inputs (cached)
 """
@@ -10,14 +10,13 @@ import pickle
 import sys
 import time
 import warnings
-from contextlib import contextmanager
 from datetime import date
 
 import numpy as np
 import pandas as pd
 
 from backtest import panel
-from stockreport import anchors, engine, history, pick, regime, score, shadow, signal, value
+from stockreport import history, pick, score, value
 
 log = logging.getLogger("backtest.run")
 IN_SAMPLE_END = "2023-12-31"  # calibrate on month ends up to here, check on the rest (A4)
@@ -25,9 +24,6 @@ START = {"us": "2018-01"}  # the SEC table starts with FY2015 and growth needs t
 V1_COLS = ["upside", "composite", "z_value", "z_quality", "z_growth", "z_momentum", "z_risk", "quality_pct", "mom_12_1",
            "np_growth", "cash_conv", "eps_ttm", "eps_e2", "analysts", "mcap_rank", "industry", "financial", "price",
            "ey", "by", "mcap"]
-V2_COLS = ["archetype", "upside", "v_final", "v_intrinsic", "v_used", "v_peer", "v_own", "icc_final", "r_req", "r_mkt",
-           "dispersion", "confidence", "conf_points", "screen_ok", "bucket", "tier", "w_hist", "roe_norm", "roe_cur",
-           "break_dir", "break_confirmed", "p", "phi", "eps_core", "bps_c", "g0"]
 
 
 def months(market: str) -> list[str]:
@@ -47,12 +43,12 @@ def v1_picks(s: pd.DataFrame, checks: str = "both") -> pd.DataFrame:
 
 
 def build(market: str) -> None:
-    """Snapshots → v1 (value, score, picks with and without checks 1-2) → v2's history inputs, per date."""
+    """Snapshots → v1 (value, score, picks with and without checks 1-2) → the history inputs, per date."""
     warnings.simplefilter("ignore")
     panel.setup_history(market)
     out, started = {}, time.monotonic()
     if market == "cn":
-        cons = consensus_window()  # also v2's weekly-snapshot table, monthly here, for its revisions
+        cons = consensus_window()  # also the weekly-snapshot table, monthly here, for the revisions
         pd.concat([e.assign(snapshot=m) for m, e in cons.items()]).rename_axis("code").reset_index().to_csv(
             panel.HIST / "cn_consensus.csv.gz", index=False, compression="gzip")
         px, res, bal, val = panel.CNPrices(), panel.cn_results(), panel.cn_balance(), panel.cn_valuations()
@@ -118,45 +114,6 @@ def consensus_window() -> dict[str, pd.DataFrame]:
 def load(market: str) -> dict:
     with open(panel.BT / f"snap_{market}.pkl", "rb") as f:
         return pickle.load(f)
-
-
-@contextmanager
-def params(**kw):
-    """Temporarily set v2 module constants, e.g. params(engine__LAMBDA=0.25, shadow__MOM_WEIGHT=0.5)."""
-    mods = {"engine": engine, "regime": regime, "anchors": anchors, "shadow": shadow}
-    old = {}
-    for key, val in kw.items():
-        mod, name = key.split("__")
-        old[key] = getattr(mods[mod], name)
-        setattr(mods[mod], name, val)
-    try:
-        yield
-    finally:
-        for key, val in old.items():
-            mod, name = key.split("__")
-            setattr(mods[mod], name, val)
-
-
-def frame(market: str, data: dict, **kw) -> pd.DataFrame:
-    """One row per date and stock: v1 and v2 signals and buckets (v2 with the constants in kw) and the
-    later returns."""
-    rows = []
-    country = panel.today_snapshot("us")["country"] if market == "us" else None
-    with params(**kw):
-        for m, d in data.items():
-            s, fwd = d["snap"], d["fwd"]
-            if country is not None and "country" not in s:  # snapshots built before the country premium
-                s = s.assign(country=country.reindex(s.index))
-            v, *_ = shadow.value(s, market, day_of(market, m), loaded=d["loaded"])
-            f = s[V1_COLS].join(v[V2_COLS].add_prefix("v2_")).join(fwd)
-            picks = d["picks"]["both"]
-            f["v1_bucket"] = picks[picks["role"] == "pick"].set_index("code")["bucket"].reindex(f.index)
-            rows.append(f.assign(date=m, market=market))
-    out = pd.concat(rows).rename_axis("code").reset_index()
-    out = out[out["date"] >= START.get(market, "")]
-    out["sample"] = np.where(out["date"] <= IN_SAMPLE_END[: 7 if market != "cn" else 10], "in", "out")
-    out["v2_gap"] = np.log(out["v2_v_final"] / out["price"])
-    return signal.add_excess(out)
 
 
 if __name__ == "__main__":

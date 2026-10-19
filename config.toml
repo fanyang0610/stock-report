@@ -92,30 +92,23 @@ units_ratio = 20              # consensus EPS this many times off the trailing E
 basis_ratio = 2               # this year's consensus this far from the trailing EPS: adjusted vs GAAP (counted only)
 drift = { value = 0.05, profit = 0.05, book = 0.05, consensus = 0.2, fair_value = 0.3 }  # day-over-day alarms
 
-[v2]                          # valuation v2 in shadow mode (docs/REVIEW.md A2; first guesses until the Phase 9 backtest)
-lambda = 0.5                  # share of an industry's implied premium over the market's implied return accepted as risk
-discount = "implied"          # required return base: "implied" (the market's implied return) or "configured" (10-year + premium)
-long_growth = { cn = 0.03, hk = 0.03, us = 0.04 }
-# Phase 9 backtest (docs/BACKTEST.md): excess ROE fades much faster in CN and HK than v2 assumed
-phi = { cn = [0.2, 0.0, 0.0], hk = [0.2, 0.0, 0.0], us = [0.15, 0.45, 0.2] }  # φ = a + b × ROE stability + c × margin/60%
-fade_years = { cn = 3, hk = 3, us = 10 }     # years after year 3 over which ROE fades to its long-run level
-country_lambda = 1.0          # US: share of a foreign listing's country premium (its implied return over home listings')
-phi_new = { cn = 0.05, hk = 0.1, us = 0.5 }   # persistence floor under a new regime (breaks that held 3 years)
-own_boom_weight = 0.0         # log-odds for the stock's own last boom (was ±0.5; no out-of-sample power)
-growth_min_analysts = 5       # consensus EPS growth sets expected and book growth only with this many analysts
+[shadow]                      # the v3 shadow lists' bucket rules (v2's, as Phase 9 calibrated them; PLAN.md Method 12)
 buy_min_upside = 0.20
 buy_largest_n = { cn = 300, hk = 200, us = 300 }   # buys only among the market's largest companies (your choice, Phase 9 review)
 buy_home_only = true          # US buys only among US listings (foreign buys trailed US buys by 11-12 points in the backtest)
-momentum_floor = "industry"   # buy floor momentum z ≥ −0.5: "industry" (v1's industry-relative z), "market" or "none"
-momentum_weight = 0.5         # momentum z added to the buy ranking (confidence-weighted upside in sd units; Phase 9)
+momentum_weight = 0.5         # momentum z added to the buy ranking (range-weighted upside in sd units; Phase 9)
 hold_max_abs_upside = 0.15
 sell_max_upside = -0.25
 
-[v2.themes]                   # industry-name substrings (US: the Nasdaq industry). Tags only label a stock and give
-                              # AI-tagged regime breaks the capex evidence; they never set a value.
-ai = ["Semiconductor", "Electronic Components", "Telecommunications Equipment", "Computer Communications",
-      "半导体", "元件", "通信设备", "光学光电子", "计算机设备", "资讯科技器材"]
-ai_disrupted = ["Advertising", "EDP Services", "Business Services", "广告营销", "IT服务"]
+[v3]                          # valuation v3, the Phase 13 redesign (PLAN.md Method 16), in shadow mode next to v1
+tolerance = { cn = 0.1, hk = 0.1, us = 0.25 }  # base rates: profit keeps up a rate while its sum over the years is at most this short
+min_starts = 60               # a base-rate cell needs this many company-years, else the next coarser cell
+fade_years = { cn = 3, hk = 3, us = 15 }  # after the duration (growth) and the 10-year base-rate path (ROE), fade to the long-run levels
+haircut = { cn = 0.0, hk = 0.0, us = 0.0 }  # durations shortened by this share (HK, survivors only: 0-30% tried in-sample, none helped)
+book_light_roe = 0.4          # negative book (no loss in 5 years) or a 5-year ROE above this: valued on the capital earning 40%
+growth = [-0.10, 0.40]        # the growth rate held during the duration (analysts' years 1-3 or the own trend)
+long_growth = { cn = 0.03, hk = 0.03, us = 0.04 }   # long-run nominal growth (as v2)
+long_roe = { cn = "market", hk = "market", us = "r" }  # long-run ROE: "market" (the largest third's median) or "r" (no excess)
 
 [events]                      # event layer (PLAN.md Method 14)
 backfill_days = 10            # the first fetch reads this many days back (CN ~30 s a day); later the days since the last

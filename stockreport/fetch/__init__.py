@@ -164,7 +164,7 @@ def steps(market: str, today: date) -> list:
     from stockreport.fetch import events
     from stockreport.track import tracked
     if market == "cn":
-        from stockreport.fetch import eastmoney, tdx, tencent
+        from stockreport.fetch import eastmoney, swclass, tdx, tencent
         return [("prices", lambda: tdx.update_prices(today)),
                 ("quotes", lambda: eastmoney.update_quotes()),
                 ("Tencent quotes", lambda: tencent.update_quotes(eastmoney.cn_largest())),
@@ -174,10 +174,11 @@ def steps(market: str, today: date) -> list:
                 ("10y yield", lambda: eastmoney.update_yield()),
                 ("history", lambda: eastmoney.update_cn_history(today)),
                 ("pre-announcements", lambda: eastmoney.update_forecasts(today)),
+                ("申万 industries", lambda: swclass.update(today)),
                 ("consensus snapshot", lambda: snapshot(DATA / "fundamentals" / "cn_consensus.csv.gz", "cn", today)),
                 ("announcements", lambda: events.update("cn", today))]
     if market == "us":
-        from stockreport.fetch import fred, nasdaq, sec, yahoo
+        from stockreport.fetch import frames, fred, nasdaq, sec, yahoo
         return [("listing", nasdaq.update_list),
                 ("prices", lambda: yahoo.update_prices(today, tracked("us", today, nasdaq.candidates()))),
                 ("SEC fundamentals", lambda: sec.update_facts(today, nasdaq.candidates())),
@@ -188,6 +189,7 @@ def steps(market: str, today: date) -> list:
                 ("Yahoo annual history", lambda: yahoo.update_annual(today, sec.annual_gaps(nasdaq.candidates()), sec.ANNUAL)),
                 ("monthly prices", lambda: yahoo.update_monthly(
                     today, "us", nasdaq.candidates(), {f"{c}=X" for c in sec.history_currencies()})),
+                ("SEC frames", lambda: frames.update(today, sec.load_ciks().reindex(nasdaq.candidates()).dropna())),
                 ("consensus snapshot", lambda: snapshot(nasdaq.CONSENSUS, "us", today)),
                 ("filings", lambda: events.update("us", today))]
     if market == "hk":

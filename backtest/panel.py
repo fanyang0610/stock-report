@@ -29,7 +29,7 @@ def setup_history(market: str) -> None:
     2017-10, rebuilt from the backtest tables; US/HK tables linked from data/history."""
     HIST.mkdir(parents=True, exist_ok=True)
     history.HISTORY = HIST
-    for name in ("us_annual", "us_monthly", "us_splits", "hk_results", "hk_monthly", "hk_splits"):
+    for name in ("us_annual", "us_monthly", "us_splits", "hk_results", "hk_monthly", "hk_splits", "us_frames", "us_sic", "cn_sw"):
         link = HIST / f"{name}.csv.gz"
         if not link.exists():
             os.symlink(os.path.relpath(DATA / "history" / f"{name}.csv.gz", HIST), link)

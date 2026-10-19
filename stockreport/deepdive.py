@@ -258,7 +258,7 @@ ARCHETYPES = {"insurer": "保险公司（内含价值）", "property": "地产/�
 
 def triggers(market: str, cands: pd.DataFrame, today: date) -> list[dict]:
     """Rule triggers per candidate, the strongest first: a deal, risk or contract filing in the event feed (that
-    filing is read); a value 2× or ½ the price without v2's 高; v2's quality screen failing on a strong buy or hold
+    filing is read); a value 2× or ½ the price without v3's 高; v3's quality screen failing on a strong buy or hold
     signal; an archetype the rules can't read (insurer, landlord, holding company, a 40% share-count change); an
     abnormal move without a matching event (the latest periodic report is read)."""
     ev = events.load(market)
@@ -271,14 +271,14 @@ def triggers(market: str, cands: pd.DataFrame, today: date) -> list[dict]:
             e = mine.iloc[-1]
             found.append((1, f"{e['date'][5:]} {events.KINDS[e['kind']]}公告",
                           {"url": e["url"], "date": e["date"], "title": events.short(e["title"], 24)}))
-        ratio, conf = r["fv_mid"] / r["price"], r.get("v2_confidence")
+        ratio, conf = r["fv_mid"] / r["price"], r.get("v3_confidence")
         if (ratio >= CFG["value_ratio"] or ratio <= 1 / CFG["value_ratio"]) and conf != "高":
-            found.append((2, f"估值为现价的 {ratio:.1f} 倍，v2 把握度{conf if isinstance(conf, str) and conf else '无'}", None))
-        fails = r.get("v2_screen_fails")
+            found.append((2, f"估值为现价的 {ratio:.1f} 倍，v3 把握度{conf if isinstance(conf, str) and conf else '无'}", None))
+        fails = r.get("v3_screen_fails")
         if r["bucket"] != "sell" and isinstance(fails, str) and fails and r["upside"] >= CFG["strong_upside"]:
             found.append((3, f"质量筛查未通过（{fails}）但空间 {r['upside']:+.0%}", None))
         kind = next((k for k, words in CFG["archetypes"].items() if any(w in str(r["industry"]) for w in words)), None)
-        if kind or abs(r.get("v2_dilution") or 0) > CFG["share_change"]:
+        if kind or abs(r.get("v3_dilution") or 0) > CFG["share_change"]:
             found.append((4, ARCHETYPES.get(kind, "5 年股本变化超过 40%"), None))
         if moves[r["code"]]["matched"] is False:
             found.append((5, "异动未见对应公告", None))
@@ -290,10 +290,10 @@ def triggers(market: str, cands: pd.DataFrame, today: date) -> list[dict]:
 
 
 def candidates(picks: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
-    """The picks and the first runners-up per bucket, with v2's confidence, screen and dilution when it ran."""
+    """The picks and the first runners-up per bucket, with v3's confidence, screen and dilution when it ran."""
     keep = (picks["role"] == "pick") | ((picks["role"] == "runner_up") & (picks["rank"] <= CFG["runners_up"]))
-    v2 = df.reindex(columns=["v2_confidence", "v2_screen_fails", "v2_dilution"])
-    return picks[keep].drop(columns=v2.columns, errors="ignore").join(v2, on="code")
+    v3 = df.reindex(columns=["v3_confidence", "v3_screen_fails", "v3_dilution"])
+    return picks[keep].drop(columns=v3.columns, errors="ignore").join(v3, on="code")
 
 
 def run(market: str, today: date, picks: pd.DataFrame, df: pd.DataFrame, use_ai: bool) -> dict:

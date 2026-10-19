@@ -463,3 +463,54 @@ prices China property risk that v2's data can't see.
 
 MSFT (+64%) and META (+60%) are within the floor but still rank behind these on upside plus momentum. NVDA
 (+97%) and TSM (+67%) still fail the momentum floor.
+
+## 14. Valuation v3 (Phase 13, 2026-10-20; backtest/v3.py)
+
+v3 without consensus (the company's own trend) on the same cached month-end snapshots as v1 (section 2), with
+base rates from the history public on each date: CN 申万 level 1 on the annual results since 2009, US SEC frames
+since CY2009 (every filer, dead companies included), HK the Eastmoney history since 2015 (survivors). The first
+HK dates (2016-10..2018) have too little history for base rates and get no values. v1 here reproduces section 3
+exactly. Phase 9's v2 scripts (calibrate.py, studies.py, panels_run.py, report.py) were removed with v2; git
+history has them.
+
+**Calibration** (in-sample, a value replaces the default only for ≥ 0.005 more 12-month rank correlation, as in
+Phase 9; one at a time, then jointly for the US). Default: 5-year fade, 10% tolerance, long-run ROE = the
+largest third's median.
+
+| Parameter | CN in-sample IC 12m | US | HK | Chosen |
+|---|---|---|---|---|
+| fade years 3 / 5 / 10 / 15 | **0.128** / 0.121 / 0.105 / 0.091 | 0.018 / 0.022 / 0.031 / **0.039** | **0.123** / 0.118 / 0.106 / 0.096 | CN 3, HK 3, US 15 |
+| tolerance 0 / 10% / 25% | 0.122 / 0.121 / 0.116 | 0.015 / 0.022 / **0.036** | 0.120 / 0.118 / 0.113 | US 25%, else 10% |
+| long-run ROE market / r | 0.121 / 0.110 | 0.022 / **0.038** | 0.118 / 0.118 | US r, else market |
+| HK haircut 0 / 10 / 20 / 30% | | | 0.118 / 0.119 / 0.119 / 0.120 | 0 (no value clears the bar) |
+
+US jointly: fade 15 0.039; + tolerance 25% 0.048; + long-run ROE r 0.048; all three **0.052** (chosen; out of sample
+0.074, buy − sell −56.1%, against 0.120 and −2.9% for the default). The US in-sample correlations are weak
+(t < 1), so this choice mostly follows noise.
+
+**v1 vs v3 vs the plain benchmarks**, 12 months (rank IC, t; buckets vs the equal-weight universe):
+
+| | in IC | out IC (t) | out buy | out sell | out buy − sell |
+|---|---|---|---|---|---|
+| CN v1 | +0.084 | −0.009 (−0.2) | −0.9% | +3.0% | −4.0% |
+| CN v3 | +0.128 | −0.040 (−0.5) | −9.8% | +2.0% | −11.8% |
+| CN E/P / B/P | +0.087 / +0.152 | −0.041 / −0.003 | | | +7.6% / −42.1% |
+| US v1 | −0.003 | +0.076 (1.6) | +2.7% | +1.3% | +1.4% |
+| US v3 | +0.052 | +0.074 (1.7) | +8.7% | +64.8% | −56.1% |
+| US E/P / B/P | −0.039 / −0.027 | +0.075 / +0.160 | | | +0.7% / +29.6% |
+| HK v1 | +0.074 | +0.049 (1.5) | +8.5% | −22.1% | +30.6% |
+| HK v3 | +0.123 | +0.141 (2.1) | +2.0% | +4.9% | −2.9% |
+| HK E/P / B/P | +0.080 / +0.092 | +0.116 / +0.110 | | | −6.7% / +11.5% |
+
+- **Done-when (1) is not met.** v3 beats v1 on rank correlation out of sample only in HK (US a tie), on buy − sell
+  in no market, and the better of plain E/P and B/P only in HK. It stays in shadow.
+- **Ranking vs buckets.** v3's ranking is competitive (HK best of all four; in-sample better than v1 everywhere),
+  but its buckets lose: with one discount rate per market, the largest upsides are low-P/B financials and state
+  companies, the largest downsides high-P/B growth names, and after 2023 the growth names kept rising (US sells
+  +65% over the universe). v3's upside ranks stocks almost exactly as the return the price implies at base-rate
+  earnings does (rank correlation 0.97-0.98 on 2026-10-19), and by industry that implied return runs from ~4.5-6%
+  (software, semiconductors, staples) to 11-17% (banks, insurers, construction) against one rate per market (CN
+  5.0%, US 6.8%, HK 7.6%).
+- Rerun (~6 min; ~25 min for the grids): `uv run python -m backtest.v3 compare` (data/backtest/v3_results.md) and
+  `uv run python -m backtest.v3 grid cn|us|hk` (data/backtest/v3_grid_<market>.csv), on the snapshots built by
+  `uv run python -m backtest.run build cn|us|hk`.
