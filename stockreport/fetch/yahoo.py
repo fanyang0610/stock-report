@@ -43,6 +43,9 @@ FIELDS = {"revenue": "TotalRevenue", "np": "NetIncomeCommonStockholders", "gp": 
           "liabilities": "TotalLiabilitiesNetMinorityInterest", "assets": "TotalAssets",
           "ni": "NetIncome", "shares": "OrdinarySharesNumber"}
 MAX_AGE_DAYS = 200  # same freshness rule as SEC
+# Half-year and annual reporters (no quarterly figures in the last 400 days: BHP, Unilever, National Grid, HDFC Bank...)
+# report the next half within 3-4 months of its end (UK, EU, Australian listing rules), up to ~300 days after the last.
+HALF_YEAR_AGE_DAYS, QUARTERLY_WITHIN_DAYS = 300, 400
 # market -> (index symbol, its code in the price table, ticker -> Yahoo symbol); the index is the
 # trading calendar (and the benchmark in Phase 6): S&P 500, Hang Seng
 MARKETS = {"us": ("^GSPC", "SPX", lambda c: c.replace(".", "-")), "hk": ("^HSI", "HSI", lambda c: f"{int(c):04d}.HK")}
@@ -131,10 +134,11 @@ def update_fx(currencies: set[str]) -> None:
 
 
 def parse_timeseries(code: str, payload: dict, today: date) -> dict:
-    """TTM revenue / profit / gross profit / operating cash flow at the latest trailing period, the latest
-    equity, liabilities and assets (balance_period = the equity's date, which can be a quarter before the TTM
-    period), and growth: TTM vs the TTM a year earlier, else the fiscal year a year earlier, else the latest
-    quarter vs the same quarter a year earlier, else the last two fiscal years (semiannual reporters)."""
+    """TTM revenue / profit / gross profit / operating cash flow at the latest trailing period (at most 200 days
+    old, 300 for half-year reporters), the latest equity, liabilities and assets (balance_period = the equity's
+    date, which can be a quarter before the TTM period), and growth: TTM vs the TTM a year earlier, else the
+    fiscal year a year earlier, else the latest quarter vs the same quarter a year earlier, else the last two
+    fiscal years (semiannual reporters)."""
     series = {}
     for item in payload["timeseries"]["result"]:
         name = item["meta"]["type"][0]
@@ -142,8 +146,10 @@ def parse_timeseries(code: str, payload: dict, today: date) -> dict:
                               for v in item.get(name) or [] if v)
     near = lambda name, day: next((v for d, v, _ in series.get(name, [])
                                    if abs((date.fromisoformat(d) - day).days) <= 20), None)
+    age = lambda day: (today - date.fromisoformat(day)).days
     profit = series.get("trailing" + FIELDS["np"])
-    if not profit or (today - date.fromisoformat(profit[-1][0])).days > MAX_AGE_DAYS:
+    quarterly = any(age(d) <= QUARTERLY_WITHIN_DAYS for d, _, _ in series.get("quarterly" + FIELDS["np"], []))
+    if not profit or age(profit[-1][0]) > (MAX_AGE_DAYS if quarterly else HALF_YEAR_AGE_DAYS):
         return {"code": code, "yahoo": "no recent TTM"}
     end = date.fromisoformat(profit[-1][0])
     row = {"code": code, "yahoo": "ok", "period": end.isoformat(), "currency": profit[-1][2]}

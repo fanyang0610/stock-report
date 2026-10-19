@@ -132,6 +132,10 @@ def test_yahoo_fundamentals_for_sec_gaps():
     ry = yahoo.parse_timeseries("RY", s["RY"], day)  # latest quarter vs the same quarter a year earlier
     assert ry["np_yoy"] == pytest.approx(5.877 / 5.29 - 1, abs=2e-3)
     assert yahoo.parse_timeseries("RY", s["RY"], date(2027, 6, 1))["yahoo"] == "no recent TTM"
+    # freshness: RY reports quarterly, 200 days; BHP has no quarterly figures (half-year reporter), 300 days
+    assert yahoo.parse_timeseries("RY", s["RY"], date(2027, 2, 18))["yahoo"] == "no recent TTM"  # 202 days
+    assert yahoo.parse_timeseries("BHP", s["BHP"], date(2027, 2, 18))["period"] == "2026-06-30"  # 233 days
+    assert yahoo.parse_timeseries("BHP", s["BHP"], date(2027, 4, 28))["yahoo"] == "no recent TTM"  # 302 days
 
 
 def test_timeseries_net_income_and_shares_for_the_cross_checks():
