@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from stockreport import notes, report, track
+from stockreport import notes, report, track, verdicts
 from stockreport.pick import CSV_COLUMNS, pick
 from stockreport.score import score
 from stockreport.value import value
@@ -100,3 +100,29 @@ def test_no_notes_run_still_applies_checks_1_2(tmp_path, monkeypatch):
     html = (folder / "report.html").read_text(encoding="utf-8")
     assert "利润异常已剔除（2）" in html and "688012 中微公司（持有候选）" in html
     assert set(track.load()["ticker"]).isdisjoint({"688256", "688012"})
+
+
+def test_deep_dives_and_verdicts_reach_the_report(tmp_path, monkeypatch):
+    """A deep-dive veto swaps 中信建投 out of the holds, a 低信心 result marks 沪硅产业, your veto swaps 珀莱雅 and your
+    confirm lifts 荣昌生物's 低信心; the cards carry the 深度核查 and 近期事件 lines."""
+    folder = tmp_path / DAY.isoformat()
+    folder.mkdir()
+    line = "深度核查（2026年半年度报告，2026-08-20）：非经常性损益占同期归母净利润 45%（2/2 条引文已核实）"
+    (folder / "cn_deepdive.json").write_text(json.dumps({"fresh": ["601066", "688126"], "results": {
+        "601066": {"name": "中信建投", "trigger": "测试", "filing": "cn-1", "line": line, "action": "veto",
+                   "reason": "深度核查：非经常性损益占同期净利润 45%"},
+        "688126": {"name": "沪硅产业", "trigger": "测试", "filing": "cn-2", "line": "深度核查（x，2026-08-20）：测试",
+                   "action": "low", "reason": "深度核查：测试"}}}, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(verdicts, "PATH", tmp_path / "verdicts.csv")
+    monkeypatch.setattr(verdicts, "periods", lambda m: pd.Series(dtype=str))
+    verdicts.add("603605", "veto", "2026-12-31", "测试否决", DAY)
+    verdicts.add("688331", "confirm", "2026-12-31", "测试确认", DAY)
+    pdf, summary = build(tmp_path, monkeypatch, ["cn"])
+    lines = summary.splitlines()
+    assert "深度核查或人工否决后替换：中信建投、珀莱雅" in lines
+    assert not any(x.startswith(("601066", "603605")) for x in lines) and any(x.startswith("600061 国投资本 持有") for x in lines)
+    assert any(x.startswith("688126 沪硅产业 卖出") and x.endswith("低信心") for x in lines)
+    assert any(x.startswith("688331 荣昌生物 买入") and not x.endswith("低信心") for x in lines)
+    html = (folder / "report.html").read_text(encoding="utf-8")
+    assert "深度核查否决" in html and "人工否决" in html and "你的否决（至 2026-12-31）：测试否决" in html
+    assert html.count("<span class=\"label\">近期事件：</span>") == 15 and "测试</span>" not in html and "深度核查（x，2026-08-20）：</span>测试" in html

@@ -69,8 +69,9 @@ def text_summary(report: dict, limit: int = 4000) -> str:
                              f"{p['price']:,.2f}→{p['fv_mid']:,.2f} {p['upside']:+.1%}{flag}")
         if m.get("excluded"):
             lines.append("利润异常已剔除：" + "、".join(e["name"] for e in m["excluded"]))
-        for ai, label in ((True, "AI 标记后替换："), (False, "其他市场已入选、不重复列出：")):
-            out = [s["out"].split(" ", 1)[-1] for s in m.get("swaps", []) if s.get("ai", True) == ai]
+        for group, label in (("ai", "AI 标记后替换："), ("check", "深度核查或人工否决后替换："),
+                             ("dual", "其他市场已入选、不重复列出：")):
+            out = [s["out"].split(" ", 1)[-1] for s in m.get("swaps", []) if s.get("group", "ai") == group]
             if out:
                 lines.append(label + "、".join(out))
     lines += ["", "详见 PDF。非投资建议。"]

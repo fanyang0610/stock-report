@@ -1,0 +1,252 @@
+{
+ "hits": {
+  "hits": [
+   {
+    "_index": "edgar_file",
+    "_id": "0001705284-26-000010:pbam-20261016.htm",
+    "_score": null,
+    "_source": {
+     "ciks": [
+      "0001705284"
+     ],
+     "period_ending": "2026-10-16",
+     "file_num": [
+      "001-43397"
+     ],
+     "display_names": [
+      "Private Bancorp of America, Inc.  (PBAM)  (CIK 0001705284)"
+     ],
+     "xsl": null,
+     "sequence": 1,
+     "root_forms": [
+      "8-K"
+     ],
+     "file_date": "2026-10-16",
+     "biz_states": [
+      "CA"
+     ],
+     "sics": [
+      "6021"
+     ],
+     "form": "8-K",
+     "adsh": "0001705284-26-000010",
+     "film_num": [
+      "261464377"
+     ],
+     "biz_locations": [
+      "La Jolla, CA"
+     ],
+     "file_type": "8-K",
+     "ma_i_individual": null,
+     "file_description": "8-K",
+     "inc_states": [
+      "CA"
+     ],
+     "items": [
+      "2.02",
+      "7.01"
+     ]
+    },
+    "sort": [
+     1792108800000,
+     "0001705284-26-000010:pbam-20261016.htm"
+    ]
+   },
+   {
+    "_index": "edgar_file",
+    "_id": "0002115436-26-000013:xom-20261016.htm",
+    "_score": null,
+    "_source": {
+     "ciks": [
+      "0002115436"
+     ],
+     "period_ending": "2026-10-16",
+     "file_num": [
+      "001-43384"
+     ],
+     "display_names": [
+      "ExxonMobil Holdings Corp  (XOM)  (CIK 0002115436)"
+     ],
+     "xsl": null,
+     "sequence": 1,
+     "root_forms": [
+      "8-K"
+     ],
+     "file_date": "2026-10-16",
+     "biz_states": [
+      "TX"
+     ],
+     "sics": [
+      "2911"
+     ],
+     "form": "8-K",
+     "adsh": "0002115436-26-000013",
+     "film_num": [
+      "261464374"
+     ],
+     "biz_locations": [
+      "Spring, TX"
+     ],
+     "file_type": "8-K",
+     "ma_i_individual": null,
+     "file_description": "FORM 8-K",
+     "inc_states": [
+      "TX"
+     ],
+     "items": [
+      "7.01"
+     ]
+    },
+    "sort": [
+     1792108800000,
+     "0002115436-26-000013:xom-20261016.htm"
+    ]
+   },
+   {
+    "_index": "edgar_file",
+    "_id": "0001829126-26-011243:fiee_8k.htm",
+    "_score": null,
+    "_source": {
+     "ciks": [
+      "0001467761"
+     ],
+     "period_ending": "2026-10-12",
+     "file_num": [
+      "001-37649"
+     ],
+     "display_names": [
+      "FiEE, Inc.  (FIEE)  (CIK 0001467761)"
+     ],
+     "xsl": null,
+     "sequence": 1,
+     "root_forms": [
+      "8-K"
+     ],
+     "file_date": "2026-10-16",
+     "biz_states": [],
+     "sics": [
+      "7372"
+     ],
+     "form": "8-K",
+     "adsh": "0001829126-26-011243",
+     "film_num": [
+      "261466106"
+     ],
+     "biz_locations": [
+      "Osaka"
+     ],
+     "file_type": "8-K",
+     "ma_i_individual": null,
+     "file_description": "8-K",
+     "inc_states": [
+      "DE"
+     ],
+     "items": [
+      "1.01",
+      "9.01"
+     ]
+    },
+    "sort": [
+     1792108800000,
+     "0001829126-26-011243:fiee_8k.htm"
+    ]
+   },
+   {
+    "_index": "edgar_file",
+    "_id": "0001654954-26-008988:tomz_8k.htm",
+    "_score": null,
+    "_source": {
+     "ciks": [
+      "0000314227"
+     ],
+     "period_ending": "2026-10-11",
+     "file_num": [
+      "001-39574"
+     ],
+     "display_names": [
+      "TOMI Environmental Solutions, Inc.  (TOMZ)  (CIK 0000314227)"
+     ],
+     "xsl": null,
+     "sequence": 1,
+     "root_forms": [
+      "8-K"
+     ],
+     "file_date": "2026-10-16",
+     "biz_states": [
+      "MD"
+     ],
+     "sics": [
+      "2860"
+     ],
+     "form": "8-K",
+     "adsh": "0001654954-26-008988",
+     "film_num": [
+      "261466266"
+     ],
+     "biz_locations": [
+      "Frederick, MD"
+     ],
+     "file_type": "8-K",
+     "ma_i_individual": null,
+     "file_description": "FORM 8-K",
+     "inc_states": [
+      "FL"
+     ],
+     "items": [
+      "5.02"
+     ]
+    },
+    "sort": [
+     1792108800000,
+     "0001654954-26-008988:tomz_8k.htm"
+    ]
+   },
+   {
+    "_index": "edgar_file",
+    "_id": "0001988894-26-000091:as-20261015x6k.htm",
+    "_score": null,
+    "_source": {
+     "ciks": [
+      "0001988894"
+     ],
+     "period_ending": "2026-09-30",
+     "file_num": [
+      "001-41943"
+     ],
+     "display_names": [
+      "Amer Sports, Inc.  (AS)  (CIK 0001988894)"
+     ],
+     "xsl": null,
+     "sequence": 1,
+     "root_forms": [
+      "6-K"
+     ],
+     "file_date": "2026-10-16",
+     "biz_states": [],
+     "sics": [
+      "2300"
+     ],
+     "form": "6-K",
+     "adsh": "0001988894-26-000091",
+     "film_num": [
+      "261466271"
+     ],
+     "biz_locations": [
+      "Grand Cayman"
+     ],
+     "file_type": "6-K",
+     "ma_i_individual": null,
+     "file_description": "6-K",
+     "inc_states": [
+      "E9"
+     ],
+     "items": []
+    },
+    "sort": [
+     1792108800000,
+     "0001988894-26-000091:as-20261015x6k.htm"
+    ]
+   }
+  ]
+ }
+}

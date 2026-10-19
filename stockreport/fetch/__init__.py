@@ -161,6 +161,7 @@ def snapshot(src: Path, market: str, today: date, days: int = 7) -> None:
 
 
 def steps(market: str, today: date) -> list:
+    from stockreport.fetch import events
     from stockreport.track import tracked
     if market == "cn":
         from stockreport.fetch import eastmoney, tdx, tencent
@@ -173,7 +174,8 @@ def steps(market: str, today: date) -> list:
                 ("10y yield", lambda: eastmoney.update_yield()),
                 ("history", lambda: eastmoney.update_cn_history(today)),
                 ("pre-announcements", lambda: eastmoney.update_forecasts(today)),
-                ("consensus snapshot", lambda: snapshot(DATA / "fundamentals" / "cn_consensus.csv.gz", "cn", today))]
+                ("consensus snapshot", lambda: snapshot(DATA / "fundamentals" / "cn_consensus.csv.gz", "cn", today)),
+                ("announcements", lambda: events.update("cn", today))]
     if market == "us":
         from stockreport.fetch import fred, nasdaq, sec, yahoo
         return [("listing", nasdaq.update_list),
@@ -186,7 +188,8 @@ def steps(market: str, today: date) -> list:
                 ("Yahoo annual history", lambda: yahoo.update_annual(today, sec.annual_gaps(nasdaq.candidates()), sec.ANNUAL)),
                 ("monthly prices", lambda: yahoo.update_monthly(
                     today, "us", nasdaq.candidates(), {f"{c}=X" for c in sec.history_currencies()})),
-                ("consensus snapshot", lambda: snapshot(nasdaq.CONSENSUS, "us", today))]
+                ("consensus snapshot", lambda: snapshot(nasdaq.CONSENSUS, "us", today)),
+                ("filings", lambda: events.update("us", today))]
     if market == "hk":
         from stockreport.fetch import eastmoney, hkgb, yahoo
         return [("company list", lambda: eastmoney.update_hk_list(today)),
@@ -198,7 +201,8 @@ def steps(market: str, today: date) -> list:
                 ("10y yield", hkgb.update_yield),
                 ("history", lambda: eastmoney.update_hk_history(today)),
                 ("monthly prices", lambda: yahoo.update_monthly(today, "hk", eastmoney.hk_candidates(), {"HKDCNY=X"})),
-                ("consensus snapshot", lambda: snapshot(yahoo.CONSENSUS, "hk", today))]
+                ("consensus snapshot", lambda: snapshot(yahoo.CONSENSUS, "hk", today)),
+                ("announcements", lambda: events.update("hk", today))]
     raise SystemExit(f"unknown market {market!r}")
 
 

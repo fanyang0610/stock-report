@@ -116,3 +116,26 @@ sell_max_upside = -0.25
 ai = ["Semiconductor", "Electronic Components", "Telecommunications Equipment", "Computer Communications",
       "半导体", "元件", "通信设备", "光学光电子", "计算机设备", "资讯科技器材"]
 ai_disrupted = ["Advertising", "EDP Services", "Business Services", "广告营销", "IT服务"]
+
+[events]                      # event layer (PLAN.md Method 14)
+backfill_days = 10            # the first fetch reads this many days back (CN ~30 s a day); later the days since the last
+keep_days = 120               # rows older than this are dropped from data/events/<market>.csv.gz
+recent_days = 30              # 近期事件: non-routine filings of the last 30 days, newest first ...
+max_lines = 3                 # ... at most this many on a card
+move_days = 5                 # abnormal move: the 1-5-day return over the market index ...
+move_z = 2.5                  # ... at least this many sd of the stock's daily excess returns over the past year
+
+[deepdive]                    # deep-dive lane, tier 3 (PLAN.md Method 15; docs/REVIEW.md A3)
+per_day = 3                   # new filings read per market a day (cached filings are reused at no cost)
+runners_up = 2                # the first runners-up per bucket can be triggered too (they may replace a swapped pick)
+value_ratio = 2.0             # trigger: v1 fair value ≥ 2× or ≤ ½ the price without v2's 高
+strong_upside = 0.3           # trigger: v2's quality screen fails on a buy/hold with at least this upside
+share_change = 0.4            # trigger: 5-year share-count change (v2_dilution, US) above this
+archetypes = { insurer = ["保险", "Insur"], property = ["地产", "Real Estate"], holdco = ["综合", "Conglomer"] }
+max_chars = 80000             # filing text sent to DeepSeek: all of it if shorter, else windows around keywords
+window = [1500, 2500]         # characters before / after each keyword
+workers = 3
+one_off_share = 0.3           # buy/hold vetoed when non-recurring items are this share of the period's profit
+related_party = 0.3           # 低信心 when sales to related parties are this share of revenue
+material = 0.1                # a deal or contract this share of revenue or market value is 重大
+keep_days = 400               # cached filings older than this are deleted

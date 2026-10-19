@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from stockreport import deliver, track
+from stockreport import deliver, events, track, verdicts
 from stockreport.cleanup import size_of
 from stockreport.config import CONFIG, DATA, REPORTS
 from stockreport.fetch import eastmoney
@@ -37,13 +37,31 @@ def trigger(p: dict) -> str:
     return f"股价回落到 {p['fv_mid'] / (1 + lo):,.2f} 以下（空间回到 {lo:+.0%} 以内），或净利润转为增长时复查"
 
 
-def card(p: dict) -> dict:
+def card(p: dict, dives: dict, lines: dict) -> dict:
     """The label comes from the bucket, so picks CSVs from before the rename read 买入 / 持有 / 卖出 too."""
+    ev = lines.get(p["code"], {})
     return {"ticker": p["code"], "name": p["name"], "bucket": p["bucket"], "action": BUCKETS[p["bucket"]],
             "price": p["price"], "price_date": p["price_date"], "fv_low": p["fv_low"], "fv_mid": p["fv_mid"],
             "fv_high": p["fv_high"], "upside": p["upside"], "drivers": str(p["drivers"]).split("；"),
             "risk": p["key_risk"], "ai_risk": p["ai_risk"], "note": p["note"], "trigger": trigger(p),
-            "low_conviction": p["conviction"] == "低信心", "flag": FLAG_WORDS.get(p["flag"])}
+            "low_conviction": p["conviction"] == "低信心", "flag": FLAG_WORDS.get(p["flag"]),
+            "deep_dive": dives.get(p["code"], {}).get("line", ""), "events": ev.get("events", ""),
+            "move": ev.get("move", "")}
+
+
+def judged(market: str, day: date, today: date, picks: pd.DataFrame) -> tuple[dict, dict, dict]:
+    """The day's deep-dive results, and the vetoes (code -> (flag, reason)) and 低信心 changes (code -> True to
+    mark, False to lift) from them and from your verdicts in force."""
+    path = REPORTS / day.isoformat() / f"{market}_deepdive.json"
+    dives = json.loads(path.read_text(encoding="utf-8"))["results"] if path.exists() else {}
+    vetoes = {c: ("deep_dive", d["reason"]) for c, d in dives.items() if d["action"] == "veto"}
+    low = {c: True for c, d in dives.items() if d["action"] == "low"}
+    for code, v in verdicts.active(market, today, picks.set_index("code")["period"].astype(str)).items():
+        if v["verdict"] == "veto":
+            vetoes[code] = ("user_veto", f"你的否决（至 {v['until']}）：{v['reason']}")
+        else:
+            low[code] = False
+    return dives, vetoes, low
 
 
 def issuers() -> dict[str, pd.Series]:
@@ -80,13 +98,18 @@ def build(today: date, use_ai: bool = True) -> tuple[Path, str]:
         picks = pd.read_csv(path, dtype={"code": str, "price_date": str})
         org = picks["code"].map(orgs[code])
         taken = {c: f"同一发行人已在{kept[o]}入选" for c, o in zip(picks["code"], org) if o in kept}
-        final, swaps = annotate(picks, code, day, use_ai, taken)
+        dives, vetoes, low = judged(code, day, today, picks)
+        final, swaps = annotate(picks, code, day, use_ai, taken, vetoes)
+        for c, mark in low.items():
+            final.loc[final["code"] == c, "conviction"] = "低信心" if mark else "normal"
+        lines = events.lines(code, final, today)
         if day == today:
             logged[code] = final
         final_org = final["code"].map(orgs[code])
         kept |= {o: f" {MARKETS[code][0]}（{c} {n}）" for o, c, n in zip(final_org, final["code"], final["name"]) if pd.notna(o)}
         for s in swaps:
-            s["ai"], s["flag"] = s["flag"] != "dual_listed", FLAG_WORDS[s["flag"]]
+            s["group"] = {"dual_listed": "dual", "deep_dive": "check", "user_veto": "check"}.get(s["flag"], "ai")
+            s["flag"] = FLAG_WORDS[s["flag"]]
         done[code] = {"code": code.upper(), "name": MARKETS[code][0], "currency": MARKETS[code][1],
                       "r": final["r"].iloc[0], "data_date": final["price_date"].max(), "swaps": swaps,
                       "ai_notes": int((final["note_source"] != "template").sum()),
@@ -94,7 +117,7 @@ def build(today: date, use_ai: bool = True) -> tuple[Path, str]:
                                     "reason": e["exclusion"]} for e in picks[picks["role"] == "excluded"].to_dict("records")],
                       "stale": (f"今日未能更新，沿用 {day} 的选股" if day != today else
                                 f"今日部分数据获取失败（{'、'.join(failed[code])}），沿用上次的缓存数据" if failed.get(code) else ""),
-                      "picks": [card(p) for p in final.to_dict("records")]}
+                      "picks": [card(p, dives, lines) for p in final.to_dict("records")]}
     markets = [done[code] for code in MARKETS if code in done]
     if not markets:
         raise SystemExit(f"no picks CSV in {REPORTS}; run `run` first")

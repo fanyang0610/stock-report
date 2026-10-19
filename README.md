@@ -22,6 +22,8 @@ uv run python -m stockreport run --no-notes      # same with template notes (no 
 uv run python -m stockreport track               # average return of past picks (data/picks.csv) vs each market's index
 uv run python -m stockreport send                # send the newest report's text + PDF (asks first); --test sends fake data
 uv run python -m stockreport listen              # answer the keyword for ~55 s (launchd restarts it 10 s after it ends)
+uv run python -m stockreport verdict 600519 veto --until 2026-12-31 --reason "..."  # swap a pick out (confirm: lift 低信心)
+uv run python -m stockreport verdict             # list the verdicts in force (they end at their date or the next report)
 uv run python -m stockreport cleanup --dry-run   # what retention would delete, and data/ + reports/ size
 node bridge/wechat.mjs status                    # is the bot's reply window open?
 uv run pytest

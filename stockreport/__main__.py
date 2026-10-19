@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from stockreport import crosscheck, deliver, report, shadow, track
+from stockreport import crosscheck, deepdive, deliver, report, shadow, track, verdicts
 from stockreport.cleanup import cleanup
 from stockreport.config import CONFIG, DATA, REPORTS, ROOT, setup_logging
 from stockreport.fetch import fetch as fetch_market
@@ -30,7 +30,7 @@ def discount_rate(market: str) -> tuple[float, str]:
     return latest["y10"] / 100 + CONFIG["value"]["equity_premium"][market], latest["date"]
 
 
-def build_market(market: str, today: date) -> None:
+def build_market(market: str, today: date, use_ai: bool = True) -> None:
     """Fetch (failed steps keep their cache), value, score and pick one market -> its picks CSV and snapshot."""
     failed = fetch_market(market, today)
     report.save_failed(today, market, failed)
@@ -69,6 +69,10 @@ def build_market(market: str, today: date) -> None:
     except Exception:
         log.exception("%s valuation v2 (shadow) failed; v1 is unaffected", market.upper())
     df.to_csv(snap / f"{market}.csv.gz", compression="gzip")
+    try:  # deep-dive lane (DeepSeek only with notes on): vetoes and 低信心 are applied when the report is built
+        deepdive.run(market, today, picks, df, use_ai)
+    except Exception:
+        log.exception("%s deep dives failed; the report goes out without them", market.upper())
     print(f"\nWrote {(out / f'{market}_picks.csv').relative_to(ROOT)} and the snapshot "
           f"{(snap / f'{market}.csv.gz').relative_to(ROOT)}")
 
@@ -96,7 +100,7 @@ def run(markets: list[str], use_ai: bool) -> int:
     started, today, crashed = time.monotonic(), date.today(), []
     for market in markets:
         try:
-            build_market(market, today)
+            build_market(market, today, use_ai)
         except Exception:
             log.exception("%s build failed; the report shows its newest earlier picks", market.upper())
             crashed.append(market)
@@ -190,6 +194,11 @@ def main(argv: list[str] | None = None) -> int:
     v2 = sub.add_parser("v2", help="valuation v2 (shadow) on a saved snapshot: v2 lists and the v1/v2 comparison")
     v2.add_argument("--market", choices=["cn", "us", "hk"], help="one market (default: all three)")
     v2.add_argument("--date", help="snapshot date YYYY-MM-DD (default: the newest)")
+    verdict = sub.add_parser("verdict", help="your veto or confirm for a stock (no arguments: list those in force)")
+    verdict.add_argument("code", nargs="?", help="ticker, e.g. 600519, 00700 or AAPL")
+    verdict.add_argument("action", nargs="?", choices=["veto", "confirm"])
+    verdict.add_argument("--until", help="last day it applies, YYYY-MM-DD (it also ends at the next report)")
+    verdict.add_argument("--reason", default="", help="why, in a few words (shown on the report)")
     clean = sub.add_parser("cleanup", help="apply the storage retention periods")
     clean.add_argument("--dry-run", action="store_true", help="only list what would be deleted")
     args = parser.parse_args(argv)
@@ -204,6 +213,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "listen":
         setup_logging(console=False)
         return listen()
+    if args.command == "verdict":
+        if not args.code:
+            return verdicts.show(date.today())
+        if not args.action or not args.until:
+            parser.error("verdict needs a code, veto|confirm and --until")
+        print(verdicts.add(args.code, args.action, args.until, args.reason, date.today()))
+        return 0
     if args.command == "cleanup":
         cleanup(dry_run=args.dry_run)
         return 0
