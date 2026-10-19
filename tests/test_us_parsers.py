@@ -108,6 +108,22 @@ def test_fiscal_year_comes_from_the_10k():
     assert facts("FIX")["revenue_ttm"] == 6_130_988e3 + 9_101_641e3 - 4_004_605e3
 
 
+def test_ttm_chains_periods_without_a_fiscal_year_a_year_back():
+    # Paramount Skydance: H1 2026 + the successor (Aug 8 - Dec 31 2025) + the predecessor's Jul 1 - Aug 6 (the closing
+    # day is in neither); a year earlier H1 2025 + FY2024 - 9M 2024 + Q3 2024.
+    skyd = facts("SKYD")
+    assert skyd["revenue_ttm"] == (14_260 + 12_269 + 2_581) * 1e6 and skyd["np_ttm"] == (209 - 586 - 244) * 1e6
+    assert skyd["revenue_prior"] == (14_041 + 29_213 - 21_229 + 6_731) * 1e6 and not skyd["gap"]
+    # Ferguson moved its year end from July to December (a 5-month 10-KT): H1 2026 + Aug-Dec 2025 + FY to Jul 2025
+    # - Aug-Dec 2024 - H1 2025. July 2024 is reported in no period, so there is no TTM a year earlier.
+    ferg = facts("FERG")
+    assert ferg["revenue_ttm"] == (16_223 + 12_833 + 30_762 - 12_279 - 15_576) * 1e6 and ferg["revenue_prior"] is None
+    # Only after an annual report for less than a year: L3Harris (a normal year) tags its 2025 revenue (21.9bn) with
+    # Q4's dates, which would chain to 11.6 + 21.9 + 5.7 = 39.1bn; no TTM revenue instead (Yahoo fills it).
+    lhx = facts("LHX")
+    assert lhx["revenue_ttm"] is None and lhx["np_ttm"] == (1_112 + 1_606 - 844) * 1e6
+
+
 def test_equity_and_net_income_are_the_parents():
     # AT&T tags equity only including minorities; Invesco tags no NetIncomeLoss (its profit available to
     # common is after preferred dividends and the 2025 preferred buyback).

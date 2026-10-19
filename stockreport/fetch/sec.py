@@ -171,9 +171,10 @@ def near(vals: dict, end: str, length: int | None, tol: int):
     return None
 
 
-def ttm(vals: dict, end: str) -> float | None:
+def ttm(vals: dict, end: str, short_year: bool = False) -> float | None:
     """Trailing 12 months to the period ending near `end` (52/53-week years move period ends): the
-    fiscal year itself, or year-to-date + the last fiscal year - the same year-to-date a year earlier."""
+    fiscal year itself, or year-to-date + the last fiscal year - the same year-to-date a year earlier;
+    after an annual report for less than a year (short_year), chained periods (chain())."""
     fy = near(vals, end, 365, tol=15)
     if fy is not None:
         return fy
@@ -182,7 +183,29 @@ def ttm(vals: dict, end: str) -> float | None:
         return None
     length, s, e = max(ytd)
     last_fy, prior = near(vals, shift(s, -1), 365, tol=15), near(vals, shift(e, -364), length, tol=12)
-    return None if last_fy is None or prior is None else vals[(s, e)] + last_fy - prior
+    if last_fy is None or prior is None:
+        return chain(vals, e) if short_year else None
+    return vals[(s, e)] + last_fy - prior
+
+
+def chain(vals: dict, end: str) -> float | None:
+    """The 12 months to `end` from the fewest reported periods added and subtracted end to end, back to a date
+    a year earlier (within 15 days): a fiscal-year change's transition period (Ferguson), a merger's predecessor
+    and successor periods (Paramount Skydance; boundaries up to 3 days apart join, the closing day is in
+    neither). Only after a short annual report: L3Harris tags its fiscal-year revenue with Q4's dates."""
+    edges, level, seen, start = [(shift(s, -1), e, v) for (s, e), v in vals.items() if s], {end: 0.0}, {end}, shift(end, -365)
+    for _ in range(6):
+        step = {}
+        for node, total in level.items():
+            for a, b, v in edges:
+                for here, there, sign in ((b, a, 1), (a, b, -1)):  # back over a period adds it, forward subtracts it
+                    if abs(days(here, node)) <= 3 and there not in seen:
+                        step.setdefault(there, total + sign * v)
+        hit = sorted((abs(days(n, start)), t) for n, t in step.items() if abs(days(n, start)) <= 15)
+        if hit:
+            return hit[0][1]
+        seen, level = seen | set(step), step
+    return None
 
 
 def parse_facts(code: str, payload: dict, today: date) -> dict:
@@ -190,19 +213,21 @@ def parse_facts(code: str, payload: dict, today: date) -> dict:
     growth against the TTM a year earlier (same concept), and the latest equity, liabilities and
     assets. gap = True when there is no recent us-gaap 10-Q/10-K period in USD or no TTM profit/revenue."""
     gaap = payload.get("facts", {}).get("us-gaap", {})
-    filed = {}  # period end -> first filing date (when the company reported it)
+    filed, year = {}, {}  # period end -> first filing date; 10-K period end -> its longest period
     for n in DURATION["np"]:
         for f in gaap.get(n, {}).get("units", {}).get("USD", []):
             if f.get("form", "").startswith(("10-Q", "10-K")) and "start" in f:
                 filed[f["end"]] = min(filed.get(f["end"], f["filed"]), f["filed"])
+                if f["form"].startswith("10-K"):
+                    year[f["end"]] = max(year.get(f["end"], 0), days(f["start"], f["end"]))
     row = {"code": code, "cik": payload.get("cik")}
     if not filed or days(max(filed), today.isoformat()) > MAX_AGE_DAYS:
         return row | {"gap": True}
     end = max(filed)
-    get = lambda names: values(gaap, names)
+    get, short = lambda names: values(gaap, names), bool(year) and year[max(year)] < 340  # last 10-K under a year
     for key, names in DURATION.items():
         vals = revenue(get, names, CHECKS["us-gaap"]) if key == "revenue" else get(names)
-        row[f"{key}_ttm"], row[f"{key}_prior"] = ttm(vals, end), ttm(vals, shift(end, -364))
+        row[f"{key}_ttm"], row[f"{key}_prior"] = ttm(vals, end, short), ttm(vals, shift(end, -364), short)
     instant = lambda names: near(values(gaap, names), end, None, 5)
     for key, names in INSTANT.items():
         row[key] = instant(names)
