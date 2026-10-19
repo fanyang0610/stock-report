@@ -251,8 +251,8 @@ def build_us(today: date) -> tuple[pd.DataFrame, dict]:
         "missing price history": df[["mom_12_1", "vol_1y"]].isna().any(axis=1),
         "listing price vs Yahoo closes differ >1%": listed_px > 0.01,
     }
-    df, info = finish(df, info, checks | crosscheck.checks(df, "us", info))
     df["financial"] = df["industry"].isin(CONFIG["peers"]["financial_industries_us"])
+    df, info = finish(df, info, checks | crosscheck.checks(df, "us", info))
     small = (df.groupby("industry")["industry"].transform("size") < CONFIG["peers"]["min_group_size"]) & ~df["financial"]
     df.loc[small, "industry"] = np.where(df.loc[small, "sector"] != "", df.loc[small, "sector"] + " (other)", "Miscellaneous")
     df.loc[df["industry"] == "", "industry"] = "Miscellaneous"

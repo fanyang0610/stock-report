@@ -52,6 +52,14 @@ def test_buckets_follow_the_rules(scored):
     assert hold["z_quality"].is_monotonic_decreasing
 
 
+
+def test_a_simpler_lens_or_a_kept_source_gap_is_low_conviction(scored):
+    picks = pick(scored)
+    a, b = picks.query("role == 'pick' and conviction == 'normal'")["code"].iloc[:2]
+    out = pick(scored.assign(simple_lens=scored.index == a, source_gap=scored.index == b)).set_index("code")
+    assert (out.loc[[a, b], "conviction"] == "低信心").all() and (out.loc[[a, b], "bucket"] == picks.set_index("code").loc[[a, b], "bucket"]).all()
+
+
 def test_drivers_point_the_right_way(scored):
     row = scored.iloc[0]
     drivers, risk = explain(row, "buy")

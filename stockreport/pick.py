@@ -99,7 +99,8 @@ def pick(df: pd.DataFrame, use: tuple[str, ...] = ("c1", "c2")) -> pd.DataFrame:
             for rank, item in enumerate((x for x in items if x["role"] == role), start=1):
                 row = df.loc[item["code"]]
                 drivers, risk = explain(row, bucket)
-                low = item["tier"] > 1 or not row["lenses_agree"]  # the RI check is kept for reference only
+                # the RI check is kept for reference only; a simpler peer multiple or a kept second-source gap is 低信心
+                low = item["tier"] > 1 or not row["lenses_agree"] or any(row.get(k, False) == True for k in ("simple_lens", "source_gap"))
                 rows.append({"bucket": bucket, "action": BUCKETS[bucket], "role": role, "rank": rank,
                              "tier": item["tier"], "conviction": "低信心" if low else "normal",
                              "code": item["code"], "drivers": drivers, "key_risk": risk, "exclusion": None})
@@ -117,7 +118,7 @@ CSV_COLUMNS = [
     "bucket", "action", "role", "rank", "tier", "conviction", "code", "name", "industry", "peer_group",
     "price", "price_date", "fv_low", "fv_mid", "fv_high", "upside", "method", "fit_group", "fit_n",
     "fv_trailing", "fv_forward", "lenses_agree", "analysts", "eps_e2", "fwd_pe", "fwd_growth",
-    "ri_value", "ri_gap", "cross_check_ok", "r", "mcap", "mcap_rank", "turnover_20d",
+    "ri_value", "ri_gap", "cross_check_ok", "simple_lens", "source_gap", "r", "mcap", "mcap_rank", "turnover_20d",
     "pe", "pb", "ps", "ey", "by", "roe", "rev_growth", "np_growth", "gross_margin", "debt_ratio",
     "cash_conv", "div_yield", "mom_12_1", "vol_1y", "period", "notice_date", "np_ttm", "revenue_ttm",
     "eps_ttm", "bps", "z_value", "z_quality", "z_growth", "z_momentum", "z_risk", "composite",

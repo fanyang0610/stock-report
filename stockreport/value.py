@@ -2,7 +2,8 @@
 cross-check (PLAN.md Method sections 2 and 4). Multiples are fitted in logs, so residuals are relative.
 
 - Trailing lens: today's book and earnings power (P/B on ROE and growth; P/S for loss-makers;
-  P/B on ROE for banks, insurers and brokers).
+  P/B on ROE for banks, insurers and brokers). A stock neither lens can value because an input is
+  missing gets a simpler peer multiple (FALLBACKS), marked 低信心 in pick.py.
 - Forward lens: what peers pay for expected growth, on analyst consensus EPS (no target prices), for
   financials too: it tempers a one-year ROE spike such as insurers' investment gains. It values a
   stock alone when the trailing lens can't (negative book value)."""
@@ -51,7 +52,7 @@ def fit_lens(df: pd.DataFrame, multiple: str, xs: list[str], base: str,
              fit_on: pd.Series, applies: pd.Series, min_size: int) -> pd.DataFrame:
     """Fit log(multiple) on xs within each peer group (pooled when too small) and value the `applies`
     stocks: mid = fitted multiple x own per-share base; band = 25th/75th pct of the fit's residuals."""
-    out = pd.DataFrame(np.nan, index=df.index, columns=["mid", "band_lo", "band_hi", "fit_n"])
+    out = pd.DataFrame(np.nan, index=df.index, columns=["mid", "band_lo", "band_hi", "fit_n", "peers_lo", "peers_hi"])
     out["fit_group"] = None
     usable = fit_on & (df[multiple] > 0) & df[xs].notna().all(axis=1)
     for group, members in df[applies].groupby("peer_group"):
@@ -63,10 +64,11 @@ def fit_lens(df: pd.DataFrame, multiple: str, xs: list[str], base: str,
             continue
         y, x = np.log(df.loc[sample, multiple]), df.loc[sample, xs].to_numpy()
         coef = fit(y, x)
-        q25, q75 = np.quantile(y - predict(coef, x), [0.25, 0.75])
+        q5, q25, q75, q95 = np.quantile(y - predict(coef, x), [0.05, 0.25, 0.75, 0.95])
         target = members.index[members[xs].notna().all(axis=1)]
         out.loc[target, "mid"] = np.exp(predict(coef, df.loc[target, xs].to_numpy())) * df.loc[target, base]
-        out.loc[target, ["band_lo", "band_hi", "fit_n"]] = [np.exp(q25), np.exp(q75), int(sample.sum())]
+        out.loc[target, ["band_lo", "band_hi", "fit_n", "peers_lo", "peers_hi"]] = [
+            np.exp(q25), np.exp(q75), int(sample.sum()), np.exp(q5), np.exp(q95)]
         out.loc[target, "fit_group"] = fit_group
     return out
 
@@ -83,6 +85,17 @@ METHODS = {
             lambda d: ~d["financial"] & (d["np_ttm"] > 0)),
     "P/S": ("ps", ["gross_margin", "growth"], "sps_ttm", lambda d: ~d["financial"],
             lambda d: ~d["financial"] & (d["np_ttm"] <= 0)),
+}
+
+# A missing input drops the regressor, not the stock: loss-makers with no gross profit line (biotech, telecom
+# equipment, media, exchanges) on P/S and growth; profitable companies with negative book value (buybacks, REITs)
+# and too few analysts for the forward lens on P/E and growth. Only stocks neither lens values; 低信心 (simple_lens).
+# A stock priced outside its peers' spread around the fit (5th-95th percentile) is priced on something else, e.g.
+# pre-revenue Roivant at ~1,000x sales or 碧桂园's restructuring gain: no value rather than a meaningless one.
+FALLBACKS = {
+    "P/S on growth": ("ps", ["growth"], "sps_ttm", lambda d: ~d["financial"], lambda d: ~d["financial"] & (d["np_ttm"] <= 0)),
+    "P/E on growth": ("pe", ["growth"], "eps_ttm", lambda d: ~d["financial"] & (d["np_ttm"] > 0),
+                      lambda d: ~d["financial"] & (d["np_ttm"] > 0)),
 }
 
 
@@ -105,6 +118,13 @@ def value(df: pd.DataFrame, r: float) -> pd.DataFrame:
 
     has_forecast = (df["analysts"] >= cfg["forward_min_analysts"]) & (df["eps_e2"] > 0) & df["fwd_growth"].notna()
     fwd = fit_lens(df, "fwd_pe", ["fwd_growth"], "eps_e2", has_forecast, has_forecast, min_size)
+    for method, (multiple, xs, base, fit_on, applies) in FALLBACKS.items():
+        lens = fit_lens(df, multiple, xs, base, fit_on(df), applies(df) & trail["mid"].isna() & fwd["mid"].isna(), min_size)
+        rows = lens["mid"].notna() & (df["price"] / lens["mid"]).between(lens["peers_lo"], lens["peers_hi"])
+        trail.loc[rows] = lens.loc[rows, ["mid", "band_lo", "band_hi"]].to_numpy()
+        df.loc[rows, "method"] = method
+        df.loc[rows, ["fit_group", "fit_n"]] = lens.loc[rows, ["fit_group", "fit_n"]].to_numpy()
+    df["simple_lens"] = df["method"].isin(list(FALLBACKS))
 
     w, gap = cfg["forward_weight"], cfg["cross_check_max_gap"]
     t, f = trail["mid"].astype(float), fwd["mid"].astype(float)

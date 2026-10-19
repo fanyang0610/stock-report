@@ -114,3 +114,33 @@ def test_negative_book_is_valued_on_the_forward_lens_alone():
     assert np.isnan(row["fv_trailing"]) and row["method"] == "fwd P/E"
     assert row["fv_mid"] == pytest.approx(row["fv_forward"])
     assert row["fv_low"] < row["fv_mid"] < row["fv_high"]
+
+
+def test_a_missing_input_falls_back_to_a_simpler_peer_multiple():
+    df = load_sample()
+    forecast = (df["analysts"] >= 3) & (df["eps_e2"] > 0) & df["fwd_growth"].notna()
+    loser = df[~df["financial"] & (df["np_ttm"] <= 0) & ~forecast].index[0]  # with a forecast: the forward lens
+    df.loc[loser, "gross_margin"] = np.nan  # no gross profit line (biotech, telecom equipment, media)
+    earner = df[~df["financial"] & (df["np_ttm"] > 0)].index[0]
+    df.loc[earner, ["bps", "pb", "roe", "analysts"]] = [-5.0, np.nan, np.nan, 2]  # negative book, too few analysts
+    out = value(df, R)
+    assert (out.loc[loser, "method"], out.loc[earner, "method"]) == ("P/S on growth", "P/E on growth")
+    assert sorted(out.index[out["simple_lens"]]) == sorted([loser, earner])  # nothing else changes method
+    for code, multiple, base in ((loser, "ps", "sps_ttm"), (earner, "pe", "eps_ttm")):
+        row = out.loc[code]  # the group's fitted multiple on growth alone x the stock's own per-share base
+        group = (out["peer_group"] == row["fit_group"]) if row["fit_group"] != "全市场(合并)" else True  # or pooled
+        sample = out[group & (out[multiple] > 0) & out["growth"].notna() & ~out["financial"]
+                     & ((out["np_ttm"] > 0) if multiple == "pe" else True)]
+        coef = fit(np.log(sample[multiple]).to_numpy(), sample[["growth"]].to_numpy())
+        assert row["fv_mid"] == pytest.approx(np.exp(predict(coef, np.array([[row["growth"]]])))[0] * row[base])
+        assert row["fv_low"] < row["fv_mid"] < row["fv_high"]
+
+
+def test_no_fallback_value_for_a_stock_priced_outside_its_peers():
+    df = load_sample()
+    forecast = (df["analysts"] >= 3) & (df["eps_e2"] > 0) & df["fwd_growth"].notna()
+    loser = df[~df["financial"] & (df["np_ttm"] <= 0) & ~forecast].index[0]
+    price = df.loc[loser, "price"]  # pre-revenue: ~1,000x sales (Roivant-like), its price rests on something else
+    df.loc[loser, ["gross_margin", "sps_ttm", "ps"]] = [np.nan, price / 1000, 1000.0]
+    row = value(df, R).loc[loser]
+    assert np.isnan(row["fv_mid"]) and not row["simple_lens"] and pd.isna(row["method"])

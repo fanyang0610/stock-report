@@ -37,8 +37,8 @@ def worse(g: pd.Series, *confirm: pd.Series) -> pd.Series:
     return out
 
 
-def second_sources(df: pd.DataFrame, market: str) -> list[tuple[str, pd.Series, pd.Series | None]]:
-    """(label, gap to the second source, the stocks it drops or None) per check."""
+def second_sources(df: pd.DataFrame, market: str) -> list[tuple]:
+    """(label, gap to the second source, the stocks it drops or None[, the stocks it keeps as 低信心]) per check."""
     if market == "cn":
         t = tencent.load().reindex(df.index)
         session = t["date"] == df["trade_date"]  # prices compare within one session; the rest any day
@@ -55,11 +55,15 @@ def second_sources(df: pd.DataFrame, market: str) -> list[tuple[str, pd.Series, 
         near = lambda day: (pd.to_datetime(y[day]) - pd.to_datetime(df["period"])).dt.days.abs() <= 20
         y = y.where((df["source"] == "SEC") & (y["yahoo"] == "ok") & (y["currency"] == "USD") & near("period"))
         adr = df["listing"].str.contains("Depositary", case=False, na=False)  # Yahoo counts the ordinary shares
-        checks = [("TTM revenue vs Yahoo", gap(df["revenue_ttm"], y["revenue_ttm"])),
-                  ("TTM net income vs Yahoo", gap(df["np_ttm"], y["ni_ttm"])),
+        checks = [("TTM net income vs Yahoo", gap(df["np_ttm"], y["ni_ttm"])),
                   # Yahoo's latest equity can be a quarter older than its TTM (Amazon, Gartner on 2026-10-19)
                   ("equity vs Yahoo", gap(df["equity"], y["equity"].where(near("balance_period"))))]
-        return [(label, g, worse(g)) for label, g in checks] + [
+        # Revenue sets the fair value only for loss-makers (P/S); for the rest a gap is mostly a definition
+        # (brokers' net vs gross revenue, asset managers' carried interest, card issuers' partner payments)
+        # and touches only the growth input: kept as 低信心.
+        revenue, on_sales = gap(df["revenue_ttm"], y["revenue_ttm"]), ~df["financial"] & (df["np_ttm"] <= 0)
+        return [("TTM revenue vs Yahoo", revenue, worse(revenue) & on_sales, worse(revenue) & ~on_sales)] + [
+            (label, g, worse(g)) for label, g in checks] + [
             ("shares vs Yahoo (not ADRs)", gap(df["shares"], y["shares"].where(~adr)), None)]
     c = pd.read_csv(yahoo.CONSENSUS, dtype={"code": str, "period_y": str}).set_index("code").reindex(df.index)
     c = c.where((pd.to_datetime(c["period_y"]) - pd.to_datetime(df["period"])).dt.days.abs() <= 20)
@@ -87,7 +91,8 @@ def names(mask: pd.Series, n: int = 12) -> str:
 
 def checks(df: pd.DataFrame, market: str, info: dict) -> dict[str, pd.Series]:
     """All cross-checks: the count lines go to info["checks"] (the run prints them), the names behind
-    large gaps to the log; returns {reason: stocks to drop} for universe.finish."""
+    large gaps to the log; returns {reason: stocks to drop} for universe.finish. Stocks kept despite a gap
+    on a figure their fair value doesn't rest on are marked df["source_gap"] (低信心 in pick.py)."""
     agree, large, drop_gap = (f"{CFG[k]:.0%}" for k in ("agree", "large", "drop_gap"))
     lines, drops = [f"Cross-checks ({market.upper()}; compared: agree within {agree} / {agree}-{large} / "
                     f"over {large}, drops over {drop_gap}):"], {}
@@ -96,13 +101,19 @@ def checks(df: pd.DataFrame, market: str, info: dict) -> dict[str, pd.Series]:
     except (OSError, KeyError) as e:  # no second-source table yet (fetch failed): the checks can't run
         sources = []
         lines.append(f"  second source unavailable ({type(e).__name__}: {e})")
-    for label, g, drop in sources:
+    df["source_gap"] = False
+    for label, g, drop, *keep in sources:
         n, large = int(g.notna().sum()), g > CFG["large"]
         line = f"  {label:<28} {n:4d}: {int((g <= CFG['agree']).sum()):4d} / " \
                f"{int(((g > CFG['agree']) & ~large).sum()):3d} / {int(large.sum()):3d}"
         if drop is not None:
             drops[f"{label} >{CFG['drop_gap']:.0%}"] = drop
             line += f", drops {int(drop.sum())}"
+        if keep:
+            df["source_gap"] |= keep[0].fillna(False)
+            line += f", kept as 低信心 {int(keep[0].sum())}"
+            if keep[0].any():
+                log.info("%s %s over %.0f%%, kept as 低信心: %s", market.upper(), label, 100 * CFG["drop_gap"], names(keep[0], 40))
         lines.append(line)
         if large.any():
             log.info("%s %s over %.0f%%: %s", market.upper(), label, 100 * CFG["large"], names(large, 40))
