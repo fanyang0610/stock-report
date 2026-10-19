@@ -21,7 +21,8 @@ TITLE_SOURCES = {"cn": cninfo, "us": sec, "hk": hkex}
 UNITS = {"cn": "亿元", "us": "亿美元", "hk": "亿港元"}  # revenue and profit in the quote currency
 FLAGS = ("none", "one_off_gain", "pending_deal", "delisting_or_st", "data_suspect")
 FLAG_WORDS = {"one_off_gain": "利润一次性/异常", "pending_deal": "重大交易进行中",
-              "delisting_or_st": "退市/ST 风险", "data_suspect": "数据可疑", "dual_listed": "其他市场已入选"}
+              "delisting_or_st": "退市/ST 风险", "data_suspect": "数据可疑", "dual_listed": "其他市场已入选",
+              "deep_dive": "深度核查否决", "user_veto": "人工否决"}
 NOTE_MAX, RISK_MAX = 60, 30
 
 SYSTEM = """你是 A 股研究助理，为程序生成的选股卡片写简短中文点评。卡片上的所有数字都由程序根据公开数据计算，你不能修改它们。
@@ -242,12 +243,14 @@ class Notes:
 
 
 def annotate(picks: pd.DataFrame, market: str, today: date, use_ai: bool = True,
-             taken: dict[str, str] | None = None) -> tuple[pd.DataFrame, list[dict]]:
+             taken: dict[str, str] | None = None,
+             vetoes: dict[str, tuple[str, str]] | None = None) -> tuple[pd.DataFrame, list[dict]]:
     """Final picks with notes, and the swaps made. A flagged pick is replaced by the next runner-up
     in its bucket that isn't flagged; if none is left, it stays, marked 低信心. Names whose issuer is
-    already picked in another market (`taken`: code -> reason) are swapped out the same way and
-    never asked about."""
-    notes, taken = Notes(market, today, use_ai), taken or {}
+    already picked in another market (`taken`: code -> reason) and names vetoed by a deep dive or by
+    you (`vetoes`: code -> (flag, reason)) are swapped out the same way and never asked about."""
+    notes = Notes(market, today, use_ai)
+    taken = (vetoes or {}) | {c: ("dual_listed", r) for c, r in (taken or {}).items()}
     picks = picks[(picks["role"] == "pick") | ~picks["code"].isin(taken)]
     todo = [r for _, r in picks[picks["role"] == "pick"].iterrows() if r["code"] not in notes.cache | taken]
     titles = {r["code"]: notes.titles(r["code"]) for r in todo}  # one at a time, politely
@@ -259,7 +262,7 @@ def annotate(picks: pd.DataFrame, market: str, today: date, use_ai: bool = True,
     for bucket, part in picks.groupby("bucket", sort=False):
         bench = [r for _, r in part[part["role"] == "runner_up"].sort_values("rank").iterrows()]
         for _, row in part[part["role"] == "pick"].sort_values("rank").iterrows():
-            note = {"flag": "dual_listed", "reason": taken[row["code"]]} if row["code"] in taken else notes.get(row)
+            note = dict(zip(("flag", "reason"), taken[row["code"]])) if row["code"] in taken else notes.get(row)
             while note["flag"] != "none" and bench:
                 nxt = bench.pop(0)
                 swaps.append({"bucket": bucket, "out": f"{row['code']} {row['name']}", "flag": note["flag"],

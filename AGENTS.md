@@ -9,7 +9,7 @@ docs/PLAN.md has the method, the phases and the current status. Do only the phas
 ## Layout
 stockreport/fetch/ (one module per data source) → universe.py → value.py → score.py → pick.py → notes.py (DeepSeek) → render/ (HTML → PDF) → deliver.py; plus listener.py and track.py.
 Valuation v2 runs in shadow mode after pick.py (Phase 8, docs/PLAN.md Method 12): history.py → engine.py → regime.py → anchors.py → shadow.py.
-crosscheck.py compares each market's key figures with a second source and raises day-over-day drift alarms (Phase 12, docs/PLAN.md Method 13). signal.py scores signals (the backtest and `track --signal`). backtest/ (outside the app) is the Phase 9 backtest; docs/BACKTEST.md has its results and commands.
+crosscheck.py compares each market's key figures with a second source and raises day-over-day drift alarms (Phase 12, docs/PLAN.md Method 13). Phase 11 (Methods 14-15): the event layer (fetch/events.py market-wide filing feeds → events.py classification and abnormal-move labels) and the deep-dive lane (deepdive.py: triggers, fetch/filings.py, DeepSeek questionnaire, quotes.py verification; verdicts.py for your vetoes and confirms). signal.py scores signals (the backtest and `track --signal`). backtest/ (outside the app) is the Phase 9 backtest; docs/BACKTEST.md has its results and commands.
 bridge/wechat.mjs is the WeChat helper (Node). data/ is the daily cache and reports/ the outputs; both are git-ignored.
 
 ## Rules
@@ -32,5 +32,6 @@ uv run python -m stockreport send [--test]                          # text summa
 uv run python -m stockreport listen                                 # keyword listener (launchd)
 uv run python -m stockreport v2 [--market cn|us|hk] [--date D]      # valuation v2 (shadow) on a saved snapshot
 uv run python -m stockreport track [--signal]                       # performance scorecard (--signal: v1/v2 signals on the snapshots)
+uv run python -m stockreport verdict [CODE veto|confirm --until D --reason "..."]  # your verdicts (no args: list)
 uv run python -m stockreport cleanup [--dry-run]                    # apply storage retention
 uv run pytest

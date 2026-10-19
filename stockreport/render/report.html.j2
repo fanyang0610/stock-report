@@ -62,6 +62,10 @@
     <p><b>AI 点评：</b>由 DeepSeek 根据卡片上的数字和近 60 日公告标题撰写，不改变任何数字；被它标记为利润一次性/异常、
       重大交易进行中、退市/ST 风险或数据可疑的标的，已换成同档下一名。</p>
     <p><b>利润异常剔除：</b>净利润暴增但经营现金流不足，或分析师预期明年 EPS 明显回落的买入、持有候选，由程序在选股时直接剔除，不依赖 AI。</p>
+    <p><b>近期事件：</b>交易所全市场公告按规则分类（业绩、交易、风险、股本、增减持、经营），只作标注，不改估值。<b>异动</b>指 1-5 日相对指数涨跌超过
+      2.5 个标准差：有对应公告视为信息，没有则按噪音处理。</p>
+    <p><b>深度核查：</b>规则触发（重大公告、估值与现价相差两倍以上、保险/地产/控股等特殊结构、无公告异动），每个市场每天最多读 3 份新文件。
+      DeepSeek 只负责找出原文句子，程序逐句核对原文并从引文里取数；核实的事实可导致替换（如非经常性损益过高、要约收购、非标审计意见）或标为低信心。</p>
   </div>
   {% endif %}
   <table class="overview">
@@ -118,6 +122,8 @@
           <span class="label">驱动：</span>{{ p.drivers | join('；') }}　<span class="label">短板：</span>{{ p.risk }}<br>
           <span class="label">AI 点评：</span>{{ p.note }}{% if p.ai_risk %}　<span class="label">风险：</span>{{ p.ai_risk }}{% endif %}<br>
           <span class="label">复查条件：</span>{{ p.trigger }}
+          {% if p.events is defined %}<br><span class="label">近期事件：</span>{{ p.events }}{% if p.move %}<br>{{ p.move }}{% endif %}{% endif %}
+          {% if p.deep_dive %}<br><span class="label">{{ p.deep_dive.split('：', 1)[0] }}：</span>{{ p.deep_dive.split('：', 1)[1] }}{% endif %}
         </td>
       </tr>
     </tbody>
