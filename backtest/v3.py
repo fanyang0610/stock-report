@@ -4,6 +4,7 @@ v1 and the plain earnings- and book-yield rankings. Parameters are chosen in-sam
 checked out of sample (2024-01..2026-09).
 
   uv run python -m backtest.v3 grid cn|us|hk      # one-at-a-time grids -> data/backtest/v3_grid_<market>.csv
+  uv run python -m backtest.v3 lambda cn|us|hk    # the industry premium λ -> data/backtest/v3_lambda_<market>.csv
   uv run python -m backtest.v3 compare            # v1, v3 (config.toml), E/P, B/P -> data/backtest/v3_results.md
 """
 
@@ -22,13 +23,17 @@ from stockreport import baserates as br, shadow, signal, v3
 MARKETS = ("cn", "us", "hk")
 V1_COLS = ["upside", "z_momentum", "z_quality", "quality_pct", "mom_12_1", "np_growth", "eps_ttm", "mcap_rank",
            "industry", "financial", "price", "ey", "by", "mcap"]
-V3_COLS = ["upside", "v_mid", "bucket", "confidence", "implied_label", "valued", "light", "d50", "level", "r"]
+V3_COLS = ["upside", "v_mid", "bucket", "confidence", "implied_label", "valued", "light", "d50", "level", "r", "irr"]
+LAMBDA_GRID = {"industry premium": [("v3__LAMBDA", x) for x in (0.0, 0.25, 0.5, 0.75, 1.0)]}
+COUNTRY_GRID = {"country premium": [("v3__COUNTRY_LAMBDA", x) for x in (0.0, 0.5, 1.0)]}
 GRID = {
     "fade years": [("v3__FADE", x) for x in (3, 5, 10, 15)],
     "tolerance": [("br__TOL", x) for x in (0.0, 0.1, 0.25)],
     "long-run ROE": [("v3__LONG_ROE", x) for x in ("market", "r")],
 }
-HK_GRID = {"haircut": [("v3__HAIRCUT", x) for x in (0.0, 0.1, 0.2, 0.3)]}  # HK: survivors only (your OK)
+HK_LAMBDA_GRID = {"industry premium": [("v3__LAMBDA", x) for x in (0.0, 0.25, 0.5, 0.75, 1.0)]}
+COUNTRY_GRID = {"country premium": [("v3__COUNTRY_LAMBDA", x) for x in (0.0, 0.5, 1.0)]}
+GRID = {"haircut": [("v3__HAIRCUT", x) for x in (0.0, 0.1, 0.2, 0.3)]}  # HK: survivors only (your OK)
 
 
 @contextmanager
@@ -52,10 +57,13 @@ def frame(market: str, data: dict, **kw) -> pd.DataFrame:
     warnings.simplefilter("ignore")
     p = br.panel(market)
     secs = br.sectors(market)
+    country = panel.today_snapshot("us")["country"] if market == "us" else None  # snapshots built before Phase 9's field
     rows, started = [], time.monotonic()
     with params(**kw):
         for m, d in data.items():
             s, day = d["snap"], run.day_of(market, m)
+            if country is not None and "country" not in s:
+                s = s.assign(country=country.reindex(s.index))
             st = br.starts(p, day.isoformat(), market)
             st.attrs["roe_long"] = v3.roe_long(p, day.isoformat(), market)
             h = d["loaded"][0] if isinstance(d["loaded"], tuple) else d["loaded"]
@@ -120,16 +128,17 @@ def metrics(f: pd.DataFrame, who: str = "v3") -> dict:
     return out
 
 
-def grid(market: str) -> pd.DataFrame:
+def grid(market: str, which: str = "grid") -> pd.DataFrame:
     panel.setup_history(market)
     data, rows = run.load(market), []
-    for name, options in (GRID | (HK_GRID if market == "hk" else {})).items():
+    grids = {"lambda": LAMBDA_GRID, "country": COUNTRY_GRID}.get(which) or GRID | (HK_GRID if market == "hk" else {})
+    for name, options in grids.items():
         for key, val in options:
             f = frame(market, data, **{key: val})
             rows.append({"param": name, "value": str(val), "market": market} | metrics(f))
             print(name, val, {k: round(v, 3) for k, v in rows[-1].items() if k.endswith(("ic 12m", "buy-sell 12m"))}, flush=True)
     out = pd.DataFrame(rows)
-    out.to_csv(panel.BT / f"v3_grid_{market}.csv", index=False)
+    out.to_csv(panel.BT / f"v3_{which}_{market}.csv", index=False)
     return out
 
 
@@ -159,7 +168,7 @@ def compare() -> None:
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == "grid":
-        grid(sys.argv[2])
+    if sys.argv[1] in ("grid", "lambda", "country"):
+        grid(sys.argv[2], sys.argv[1])
     elif sys.argv[1] == "compare":
         compare()

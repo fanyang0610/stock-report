@@ -135,3 +135,17 @@ def test_frames_year(monkeypatch):
     assert df.at[320193, "revenue"] == 260174000000  # Apple FY2019 (Sept), the larger of its revenue concepts
     assert df.at[320193, "ni"] == 55256000000
     assert df["equity"].notna().all()
+
+
+def test_industry_and_country_rates():
+    # market 5%; banks' prices imply 11% (premium +6 points, the cap), software's 3% (−2 points); a 2-stock industry
+    # takes its parent sector's median; λ = 0.5 accepts half of each premium
+    implied = pd.Series([0.11] * 5 + [0.03] * 5 + [0.09, 0.09], index=[f"s{i}" for i in range(12)])
+    industry = pd.Series(["bank"] * 5 + ["soft"] * 5 + ["tiny"] * 2, index=implied.index)
+    parent = pd.Series(["fin"] * 5 + ["tech"] * 5 + ["fin"] * 2, index=implied.index)
+    r = v3.industry_rates(0.05, implied, industry, parent, 0.5, floor=0.04)
+    assert r[["s0", "s5"]].tolist() == pytest.approx([0.05 + 0.5 * 0.06, 0.05 - 0.5 * 0.02])
+    assert r["s10"] == pytest.approx(0.05 + 0.5 * 0.06)  # the parent "fin" median is 11% (5 banks + 2 at 9%)
+    country = pd.Series(["United States"] * 10 + ["Japan"] * 2, index=implied.index)
+    prem = v3.country_premium(implied, country)
+    assert prem["s0"] == 0 and prem["s10"] == pytest.approx(0.09 - 0.07)  # pooled (under 5): 9% over home's 7%

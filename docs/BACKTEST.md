@@ -511,6 +511,39 @@ US jointly: fade 15 0.039; + tolerance 25% 0.048; + long-run ROE r 0.048; all th
   earnings does (rank correlation 0.97-0.98 on 2026-10-19), and by industry that implied return runs from ~4.5-6%
   (software, semiconductors, staples) to 11-17% (banks, insurers, construction) against one rate per market (CN
   5.0%, US 6.8%, HK 7.6%).
+**Industry risk premium (your call, 2026-10-20).** One rate per market turned each industry's pricing into
+upside (above). Each stock's rate = the market's + λ × its industry's premium (the median rate its stocks' prices
+imply at base-rate earnings, over the market's; 5+ stocks, else the parent sector's; −3..+6 points), measured
+within each market. In-sample (other values as chosen above), rank IC 12m / buy − sell 12m:
+
+| λ | CN | US | HK |
+|---|---|---|---|
+| 0 | 0.128 / +2.8% | 0.052 / −12.1% | 0.123 / +3.1% |
+| 0.25 | 0.129 / +7.3% | 0.051 / −10.6% | 0.124 / +1.9% |
+| 0.5 | 0.134 / +4.1% | **0.052 / −9.0%** | **0.123 / +7.8%** |
+| 0.75 | **0.135 / +4.1%** | 0.051 / −14.5% | 0.118 / +13.6% |
+| 1.0 | 0.134 / +3.7% | 0.050 / −13.8% | 0.105 / +15.6% |
+
+Rule (λ targets the levels and the lists, so the bucket spread decides): the best in-sample buy − sell among the λ
+whose in-sample rank correlation is within 0.005 of the best: CN 0.75, HK 0.5, US 0.5. US foreign listings also
+carry half their country's premium (Phase 9's country premium; in-sample IC 0.052 → 0.060 at 0.5, 0.058 at 1; with
+the country field the backtest's US buys are US listings only, as configured).
+
+**v3 with the premiums, out of sample, 12 months** (v1, E/P and B/P as above):
+
+| | IC (t) | buy | sell | buy − sell (t) |
+|---|---|---|---|---|
+| CN v3 | +0.016 (0.3) | −5.3% | −16.8% | +11.4% (1.1) |
+| US v3 | +0.032 (0.9) | +3.4% | +50.6% | −47.2% (−0.9) |
+| HK v3 | +0.120 (2.4) | +9.2% | −13.0% | +22.2% (2.0) |
+
+- **Item (1):** CN meets it (beats v1 on both, and E/P and B/P); HK beats v1 and E/P on rank correlation but trails
+  v1's buy − sell (+22.2% against +30.6%); the US fails. The better of E/P and B/P is beaten in two of three (CN, HK).
+- **The US sells:** the median US sell trailed the universe (−5%), but Micron was a sell on 11 of the 21 dates
+  and rose ~450% over the universe within 12 months each time (the 2024-26 memory boom); Corning +174% (7 dates).
+  Without Micron US buy − sell is −1.6%, without both +15.3%. The US in-sample correlations are weak (t < 1), and
+  the US out-of-sample rank correlation is lower with every in-sample choice than with the defaults (0.120).
+
 - Rerun (~6 min; ~25 min for the grids): `uv run python -m backtest.v3 compare` (data/backtest/v3_results.md) and
-  `uv run python -m backtest.v3 grid cn|us|hk` (data/backtest/v3_grid_<market>.csv), on the snapshots built by
+  `uv run python -m backtest.v3 grid|lambda|country cn|us|hk` (data/backtest/v3_<grid>_<market>.csv), on the snapshots built by
   `uv run python -m backtest.run build cn|us|hk`.

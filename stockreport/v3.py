@@ -15,8 +15,9 @@ with the assumptions written out, and what the price expects. Per share, in the 
   the value is continuous at the threshold and their excess returns fade like every company's. (Keeping today's
   earnings forever, the formula's usual form, put US book-light stocks at a median +65% against −11% for the
   rest on 2026-10-19, NVIDIA at +331%.)
-- Loss-makers get a value only when 3+ analysts expect a profit within 3 years. One discount rate per market:
-  the median rate at which well-covered stocks' values equal their prices."""
+- Loss-makers get a value only when 3+ analysts expect a profit within 3 years. The discount rate: the market's,
+  the median rate at which well-covered stocks' values equal their prices, plus λ × the industry's premium (the
+  industry's median implied rate over the market's; config industry_lambda, 0 = one rate per market)."""
 
 import numpy as np
 import pandas as pd
@@ -29,6 +30,8 @@ G_LONG = CFG["long_growth"]
 FADE = CFG["fade_years"]
 HAIRCUT = CFG["haircut"]
 LONG_ROE = CFG["long_roe"]  # per market: "market" (the largest third's median ROE) or "r" (no long-run excess)
+LAMBDA = CFG["industry_lambda"]  # per market: share of an industry's implied premium accepted as its risk
+COUNTRY_LAMBDA = CFG["country_lambda"]  # US: share of a foreign listing's country premium accepted as its risk
 MIN_SPREAD = 0.015  # discount rate at least long-run growth + this
 R_RANGE = (0.0, 0.40)
 QUANTILES = (0.25, 0.5, 0.75)
@@ -168,9 +171,10 @@ def implied(V: np.ndarray, price: np.ndarray, Sc: np.ndarray, t0: np.ndarray) ->
 
 
 def market_rate(x: pd.DataFrame, path: np.ndarray, d50: np.ndarray, price: np.ndarray, well: np.ndarray,
-                roe_long: float, g_long: float, fade: int) -> tuple[float, np.ndarray]:
+                roe_long: float, g_long: float, fade: int) -> tuple[float, np.ndarray, np.ndarray]:
     """Per stock the rate at which its value at the median duration equals its price (bisection; NaN outside
-    R_RANGE), and the market's rate: the median over well-covered stocks."""
+    R_RANGE; for ranking, −inf / +inf beyond its bounds), and the market's rate: the median over well-covered
+    stocks."""
     floor = max(R_RANGE[0], g_long + MIN_SPREAD)
     lo_r, hi_r = np.full(len(x), floor), np.full(len(x), R_RANGE[1])
     D = np.column_stack([np.floor(d50), np.ceil(d50)])
@@ -186,7 +190,35 @@ def market_rate(x: pd.DataFrame, path: np.ndarray, d50: np.ndarray, price: np.nd
     censored = np.where(v_lo < price, -np.inf, np.where(v_hi > price, np.inf, irr))  # beyond the range: still ranked
     pick = well & ~np.isnan(censored)
     # more than half beyond a bound: the bound (the values then sit mostly below or above the prices)
-    return float(np.clip(np.median(censored[pick]), floor, R_RANGE[1])), irr
+    return float(np.clip(np.median(censored[pick]), floor, R_RANGE[1])), irr, censored
+
+
+def industry_rates(r_mkt: float, implied: pd.Series, industry: pd.Series, parent: pd.Series, lam: float,
+                   floor: float) -> pd.Series:
+    """Per stock: the market's rate + λ × its industry's premium, the median implied rate of the industry's
+    stocks (5+, else of its parent sector, else none) over the market's, within −3 / +6 points. λ = 0 is one
+    rate for every company in the market; λ = 1 takes each industry's pricing as its risk."""
+    out = pd.Series(0.0, implied.index)
+    for groups in (parent, industry):  # the industry overrides its parent where it has 5+ stocks
+        by = implied.dropna().groupby(groups.reindex(implied.dropna().index))
+        med = by.median().where(by.count() >= 5).dropna()
+        hit = groups.isin(med.index) & (groups != "")
+        out[hit] = groups[hit].map(med) - r_mkt
+    return (r_mkt + lam * out.clip(-0.03, 0.06)).clip(lower=floor)
+
+
+def country_premium(implied: pd.Series, country: pd.Series, home: str = "United States") -> pd.Series:
+    """US: per foreign listing, its country's median implied rate over home listings' (countries with 5+ listings,
+    the rest pooled), within −3 / +6 points; 0 at home. Toyota or Ecopetrol trade at their home market's
+    discount, which the US rate would read as upside."""
+    c = country.reindex(implied.index).fillna(home)
+    ok = implied.notna()
+    home_med = implied[ok & (c == home)].median()
+    by = implied[ok].groupby(c[ok]).agg(["median", "count"])
+    small = by.index[(by["count"] < 5) & (by.index != home)]
+    pooled = implied[ok & c.isin(small)].median() - home_med if len(small) else 0.0
+    prem = (by["median"] - home_med).where(by["count"] >= 5, pooled)
+    return c.map(prem).fillna(pooled).where(c != home, 0.0).clip(-0.03, 0.06)
 
 
 def value(df: pd.DataFrame, h: pd.DataFrame, st: pd.DataFrame, market: str, sector: pd.Series) -> pd.DataFrame:
@@ -208,14 +240,19 @@ def value(df: pd.DataFrame, h: pd.DataFrame, st: pd.DataFrame, market: str, sect
     if well.sum() < 30:  # no consensus (the backtest): stocks with 5+ years of history
         well = ok & (x["n_years"].to_numpy() >= 5)
     sub = x[ok]
-    r_mkt, irr = market_rate(sub, path[ok], q[ok, 1], price[ok], well[ok], roe_long, g_long, fade)
+    r_mkt, irr, censored = market_rate(sub, path[ok], q[ok, 1], price[ok], well[ok], roe_long, g_long, fade)
+    implied_rates = pd.Series(censored, sub.index)
+    r = industry_rates(r_mkt, implied_rates, df["industry"].fillna("").reindex(sub.index),
+                       want["sector"].reindex(sub.index), per_market(LAMBDA, market), g_long + MIN_SPREAD)
+    if market == "us" and COUNTRY_LAMBDA and "country" in df:  # foreign listings: their home market's premium
+        r = (r + COUNTRY_LAMBDA * country_premium(implied_rates, df["country"])).clip(lower=g_long + MIN_SPREAD)
     grid = np.full((len(x), br.DMAX + 1), np.nan)
-    grid[ok] = paths(sub, path[ok], r_mkt, np.tile(np.arange(br.DMAX + 1), (ok.sum(), 1)), roe_long, g_long, fade)
+    grid[ok] = paths(sub, path[ok], r.to_numpy(), np.tile(np.arange(br.DMAX + 1), (ok.sum(), 1)), roe_long, g_long, fade)
     vals = at(np.nan_to_num(grid, nan=-1e18), q)
     vals[~ok] = np.nan
     good = ok & (vals[:, 1] > 0)
-    out = x.assign(r=r_mkt, roe_long=r_mkt if np.isnan(roe_long) else roe_long, irr=np.nan, d25=q[:, 0], d50=q[:, 1], d75=q[:, 2],
-                   s1=S[:, 1], s3=S[:, 3], s5=S[:, 5], s10=S[:, 10])
+    out = x.assign(r=r.reindex(df.index), r_mkt=r_mkt, roe_long=r_mkt if np.isnan(roe_long) else roe_long, irr=np.nan,
+                   d25=q[:, 0], d50=q[:, 1], d75=q[:, 2], s1=S[:, 1], s3=S[:, 3], s5=S[:, 5], s10=S[:, 10])
     out.loc[ok, "irr"] = irr
     rng = np.sort(np.where(good[:, None], vals, np.nan), axis=1)
     out["v_low"], out["v_mid"], out["v_high"] = rng[:, 0], np.where(good, vals[:, 1], np.nan), rng[:, 2]
@@ -228,9 +265,8 @@ def value(df: pd.DataFrame, h: pd.DataFrame, st: pd.DataFrame, market: str, sect
     # where no duration explains the price (below a stop to growth, above 30 years, or growth at a low ROE): the
     # constant ROE on book forever that the price implies, and the share of similar companies whose ROE got there
     # (the average of years 3-5); 价格隐含过高/过低 only when under 10% did
-    lr = r_mkt if np.isnan(roe_long) else roe_long
     other = good & ((out["implied_side"] != "inside") | ~out["rising"])
-    on_book = r_mkt + (df["price"] / x["book"] - 1) * (r_mkt - g_long)  # on the capital earning 40% for book-light
+    on_book = out["r"] + (df["price"] / x["book"] - 1) * (out["r"] - g_long)  # on the capital earning 40% for book-light
     now = x["roe0"].where(~x["light"], x["roe5"].fillna(x["roe0"]))
     implied_roe = on_book.where(~x["light"], on_book * now / (x["e0"] / x["book"]))  # book-light: on its own book
     out["roe_now"] = now

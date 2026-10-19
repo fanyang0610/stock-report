@@ -19,7 +19,7 @@ HAND = {"us": ["TM", "GM", "F", "STLA", "TSLA", "RACE", "LLY", "JNJ", "NVDA", "M
         "cn": ["601668", "601390", "600019", "600519", "300750", "002594", "300308"],
         "hk": ["00700", "03690", "00941", "02007", "01299"]}  # the Phase 13 hand-check list (PLAN item 13)
 COLUMNS = ["e0", "book", "light", "t0", "g", "roe0", "roe_now", "level", "starts", "base", "s1", "s3", "s5", "s10", "d25", "d50", "d75",
-           "r", "roe_long", "irr", "v_low", "v_mid", "v_high", "upside", "d_implied", "implied_share", "implied_side",
+           "r", "r_mkt", "roe_long", "irr", "v_low", "v_mid", "v_high", "upside", "d_implied", "implied_share", "implied_side",
            "implied_label", "roe_implied", "roe_reached", "implied", "v_peer", "screen_fails", "dilution", "flags", "conf_points",
            "confidence", "bucket", "rank", "tier", "conviction"]
 
@@ -242,7 +242,9 @@ def report(df: pd.DataFrame, picks: pd.DataFrame, v: pd.DataFrame, market: str) 
     shown = ok & (v["implied_label"] == "")
     conf = v.loc[ok, "confidence"].value_counts(normalize=True)
     print(f"\n==== {market.upper()} valuation v3 (Phase 13, shadow; the report stays v1) ====")
-    print(f"discount rate {v['r'].iloc[0]:.2%} (market-implied), long-run ROE {v['roe_long'].iloc[0]:.1%}; valued "
+    lam = v3.per_market(v3.LAMBDA, market)
+    print(f"discount rate {v['r_mkt'].iloc[0]:.2%} (market-implied) + {lam:g} × the industry's premium (stocks' rates "
+          f"{v.loc[ok, 'r'].quantile(0.05):.1%}-{v.loc[ok, 'r'].quantile(0.95):.1%}), long-run ROE {v['roe_long'].iloc[0]:.1%}; valued "
           f"{ok.sum()} of {len(v)} (no profit and no analyst-expected profit within 3 years: {(~v['ok']).sum()}); "
           f"book-light {(v['light'] & ok).sum()}; confidence 高 {conf.get('高', 0):.0%} 中 {conf.get('中', 0):.0%} 低 {conf.get('低', 0):.0%}")
     print(f"common-sense checks: median upside {up[ok].median():+.0%} (shown without a label {up[shown].median():+.0%}); "
