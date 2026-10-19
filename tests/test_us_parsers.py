@@ -124,6 +124,9 @@ def test_yahoo_fundamentals_for_sec_gaps():
     asml = yahoo.parse_timeseries("ASML", s["ASML"], day)  # TTM a year earlier is in the series
     assert (asml["yahoo"], asml["period"], asml["currency"]) == ("ok", "2026-06-30", "EUR")
     assert asml["revenue_ttm"] == pytest.approx(35.3275e9) and asml["rev_yoy"] == pytest.approx(35.3275 / 32.1614 - 1, abs=1e-3)
+    assert asml["balance_period"] == "2026-06-30"
+    it = yahoo.parse_timeseries("IT", s["IT"], day)  # Gartner (2026-10-19): the latest equity is a quarter older than the TTM
+    assert (it["period"], it["balance_period"], it["equity"]) == ("2026-06-30", "2026-03-31", 63_384_000)
     bhp = yahoo.parse_timeseries("BHP", s["BHP"], day)  # semiannual: last fiscal year vs the one before
     assert bhp["rev_yoy"] == pytest.approx(58.76 / 51.262 - 1, abs=1e-3)
     ry = yahoo.parse_timeseries("RY", s["RY"], day)  # latest quarter vs the same quarter a year earlier

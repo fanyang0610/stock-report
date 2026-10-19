@@ -132,9 +132,9 @@ def update_fx(currencies: set[str]) -> None:
 
 def parse_timeseries(code: str, payload: dict, today: date) -> dict:
     """TTM revenue / profit / gross profit / operating cash flow at the latest trailing period, the latest
-    equity, liabilities and assets, and growth: TTM vs the TTM a year earlier, else the fiscal year a year
-    earlier, else the latest quarter vs the same quarter a year earlier, else the last two fiscal years
-    (semiannual reporters)."""
+    equity, liabilities and assets (balance_period = the equity's date, which can be a quarter before the TTM
+    period), and growth: TTM vs the TTM a year earlier, else the fiscal year a year earlier, else the latest
+    quarter vs the same quarter a year earlier, else the last two fiscal years (semiannual reporters)."""
     series = {}
     for item in payload["timeseries"]["result"]:
         name = item["meta"]["type"][0]
@@ -151,7 +151,10 @@ def parse_timeseries(code: str, payload: dict, today: date) -> dict:
         row[f"{key}_ttm"] = near("trailing" + FIELDS[key], end)
     for key in ("equity", "liabilities", "assets", "shares"):
         points = series.get("quarterly" + FIELDS[key]) or series.get("annual" + FIELDS[key]) or []
-        row[key] = points[-1][1] if points and abs((date.fromisoformat(points[-1][0]) - end).days) <= MAX_AGE_DAYS else None
+        recent = points and abs((date.fromisoformat(points[-1][0]) - end).days) <= MAX_AGE_DAYS
+        day, row[key] = points[-1][:2] if recent else (None, None)
+        if key == "equity":
+            row["balance_period"] = day
     year_ago = end - timedelta(days=365)
     for key, out in (("revenue", "rev_yoy"), ("np", "np_yoy")):
         now = row[f"{key}_ttm"]
@@ -174,8 +177,12 @@ def timeseries(client: Http, job: tuple[str, date]) -> dict:
 
 def update_gaps(today: date, codes: list[str]) -> None:
     """Weekly per company: the codes SEC has no recent quarterly numbers for first, then the rest of the
-    candidates, whose Yahoo numbers are only the second source of the cross-checks."""
-    upsert_each(GAPS, make_http, timeseries, [(c, today) for c in stale(GAPS, codes, today)], today, 2, "yahoo fundamentals")
+    candidates, whose Yahoo numbers are only the second source of the cross-checks. A table fetched before
+    balance_period was added is fetched again for every company."""
+    todo = stale(GAPS, codes, today)
+    if GAPS.exists() and "balance_period" not in pd.read_csv(GAPS, nrows=0).columns:
+        todo = list(codes)
+    upsert_each(GAPS, make_http, timeseries, [(c, today) for c in todo], today, 2, "yahoo fundamentals")
 
 
 def crumb_http() -> Http:

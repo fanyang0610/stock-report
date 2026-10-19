@@ -1,7 +1,7 @@
 """Data cross-checks and drift alarms (PLAN.md Method 13). Each figure the valuation rests on is compared
 with a second, independent source (financial-data's rule: within 1% the sources agree, 1-5% is a small
 gap, above 5% a figure is not usable): CN quotes, share counts, TTM profit and book with Tencent; US TTM
-revenue, net income, equity and share counts with Yahoo's fundamentals; HK book, trailing EPS and share
+revenue, net income, equity (same balance-sheet date) and share counts with Yahoo's fundamentals; HK book, trailing EPS and share
 counts with Yahoo's key statistics. A stock whose figure is more than `drop_gap` (20%: gaps of 5-15% are
 mostly definitions, e.g. minority interests and perpetual securities in Yahoo's HK book) off its second
 source, and not confirmed by a third where there is one (CN: Eastmoney's P/E and P/B), is dropped as
@@ -51,14 +51,14 @@ def second_sources(df: pd.DataFrame, market: str) -> list[tuple[str, pd.Series, 
                 ("TTM profit vs Tencent", profit, worse(profit, gap(df["np_ttm"], df["mcap"] / df["pe_ttm_em"]))),
                 ("book per share vs Tencent", book, worse(book, gap(df["bps"], df["price"] / df["pb_mrq_em"])))]
     if market == "us":
-        y = pd.read_csv(yahoo.GAPS, dtype={"code": str, "period": str}).set_index("code").reindex(df.index)
-        same = (df["source"] == "SEC") & (y["yahoo"] == "ok") & (y["currency"] == "USD") & (
-            (pd.to_datetime(y["period"]) - pd.to_datetime(df["period"])).dt.days.abs() <= 20)
-        y = y.where(same)
+        y = pd.read_csv(yahoo.GAPS, dtype={"code": str, "period": str, "balance_period": str}).set_index("code").reindex(df.index)
+        near = lambda day: (pd.to_datetime(y[day]) - pd.to_datetime(df["period"])).dt.days.abs() <= 20
+        y = y.where((df["source"] == "SEC") & (y["yahoo"] == "ok") & (y["currency"] == "USD") & near("period"))
         adr = df["listing"].str.contains("Depositary", case=False, na=False)  # Yahoo counts the ordinary shares
         checks = [("TTM revenue vs Yahoo", gap(df["revenue_ttm"], y["revenue_ttm"])),
                   ("TTM net income vs Yahoo", gap(df["np_ttm"], y["ni_ttm"])),
-                  ("equity vs Yahoo", gap(df["equity"], y["equity"]))]
+                  # Yahoo's latest equity can be a quarter older than its TTM (Amazon, Gartner on 2026-10-19)
+                  ("equity vs Yahoo", gap(df["equity"], y["equity"].where(near("balance_period"))))]
         return [(label, g, worse(g)) for label, g in checks] + [
             ("shares vs Yahoo (not ADRs)", gap(df["shares"], y["shares"].where(~adr)), None)]
     c = pd.read_csv(yahoo.CONSENSUS, dtype={"code": str, "period_y": str}).set_index("code").reindex(df.index)

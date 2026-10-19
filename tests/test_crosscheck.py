@@ -63,13 +63,13 @@ def test_us_compares_sec_with_yahoo_for_the_same_period(monkeypatch):
     df, info = sample("crosscheck_us_sample.csv"), {}
     drops = crosscheck.checks(df, "us", info)
     # SoFi's SEC revenue concept gives 0.61bn against Yahoo's 4.31bn, Invesco's net income -0.31bn against -0.06bn:
-    # dropped. Berkshire's revenue (385bn vs 438bn, 14%) and Amazon's equity (552bn vs 442bn, 19.9%) are large gaps
-    # under the 20% drop line. TSM is valued on Yahoo's own numbers: nothing to compare.
+    # dropped. Berkshire's revenue (385bn vs 438bn, 14%) is a large gap under the 20% drop line. Amazon's Yahoo equity
+    # (442bn) is its March balance sheet, ours (552bn) June's: not compared. TSM is valued on Yahoo's own numbers.
     assert dropped(drops, "TTM revenue vs Yahoo >20%") == ["SOFI"]
     assert dropped(drops, "TTM net income vs Yahoo >20%") == ["IVZ"]
     assert dropped(drops, "equity vs Yahoo >20%") == []
     assert counts(info, "TTM revenue vs Yahoo") == "5: 3 / 0 / 2, drops 1"
-    assert counts(info, "equity vs Yahoo") == "5: 4 / 0 / 1, drops 0"
+    assert counts(info, "equity vs Yahoo") == "4: 4 / 0 / 0, drops 0"
     # Berkshire's Yahoo count is in class A shares: a large gap, counted only
     assert counts(info, "shares vs Yahoo (not ADRs)") == "5: 4 / 0 / 1"
     assert not any("shares" in label for label in drops)
