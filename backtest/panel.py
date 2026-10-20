@@ -18,7 +18,8 @@ from stockreport.fetch import nasdaq, sec
 BT = DATA / "backtest"
 HIST = BT / "history"  # history tables as the v2 code reads them (CN rebuilt point-in-time, US/HK linked)
 A_SHARE = re.compile(r"^(60[0-5]\d{3}|68[89]\d{3}|00[0-3]\d{3}|30[01]\d{3})$")
-HORIZONS = {"1m": 30, "3m": 91, "12m": 365}  # calendar days (CN); 1, 3, 12 months (US, HK)
+HORIZONS = {"1m": 30, "3m": 91, "6m": 182, "12m": 365}  # calendar days (CN); 1, 3, 6, 12 months (US, HK)
+BLOWUP = "6m"  # worst_<h>: the lowest month-end total return within the window (Method 17: a blow-up is <= -25%)
 PREMIUM = CONFIG["value"]["equity_premium"]
 HK_TOP = 410  # HK: the turnover screen needs volumes the monthly table lacks; ~410 names pass it today (Method 1)
 FIN_SW = ("48", "4901", "4902")  # 申万 banks (L1), brokers and insurers (L2)
@@ -94,6 +95,7 @@ class CNPrices:
         self.ret, self.close, self.amount, self.traded = z["ret"], z["close"], z["amount"], z["traded"]
         self.col = {c: i for i, c in enumerate(self.codes)}
         self.level = np.cumprod(np.nan_to_num(self.ret, nan=1.0), axis=0)
+        self.eom = np.array([d[:7] != n[:7] for d, n in zip(self.days, list(self.days[1:]) + ["9999"])])
         self.index = self.csi300()
 
     @staticmethod
@@ -148,8 +150,9 @@ class CNPrices:
             "traded_today": self.traded[t, cols], "first_day": self.days[first]}, index=codes)
 
     def forward(self, day: str, codes: list[str]) -> pd.DataFrame:
-        """Total return from the close of `day` to the last close on or before 30 / 91 / 365 days later
-        (NaN when that is beyond the data); a stock that stopped trading stays flat after its last day."""
+        """Total return from the close of `day` to the last close on or before 30 / 91 / 182 / 365 days later
+        (NaN when that is beyond the data), the index's, and for BLOWUP the worst month-end within the window;
+        a stock that stopped trading stays flat after its last day."""
         cols, t, last = [self.col[c] for c in codes], self.at(day), self.days[-1]
         out = pd.DataFrame(index=codes)
         for h, n in HORIZONS.items():
@@ -160,6 +163,9 @@ class CNPrices:
             e = self.at(end)
             out[f"ret_{h}"] = self.level[e, cols] / self.level[t, cols] - 1
             out[f"idx_{h}"] = self.index.asof(pd.Timestamp(str(self.days[e]))) / self.index.asof(pd.Timestamp(str(self.days[t]))) - 1
+            if h == BLOWUP:
+                rows = np.append(np.nonzero(self.eom[t + 1: e])[0] + t + 1, e)
+                out[f"worst_{h}"] = (self.level[rows][:, cols] / self.level[t, cols]).min(axis=0) - 1
         return out
 
 
@@ -257,14 +263,17 @@ class Monthly:
         return pd.DataFrame({"mom_12_1": mom, "vol_1y": r.std().where(r.count() >= 10) * np.sqrt(12)}, index=list(codes))
 
     def forward(self, month: str, codes) -> pd.DataFrame:
+        """Total return over the next 1 / 3 / 6 / 12 months, the index's, and for BLOWUP the worst month-end."""
         i, n, out = self.ret.index.get_loc(month), len(self.ret.index), pd.DataFrame(index=list(codes))
-        for h, k in (("1m", 1), ("3m", 3), ("12m", 12)):
+        for h, k in (("1m", 1), ("3m", 3), ("6m", 6), ("12m", 12)):
             if i + k >= n:
                 out[f"ret_{h}"] = np.nan
                 continue
-            window = 1 + self.ret.iloc[i + 1: i + k + 1]
-            out[f"ret_{h}"] = window.reindex(columns=list(codes)).prod(min_count=k) - 1
+            window = (1 + self.ret.iloc[i + 1: i + k + 1]).reindex(columns=list(codes))
+            out[f"ret_{h}"] = window.prod(min_count=k) - 1
             out[f"idx_{h}"] = self.close[self.index_code].iloc[i + k] / self.close[self.index_code].iloc[i] - 1
+            if h == BLOWUP:
+                out[f"worst_{h}"] = (window.cumprod().min() - 1).where(out[f"ret_{h}"].notna())
         return out
 
 
