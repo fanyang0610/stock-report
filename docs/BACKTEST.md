@@ -668,3 +668,83 @@ question) from single stocks (a review list) without changing any value.
 
 - Rerun (~6 min for compare; seconds for the rest, on the saved frames): `uv run python -m backtest.v3 compare`,
   then `map cn|us|hk`, `persistence`, `outliers`, `cn`.
+
+## 16. Industry checks and the thin US cell (Phase 13, 2026-10-20, your call: one more round)
+
+Your rule: an industry that is off as a whole points at the method for that industry; a few stocks off are
+individuals, checked with evidence. For each industry beyond ±30% today, the part of the method that drives it
+(counterfactual medians on the 2026-10-19 snapshot, one component changed at a time), the fix tested in the
+backtest, and how the industry did over the next 12 months on past dates when its median was beyond ±30%
+(equal-weight industry return over the universe; "market right" when an expensive industry beat it or a cheap one
+trailed it).
+
+**Fixes tested** (`fixes` grid, in-sample / out of sample; 12-month rank IC and list buy − sell; bar as Phase 9):
+
+| | CN | US | HK |
+|---|---|---|---|
+| base | 0.135 / 0.016 · +4.1% / +11.4% | 0.060 / 0.032 · +1.3% / −24.5% | 0.123 / 0.120 · +7.8% / +22.2% |
+| no ROE drift in the base-rate path | 0.118 / 0.016 · +0.1% / +9.7% | 0.057 / 0.029 · −3.5% / −12.7% | 0.101 / 0.115 · +7.0% / +14.5% |
+| pooled tail hazard, 100 company-years | 0.135 / 0.018 · +4.8% / +12.4% | 0.061 / 0.033 · **+2.6% / −24.0%** | 0.123 / 0.120 · +8.0% / +21.4% |
+| pooled tail hazard, 300 | 0.135 / 0.020 · +4.1% / +12.0% | 0.062 / 0.032 · +0.7% / −23.0% | 0.122 / 0.120 · +8.8% / +24.6% |
+| industry-level cells (CN 申万 L2, HK level 2) | 0.131 / 0.016 · −0.0% / +1.6% | — | 0.121 / 0.125 · −2.3% / +13.7% |
+
+- **The thin US cell** (technology, 10-20% growth, ROE 8-15%, large: 63 starts) had no company fall behind 13%
+  growth in years 5-9 with ~20-27 at risk, so the tail extension carried a zero hazard to 30 years and CACI,
+  AMETEK and Roper sat at the 30-year cap. Pooled tail: when fewer than 100 company-years were at risk behind a
+  cell's last 3 measured years, its 10-30 year hazard is the market's at the same growth rate. Adopted in the US
+  (lists +1.3 points in-sample, +0.5 out; rank IC unchanged); CN and HK don't clear the bar and keep their own
+  tails. Today: CACI +447% → +76%, AMETEK +350% → +43%, Roper +290% → +88% (durations 10-13 years); US stocks
+  at the cap 22 → 1; beyond ±100% 6.9% → 6.4%.
+- **No ROE drift** explains US energy (integrated oil −53% → −21%, E&P −50% → −6% today) but lowers the
+  ranking in every market: not adopted (removed after the test; commit 6f780fe has it).
+- **Industry-level cells** don't move CN semiconductors (median −44% either way) and lower the lists: not adopted.
+- **Analysts' 3 years kept** (durations of at least 3 for covered stocks; Method 16's draft said so, the build
+  counts the duration from today) closes most of CN tech's gap today but can't be tested at 12 months (no
+  consensus history). On the CN 2026 consensus window (4-6 dates, covered stocks) it was mixed: 1-month IC −0.023
+  vs −0.037, 3-month +0.173 vs +0.191, top − bottom fifth over 3 months +4.1% vs −1.9%. Your call; commit 6f780fe
+  has the switch.
+
+**Each industry beyond ±30% today:**
+
+| market | industry | median | what drives it (counterfactual median) | when off before: in / out (dates) | reading |
+|---|---|---|---|---|---|
+| CN | 半导体 | −55% | analysts' 37% growth against a base-rate duration of 0.9 years (analysts' 3 years kept: −36%) | +10.7% (46) / +39.5% (13) | market right in both samples: v3 undervalues the industry |
+| CN | 通信设备 | −56% | analysts' 40% growth, duration 0.9 (−36%) | — / +75.5% (2) | new; market right so far |
+| CN | 元件 | −44% | analysts' years truncated (−1%) | — / +64.2% (3) | new |
+| CN | 自动化设备 | −53% | analysts' years (−32%) | −6.0% (25) / +37.5% (3) | v3 right in-sample |
+| CN | 电子化学品Ⅱ | −49% | analysts' years (−28%) | — | new |
+| CN | 通用设备 | −49% | analysts' years (−22%) | −4.3% (12) / +51.0% (2) | v3 right in-sample |
+| CN | 军工电子Ⅱ | −38% | analysts' years (−17%) | −8.8% (6) / +13.1% (5) | mixed |
+| CN | 软件开发 | −57% | the price needs 15% growth for 17 years; no fix moves it | +0.1% (30) / +2.1% (21) | neither: the industry went sideways |
+| CN | 乘用车 | +32% | 5 stocks, falling prices (momentum −37%) | — | new |
+| US | Integrated oil | −53% | the energy cell's ROE drift (no drift: −21%) | +4.9% (20) / +9.7% (20) | market right in both |
+| US | Oil & Gas Production | −50% | ROE drift (−6%) | −4.1% (26) / −5.6% (20) | v3 right in both |
+| US | Semiconductors | −49% | analysts' 36% growth, duration 1.6 (−39%) | +3.4% (25) / +121.6% (4) | market right |
+| US | Prepackaged Software | −35% | analysts' years (−20%) | +2.0% (53) / −13.9% (21) | mixed; v3 right out of sample |
+| US | Life Insurance | +38% | the rate: prices imply 12% against 9.3% used (λ = 1: 0%) | — / −7.3% (1) | new |
+| HK | 软件服务 | −31% | the rate: prices imply 5.7% against 6.5% used (λ = 1: 0%) | −3.8% (35) / −6.5% (21) | v3 right in both |
+| HK | 银行 | +35% | the rate: prices imply 12% against 9.9% (λ = 1: 0%) | −4.2% (53) / −1.2% (21) | market right in both: cheap banks stayed cheap |
+| HK | 建筑 | +37% | the rate: 17% against 9.8% | −7.4% (54) / +0.4% (19) | market right in-sample |
+| HK | 其他金融 | +38% | the rate: 13% against 10.3% | +18.5% (2) / +31.4% (5) | v3 right (few dates) |
+| HK | 保险 | +48% | the rate: 17% against 10.6% | +0.0% (22) / +24.5% (7) | v3 right out of sample |
+
+What it says about the method, by group: (1) growth industries (CN tech, US semis and software) are where base
+rates override analysts most; the record says the market was right in semiconductors in both CN and the US, v3 in
+HK software and (out of sample) US software. (2) Energy: the chained ROE drift carries the 2015-2020 bust forward;
+it was wrong for integrated oil and right for E&P. (3) Financials and construction in HK: only half the industry
+premium is taken as risk; history sides with the market for banks and construction and with v3 for insurers.
+
+**Stocks beyond ±100% today, by verdict** (your rule: individuals are checked, not normalized):
+
+| | beyond ±100% | 数据错误 | 行业 | 证据支持 | 需复核 (unexplained) |
+|---|---|---|---|---|---|
+| CN | 37 (4.8%) | 0 | 4 | 18 | 15 (2.0%) |
+| US | 50 (6.4%) | 2 | 9 | 20 | 19 (2.4%) |
+| HK | 27 (7.8%) | 2 | 8 | 7 | 10 (2.9%) |
+
+The largest remaining driver among unexplained US names is growth at the 40% cap (11 of 50; 5 are recoveries from a
+depressed first analyst year: airlines, Stellantis), testable only with consensus history.
+
+With the pooled tail, the US row of section 15's last table becomes: rank IC +0.061 in-sample / +0.033 out of sample, lists +2.6% / −24.0% (CN and HK unchanged); the US outlier split in data/backtest/v3_outliers.md moves by 1-2 points.
+
+- Rerun: `uv run python -m backtest.v3 fixes cn|us|hk` (data/backtest/v3_fixes_<market>.csv).

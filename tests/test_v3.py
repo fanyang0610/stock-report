@@ -149,3 +149,15 @@ def test_industry_and_country_rates():
     country = pd.Series(["United States"] * 10 + ["Japan"] * 2, index=implied.index)
     prem = v3.country_premium(implied, country)
     assert prem["s0"] == 0 and prem["s10"] == pytest.approx(0.09 - 0.07)  # pooled (under 5): 9% over home's 7%
+
+
+def test_thin_tail_takes_the_markets_hazard():
+    # a cell where nobody failed after year 3 (hazard 0) but only 20 were at risk in each of its last 3 measured
+    # years (60 company-years): with min_tail 100 its 10-30 year tail takes the market's 10% a year instead
+    s = np.r_[1.0, 0.9, 0.8, [0.7] * 8]
+    risk = np.r_[60, 50, 40, 30, 25, 22, [20] * 4]
+    ref = (0.9 ** np.arange(br.H + 1), np.full(br.H, 1000))
+    flat, pooled = br.extend(s, risk), br.extend(s, risk, ref, min_tail=100)
+    assert flat[br.DMAX] == pytest.approx(0.7)  # the cell's own zero hazard, forever
+    assert pooled[br.H + 1] == pytest.approx(0.7 * 0.9) and pooled[br.DMAX] == pytest.approx(0.7 * 0.9 ** (br.DMAX - br.H))
+    assert br.extend(s, risk, ref, min_tail=50)[br.DMAX] == pytest.approx(0.7)  # 60 at risk is enough at 50

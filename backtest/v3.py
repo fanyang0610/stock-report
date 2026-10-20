@@ -4,7 +4,7 @@ v1 and the plain earnings- and book-yield rankings. Parameters are chosen in-sam
 checked out of sample (2024-01..2026-09). The trend-first lists (trend.py, shadow.buckets) re-bucket the saved
 frame, so their variants cost seconds.
 
-  uv run python -m backtest.v3 grid|lambda|country|fixes|industry cn|us|hk  # valuation grids -> data/backtest/v3_<grid>_<market>.csv
+  uv run python -m backtest.v3 grid|lambda|country|fixes cn|us|hk  # valuation grids -> data/backtest/v3_<grid>_<market>.csv
   uv run python -m backtest.v3 compare            # v1, v3 (config.toml), E/P, B/P -> data/backtest/v3_results.md (+ frames)
   uv run python -m backtest.v3 map cn|us|hk       # trend × valuation map variants on the saved frame -> v3_map_<market>.csv
   uv run python -m backtest.v3 persistence        # base rates by business trend band (panel study) -> v3_persistence.md
@@ -31,8 +31,8 @@ V3_COLS = ["upside", "v_mid", "v_low", "v_high", "bucket", "confidence", "implie
            f"vote_{k}" for k in trend.TEXT]
 LAMBDA_GRID = {"industry premium": [("v3__LAMBDA", x) for x in (0.0, 0.25, 0.5, 0.75, 1.0)]}
 COUNTRY_GRID = {"country premium": [("v3__COUNTRY_LAMBDA", x) for x in (0.0, 0.5, 1.0)]}
-FIX_GRID = {"industry checks": [("br__DRIFT", False), ("br__MIN_TAIL", 100), ("br__MIN_TAIL", 300), ("v3__KEEP_ANALYSTS", True)]}
-INDUSTRY_GRID = {"industry cells": [("br__INDUSTRY", True)]}  # CN 申万 L2 / HK level-2 base-rate cells
+# industry checks (2026-10-20, commit 6f780fe also had no ROE drift and industry-level cells: both lowered in-sample rank IC)
+FIX_GRID = {"industry checks": [("br__MIN_TAIL", 0), ("br__MIN_TAIL", 100), ("br__MIN_TAIL", 300)]}  # analysts' 3 years: 6f780fe
 GRID = {
     "fade years": [("v3__FADE", x) for x in (3, 5, 10, 15)],
     "tolerance": [("br__TOL", x) for x in (0.0, 0.1, 0.25)],
@@ -194,11 +194,11 @@ def beta(df: pd.DataFrame, gap: str, h: str, by: list[str] | None = None) -> pd.
 def grid(market: str, which: str = "grid") -> pd.DataFrame:
     panel.setup_history(market)
     data, rows = run.load(market), []
-    grids = {"lambda": LAMBDA_GRID, "country": COUNTRY_GRID, "fixes": FIX_GRID, "industry": INDUSTRY_GRID}.get(which) or GRID
+    grids = {"lambda": LAMBDA_GRID, "country": COUNTRY_GRID, "fixes": FIX_GRID}.get(which) or GRID
     for name, options in grids.items():
         for key, val in options:
             f = frame(market, data, **{key: val})
-            f.to_pickle(panel.BT / f"v3_{market}_{key}_{val}.pkl") if which in ("fixes", "industry") else None
+            f.to_pickle(panel.BT / f"v3_{market}_{key}_{val}.pkl") if which == "fixes" else None
             rows.append({"param": name, "value": f"{key}={val}", "market": market} | metrics(f, "v3 before (v2 rules)")
                         | {f"map {k}": x for k, x in metrics(f).items() if "buy" in k})
             print(name, val, {k: round(x, 3) for k, x in rows[-1].items() if k.endswith(("ic 12m", "buy-sell 12m"))}, flush=True)
@@ -382,7 +382,7 @@ def cn_study() -> None:
 
 
 if __name__ == "__main__":
-    if sys.argv[1] in ("grid", "lambda", "country", "fixes", "industry"):
+    if sys.argv[1] in ("grid", "lambda", "country", "fixes"):
         grid(sys.argv[2], sys.argv[1])
     elif sys.argv[1] == "map":
         map_grid(sys.argv[2])

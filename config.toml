@@ -109,10 +109,7 @@ growth = [-0.10, 0.40]        # the growth rate held during the duration (analys
 long_growth = { cn = 0.03, hk = 0.03, us = 0.04 }   # long-run nominal growth (as v2)
 long_roe = { cn = "market", hk = "market", us = "r" }  # long-run ROE: "market" (the largest third's median) or "r" (no excess)
 industry_lambda = { cn = 0.75, hk = 0.5, us = 0.5 }  # share of an industry's implied premium over the market's rate taken as risk
-analysts_years = { cn = false, hk = false, us = false }  # covered stocks keep analysts' 3 years before the base-rate duration takes over
-drift = { cn = true, hk = true, us = true }  # base-rate ROE paths chain the cell's median yearly change (false: persistence toward the cell mean only)
 tail_exposure = { cn = 0, hk = 0, us = 100 }  # a cell's 10-30 year hazard needs this many company-years at risk behind it, else the market's at the same rate (0: off; in-sample)
-industry_cells = { cn = false, hk = false, us = false }  # base rates: an industry (CN 申万 L2, HK level 2) × growth × ROE cell first, where it has the starts
 country_lambda = 0.5          # US: share of a foreign listing's country premium (its country's implied rate over home listings')
 
 [trend]                       # business trend (PLAN.md Method 16, "Trend first"); a vote is +1 / -1 outside its dead band

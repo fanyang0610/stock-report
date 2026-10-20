@@ -17,7 +17,6 @@ G_LONG = CFG["long_growth"]
 FADE = CFG["fade_years"]
 LONG_ROE = CFG["long_roe"]  # per market: "market" (the largest third's median ROE) or "r" (no long-run excess)
 LAMBDA = CFG["industry_lambda"]  # per market: share of an industry's implied premium accepted as its risk
-KEEP_ANALYSTS = CFG["analysts_years"]  # per market: covered stocks keep analysts' 3 years (durations of at least 3)
 COUNTRY_LAMBDA = CFG["country_lambda"]  # US: share of a foreign listing's country premium accepted as its risk
 MIN_SPREAD = 0.015  # discount rate at least long-run growth + this
 R_RANGE = (0.0, 0.40)
@@ -210,13 +209,10 @@ def value(df: pd.DataFrame, h: pd.DataFrame, st: pd.DataFrame, market: str, sect
                     np.searchsorted(st.attrs["size_cuts"], df["revenue_ttm"].fillna(0)))
     want.index = df.index
     want["sector"] = sector.reindex(df.index).fillna("")
-    ind = br.industries(market)
-    want["industry"] = want["sector"] if ind is None else ind.reindex(df.index).fillna("")
     S, path, cells = br.survival(st, want, x["g"], per_market(br.TOL, market))
     x = x.join(cells)
     t0 = x["t0"].to_numpy(int)
     q = quantile_durations(S)
-    q = np.maximum(q, t0[:, None]) if per_market(KEEP_ANALYSTS, market) else q
     ok, price = x["ok"].to_numpy(bool), df["price"].to_numpy(float)
     well = ok & (x["t0"].to_numpy() == 3) & (x["n_years"].to_numpy() >= 5)
     if well.sum() < 30:  # no consensus (the backtest): stocks with 5+ years of history
