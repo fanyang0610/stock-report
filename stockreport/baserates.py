@@ -14,12 +14,15 @@ H = 10  # years measured; beyond, the hazard of the last 3 measured years contin
 DMAX = 30
 MIN_RISK = 20  # a year is measured only while this many companies are still at risk
 MIN_PAIRS = 50  # a cell's ROE change in a year counts only with this many companies reporting both years
+DRIFT = CONFIG["v3"]["drift"]  # per market: the ROE path chains the cell's median yearly change (else persistence only)
+MIN_TAIL = CONFIG["v3"]["tail_exposure"]  # per market: a cell's tail hazard needs this many company-years at risk, else the market's
 GROWTH = [-np.inf, 0.0, 0.1, 0.2, 0.35, np.inf]  # revenue growth in the start year
 ROE = [-np.inf, 0.08, 0.15, 0.25, np.inf]
 G_GRID = np.round(np.arange(-0.10, 0.401, 0.025), 3)  # survival is measured at these rates and interpolated
 MIN_STARTS = CONFIG["v3"]["min_starts"]
 TOL = CONFIG["v3"]["tolerance"]  # per market
 LEVELS = [("sector", "gb", "qb", "sb"), ("sector", "gb", "qb"), ("sector", "qb"), ("gb", "qb", "sb"), ("gb", "qb"), ("gb",)]
+INDUSTRY = CONFIG["v3"]["industry_cells"]  # per market: a first cell of industry × growth × ROE band (CN 申万 L2, HK level 2)
 US_MIN_REVENUE = 5e7  # US frames: filers with $50m+ revenue in the start year (shells and funds out)
 # Fama-French 12 industries by SIC code (US: SEC gives every filer, dead ones too, a SIC code, not a Nasdaq sector)
 FF12 = [("耐用消费品", [(2500, 2519), (2590, 2599), (3630, 3659), (3710, 3711), (3714, 3714), (3716, 3716), (3750, 3751),
@@ -57,6 +60,24 @@ def sectors(market: str) -> pd.Series:
     return sic.map(ff12)
 
 
+def industries(market: str) -> pd.Series | None:
+    """code -> industry under the base-rate sector: CN 申万 level 2 code, HK the first two levels of the industry
+    type; US none (the sector)."""
+    if market == "cn":
+        from stockreport.fetch import swclass
+        return pd.read_csv(swclass.TABLE, dtype=str).sort_values("start").groupby("code")["sw"].last().str[:4]
+    if market == "hk":
+        from stockreport.fetch import eastmoney
+        return eastmoney.load_hk_list().drop_duplicates("code").set_index("code")["industry_type"].str.split("-").str[:2].str.join("-")
+    return None
+
+
+def levels(market: str) -> list:
+    """The market's cells, finest first: with industry_cells, industry × growth × ROE band before the sector cells."""
+    on = INDUSTRY.get(market, False) if isinstance(INDUSTRY, dict) else INDUSTRY
+    return ([("industry", "gb", "qb")] if on else []) + LEVELS
+
+
 def panel(market: str) -> pd.DataFrame:
     """One row per company and fiscal year: code, year, sector, rev, earn (CN 扣非, US net income, HK profit),
     roe and the day the year became public (US frames: 31 March of the next year)."""
@@ -72,7 +93,9 @@ def panel(market: str) -> pd.DataFrame:
         y = history.YEARS[market]()
         out = pd.DataFrame({"code": y["code"], "year": y["year"], "rev": y["rev"], "earn": y["core"], "roe": y["roe"],
                             "avail": y["avail"]})
-    return out.assign(sector=out["code"].map(sectors(market)).fillna("")).drop_duplicates(["code", "year"], keep="last")
+    out = out.assign(sector=out["code"].map(sectors(market)).fillna(""))
+    ind = industries(market)
+    return out.assign(industry=out["sector"] if ind is None else out["code"].map(ind).fillna("")).drop_duplicates(["code", "year"], keep="last")
 
 
 def bands(growth, roe, size_rank) -> pd.DataFrame:
@@ -86,11 +109,11 @@ def starts(p: pd.DataFrame, today: str, market: str) -> pd.DataFrame:
     """Every profitable company-year public by `today` (a start; US: $50m+ revenue), with its bands, its profit
     k = 1..H years later over the start's (e1..e10) and its ROE then (q1..q10); NaN once the company stops
     reporting or the year isn't public yet. The latest year's revenue terciles are in .attrs["size_cuts"]."""
-    p = p[p["avail"] <= today]
+    p = p[p["avail"] <= today].pipe(lambda d: d if "industry" in d else d.assign(industry=d["sector"]))
     years = list(range(int(p["year"].min()), int(p["year"].max()) + 1))
     wide = {c: p.pivot(index="code", columns="year", values=c).reindex(columns=years) for c in ("earn", "rev", "roe")}
     e, rev, roe = wide["earn"].to_numpy(float), wide["rev"].to_numpy(float), wide["roe"].to_numpy(float).clip(*history.ROE_CLIP)
-    sector = p.groupby("code")["sector"].last().reindex(wide["earn"].index).to_numpy()
+    sector, industry = (p.groupby("code")[c].last().reindex(wide["earn"].index).to_numpy() for c in ("sector", "industry"))
     rows, cuts = [], {}
     for j, year in enumerate(years[1:], start=1):
         ok = (e[:, j] > 0) & (rev[:, j] > (US_MIN_REVENUE if market == "us" else 0))
@@ -102,16 +125,16 @@ def starts(p: pd.DataFrame, today: str, market: str) -> pd.DataFrame:
         with np.errstate(divide="ignore", invalid="ignore"):
             growth = rev[ok, j] / rev[ok, j - 1] - 1
         b = bands(growth, roe[ok, j], np.searchsorted(cuts[year], rev[ok, j]))
-        rows.append(pd.DataFrame(cols).assign(year=year, sector=sector[ok], **b))
+        rows.append(pd.DataFrame(cols).assign(year=year, sector=sector[ok], industry=industry[ok], **b))
     out = pd.concat(rows, ignore_index=True)
-    out.attrs["size_cuts"] = cuts[max(cuts)]
+    out.attrs["size_cuts"], out.attrs["market"] = cuts[max(cuts)], market
     return out
 
 
 ECOLS, QCOLS = [f"e{k}" for k in range(1, H + 1)], [f"q{k}" for k in range(0, H + 1)]
 
 
-def roe_path(q: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def roe_path(q: np.ndarray, drift: bool = True) -> tuple[np.ndarray, np.ndarray]:
     """How a cell's ROE moved after a start: ROE k years on ≈ A[k] + B[k] × ROE at the start: the level chained
     with the median yearly change (the drift), B the share of a company's distance from the mean still there
     (slope within [0, 1]). A year with under MIN_PAIRS companies adds no change and keeps the last slope."""
@@ -120,7 +143,7 @@ def roe_path(q: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     level, slope = start.mean(), 1.0
     for k in range(1, H + 1):
         both = np.isfinite(q[:, k]) & np.isfinite(q[:, k - 1])
-        step = float(np.median(q[both, k] - q[both, k - 1])) if both.sum() >= MIN_PAIRS else 0.0
+        step = float(np.median(q[both, k] - q[both, k - 1])) if drift and both.sum() >= MIN_PAIRS else 0.0
         seen = np.isfinite(q[:, k]) & np.isfinite(q[:, 0])
         if seen.sum() >= MIN_PAIRS and q[seen, 0].std() > 0:
             slope = float(np.clip(np.polyfit(q[seen, 0], q[seen, k], 1)[0], 0, 1))
@@ -147,20 +170,26 @@ def track(g: float, tol: float | None = None) -> np.ndarray:
     return np.cumsum((1 + g) ** np.arange(1, H + 1)) * (1 - (TOL["cn"] if tol is None else tol))
 
 
-def extend(s: np.ndarray, risk: np.ndarray) -> np.ndarray:
-    """Survival to DMAX: measured while MIN_RISK are at risk, then the last 3 measured years' hazard continues."""
-    k = int(np.argmax(risk < MIN_RISK)) if (risk < MIN_RISK).any() else H  # years measured
-    k = max(k, 1)
+def hazard(s: np.ndarray, risk: np.ndarray) -> tuple[int, float, int]:
+    """Years measured (while MIN_RISK are at risk), the yearly hazard of the last 3 of them and the exposure behind it."""
+    k = max(int(np.argmax(risk < MIN_RISK)) if (risk < MIN_RISK).any() else H, 1)
     base = s[max(k - 3, 0)]
-    hazard = 1 - (s[k] / base) ** (1 / min(k, 3)) if base > 0 and s[k] > 0 else 1.0
-    tail = s[k] * (1 - hazard) ** np.arange(1, DMAX - k + 1)
+    return k, (1 - (s[k] / base) ** (1 / min(k, 3)) if base > 0 and s[k] > 0 else 1.0), int(risk[max(k - 3, 0): k].sum())
+
+
+def extend(s: np.ndarray, risk: np.ndarray, ref: tuple | None = None, min_tail: int = 0) -> np.ndarray:
+    """Survival to DMAX: measured while MIN_RISK are at risk, then the last 3 measured years' hazard continues (the
+    market's at the same rate, `ref`, when fewer than `min_tail` company-years were at risk behind the cell's own)."""
+    k, h, exposure = hazard(s, risk)
+    h = hazard(*ref)[1] if ref is not None and exposure < min_tail else h
+    tail = s[k] * (1 - h) ** np.arange(1, DMAX - k + 1)
     return np.concatenate([s[: k + 1], tail])
 
 
 def cell_of(st: pd.DataFrame, want: pd.DataFrame) -> pd.DataFrame:
     """Per stock (rows of `want`: sector, gb, qb, sb), the finest LEVELS cell with MIN_STARTS starts: level, key."""
     out = pd.DataFrame({"level": np.nan, "key": None}, index=want.index)
-    for i, cols in enumerate(LEVELS):
+    for i, cols in enumerate(levels(st.attrs.get("market"))):
         counts = st.groupby(list(cols)).size()
         keys = pd.MultiIndex.from_frame(want[list(cols)]) if len(cols) > 1 else pd.Index(want[cols[0]])
         n = pd.Series(counts.reindex(keys).to_numpy(), index=want.index)
@@ -171,7 +200,7 @@ def cell_of(st: pd.DataFrame, want: pd.DataFrame) -> pd.DataFrame:
 
 
 def members(st: pd.DataFrame, level, key) -> np.ndarray:
-    cols = list(LEVELS[int(level)])
+    cols = list(levels(st.attrs.get("market"))[int(level)])
     return np.logical_and.reduce([st[c].to_numpy() == v for c, v in zip(cols, key)])
 
 
@@ -181,17 +210,21 @@ def survival(st: pd.DataFrame, want: pd.DataFrame, g: pd.Series, tol: float) -> 
     and the cell (level, key, starts)."""
     cells = cell_of(st, want)
     surv, path = np.full((len(want), DMAX + 1), np.nan), np.full((len(want), 2, H), np.nan)
-    cells["starts"] = 0
+    market = st.attrs.get("market")
+    cells["starts"], drift = 0, DRIFT.get(market, True) if isinstance(DRIFT, dict) else DRIFT
+    min_tail = MIN_TAIL.get(market, 0) if isinstance(MIN_TAIL, dict) else MIN_TAIL
+    pool = np.cumsum(st[ECOLS].to_numpy(float), axis=1)
+    refs = [km(pool, track(x, tol)) for x in G_GRID] if min_tail else [None] * len(G_GRID)  # the market's, per rate
     for (level, key), part in cells.dropna(subset=["level"]).groupby(["level", "key"]):
         mask = members(st, level, key)
         ratio = np.cumsum(st.loc[mask, ECOLS].to_numpy(float), axis=1)
-        grid = np.array([extend(*km(ratio, track(x, tol))) for x in G_GRID])  # (rates, years)
+        grid = np.array([extend(*km(ratio, track(x, tol)), ref, min_tail) for x, ref in zip(G_GRID, refs)])  # (rates, years)
         rows = want.index.get_indexer(part.index)
         x = np.clip(g.loc[part.index].to_numpy(float), G_GRID[0], G_GRID[-1])
         pos = np.interp(x, G_GRID, np.arange(len(G_GRID)))
         lo, frac = np.floor(pos).astype(int), (pos % 1)[:, None]
         surv[rows] = grid[lo] * (1 - frac) + grid[np.minimum(lo + 1, len(G_GRID) - 1)] * frac
-        path[rows] = np.stack(roe_path(st.loc[mask, QCOLS].to_numpy(float)))
+        path[rows] = np.stack(roe_path(st.loc[mask, QCOLS].to_numpy(float), drift))
         cells.loc[part.index, "starts"] = int(mask.sum())
     return surv, path, cells
 
@@ -217,8 +250,8 @@ def describe(level, key, market: str) -> str:
     if pd.isna(level):
         return ""
     names = {"gb": lambda b: f"营收增速 {band(GROWTH, b)}", "qb": lambda b: f"ROE {band(ROE, b)}",
-             "sb": lambda b: ["小", "中", "大"][int(b)] + "规模", "sector": lambda s: s}
-    return " · ".join(names[c](v) for c, v in zip(LEVELS[int(level)], key))
+             "sb": lambda b: ["小", "中", "大"][int(b)] + "规模", "sector": lambda s: s, "industry": lambda s: f"行业 {s}"}
+    return " · ".join(names[c](v) for c, v in zip(levels(market)[int(level)], key))
 
 
 def band(edges: list, b) -> str:
