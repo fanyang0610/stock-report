@@ -939,6 +939,25 @@ Costs and turnover: buys turn over 26-42% a month; one round trip (US 0.2%, CN 0
 beat rate by 0-0.7 points. Gaps beyond +100% among the buys: US 49%, CN 14-35%, HK 33-63%; resting on the gap alone
 (the other inputs below their median): US 0, CN 0, HK 4 of 410.
 
+**The rank itself** (your question: the weighted score's rank, not only its top 5). Each input is a percentile among the
+day's valued stocks, the score their weighted average, the buys the 5 best-ranked survivors of the funnel. The funnel's
+survivors by score fifth (top → bottom), beat the index / blow-ups:
+
+| 6 months | US in | US out | CN in | CN out | HK in | HK out |
+|---|---|---|---|---|---|---|
+| top fifth | 48.8% / 9.0% | 54.4% / 4.0% | 56.7% / 5.6% | 49.3% / 3.6% | 65.4% / 7.6% | 58.0% / 2.2% |
+| second | 47.7% / 8.1% | 44.6% / 5.1% | 53.8% / 9.0% | 46.1% / 5.1% | 55.0% / 16.7% | 49.1% / 6.8% |
+| middle | 46.3% / 6.5% | 37.4% / 6.4% | 49.9% / 15.6% | 36.0% / 7.1% | 53.7% / 17.4% | 44.5% / 6.3% |
+| fourth | 47.9% / 7.8% | 41.2% / 7.2% | 46.8% / 21.5% | 40.7% / 9.7% | 52.2% / 23.3% | 40.0% / 12.0% |
+| bottom fifth | 48.3% / 8.5% | 38.4% / 6.6% | 41.1% / 25.7% | 38.7% / 13.5% | 44.8% / 34.2% | 41.7% / 17.1% |
+| median over the index, top / bottom | −0.4% / −0.6% | +2.0% / −5.3% | +2.6% / −5.0% | −0.4% / −6.0% | +5.7% / −2.8% | +4.0% / −5.3% |
+
+The rank sorts blow-ups in every market and both samples, and the beat rate in CN and HK in both samples; in the US
+only out of sample (in-sample every fifth beat the index 46-49% of the time). The top fifth (30-40 names a month) beat
+the index 49-58% of the time out of sample, so 5-name lists drawn from it sit near the 55% line. Today's ranking with
+every input (2026-10-19, scratch, not built): the review page and reports/2026-10-19/m17_ranking.csv; the top of CN
+and HK is mostly banks and brokers (cheap, calm, rising).
+
 **7. Survivorship.** CN is close to point-in-time (it misses ~0.9% of turnover, section 9) and is where the score
 improved most on today's lists (both samples, both measures), so survivors don't make the design. In the US about
 3.8% of the 800 largest SEC filers a year stop filing (2009-2023, mostly takeovers): even if each had been a blow-up,

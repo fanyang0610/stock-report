@@ -319,6 +319,12 @@ def run_score(market: str) -> None:
     groups = {"all stocks": f, "today's v3 buys": f[f["v3_bucket"] == "buy"], f"buys ({chosen})": f[b == "buy"],
               "today's v3 sells": f[f["v3_bucket"] == "sell"], f"sells ({chosen})": f[b == "sell"]}
     print("\n-- the lists, 6 months\n" + summary(groups).to_string())
+    q = s[field].groupby(f.loc[field, "date"]).rank(pct=True)
+    fifth = np.ceil(q * 5).clip(1, 5).reindex(f.index)
+    by = f[fifth.notna()].groupby(["sample", fifth[fifth.notna()].rename("fifth")])
+    print("\n-- the funnel's survivors by score fifth (5 = top)\n" + pd.DataFrame(
+        {"beat": by["beat"].mean(), "blow-ups": by["blow"].mean(), "median vs index": by["ex6"].median(), "n": by.size()}
+    ).sort_index(ascending=[True, False]).round(3).to_string())
     top, bot = fifths(f, s, valued)
     print("\n-- all valued stocks, top vs bottom fifth by score: mean 6-month return over the index; blow-ups")
     sub = {}
