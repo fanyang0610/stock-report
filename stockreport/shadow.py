@@ -17,7 +17,6 @@ MAP = CONFIG["trend"]["map"]  # per market: the trend × valuation map (else v2'
 BUY = CONFIG["trend"]["buy"]  # per market: strict buys from "improving" only or "stable" too
 HOME = "United States"  # US: foreign listings can't be bought (config buy_home_only)
 HALF, DOUBLE = -0.5, 1.0  # common-sense clash: a healthy business valued under half its price, one in trouble over twice
-GUARD = True  # never buy a business in trouble (trend.health; the backtest measures it off)
 HAND = {"us": ["TM", "GM", "F", "STLA", "TSLA", "RACE", "LLY", "JNJ", "NVDA", "MU", "ARM", "CRWD", "JPM"],
         "cn": ["601668", "601390", "600019", "600519", "300750", "002594", "300308"],
         "hk": ["00700", "03690", "00941", "02007", "01299"]}  # the Phase 13 hand-check list (PLAN item 13)
@@ -192,7 +191,7 @@ def buy_universe(df: pd.DataFrame, market: str) -> pd.Series:
 def buckets(v: pd.DataFrame, df: pd.DataFrame, market: str = "cn") -> pd.DataFrame:
     """买入 / 持有 / 卖出, 5 each, strict rules first, relaxed fills 低信心, at most 2 per industry, data errors left out;
     per market (config [trend], PLAN.md Method 16) v2's rules or the trend × valuation map (a buy needs an improving or
-    stable trend, an improver is never a sell, a strict sell needs a deteriorating one); everywhere trouble is never a buy."""
+    stable trend, an improver is never a sell, a strict sell needs a deteriorating one)."""
     n, cap = CONFIG["buckets"]["per_bucket"], CONFIG["buckets"]["max_per_group"]
     ok = v["valued"] & (v["verdict"] != "数据错误")
     up, good, passed, mom = v["upside"], v["confidence"].isin(["高", "中"]), v["screen_ok"], df["z_momentum"]
@@ -202,7 +201,6 @@ def buckets(v: pd.DataFrame, df: pd.DataFrame, market: str = "cn") -> pd.DataFra
         trap, weak, protect = det, det, imp
     else:
         lead, trap, weak, protect = mom >= -0.5, False, (mom <= -0.5) | (df["np_growth"] < 0) | ~passed, False
-    trap = trap | (v["health"] <= -1) if GUARD else trap  # the common-sense guardrail, every market
     can_buy = ok & buy_universe(df, market) & ~trap
     width = (np.log(v["v_high"] / v["v_low"]) / 2).clip(upper=0.5).fillna(0.5)
     cw = np.log1p(up.clip(lower=-0.99)) * (1 - width)
@@ -268,7 +266,7 @@ def report(df: pd.DataFrame, picks: pd.DataFrame, v: pd.DataFrame, market: str) 
     large, far = ok & (df["mcap"] >= df["mcap"].quantile(2 / 3)), (up <= HALF) | (up >= DOUBLE)
     print(f"\ncommon sense: large stocks valued under ½ or over 2× their price {far[large].mean():.0%}; clashes (healthy under ½, "
           f"in trouble over 2×) {v.loc[ok, 'clash'].sum()}; business health 健康 {(v.loc[ok, 'health'] >= 1).sum()} / 困难 "
-          f"{(v.loc[ok, 'health'] <= -1).sum()} (never a buy)\noutlier verdicts (beyond ±100% or labelled): "
+          f"{(v.loc[ok, 'health'] <= -1).sum()}\noutlier verdicts (beyond ±100% or labelled): "
           + ", ".join(f"{k} {n}" for k, n in v.loc[v["verdict"] != "", "verdict"].value_counts().items()))
     show = v.join(df[["name", "price"]])
     for kind in ("数据错误", "需复核"):  # data errors and your review list, the largest 15 by upside

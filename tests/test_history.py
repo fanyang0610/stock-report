@@ -5,11 +5,10 @@ import os
 from datetime import date
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
 
-from stockreport import fetch, history
+from stockreport import fetch
 from stockreport.fetch import sec, yahoo
 
 SAMPLES = Path(__file__).parent / "data"
@@ -95,12 +94,3 @@ def test_history_is_point_in_time(tmp_path, monkeypatch):
     assert history.us_annual(date(2023, 3, 31))["code"].tolist().count("Y") == 1
     assert history.us_annual(date(2023, 3, 30))["code"].tolist().count("Y") == 0
 
-
-def test_research_asset_by_hand():
-    # R&D 100 a year for 2021-2024, 200 in 2025 (2020 missing: the oldest known year stands in), revenue 1,000;
-    # written off over 5 years: asset = 200 + 100 × (0.8 + 0.6 + 0.4 + 0.2) = 400, R&D less write-off = 200 - 500 / 5 = 100
-    y = pd.DataFrame({"code": ["A"] * 5 + ["B"] * 2, "year": [2021, 2022, 2023, 2024, 2025, 2024, 2025],
-                      "rnd": [100, 100, 100, 100, 200, 50, np.nan], "rev": [1000] * 7})
-    rd = history.research(y, ["A", "B"], 5)
-    assert list(rd.index) == ["A"]  # B's latest year reports no R&D
-    assert rd.at["A", "rd_asset"] == pytest.approx(0.4) and rd.at["A", "rd_delta"] == pytest.approx(0.1)

@@ -19,11 +19,9 @@ from backtest import panel, v3 as bt
 
 HALF, DOUBLE = -0.5, 1.0  # "the price halves" / "the price doubles"
 PB_CUTS, PB_NAMES = [0, 1.5, 4, np.inf], ["P/B<1.5", "1.5-4", ">4"]
-# variant -> (snapshots, settings); US "annual" is the Phase 9 snapshots kept as snap_us_annual.pkl (no quarterly reports)
-VARIANTS = {"us": {"annual": ("snap_us_annual", {"v3__RD_LIFE": {"us": 0}}), "quarterly": ("snap_us", {"v3__RD_LIFE": {"us": 0}}),
-                   "final": ("snap_us", {}), "noguard": ("snap_us", {"shadow__GUARD": False})},
-            "cn": {"final": ("snap_cn", {}), "noguard": ("snap_cn", {"shadow__GUARD": False})},
-            "hk": {"final": ("snap_hk", {}), "noguard": ("snap_hk", {"shadow__GUARD": False})}}
+# variant -> (snapshots, settings); US "annual": the Phase 9 snapshots kept as snap_us_annual.pkl (no quarterly reports)
+VARIANTS = {"us": {"annual": ("snap_us_annual", {}), "final": ("snap_us", {})}, "cn": {"final": ("snap_cn", {})},
+            "hk": {"final": ("snap_hk", {})}}
 
 
 def build(market: str) -> None:

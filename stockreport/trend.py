@@ -1,6 +1,6 @@
 """Business trend and health (Phase 13, PLAN.md Method 16): point-in-time votes of +1 / −1 outside config [trend]'s dead
 bands. The trend votes on changes (revenue and core-profit growth acceleration, the ROE trend, momentum, the revision;
-the class drives the trend × valuation map and the outlier verdicts); health on levels (the guardrail: trouble is never a buy)."""
+the class drives the trend × valuation map and the outlier verdicts); health on levels (the common-sense check)."""
 
 import numpy as np
 import pandas as pd
@@ -54,7 +54,7 @@ def classify(ev: pd.DataFrame, momentum: pd.Series, revision: pd.Series, market:
 
 
 def health(df: pd.DataFrame, roe: pd.Series, r: pd.Series, revision: pd.Series | None) -> pd.Series:
-    """Business health, the common-sense guardrail (PLAN.md Method 16): the obvious signs in levels, same dead bands:
+    """Business health, the common-sense check (PLAN.md Method 16): the obvious signs in levels, same dead bands:
     revenue and profit growth over the year (a loss counts against), ROE over the discount rate, 12-1 momentum over the
     market's median, the revision (live). The sum: healthy at +1 or more, in trouble at −1 or less."""
     x = pd.DataFrame({"rev": df["rev_growth"], "profit": df["np_growth"].where(df["np_ttm"] > 0, -1.0), "roe": roe - r,

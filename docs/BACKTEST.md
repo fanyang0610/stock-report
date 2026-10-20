@@ -748,3 +748,87 @@ depressed first analyst year: airlines, Stellantis), testable only with consensu
 With the pooled tail, the US row of section 15's last table becomes: rank IC +0.061 in-sample / +0.033 out of sample, lists +2.6% / −24.0% (CN and HK unchanged); the US outlier split in data/backtest/v3_outliers.md moves by 1-2 points.
 
 - Rerun: `uv run python -m backtest.v3 fixes cn|us|hk` (data/backtest/v3_fixes_<market>.csv).
+
+## 17. Common sense first (Phase 13, 2026-10-20, your calls: US quarterly data, R&D, fit first; no patch rules)
+
+Your points: the US is the most efficient market with the best data, so a sound method should explain US prices
+best; a backtest that succeeds too well may be overfit; Micron, AMD and Eli Lilly are dominant and won't halve
+soon, troubled carmakers won't double; a business in trouble deserves a limited fair value from the method itself,
+not an exclusion rule. Checks in this order, each period run once (backtest/sense.py): fit, then what a gap has
+meant, then returns.
+
+**1. US quarterly results** (`backtest.fetch sec`: each company's companyfacts once, every 10-Q/10-K period by its
+filing date, data/backtest/us_quarterly.csv.gz, 878 companies). The Phase 9 US snapshots had annual reports only,
+up to 15 months stale; CN saw every quarter. On 2025-01, 594 of 815 US names have a newer quarterly report; Micron's
+EPS is 3.50, not the 0.70 of its year to August 2024 that made it a v3 sell on 6 dates before it rose 4-10×.
+
+| US | within ±30% | large beyond ½ / 2× | rank IC 12m | buy − sell (mean) | buy − sell (median) |
+|---|---|---|---|---|---|
+| annual reports (Phase 9) | 34.6% / 36.4% | 32.6% / 33.2% | 0.061 / 0.033 | +2.6% / −24.0% | +5.0% / +8.0% |
+| quarterly reports (adopted) | 35.8% / 37.6% | 31.0% / 31.2% | 0.057 / 0.042 | +3.1% / +5.4% | +4.2% / +10.2% |
+
+In-sample / out of sample; "large" = the top third by market value. Against the others on the same quarterly
+snapshots, out of sample: v1 rank IC 0.091, buy − sell +24.0%; E/P 0.085 / −3.3%; B/P 0.141 / +14.1% (in-sample
+all three were at or below zero: −0.005, −0.030, −0.024). The −24% out of sample, driven by Micron and AMD, was a test-data bug.
+
+**2. R&D as an investment** (written off evenly over 5 years: book + the unwritten R&D, earnings + R&D − write-off;
+R&D from SEC for 519 US companies). Fit +0.5 / +0.8 points, rank IC +0.003 / +0.007, buy − sell median −1 point out
+of sample; today it lifts the US share beyond ±100% from 6.4% to 8.0% and makes the troubled carmakers look cheaper
+still (Ford +82% → +111%, Stellantis +239% → +591%). Not adopted (commit 814b67f has it).
+
+**3. The exclusion rule, removed.** "A business in trouble is never a buy" (814b67f) was a patch on one symptom.
+Measured before removal: about neutral on buys, but its first form ("and a healthy one is never a sell") cost CN and
+HK 6-28 points: the expensive healthy stocks v3 sold did trail (HK out of sample: median −10% to −41%).
+
+**4. What a gap has meant over the next 12 months** (all valued stocks, by v3's gap):
+
+| | US: beat the market / halved / doubled | CN | HK |
+|---|---|---|---|
+| valued under ½ the price, in | 41% / 1.0% / 2.8% | 35% / 8.2% / 6.0% | 36% / 11.5% / 5.6% |
+| valued under ½ the price, out | 42% / 1.6% / 6.5% | 41% / 2.3% / 11.0% | 36% / 4.6% / 12.1% |
+| within ±20%, out | 39% / 0.5% / 2.9% | 33% / 0.0% / 6.9% | 37% / 0.8% / 6.3% |
+| valued over 2× the price, in | 49% / 1.2% / 6.3% | 52% / 2.0% / 1.9% | 49% / 3.3% / 1.9% |
+| valued over 2× the price, out | 43% / 0.9% / 3.1% | 41% / 0.0% / 3.7% | 43% / 1.3% / 5.1% |
+
+Share of the log gap closed within 12 months (per-date slope of log excess return on the log gap): US +0.014 /
+−0.004, CN +0.054 / −0.009, HK +0.036 / +0.051, none significant except CN's P/B < 1.5 stocks out of sample
+(+0.069, t 2.5). A +100% gap has meant about 0-3% over the universe in a year. Your rule holds in data: the size of
+v3's gap is not a near-term price move in any market; in CN and HK its direction carries some information, in the
+US hardly any. Healthy businesses valued under ½ halved 1-2% of the time in the US (as often as any healthy
+business), 3-12% in CN and HK; troubled ones valued over 2× beat the market 36-46% of the time out of sample.
+
+**5. One cause behind your examples: v3 squeezes every company toward its book value.** Today the median v3 upside
+of stocks priced under book is US +60%, CN +44%, HK +44%; of stocks over 4× book US −13%, CN −56%, HK −58%. The
+same split runs through the backtest (fit within ±30%: P/B > 4 US 32-34%, CN 25-33%, HK 5-7%). Troubled
+businesses sit at the bottom of P/B, dominant growers at the top. What drives each end today:
+
+| | median upside | without analysts | what lifts / sinks the value |
+|---|---|---|---|
+| US, in trouble, upside ≥ +50% (20) | +76% | −45% | analysts' year-1 EPS 2.4× the reported 12 months (GM: $13.53 adjusted for 2026, half of it reported, against $2.22 reported; Pfizer $2.95 vs $0.76) |
+| CN, in trouble, ≥ +50% (34) | +93% | +71% | P/B 0.83; ROE 4.2% against a 5.6% rate recovers to the market's long-run ROE |
+| HK, in trouble, ≥ +50% (23) | +100% | +87% | P/B 0.37; the same recovery on a book the market prices at a third |
+| healthy, upside ≤ −40%: US 142, CN 146, HK 47 | −57% / −63% / −56% | about the same | P/B 4.6-9.4; base-rate growth durations of 0.8-1.6 years for 14-36% growth |
+
+**6. Structural fixes tested for that cause, none adopted** (scratch tests on the 2026-10-19 snapshots and the base-rate panels):
+
+- *Health-aware base rates.* Business health (levels: revenue growth ±5%, profit growth ±20% or a loss, ROE vs
+  8%) adds nothing beyond the growth and ROE bands: ROE 3 and 5 years after a start is within ±0.5 points of the
+  cell's average for troubled, neutral and healthy companies alike, in all three markets. Troubled companies'
+  ROE was back to 8%+ in years 3-5 in 28% (US), 23% (CN), 19% (HK) of cases, against 45% / 43% / 32% for all;
+  the cells already carry that.
+- *A health risk premium.* The rate the price implies over the rate v3 uses differs by 0-1 point between troubled
+  and healthy businesses (US +2.0 vs +1.6, CN +0.4 vs +0.4, HK +1.0 vs +0.1): no premium to measure.
+- *No forced convergence after the measured decade* (ROE stays where similar companies were in year 10). The data
+  says convergence is real: the share of a company's ROE distance from the average still there after 10 years is
+  25% in the US (18% after 15) and 8% in CN. Fit falls (US 44% → 40%, CN 42% → 32%, HK 42% → 29% within ±30%).
+- *What the market pays for fundamentals* (log P/B on ROE, growth, health and size with sector intercepts): R² 0.55
+  US, 0.58 CN, 0.36 HK; fit 43% / 44% / 39% (v3 44% / 42% / 42%); the same names stay far off (Stellantis +897%,
+  中国建筑 +278%, Apple −60%).
+
+The names off in both methods are the ones priced far from their book: deep under it (Stellantis 0.18×, Chinese
+builders and developers ~0.3×) and far over it. Accounting book and reported or adjusted earnings miss what the
+market sees there (assets it doesn't believe, recoveries it doubts, assets that never reach the balance sheet).
+
+- Rerun: `uv run python -m backtest.fetch sec` (once; resumable), `uv run python -m backtest.run build us`,
+  `uv run python -m backtest.sense build us|cn|hk` (a few minutes each), `uv run python -m backtest.sense us|cn|hk
+  [annual|final]`.
