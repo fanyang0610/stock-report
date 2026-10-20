@@ -27,10 +27,8 @@ def load_results(table: str = "results") -> pd.DataFrame:
 
 
 def ttm(results: pd.DataFrame) -> pd.DataFrame:
-    """Latest report per stock, plus trailing-12-month revenue and profit (and 扣非 EPS where the
-    table has it): TTM = year-to-date + last full year - same period of last year. The fiscal year
-    starts on the row's `start` date when there is one (HK: March, June... year ends), else on
-    January 1 (CN)."""
+    """Latest report per stock, plus trailing-12-month revenue and profit (and 扣非 EPS where the table has it): TTM =
+    year-to-date + last full year - same period of last year; the fiscal year starts on the row's `start` (HK) or Jan 1."""
     results = results.dropna(subset=["revenue", "np"])
     cols = ["revenue", "np"] + (["eps_deduct"] if "eps_deduct" in results else [])
     latest = results.loc[results.groupby("code")["period"].idxmax()].copy()

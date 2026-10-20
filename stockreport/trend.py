@@ -1,7 +1,6 @@
-"""Business trend (Phase 13, PLAN.md Method 16 "Trend first"): per stock, point-in-time votes of +1 / −1 outside
-a dead band (config [trend]): revenue and core-profit growth acceleration, the ROE trend, 12-1 month momentum over
-the market's median and the 4-week consensus revision (live only). The class (the votes config `evidence` counts
-per market) drives the trend × valuation map and the outlier verdicts; CN adds speculative heat (limit-up days)."""
+"""Business trend and health (Phase 13, PLAN.md Method 16): point-in-time votes of +1 / −1 outside config [trend]'s dead
+bands. The trend votes on changes (revenue and core-profit growth acceleration, the ROE trend, momentum, the revision;
+the class drives the trend × valuation map and the outlier verdicts); health on levels (the guardrail: trouble is never a buy)."""
 
 import numpy as np
 import pandas as pd
@@ -52,6 +51,16 @@ def classify(ev: pd.DataFrame, momentum: pd.Series, revision: pd.Series, market:
     score = votes[use].sum(axis=1)
     return votes.add_prefix("vote_").assign(trend=np.select([score >= need, score <= -need], [1, -1], 0), trend_score=score,
                                             trend_why=[describe(x.loc[c, use], votes.loc[c, use]) for c in ev.index])
+
+
+def health(df: pd.DataFrame, roe: pd.Series, r: pd.Series, revision: pd.Series | None) -> pd.Series:
+    """Business health, the common-sense guardrail (PLAN.md Method 16): the obvious signs in levels, same dead bands:
+    revenue and profit growth over the year (a loss counts against), ROE over the discount rate, 12-1 momentum over the
+    market's median, the revision (live). The sum: healthy at +1 or more, in trouble at −1 or less."""
+    x = pd.DataFrame({"rev": df["rev_growth"], "profit": df["np_growth"].where(df["np_ttm"] > 0, -1.0), "roe": roe - r,
+                      "momentum": df["mom_12_1"] - df["mom_12_1"].median(),
+                      "revision": np.nan if revision is None else revision.reindex(df.index)}, index=df.index)
+    return pd.DataFrame({k: vote(x[k], DEAD[k]) for k in x}, index=df.index).sum(axis=1)
 
 
 def describe(x: pd.Series, v: pd.Series) -> str:

@@ -1,7 +1,6 @@
-"""Manual verdicts, tier 4 of the deep-dive lane (PLAN.md Method 15, docs/REVIEW.md A3): `verdict <code>
-veto|confirm --until YYYY-MM-DD --reason "..."` appends to data/verdicts.csv. A veto swaps the pick like an AI flag;
-a confirm lifts 低信心. A verdict never changes a number, and it ends at its date or when the stock reports a newer
-period than the one in the snapshot the verdict was given on."""
+"""Manual verdicts, tier 4 of the deep-dive lane (PLAN.md Method 15): `verdict <code> veto|confirm --until D --reason
+"..."` appends to data/verdicts.csv. A veto swaps the pick like an AI flag, a confirm lifts 低信心; never a number. It ends
+at its date or when the stock reports a period newer than the snapshot's it was given on."""
 
 import re
 from datetime import date

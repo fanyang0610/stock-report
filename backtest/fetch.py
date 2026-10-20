@@ -5,6 +5,7 @@ are parsed in memory and never stored; every task skips what it already has, so 
   uv run python -m backtest.fetch tdx         # 通达信 daily packages (from ~2021-08) and the CSI 300 before
   uv run python -m backtest.fetch reports     # research-report archive for the 2026 consensus window
   uv run python -m backtest.fetch sw          # 申万 industry change history
+  uv run python -m backtest.fetch sec         # US quarterly results (Phase 13) and the annual history with R&D
 """
 
 import logging
@@ -17,7 +18,7 @@ import pandas as pd
 from dotenv import dotenv_values
 
 from stockreport.config import DATA, ROOT
-from stockreport.fetch import Http, each, tdx
+from stockreport.fetch import Http, each, merge, sec, tdx
 from stockreport.fetch.eastmoney import A_SHARES, CN_RESULTS, FORECAST_FIELDS, datacenter, forecast_table, results_table
 
 log = logging.getLogger("backtest.fetch")
@@ -218,7 +219,68 @@ def sw() -> None:
     xls.unlink()
 
 
+def quarters(code: str, payload: dict) -> list[dict]:
+    """Every 10-Q/10-K period end since 2016-06 (us-gaap, USD): trailing-12-month revenue, profit, gross profit
+    and operating cash flow, the same a year earlier, and the balance sheet, public on the period's first filing
+    date; sec.parse_facts for every period, not only the latest. Values as last restated, like the annual history."""
+    gaap = payload.get("facts", {}).get("us-gaap", {})
+    filed, year = {}, {}
+    for n in (c for c in sec.DURATION["np"] if isinstance(c, str)):
+        for f in gaap.get(n, {}).get("units", {}).get("USD", []):
+            if f.get("form", "").startswith(("10-Q", "10-K")) and "start" in f:
+                filed[f["end"]] = min(filed.get(f["end"], f["filed"]), f["filed"])
+                if f["form"].startswith("10-K"):
+                    year[f["end"]] = max(year.get(f["end"], 0), sec.days(f["start"], f["end"]))
+    get = lambda names: sec.values(gaap, names)
+    series = {k: sec.revenue(get, c, sec.CHECKS["us-gaap"]) if k == "revenue" else get(c) for k, c in sec.DURATION.items()}
+    inst = {k: get(c) for k, c in sec.INSTANT.items()}
+    rows = []
+    for end in sorted(e for e in filed if e >= "2016-06-01"):
+        ys = [e for e in year if e <= end]
+        short = bool(ys) and year[max(ys)] < 340
+        row = {"code": code, "end": end, "filed": filed[end]}
+        for k, vals in series.items():
+            row[f"{k}_ttm"], row[f"{k}_prior"] = sec.ttm(vals, end, short), sec.ttm(vals, sec.shift(end, -364), short)
+        row |= {k: sec.near(vals, end, None, 5) for k, vals in inst.items()}
+        for when in ("ttm", "prior"):
+            if None not in (row[f"nii_{when}"], row[f"nonint_{when}"]):
+                row[f"revenue_{when}"] = sec.larger(row[f"revenue_{when}"], row[f"nii_{when}"] + row[f"nonint_{when}"])
+        if row["gp_ttm"] is None and None not in (row["cost_ttm"], row["revenue_ttm"]):
+            row["gp_ttm"] = row["revenue_ttm"] - row["cost_ttm"]
+        rows.append({k: v for k, v in row.items() if not k.startswith(("nii_", "nonint_", "cost_"))})
+    return rows
+
+
+def sec_facts() -> None:
+    """Each US company's companyfacts once (4 at a time, under SEC's 10 requests/s): its quarterly periods
+    (us_quarterly.csv.gz) and its annual history with R&D, merged into data/history/us_annual.csv.gz as the
+    weekly SEC fetch does. Resumable: companies already in the quarterly table are skipped."""
+    path = BT / "us_quarterly.csv.gz"
+    have = set(pd.read_csv(path, usecols=["code"], dtype=str)["code"]) if path.exists() else set()
+    cik = sec.load_ciks()
+    codes = sorted(set(pd.read_csv(sec.ANNUAL, usecols=["code"], dtype=str)["code"]) - have)
+    todo = [(c, int(cik[c])) for c in codes if c in cik.index]
+
+    def job(client, item):
+        resp = client.get(sec.FACTS.format(cik=item[1]), ok=(200, 404))
+        payload = resp.json() if resp.status_code == 200 else {}
+        return quarters(item[0], payload) or [{"code": item[0]}], sec.parse_annual(item[0], payload)
+
+    q, a = [], []
+    for i, got in enumerate(each(sec.make_http, job, todo, 4), 1):
+        if got:
+            q, a = q + got[0], a + got[1]
+        if i % 100 == 0 or i == len(todo):
+            if a:
+                merge(sec.ANNUAL, pd.DataFrame(a).assign(fetched=date.today().isoformat()), ["code", "fy_end"])
+            if q:
+                old = pd.read_csv(path, dtype={"code": str, "end": str, "filed": str}) if path.exists() else None
+                write(pd.concat([old, pd.DataFrame(q)]) if old is not None else pd.DataFrame(q), path)
+            q, a = [], []
+            log.info("sec facts: %d of %d", i, len(todo))
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     for task in sys.argv[1:]:
-        {"eastmoney": eastmoney, "tdx": tdx_packages, "reports": reports, "sw": sw, "rates": rates}[task]()
+        {"eastmoney": eastmoney, "tdx": tdx_packages, "reports": reports, "sw": sw, "rates": rates, "sec": sec_facts}[task]()

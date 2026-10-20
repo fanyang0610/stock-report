@@ -1,8 +1,7 @@
-"""Base rates, the outside view (Phase 13, PLAN.md Method 16). Of the companies that looked like this one in some
-year (sector, revenue growth, ROE and size bands), the share whose profit kept up a
-growth rate for 1..10 years: profit summed over years 1..k at least the sum of (1 + g)^j × the start's, less a
-tolerance. Counted over the companies still reporting (Kaplan-Meier: one that stops reporting leaves without
-counting as a failure). US from SEC's frames (dead filers included); CN and HK from listed companies' history."""
+"""Base rates, the outside view (Phase 13, PLAN.md Method 16): of the companies that looked like this one in some year
+(sector, revenue growth, ROE and size bands), the share whose profit kept up a growth rate for 1..10 years (profit summed
+over years 1..k at least the sum of (1 + g)^j × the start's, less a tolerance), Kaplan-Meier over those still reporting.
+US from SEC's frames (dead filers included); CN and HK from listed companies' history."""
 
 import numpy as np
 import pandas as pd

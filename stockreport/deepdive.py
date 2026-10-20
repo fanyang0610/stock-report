@@ -1,9 +1,7 @@
-"""Deep-dive lane, tier 3 (PLAN.md Method 15, docs/REVIEW.md A3): rule-triggered reading of one filing per stock,
-at most `per_day` new filings per market a day, among the picks and the first runners-up. DeepSeek answers a fixed
-questionnaire with quoted sentences; code verifies every quote (stockreport/quotes.py), takes each number from its
-quote and works out what it means for the pick: a veto (swapped like an AI flag), 低信心, or a line on the card.
-Verified facts are cached per filing in data/deepdive/<market>/<filing>.json; the day's results go to
-reports/<date>/<market>_deepdive.json."""
+"""Deep-dive lane, tier 3 (PLAN.md Method 15, docs/REVIEW.md A3): rule-triggered reading of one filing per stock, at
+most `per_day` new filings per market a day, among the picks and first runners-up. DeepSeek answers a fixed questionnaire
+with quoted sentences; code verifies every quote (quotes.py), takes each number from it and decides what it means: a veto
+(swapped like an AI flag), 低信心, or a card line. Cached per filing in data/deepdive/; the day's in reports/<date>/."""
 
 import json
 import logging

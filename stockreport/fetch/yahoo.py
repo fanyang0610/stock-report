@@ -1,16 +1,9 @@
-"""Yahoo (query1.finance.yahoo.com). Yahoo answers 429 to a full browser User-Agent; a bare one works.
-- Chart API (v8/finance/chart): US and HK daily prices and dividends, one call per stock, updated incrementally.
-  Daily returns come from the adjusted close inside each response, so splits and dividends between
-  fetches never break the chain; they are stored as close and an implied prev_close (like the CN table).
-- Fundamentals timeseries: trailing-12-month numbers for the companies SEC companyfacts can't cover
-  (mostly foreign filers), in their reporting currency. Weekly per company.
-- '<CUR>=X' FX rates for those reporting currencies (and HK's), and daily '<CUR>CNY=X' history to undo
-  Eastmoney's conversion of HK companies' figures to CNY at each period-end rate.
-- quoteSummary: HK consensus EPS for this and next fiscal year, and the reporting currency (needs a
-  cookie + crumb).
-- History (weekly, on Sundays): annual results for the US companies SEC has no annual history for
-  (Yahoo keeps 4-5 years), and ~11 years of month-end closes, monthly returns and splits for US/HK
-  stocks, their index and the FX rates own-history P/B needs (HKDCNY, US reporting currencies)."""
+"""Yahoo (query1.finance.yahoo.com; a bare User-Agent, a full browser one gets 429): chart API daily US/HK prices and
+dividends (incremental; returns from each response's adjusted close, stored as close and an implied prev_close);
+fundamentals timeseries (trailing 12 months, reporting currency, weekly) for companies SEC companyfacts can't cover;
+'<CUR>=X' FX and daily '<CUR>CNY=X' history (to undo Eastmoney's CNY conversion of HK figures); quoteSummary HK
+consensus EPS and reporting currency (cookie + crumb); on Sundays annual results where SEC has none (4-5 years) and
+~11 years of month-end closes, returns and splits for US/HK stocks, their index and the FX own-history P/B needs."""
 
 import logging
 import time
@@ -134,11 +127,10 @@ def update_fx(currencies: set[str]) -> None:
 
 
 def parse_timeseries(code: str, payload: dict, today: date) -> dict:
-    """TTM revenue / profit / gross profit / operating cash flow at the latest trailing period (at most 200 days
-    old, 300 for half-year reporters), the latest equity, liabilities and assets (balance_period = the equity's
-    date, which can be a quarter before the TTM period), and growth: TTM vs the TTM a year earlier, else the
-    fiscal year a year earlier, else the latest quarter vs the same quarter a year earlier, else the last two
-    fiscal years (semiannual reporters)."""
+    """TTM revenue / profit / gross profit / operating cash flow at the latest trailing period (at most 200 days old, 300
+    for half-year reporters), the latest equity, liabilities and assets (balance_period: the equity's date, up to a
+    quarter before), and growth: TTM vs a year earlier, else the fiscal year, else the quarter vs the same quarter a
+    year earlier, else the last two fiscal years (semiannual reporters)."""
     series = {}
     for item in payload["timeseries"]["result"]:
         name = item["meta"]["type"][0]

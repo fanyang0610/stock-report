@@ -1,8 +1,8 @@
 """Point-in-time snapshots for the backtest: for every month end, the v1 snapshot columns built only from
 what was public that day, and the stocks' forward returns. CN from data/backtest (Eastmoney valuation
 history until the 通达信 packages start in 2021-08, then the packages; 业绩报表 by notice date; 申万 industry
-of the day). US and HK from data/history: today's candidates only (survivors), today's industries, annual
-SEC reports by filing date (US) and Eastmoney results 90 days after the period (HK)."""
+of the day). US and HK from data/history: today's candidates only (survivors), today's industries, SEC reports
+by filing date (US: annual, and quarterly from backtest.fetch sec) and Eastmoney results 90 days after the period (HK)."""
 
 import os
 import re
@@ -112,12 +112,10 @@ class CNPrices:
                           tdx[["date", "code", "close", "ret", "amount", "traded"]]])
         codes = np.array(sorted(both["code"].unique()))
         r, c = np.searchsorted(days, both["date"].to_numpy()), np.searchsorted(codes, both["code"].to_numpy())
-        mats = {}
-        for name, fill, dtype in (("ret", np.nan, np.float32), ("close", np.nan, np.float32),
-                                  ("amount", np.nan, np.float32), ("traded", False, bool)):
-            m = np.full((len(days), len(codes)), fill, dtype=dtype)
+        mats = {name: np.full((len(days), len(codes)), fill, dtype=dtype) for name, fill, dtype in (
+            ("ret", np.nan, np.float32), ("close", np.nan, np.float32), ("amount", np.nan, np.float32), ("traded", False, bool))}
+        for name, m in mats.items():
             m[r, c] = both[name].to_numpy()
-            mats[name] = m
         np.savez_compressed(path, days=days, codes=codes, **mats)
 
     @staticmethod
@@ -279,9 +277,10 @@ def us_books(today_snap: pd.DataFrame) -> pd.DataFrame:
 
 
 def us_snapshot(month: str, mon: Monthly, today_snap: pd.DataFrame, books: pd.DataFrame,
-                rates: pd.Series) -> tuple[pd.DataFrame, dict]:
-    """The US v1 snapshot at a month end: the last annual report filed by then (no quarterly history, so
-    trailing numbers are the last fiscal year), in today's listed units; USD at that month's FX."""
+                rates: pd.Series, quarters: pd.DataFrame | None = None) -> tuple[pd.DataFrame, dict]:
+    """The US v1 snapshot at a month end: the last annual report filed by then, in today's listed units; USD at that
+    month's FX. With `quarters`, a USD reporter's trailing 12 months, growth and balance sheet come from its latest
+    10-Q/10-K filed by then when that is newer than the annual report (shares stay the annual report's)."""
     day = pd.Timestamp(f"{month}-01") + pd.offsets.MonthEnd(0)
     info = {"stages": {}, "dropped": {}}
     codes = [c for c in today_snap.index if c in mon.close.columns and pd.notna(mon.close.at[month, c])]
@@ -297,13 +296,20 @@ def us_snapshot(month: str, mon: Monthly, today_snap: pd.DataFrame, books: pd.Da
     for col, src in (("revenue_ttm", "revenue"), ("np_ttm", "ni"), ("gp_ttm", "gp"), ("ocf_ttm", "ocf"),
                      ("equity", "equity"), ("liabilities", "liabilities"), ("assets", "assets")):
         df[col] = last[src] / rate
-    df["bps"] = df["equity"] / df["shares"]
-    df["debt_ratio"] = df["liabilities"] / df["assets"]
-    df["gross_margin"] = df["gp_ttm"] / df["revenue_ttm"]
-    df["cash_conv"] = (df["ocf_ttm"] / df["np_ttm"]).where(df["np_ttm"] > 0)
-    df["rev_growth"] = last["revenue"] / prev["revenue"].reindex(last.index) - 1
-    df["np_growth"] = (last["ni"] - prev["ni"].reindex(last.index)) / prev["ni"].reindex(last.index).abs()
+    df["rev_prior"], df["np_prior"] = prev["revenue"].reindex(last.index) / rate, prev["ni"].reindex(last.index) / rate
     df["period"], df["notice_date"] = last["fy_end"], last["avail"]
+    if quarters is not None:
+        q = quarters[quarters["code"].isin(set(df.index)) & (quarters["filed"] <= day.strftime("%Y-%m-%d"))].groupby("code").last()
+        q = q[(q["end"] > df["period"].reindex(q.index)) & (last["currency"].reindex(q.index) == "USD")]
+        q = q.dropna(subset=["np_ttm", "revenue_ttm", "equity"]).rename(columns={"revenue_prior": "rev_prior", "end": "period",
+                                                                              "filed": "notice_date"})
+        cols = ["revenue_ttm", "np_ttm", "gp_ttm", "ocf_ttm", "equity", "liabilities", "assets", "rev_prior", "np_prior", "period"]
+        df.loc[q.index, cols + ["notice_date"]] = q[cols + ["notice_date"]].fillna(df.loc[q.index, cols + ["notice_date"]])
+        info["stages"]["of which on a newer quarterly report"] = len(q)
+    df["bps"], df["debt_ratio"] = df["equity"] / df["shares"], df["liabilities"] / df["assets"]
+    df["gross_margin"], df["cash_conv"] = df["gp_ttm"] / df["revenue_ttm"], (df["ocf_ttm"] / df["np_ttm"]).where(df["np_ttm"] > 0)
+    df["rev_growth"] = df["revenue_ttm"] / df.pop("rev_prior") - 1
+    df["np_growth"] = (df["np_ttm"] - df["np_prior"]) / df.pop("np_prior").abs()
     info["stages"]["today's candidates with an annual report"] = len(df)
     df = df.join(mon.metrics(month, df.index))
     df = df.sort_values("mcap", ascending=False).head(CONFIG["universe"]["top_n"]).copy()

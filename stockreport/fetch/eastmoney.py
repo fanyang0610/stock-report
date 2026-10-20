@@ -1,9 +1,7 @@
-"""Eastmoney datacenter (datacenter-web.eastmoney.com): CN daily valuation, quarterly results,
-balance sheets, dividends and the ChinaBond 10-year yield it republishes; the HK company list and
-main indicators; and Eastmoney's company id (ORG_CODE), which is the same for every listing of one
-issuer (A/H pairs, US ADRs and their HK lines), for the cross-market issuer dedupe.
-History (data/history/): CN annual results since 2015 with 扣非 EPS, the CN valuation table at every
-half-year end since 2018-12, HK main indicators since 2015, and the market-wide 业绩预告 table."""
+"""Eastmoney datacenter (datacenter-web.eastmoney.com): CN daily valuation, quarterly results, balance sheets, dividends
+and the ChinaBond 10-year yield; the HK list and main indicators; the company id (ORG_CODE, one per issuer across A/H/ADR
+lines) for the issuer dedupe. History: CN annual results (扣非 EPS), CN valuations at half-year ends since 2018-12, HK
+main indicators since 2015, and the market-wide 业绩预告 table."""
 
 import logging
 from datetime import date, timedelta

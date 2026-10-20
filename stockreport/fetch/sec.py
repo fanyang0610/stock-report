@@ -54,7 +54,8 @@ TAXONOMIES = {
                              "IncomeLossFromContinuingOperationsIncludingPortionAttributableToNoncontrollingInterest"],
                  "ocf": DURATION["ocf"], "capex": ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"],
                  "div": ["PaymentsOfDividendsCommonStock", "PaymentsOfDividends"],
-                 "dil_shares": ["WeightedAverageNumberOfDilutedSharesOutstanding"]},
+                 "dil_shares": ["WeightedAverageNumberOfDilutedSharesOutstanding"],
+                 "rnd": ["ResearchAndDevelopmentExpense", "ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost"]},
                 {"equity": INSTANT["equity"] + ["PartnersCapital", ("PartnersCapitalIncludingPortionAttributableToNoncontrollingInterest",
                                                   "MinorityInterest"), "PartnersCapitalIncludingPortionAttributableToNoncontrollingInterest"],
                  "pref": ["PreferredStockValue"], "assets": ["Assets"],  # partners' capital: MLPs (EPD, MPLX)
@@ -69,7 +70,7 @@ TAXONOMIES = {
                    "capex": ["PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities",
                              "PurchaseOfPropertyPlantAndEquipment"],
                    "div": ["DividendsPaidClassifiedAsFinancingActivities", "DividendsPaid"],
-                   "dil_shares": ["AdjustedWeightedAverageShares"]},
+                   "dil_shares": ["AdjustedWeightedAverageShares"], "rnd": ["ResearchAndDevelopmentExpense"]},
                   {"equity": ["EquityAttributableToOwnersOfParent", ("Equity", "NoncontrollingInterests"), "Equity"], "assets": ["Assets"],
                    "liabilities": ["Liabilities"], "shares": ["NumberOfSharesOutstanding"]}),
 }

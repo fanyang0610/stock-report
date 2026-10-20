@@ -1,10 +1,9 @@
 """Valuation v3, the Phase 13 redesign (PLAN.md Method 16 has the method and every choice): what the company's
-own future earnings are worth, and what the price expects; per share, in the quote currency. Residual income on
-book (book-light companies: on the capital that earns 40%): years 1-3 from 3+ analysts' EPS, else the own
-trend; growth g with ROE held for a duration D from the base rates (baserates.py), then the base-rate ROE path
-and a fixed fade to the long-run levels. The range is the value at the 25th / 50th / 75th percentile of D; the
-duration the price needs, placed in that distribution, gives 价格隐含过高 / 过低. Loss-makers only with 3+
-analysts expecting a profit within 3 years. The rate: the market's implied rate + λ × the industry's premium."""
+own future earnings are worth, and what the price expects; per share, in the quote currency. Residual income on book
+(US: R&D as an investment; book-light companies: on the capital that earns 40%): years 1-3 from 3+ analysts' EPS, else
+the own trend; growth g with ROE held for a duration D from the base rates, then the base-rate ROE path and a fade to
+the long-run levels. Range: D's 25th / 50th / 75th percentile; the duration the price needs gives 价格隐含过高 / 过低.
+Loss-makers only with 3+ analysts expecting a profit within 3 years. Rate: the market's implied rate + λ × the industry's premium."""
 
 import numpy as np
 import pandas as pd
@@ -17,6 +16,7 @@ G_LONG = CFG["long_growth"]
 FADE = CFG["fade_years"]
 LONG_ROE = CFG["long_roe"]  # per market: "market" (the largest third's median ROE) or "r" (no long-run excess)
 LAMBDA = CFG["industry_lambda"]  # per market: share of an industry's implied premium accepted as its risk
+RD_LIFE = CFG["rd_life"]  # per market: years R&D is written off over as an investment (0: expensed, as reported)
 COUNTRY_LAMBDA = CFG["country_lambda"]  # US: share of a foreign listing's country premium accepted as its risk
 MIN_SPREAD = 0.015  # discount rate at least long-run growth + this
 R_RANGE = (0.0, 0.40)
@@ -54,6 +54,11 @@ def inputs(df: pd.DataFrame, h: pd.DataFrame, market: str) -> pd.DataFrame:
     # negative book after buybacks counts as book-light; after recent losses (碧桂园) it is distress: no value
     losses = h["loss_5y"] if "loss_5y" in h else h.get("loss_years", pd.Series(0, df.index))
     x["light"] = ((x["b0"] <= 0) & ~(losses.reindex(df.index).fillna(0) > 0)) | (x["roe5"].fillna(x["roe0"]) > CFG["book_light_roe"])
+    x["b_rep"] = x["b0"]  # as reported: the base-rate cells stay on it
+    if per_market(RD_LIFE, market) and "rd_asset" in h:  # R&D as an investment: book + its asset, earnings + R&D - write-off
+        x["b0"] = x["b0"] + (h["rd_asset"] * (rps := df["revenue_ttm"] / df["shares"])).fillna(0)  # rps: revenue per share
+        x[["e0", "e1", "e2", "e3"]] = x[["e0", "e1", "e2", "e3"]].add((h["rd_delta"] * rps).fillna(0), axis=0)
+    x["roe_v"] = (x["e0"] / x["b0"]).where(x["b0"] > 0)  # on the book valued (the labels' ROE today)
     first = x[["e0", "e1", "e2", "e3"]].where(x[["e0", "e1", "e2", "e3"]] > 0).bfill(axis=1).iloc[:, 0]
     x["book"] = x["b0"].where(~x["light"], np.maximum(x["b0"].fillna(0), first / CFG["book_light_roe"]))
     x["ok"] = ((x["e0"] > 0) | cons) & (x["book"] > 0)
@@ -205,7 +210,7 @@ def value(df: pd.DataFrame, h: pd.DataFrame, st: pd.DataFrame, market: str, sect
     x = inputs(df, h, market)
     g_long, fade = per_market(G_LONG, market), per_market(FADE, market)
     roe_long = np.nan if per_market(LONG_ROE, market) == "r" else float(st.attrs["roe_long"])
-    want = br.bands(df["rev_growth"], x["roe0"].where(x["b0"] > 0, 1.0),
+    want = br.bands(df["rev_growth"], x["roe0"].where(x["b_rep"] > 0, 1.0),
                     np.searchsorted(st.attrs["size_cuts"], df["revenue_ttm"].fillna(0)))
     want.index = df.index
     want["sector"] = sector.reindex(df.index).fillna("")
@@ -243,7 +248,7 @@ def value(df: pd.DataFrame, h: pd.DataFrame, st: pd.DataFrame, market: str, sect
     # (the average of years 3-5); 价格隐含过高/过低 only when under 10% did
     other = good & ((out["implied_side"] != "inside") | ~out["rising"])
     on_book = out["r"] + (df["price"] / x["book"] - 1) * (out["r"] - g_long)  # on the capital earning 40% for book-light
-    now = x["roe0"].where(~x["light"], x["roe5"].fillna(x["roe0"]))
+    now = x["roe_v"].where(~x["light"], x["roe5"].fillna(x["roe0"]))
     implied_roe = on_book.where(~x["light"], on_book * now / (x["e0"] / x["book"]))  # book-light: on its own book
     out["roe_now"] = now
     out["roe_implied"] = implied_roe.where(other)

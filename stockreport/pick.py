@@ -1,7 +1,6 @@
-"""Buckets per market (PLAN.md Method section 6): always 5 BUY, 5 HOLD and 5 SELL, rank-based.
-A bucket short of names that meet every rule is filled with the next-ranked ones, marked 低信心.
-Buy and hold candidates whose recent profit is a one-off by checks 1-2 (Method 8) never take a place;
-the ones that would have are kept in the picks CSV as role "excluded", so the report can list them."""
+"""Buckets per market (PLAN.md Method section 6): always 5 BUY, 5 HOLD and 5 SELL, rank-based; a short bucket is filled
+with the next-ranked names, marked 低信心. Buy and hold candidates whose recent profit is a one-off (checks 1-2, Method 8)
+never take a place; they stay in the picks CSV as role "excluded" for the report to list."""
 
 import pandas as pd
 
@@ -12,10 +11,9 @@ BUCKETS = {"buy": "买入", "hold": "持有", "sell": "卖出"}
 
 
 def one_off(df: pd.DataFrame) -> pd.DataFrame:
-    """The one_off_gain checks per stock (thresholds in config.toml [notes]; NaN = doesn't apply).
-    1: profit jump without cash (not banks, brokers and insurers, whose investment income is core);
-    2: analysts expect EPS to fall back; 3: profit outgrew revenue, which lets a one-off item in the
-    announcement titles count (DeepSeek notes only)."""
+    """The one_off_gain checks per stock (config.toml [notes]; NaN = doesn't apply). 1: profit jump without cash (not
+    financials, whose investment income is core); 2: analysts expect EPS to fall back; 3: profit outgrew revenue, which
+    lets a one-off item in the announcement titles count (DeepSeek notes only)."""
     cfg, min_analysts = CONFIG["notes"], CONFIG["value"]["forward_min_analysts"]
     applies1 = (df["method"] != "P/B on ROE") & df["cash_conv"].notna() & (df["np_ttm"] > 0)
     applies2 = (df["analysts"] >= min_analysts) & (df["eps_ttm"] > 0) & df["eps_e2"].notna()

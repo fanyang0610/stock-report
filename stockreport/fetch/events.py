@@ -1,8 +1,7 @@
-"""Market-wide daily announcement feeds for the event layer (PLAN.md Method 14): CNINFO's whole-market query
-(~45 pages a day), HKEXnews' title search for all stocks (one call a day, with HKEX's own headline categories)
-and SEC full-text search (8-K items, merger and tender forms, periodic reports; ~3-10 calls a day). Each filing
-becomes one row (date, code, kind, title, url), classified by rules (stockreport/events.py); routine filings are
-dropped. Kept in data/events/<market>.csv.gz for `keep_days`; the newest fetched day is asked again."""
+"""Market-wide daily announcement feeds for the event layer (PLAN.md Method 14): CNINFO's whole-market query (~45 pages
+a day), HKEXnews' title search (one call, HKEX's own categories) and SEC full-text search (8-K items, merger and tender
+forms, periodic reports). One row per filing (date, code, kind, title, url), classified by rules (events.py), routine
+ones dropped; kept in data/events/<market>.csv.gz for `keep_days`, the newest fetched day asked again."""
 
 import html
 import json

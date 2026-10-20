@@ -8,6 +8,7 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
+from stockreport.config import CONFIG
 from stockreport.fetch import HISTORY
 
 ROE_CLIP = (-0.5, 1.5)  # a yearly ROE on a tiny book can't dominate an average
@@ -60,7 +61,20 @@ def us_years() -> pd.DataFrame:
     roe = (core / ((eq + prev) / 2).where(prev > 0, eq)).where(eq > 0)
     return pd.DataFrame({"code": a["code"], "year": a["year"], "roe": roe, "core": core, "ni": a["ni"],
                          "rev": a["revenue"], "ocf": a["ocf"], "gm": a["gp"] / a["revenue"],
-                         "fcf": a["ocf"] - a["capex"].fillna(0), "avail": a["avail"]})
+                         "fcf": a["ocf"] - a["capex"].fillna(0), "rnd": a.reindex(columns=["rnd"])["rnd"], "avail": a["avail"]})
+
+
+def research(years: pd.DataFrame, codes, life: int) -> pd.DataFrame:
+    """R&D as an investment written off evenly over `life` years (PLAN.md Method 16) when the latest fiscal year reports
+    it: the research asset (the part of the last `life` years' R&D not yet written off; the oldest known year stands in
+    for missing ones) and the year's R&D less its write-off, both over that year's revenue."""
+    y = years[years["code"].isin(set(codes))]
+    y = y.assign(k=y.groupby("code")["year"].transform("max") - y["year"])
+    r = y[y["k"] <= life].pivot_table(index="code", columns="k", values="rnd", aggfunc="last").reindex(columns=range(life + 1))
+    rev = y[y["k"] == 0].groupby("code")["rev"].last()
+    r = r[(r[0] > 0) & (rev.reindex(r.index) > 0)].ffill(axis=1)
+    rd = pd.DataFrame({"rd_asset": r.iloc[:, :life] @ (1 - np.arange(life) / life), "rd_delta": r[0] - r.iloc[:, 1:].sum(axis=1) / life})
+    return rd.div(rev.reindex(rd.index), axis=0)
 
 
 def hk_results() -> pd.DataFrame:
@@ -133,10 +147,8 @@ def closest(s: pd.DataFrame, day: str, want: float) -> float:
 
 
 def own_pb(books: pd.DataFrame, monthly: pd.DataFrame, splits: pd.DataFrame, today: date) -> pd.DataFrame:
-    """Median and 10th-90th percentile P/B per stock over the last 7 years (24+ months). books: code, avail (the
-    day the book is public), book_unit (book per
-    listed unit in today's units, own currency); monthly: code, month, close (as traded), fx (own
-    currency per quote-currency unit)."""
+    """Median and 10th-90th percentile P/B per stock over the last 7 years (24+ months). books: code, avail (the day the
+    book is public), book_unit (per listed unit in today's units, own currency); monthly: code, month, close, fx."""
     m = monthly[monthly["month"].between(f"{today.year - 7}-{today.month:02d}", f"{today:%Y-%m}")].copy()
     m["day"] = pd.to_datetime(m["month"] + "-28")
     m["close"] = m["close"] / splits_after(splits, m["code"], m["month"] + "-28")  # today's units
@@ -283,6 +295,6 @@ def load(market: str, snap: pd.DataFrame, today: date) -> pd.DataFrame:
     if market == "cn":
         out = out.join(preannounced(snap, today))
     if market == "us":
-        out = out.join(us_preferred(snap, today))
+        out = out.join(us_preferred(snap, today)).join(research(years, snap.index, CONFIG["v3"]["rd_life"]["us"]))
     out["revision"] = revisions(market, today)
     return out

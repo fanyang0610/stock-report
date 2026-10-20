@@ -111,6 +111,7 @@ long_roe = { cn = "market", hk = "market", us = "r" }  # long-run ROE: "market" 
 industry_lambda = { cn = 0.75, hk = 0.5, us = 0.5 }  # share of an industry's implied premium over the market's rate taken as risk
 tail_exposure = { cn = 0, hk = 0, us = 100 }  # a cell's 10-30 year hazard needs this many company-years at risk behind it, else the market's at the same rate (0: off; in-sample)
 country_lambda = 0.5          # US: share of a foreign listing's country premium (its country's implied rate over home listings')
+rd_life = { cn = 0, hk = 0, us = 0 }  # R&D as an investment written off over this many years (0: expensed; tested at 5 in the US, not adopted)
 
 [trend]                       # business trend (PLAN.md Method 16, "Trend first"); a vote is +1 / -1 outside its dead band
 dead = { rev = 0.05, profit = 0.2, roe = 0.02, momentum = 0.1, revision = 0.02 }  # growth acceleration, ROE change, 12-1 return over the median, 4-week EPS revision

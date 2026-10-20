@@ -1,7 +1,6 @@
-"""Tracking (PLAN.md Method 10): every report's final picks go to data/picks.csv, and `track` prints
-their average return by market and bucket against the market's index at 1 week, 1 month and 3 months.
-Returns run from the close the pick was priced at, chained from close / prev_close (dividends and
-splits included; the indexes are price indexes)."""
+"""Tracking (PLAN.md Method 10): every report's final picks go to data/picks.csv; `track` prints their average return by
+market and bucket against the index at 1 week, 1 and 3 months, from the close each pick was priced at, chained from close
+/ prev_close (dividends and splits included; the indexes are price indexes)."""
 
 from datetime import date, timedelta
 

@@ -20,11 +20,10 @@ def far_industries(v: pd.DataFrame, df: pd.DataFrame) -> pd.Series:
 
 
 def verdicts(v: pd.DataFrame, df: pd.DataFrame, market: str, today: date) -> pd.DataFrame:
-    """One verdict with its reason per valued stock beyond ±100% or labelled 价格隐含过高/过低: 行业 (its industry
-    is off as a whole), 数据错误 (out of the lists: profit, EPS or book 20%+ off its second source, revenue too for
-    own-trend growth, or a deep-dive veto), 证据支持 (kept, risk flagged: the business trend explains the price,
-    or a deal, risk or capital filing in the last 30 days), else 需复核 (your review list, with what the value
-    rests on). Kept in the snapshot (v3_verdict): `track --signal` shows which kinds the market was right about."""
+    """Per valued stock beyond ±100% or labelled 价格隐含过高/过低, a verdict and its reason: 行业 (the industry is off
+    as a whole), 数据错误 (out of the lists: profit, EPS or book 20%+ off its second source, revenue too for own-trend
+    growth, or a deep-dive veto), 证据支持 (kept, risk flagged: the trend explains the price, or a deal, risk or capital
+    filing in 30 days), else 需复核 (your review list). v3_verdict: `track --signal` shows which kinds the market got right."""
     ok, up, label = v["valued"], v["upside"], v["implied_label"].fillna("")
     cheap, rich = ok & ((up > 1) | (label == "价格隐含过低")), ok & (label == "价格隐含过高") & ~(up > 1)
     out = pd.DataFrame({"verdict": "", "verdict_why": ""}, index=v.index)

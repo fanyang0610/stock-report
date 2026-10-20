@@ -80,7 +80,7 @@ def test_map_never_buys_a_value_trap_never_sells_an_improver(monkeypatch):
     up = np.r_[[0.6] * 6, [-0.6] * 6]
     tr = np.tile([1, -1], 6)
     v = pd.DataFrame({"valued": True, "verdict": "", "upside": up, "confidence": "高", "screen_ok": True, "trend": tr,
-                      "v_low": 1 + up * 0.9, "v_high": 1 + up * 1.1}, index=idx)
+                      "v_low": 1 + up * 0.9, "v_high": 1 + up * 1.1, "health": 0}, index=idx)
     df = pd.DataFrame({"z_momentum": 0.0, "mcap_rank": np.arange(1, n + 1), "np_growth": 0.1, "quality_pct": 0.8,
                        "z_quality": np.linspace(1, 0, n), "industry": [f"ind{i}" for i in range(n)], "country": "United States"},
                       index=idx)
@@ -92,3 +92,24 @@ def test_map_never_buys_a_value_trap_never_sells_an_improver(monkeypatch):
     sells = b.index[b["bucket"] == "sell"]
     assert len(sells) and (v.loc[sells, "trend"] == -1).all()  # expensive and improving: never a sell
     assert (b.loc[b["bucket"] == "hold"].index.isin(v.index[(v["trend"] == 1) & (v["upside"] < 0)])).any()
+
+
+def test_guardrail_never_buys_trouble(monkeypatch):
+    # v2's rules: 6 cheap (+60%) and 6 expensive (−60%) stocks, half healthy (+2), half in trouble (−2)
+    n, idx = 12, [f"s{i}" for i in range(12)]
+    up, health = np.r_[[0.6] * 6, [-0.6] * 6], np.tile([2, -2], 6)
+    v = pd.DataFrame({"valued": True, "verdict": "", "upside": up, "confidence": "高", "screen_ok": True, "trend": 0,
+                      "v_low": 1 + up * 0.9, "v_high": 1 + up * 1.1, "health": health}, index=idx)
+    df = pd.DataFrame({"z_momentum": 0.0, "mcap_rank": np.arange(1, n + 1), "np_growth": -0.1, "quality_pct": 0.8,
+                       "z_quality": np.linspace(1, 0, n), "industry": [f"ind{i}" for i in range(n)]}, index=idx)
+    monkeypatch.setitem(shadow.MAP, "cn", False)
+    b = shadow.buckets(v, df, "cn")
+    assert set(b.index[b["bucket"] == "buy"]) == {"s0", "s2", "s4"}  # cheap and healthy only: cheap trouble is a trap
+    assert (b["bucket"] == "sell").sum() == 5  # expensive stocks can still be sold, healthy or not
+
+
+def test_health_votes_on_levels():
+    df = pd.DataFrame({"rev_growth": [0.3, -0.1], "np_growth": [0.5, 0.5], "np_ttm": [1.0, -1.0], "mom_12_1": [0.4, -0.4]},
+                      index=["good", "bad"])
+    h = trend.health(df, pd.Series([0.2, 0.02], df.index), pd.Series(0.08, df.index), None)
+    assert h["good"] == 4 and h["bad"] == -4  # a loss counts against even when it shrank

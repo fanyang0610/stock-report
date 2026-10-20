@@ -1,7 +1,7 @@
-"""Valuation v3 (Phase 13, PLAN.md Method 16) in shadow mode next to v1 (the report stays v1 until Phase 10): its
-columns (v3_*) go into the snapshot and the run prints the lists, checks, outlier verdicts and hand-checked names.
-Per stock: the value range, upside, what the price implies, the base-rate cell, what peers pay (never blended),
-confidence, 需复核 flags and the business trend. The lists skip the AI swaps and the cross-market issuer dedupe."""
+"""Valuation v3 (Phase 13, PLAN.md Method 16) in shadow mode next to v1 (the report stays v1 until Phase 10): its columns
+(v3_*) go into the snapshot and the run prints the lists, checks, verdicts and hand-checked names. Per stock: value range,
+upside, what the price implies, base-rate cell, peers (never blended), confidence, 需复核 flags, trend and health. The lists
+skip the AI swaps and the cross-market issuer dedupe."""
 
 from datetime import date
 
@@ -16,13 +16,16 @@ C2 = CONFIG["shadow"]  # bucket rules kept from v2 (Phase 9 calibration): thresh
 MAP = CONFIG["trend"]["map"]  # per market: the trend × valuation map (else v2's rules), chosen in-sample
 BUY = CONFIG["trend"]["buy"]  # per market: strict buys from "improving" only or "stable" too
 HOME = "United States"  # US: foreign listings can't be bought (config buy_home_only)
+HALF, DOUBLE = -0.5, 1.0  # common-sense clash: a healthy business valued under half its price, one in trouble over twice
+GUARD = True  # never buy a business in trouble (trend.health; the backtest measures it off)
 HAND = {"us": ["TM", "GM", "F", "STLA", "TSLA", "RACE", "LLY", "JNJ", "NVDA", "MU", "ARM", "CRWD", "JPM"],
         "cn": ["601668", "601390", "600019", "600519", "300750", "002594", "300308"],
         "hk": ["00700", "03690", "00941", "02007", "01299"]}  # the Phase 13 hand-check list (PLAN item 13)
 COLUMNS = ["e0", "book", "light", "t0", "g", "roe0", "roe_now", "level", "starts", "base", "s1", "s3", "s5", "s10", "d25", "d50", "d75",
            "r", "r_mkt", "roe_long", "irr", "v_low", "v_mid", "v_high", "upside", "d_implied", "implied_share", "implied_side",
            "implied_label", "roe_implied", "roe_reached", "implied", "v_peer", "screen_fails", "dilution", "flags", "conf_points",
-           "confidence", "trend", "trend_score", "trend_why", "verdict", "verdict_why", "bucket", "rank", "tier", "conviction"]
+           "confidence", "trend", "trend_score", "trend_why", "health", "clash", "verdict", "verdict_why", "bucket", "rank", "tier",
+           "conviction"]
 
 
 def parents(df: pd.DataFrame, market: str) -> pd.Series:
@@ -60,6 +63,8 @@ def value(df: pd.DataFrame, market: str, today: date, loaded: tuple | None = Non
     h, st, sector = loaded or load(df, market, today)
     v = v3.value(df, h, st, market, sector)
     v = v.join(trend.classify(h, df["mom_12_1"], h.get("revision"), market))
+    v["health"] = trend.health(df, v["roe0"], v["r"], h.get("revision"))
+    v["clash"] = ((v["upside"] <= HALF) & (v["health"] >= 1)) | ((v["upside"] >= DOUBLE) & (v["health"] <= -1))
     v["base"] = [br.describe(lv, k, market) for lv, k in zip(v["level"], v["key"])]
     v["implied"] = sentences(v, df, v3.per_market(v3.FADE, market))
     v["v_peer"] = peer(df, v, parents(df, market))
@@ -185,10 +190,9 @@ def buy_universe(df: pd.DataFrame, market: str) -> pd.Series:
 
 
 def buckets(v: pd.DataFrame, df: pd.DataFrame, market: str = "cn") -> pd.DataFrame:
-    """买入 / 持有 / 卖出, 5 each, strict rules first and relaxed fills marked 低信心, at most 2 per industry, each
-    stock once, data errors left out; per market (config [trend], PLAN.md Method 16): v2's rules (Phase 9), or the
-    trend × valuation map (a buy needs an improving or stable trend, a value trap is never a buy, an improver never
-    a sell, a strict sell needs a deteriorating trend)."""
+    """买入 / 持有 / 卖出, 5 each, strict rules first, relaxed fills 低信心, at most 2 per industry, data errors left out;
+    per market (config [trend], PLAN.md Method 16) v2's rules or the trend × valuation map (a buy needs an improving or
+    stable trend, an improver is never a sell, a strict sell needs a deteriorating one); everywhere trouble is never a buy."""
     n, cap = CONFIG["buckets"]["per_bucket"], CONFIG["buckets"]["max_per_group"]
     ok = v["valued"] & (v["verdict"] != "数据错误")
     up, good, passed, mom = v["upside"], v["confidence"].isin(["高", "中"]), v["screen_ok"], df["z_momentum"]
@@ -198,6 +202,7 @@ def buckets(v: pd.DataFrame, df: pd.DataFrame, market: str = "cn") -> pd.DataFra
         trap, weak, protect = det, det, imp
     else:
         lead, trap, weak, protect = mom >= -0.5, False, (mom <= -0.5) | (df["np_growth"] < 0) | ~passed, False
+    trap = trap | (v["health"] <= -1) if GUARD else trap  # the common-sense guardrail, every market
     can_buy = ok & buy_universe(df, market) & ~trap
     width = (np.log(v["v_high"] / v["v_low"]) / 2).clip(upper=0.5).fillna(0.5)
     cw = np.log1p(up.clip(lower=-0.99)) * (1 - width)
@@ -260,11 +265,11 @@ def report(df: pd.DataFrame, picks: pd.DataFrame, v: pd.DataFrame, market: str) 
     far = t[(t["n"] >= 5) & (t["median"].abs() > 0.3)].sort_values("median")
     print(f"industries (5+ valued) beyond ±30% (the method is checked per industry): {len(far)} of {(t['n'] >= 5).sum()}; "
           f"labels and median implied vs base-rate durations (years)\n" + far.assign(median=far["median"].map("{:+.0%}".format)).round(1).to_string())
-    cell = pd.cut(up[ok], [-np.inf, C2["sell_max_upside"], C2["buy_min_upside"], np.inf], labels=["昂贵", "中间", "便宜"])
-    grid = pd.crosstab(cell, v.loc[ok, "trend"].map(trend.LABELS)).reindex(columns=list(trend.LABELS.values()), fill_value=0)
-    print(f"\ntrend × valuation (votes: {', '.join(trend.EVIDENCE[market])}; ±{trend.NEED[market]}): " + "; ".join(
-        f"{c} " + " / ".join(f"{t} {n}" for t, n in row.items()) for c, row in grid.iterrows()) + "\noutlier verdicts (beyond "
-        f"±100% or labelled): " + ", ".join(f"{k} {n}" for k, n in v.loc[v["verdict"] != "", "verdict"].value_counts().items()))
+    large, far = ok & (df["mcap"] >= df["mcap"].quantile(2 / 3)), (up <= HALF) | (up >= DOUBLE)
+    print(f"\ncommon sense: large stocks valued under ½ or over 2× their price {far[large].mean():.0%}; clashes (healthy under ½, "
+          f"in trouble over 2×) {v.loc[ok, 'clash'].sum()}; business health 健康 {(v.loc[ok, 'health'] >= 1).sum()} / 困难 "
+          f"{(v.loc[ok, 'health'] <= -1).sum()} (never a buy)\noutlier verdicts (beyond ±100% or labelled): "
+          + ", ".join(f"{k} {n}" for k, n in v.loc[v["verdict"] != "", "verdict"].value_counts().items()))
     show = v.join(df[["name", "price"]])
     for kind in ("数据错误", "需复核"):  # data errors and your review list, the largest 15 by upside
         part = show[show["verdict"] == kind].sort_values("upside", ascending=False)

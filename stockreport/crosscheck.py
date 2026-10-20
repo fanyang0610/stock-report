@@ -1,14 +1,10 @@
-"""Data cross-checks and drift alarms (PLAN.md Method 13). Each figure the valuation rests on is compared
-with a second, independent source (financial-data's rule: within 1% the sources agree, 1-5% is a small
-gap, above 5% a figure is not usable): CN quotes, share counts, TTM profit and book with Tencent; US TTM
-revenue, net income, equity (same balance-sheet date) and share counts with Yahoo's fundamentals; HK book, trailing EPS and share
-counts with Yahoo's key statistics. A stock whose figure is more than `drop_gap` (20%: gaps of 5-15% are
-mostly definitions, e.g. minority interests and perpetual securities in Yahoo's HK book) off its second
-source, and not confirmed by a third where there is one (CN: Eastmoney's P/E and P/B), is dropped as
-inconsistent data (rule 5). Gaps with a known structural cause are counted only: share classes and A+H counts at Yahoo,
-Yahoo's HK EPS at older FX rates, adjusted vs GAAP consensus. Consensus EPS 20x+ off the trailing EPS on
-a normal margin is a units error and drops the stock. Drift alarms compare each stock with the newest
-earlier snapshot and are logged, never dropped. Every run prints the counts; the names go to the log."""
+"""Data cross-checks and drift alarms (PLAN.md Method 13): each figure the valuation rests on against a second source
+(within 1% agree, 1-5% small, above 5% unusable): CN quotes, shares, TTM profit and book with Tencent; US TTM revenue,
+net income, equity and shares with Yahoo's fundamentals; HK book, trailing EPS and shares with Yahoo's statistics. Over
+`drop_gap` (20%; 5-15% gaps are mostly definitions) and unconfirmed by a third source (CN: Eastmoney's P/E, P/B): dropped
+(rule 5). Known structural gaps (share classes, A+H counts, Yahoo's HK EPS at old FX, adjusted vs GAAP consensus) are
+counted only; consensus EPS 20x+ off trailing EPS on a normal margin is a units error and drops the stock. Drift alarms
+(against the newest earlier snapshot) are logged, never dropped. Every run prints the counts; the names go to the log."""
 
 import logging
 from datetime import date

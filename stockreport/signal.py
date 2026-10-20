@@ -1,7 +1,6 @@
-"""Signal tracking (Phase 9, docs/BACKTEST.md): how well a valuation ranks stocks and how its buckets did
-afterwards. The backtest and `track --signal` (the live snapshots, v1 and v3, and v3's outlier verdicts) use the same measures:
-rank correlation of the signal with later returns per date, bucket returns against the equal-weight
-universe and the index, and hit rates by confidence band (β, the share of the log gap closed, is in backtest/v3.py)."""
+"""Signal tracking (Phase 9, docs/BACKTEST.md), shared by the backtest and `track --signal` (live snapshots, v1 and v3,
+and v3's outlier verdicts): per-date rank correlation with later returns, bucket returns against the equal-weight
+universe and the index, and hit rates by confidence band."""
 
 from datetime import date, timedelta
 

@@ -1,12 +1,7 @@
-"""Fair value per stock from what its peer group pays, through two lenses, with a residual-income
-cross-check (PLAN.md Method sections 2 and 4). Multiples are fitted in logs, so residuals are relative.
-
-- Trailing lens: today's book and earnings power (P/B on ROE and growth; P/S for loss-makers;
-  P/B on ROE for banks, insurers and brokers). A stock neither lens can value because an input is
-  missing gets a simpler peer multiple (FALLBACKS), marked 低信心 in pick.py.
-- Forward lens: what peers pay for expected growth, on analyst consensus EPS (no target prices), for
-  financials too: it tempers a one-year ROE spike such as insurers' investment gains. It values a
-  stock alone when the trailing lens can't (negative book value)."""
+"""Fair value per stock from what its peer group pays, through two lenses, with a residual-income cross-check (PLAN.md
+Method sections 2 and 4); multiples fitted in logs. Trailing lens: book and earnings power (P/B on ROE and growth; P/S
+for loss-makers; P/B on ROE for financials), else a simpler peer multiple (FALLBACKS, 低信心 in pick.py). Forward lens:
+what peers pay for consensus growth (no target prices), financials too; alone where the trailing lens can't (negative book)."""
 
 import numpy as np
 import pandas as pd

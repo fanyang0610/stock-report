@@ -27,7 +27,7 @@ MARKETS = ("cn", "us", "hk")
 V1_COLS = ["upside", "z_momentum", "z_quality", "quality_pct", "mom_12_1", "np_growth", "eps_ttm", "mcap_rank",
            "industry", "financial", "price", "ey", "by", "mcap", "country"]
 V3_COLS = ["upside", "v_mid", "v_low", "v_high", "bucket", "confidence", "implied_label", "valued", "light", "d50", "level",
-           "r", "irr", "screen_ok", "t0", "g", "trend", "trend_score", "verdict", "verdict_why"] + [
+           "r", "irr", "screen_ok", "t0", "g", "trend", "trend_score", "health", "clash", "verdict", "verdict_why"] + [
            f"vote_{k}" for k in trend.TEXT]
 LAMBDA_GRID = {"industry premium": [("v3__LAMBDA", x) for x in (0.0, 0.25, 0.5, 0.75, 1.0)]}
 COUNTRY_GRID = {"country premium": [("v3__COUNTRY_LAMBDA", x) for x in (0.0, 0.5, 1.0)]}

@@ -1,7 +1,6 @@
-"""Quote verification for the deep-dive lane (AGENTS.md rule 2): a fact counts only when its quoted sentence is in
-the filing text (whitespace and full-width forms normalized), its number is written in that quote, and its unit is
-written right after the number or in a unit line (e.g. "单位：元 币种：人民币") shortly before the quote in the filing.
-The number is parsed from the quote; the model's answer only points to it."""
+"""Quote verification for the deep-dive lane (AGENTS.md rule 2): a fact counts only when its quoted sentence is in the
+filing text (whitespace and full-width forms normalized), its number is in the quote, and its unit right after the number
+or in a unit line (e.g. "单位：元 币种：人民币") shortly before it. The number is parsed from the quote, never the answer."""
 
 import re
 import unicodedata

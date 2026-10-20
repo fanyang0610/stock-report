@@ -20,6 +20,7 @@ from stockreport import history, pick, score, value
 
 log = logging.getLogger("backtest.run")
 IN_SAMPLE_END = "2023-12-31"  # calibrate on month ends up to here, check on the rest (A4)
+QUARTERLY = True  # US: trailing numbers from 10-Qs (Phase 13); False rebuilds the annual-only snapshots
 START = {"us": "2018-01"}  # the SEC table starts with FY2015 and growth needs two years: ~400 US names from 2018
 V1_COLS = ["upside", "composite", "z_value", "z_quality", "z_growth", "z_momentum", "z_risk", "quality_pct", "mom_12_1",
            "np_growth", "cash_conv", "eps_ttm", "eps_e2", "analysts", "mcap_rank", "industry", "financial", "price",
@@ -58,13 +59,15 @@ def build(market: str) -> None:
     else:
         mon, today_snap, rates = panel.Monthly(market), panel.today_snapshot(market), panel.rates_series(market)
         res = history.hk_results() if market == "hk" else panel.us_books(today_snap)
+        quarters = pd.read_csv(panel.BT / "us_quarterly.csv.gz", dtype={"code": str, "end": str, "filed": str}).dropna(
+            subset=["end", "filed"]).sort_values(["code", "end"]) if market == "us" and QUARTERLY else None  # backtest.fetch sec
     for m in months(market):
         day = day_of(market, m)
         if market == "cn":
             snap, info = panel.cn_snapshot(m, px, res, bal, val, tdx_names, rates, cons.get(m))
             fwd = px.forward(m, list(snap.index))
         elif market == "us":
-            snap, info = panel.us_snapshot(m, mon, today_snap, res, rates)
+            snap, info = panel.us_snapshot(m, mon, today_snap, res, rates, quarters)
             fwd = mon.forward(m, snap.index)
         else:
             snap, info = panel.hk_snapshot(m, mon, today_snap, res, rates)
