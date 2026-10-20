@@ -131,6 +131,6 @@ def report(market: str, df: pd.DataFrame) -> None:
             if col in df and df[col].notna().any():
                 print(f"{h} {name} buckets:\n{bucket_table(df, col, h).round(3).to_string()}")
         buys = df[df["v3_bucket"] == "buy"]
-        print(f"{h} v3 buys beating the universe by confidence: "
-              + ", ".join(f"{k} {v:.0%}" for k, v in (buys[f"ex_{h}"] > 0).groupby(buys["v3_confidence"]).mean().items()))
+        print(f"{h} v3 buys beating the universe by confidence: " + ", ".join(
+            f"{k} {v:.0%}" for k, v in (buys[f"ex_{h}"] > 0).groupby(buys["v3_confidence"]).mean().items()))
         print("\n".join(forecast_pieces(df, market, h)))

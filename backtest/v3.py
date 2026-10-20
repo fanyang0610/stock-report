@@ -4,7 +4,7 @@ v1 and the plain earnings- and book-yield rankings. Parameters are chosen in-sam
 checked out of sample (2024-01..2026-09). The trend-first lists (trend.py, shadow.buckets) re-bucket the saved
 frame, so their variants cost seconds.
 
-  uv run python -m backtest.v3 grid|lambda|country|cells cn|us|hk  # valuation grids -> data/backtest/v3_<grid>_<market>.csv
+  uv run python -m backtest.v3 grid|lambda|country cn|us|hk  # valuation grids -> data/backtest/v3_<grid>_<market>.csv
   uv run python -m backtest.v3 compare            # v1, v3 (config.toml), E/P, B/P -> data/backtest/v3_results.md (+ frames)
   uv run python -m backtest.v3 map cn|us|hk       # trend × valuation map variants on the saved frame -> v3_map_<market>.csv
   uv run python -m backtest.v3 persistence        # base rates by business trend band (panel study) -> v3_persistence.md
@@ -20,23 +20,21 @@ import numpy as np
 import pandas as pd
 
 from backtest import panel, run
-from stockreport import baserates as br, outliers, shadow, signal, trend, v3
+from stockreport import baserates as br, history, outliers, shadow, signal, trend, v3
 
 MARKETS = ("cn", "us", "hk")
 V1_COLS = ["upside", "z_momentum", "z_quality", "quality_pct", "mom_12_1", "np_growth", "eps_ttm", "mcap_rank",
            "industry", "financial", "price", "ey", "by", "mcap", "country"]
 V3_COLS = ["upside", "v_mid", "v_low", "v_high", "bucket", "confidence", "implied_label", "valued", "light", "d50", "level",
-           "r", "irr", "screen_ok", "t0", "g", "tb", "trend", "trend_score", "verdict", "verdict_why"] + [
+           "r", "irr", "screen_ok", "t0", "g", "limit_ups", "trend", "trend_score", "verdict", "verdict_why"] + [
            f"vote_{k}" for k in trend.TEXT]
 LAMBDA_GRID = {"industry premium": [("v3__LAMBDA", x) for x in (0.0, 0.25, 0.5, 0.75, 1.0)]}
 COUNTRY_GRID = {"country premium": [("v3__COUNTRY_LAMBDA", x) for x in (0.0, 0.5, 1.0)]}
-CELLS_GRID = {"base-rate cells": [("br__CELL", x) for x in ("size", "trend")]}
 GRID = {
     "fade years": [("v3__FADE", x) for x in (3, 5, 10, 15)],
     "tolerance": [("br__TOL", x) for x in (0.0, 0.1, 0.25)],
     "long-run ROE": [("v3__LONG_ROE", x) for x in ("market", "r")],
 }
-HK_GRID = {"haircut": [("v3__HAIRCUT", x) for x in (0.0, 0.1, 0.2, 0.3)]}  # HK: survivors only (your OK)
 EVIDENCE = {"all": (list(trend.TEXT), 2), "business": (list(trend.BUSINESS), 2), "price": (["momentum", "revision"], 1)}
 
 
@@ -62,6 +60,7 @@ def frame(market: str, data: dict, **kw) -> pd.DataFrame:
     p = br.panel(market)
     secs = br.sectors(market)
     country = panel.today_snapshot("us")["country"] if market == "us" else None  # snapshots built before Phase 9's field
+    px = panel.CNPrices() if market == "cn" else None  # CN: limit-up days (the sell_heat rule)
     rows, started = [], time.monotonic()
     with params(outliers__LIVE=False, **kw):
         for m, d in data.items():
@@ -72,6 +71,8 @@ def frame(market: str, data: dict, **kw) -> pd.DataFrame:
             st.attrs["roe_long"] = v3.roe_long(p, day.isoformat(), market)
             h = d["loaded"][0] if isinstance(d["loaded"], tuple) else d["loaded"]
             h = shadow.with_trend(h, market, s.index, day.isoformat())
+            if px is not None:
+                h = h.assign(limit_ups=cn_limit_ups(px, s.index, day.isoformat()))
             v = shadow.value(s, market, day, loaded=(h, st, sector_of(s, market, secs)))
             f = s.reindex(columns=V1_COLS).join(v[V3_COLS].add_prefix("v3_")).join(d["fwd"])
             picks = d["picks"]["both"]
@@ -84,9 +85,18 @@ def frame(market: str, data: dict, **kw) -> pd.DataFrame:
     return add_signals(signal.add_excess(out), market)
 
 
+def cn_limit_ups(px, codes, day: str, days: int = 63) -> pd.Series:
+    """trend.limit_ups on the backtest's daily matrices: limit-up days in the last 63 trading days."""
+    t = int(np.searchsorted(px.days, day, side="right")) - 1
+    cols = pd.Index(codes).map(px.col)
+    r = px.ret[max(t - days + 1, 0): t + 1][:, np.nan_to_num(cols.to_numpy(float), nan=0).astype(int)] - 1
+    limit = np.where(pd.Index(codes).str[:3].isin(["300", "301", "688", "689"]), 0.195, 0.095)
+    return pd.Series(np.where(cols.notna(), (r >= limit).sum(axis=0), np.nan), index=codes)
+
+
 def add_signals(f: pd.DataFrame, market: str) -> pd.DataFrame:
     """The lists with v2's rules on the same values (the before)."""
-    f["v3_bucket_v2"] = rebucket(f, market, shadow__MAP=False)
+    f["v3_bucket_v2"] = rebucket(f, market, shadow__MAP=False, shadow__HEAT=0)
     return f
 
 
@@ -179,8 +189,7 @@ def beta(df: pd.DataFrame, gap: str, h: str, by: list[str] | None = None) -> pd.
 def grid(market: str, which: str = "grid") -> pd.DataFrame:
     panel.setup_history(market)
     data, rows = run.load(market), []
-    grids = {"lambda": LAMBDA_GRID, "country": COUNTRY_GRID, "cells": CELLS_GRID}.get(which) or GRID | (
-        HK_GRID if market == "hk" else {})
+    grids = {"lambda": LAMBDA_GRID, "country": COUNTRY_GRID}.get(which) or GRID
     for name, options in grids.items():
         for key, val in options:
             f = frame(market, data, **{key: val})
@@ -197,9 +206,14 @@ def map_grid(market: str) -> pd.DataFrame:
     re-bucketed on the saved frame; the in-sample buy − sell decides (Phase 9's bar: +1 point)."""
     f = pd.read_pickle(panel.BT / f"v3_{market}.pkl")
     rows = [{"variant": "v2 rules (before)"} | metrics(f, "v3 before (v2 rules)")]
+    if market == "cn":  # CN: strict sells need speculative heat (limit-up days in 3 months) instead of v2's weakness
+        for k in (2, 3):
+            f["b"] = rebucket(f, market, shadow__MAP=False, shadow__HEAT=k)
+            rows.append({"variant": f"v2 rules, sells need {k}+ limit-up days"} | metrics(f, bucket="b"))
+            print(market, rows[-1]["variant"], {x: round(y, 3) for x, y in rows[-1].items() if "buy" in x and "t" not in x[-2:]}, flush=True)
     for ev in EVIDENCE:
         for buy in ("improving", "stable"):
-            f["b"] = rebucket(f, market, evidence=ev, shadow__MAP=True, shadow__BUY=buy)
+            f["b"] = rebucket(f, market, evidence=ev, shadow__MAP=True, shadow__BUY=buy, shadow__HEAT=0)
             rows.append({"variant": f"map, votes {ev}, buys {buy}"} | metrics(f, bucket="b"))
             print(market, rows[-1]["variant"], {k: round(x, 3) for k, x in rows[-1].items() if "buy" in k and "t" not in k[-2:]}, flush=True)
     cells = []
@@ -245,14 +259,37 @@ def compare() -> None:
     print("\n".join(lines))
 
 
+def band(rev: np.ndarray, earn: np.ndarray, roe: np.ndarray) -> np.ndarray:
+    """Business trend band per row (columns latest first): 2 improving (trend.py's business votes sum ≥ 2), 0
+    deteriorating (≤ −2), else 1. (Splitting the base-rate cells by it was tested in-sample, 2026-10-20: CN
+    0.131 / US 0.060 / HK 0.119 rank IC against 0.135 / 0.060 / 0.123 by size; not adopted, then removed.)"""
+    acc = trend.accelerations(rev, earn, roe)
+    s = sum(trend.vote(acc[k], trend.DEAD[k]) for k in trend.BUSINESS)
+    return np.select([s >= 2, s <= -2], [2, 0], 1)
+
+
+def start_bands(p: pd.DataFrame, market: str) -> np.ndarray:
+    """The band of every br.starts(p, <after the panel>) row, in its order: the start year and the 3 before."""
+    years = list(range(int(p["year"].min()), int(p["year"].max()) + 1))
+    w = {c: p.pivot(index="code", columns="year", values=c).reindex(columns=years).to_numpy(float) for c in ("earn", "rev", "roe")}
+    e, rev, roe, out = w["earn"], w["rev"], w["roe"].clip(*history.ROE_CLIP), []
+    for j in range(1, len(years)):
+        ok = (e[:, j] > 0) & (rev[:, j] > (br.US_MIN_REVENUE if market == "us" else 0))
+        if ok.sum() >= 3:
+            back = lambda m: np.column_stack([m[ok, j - i] if j >= i else np.full(ok.sum(), np.nan) for i in range(4)])
+            out.append(band(back(rev), back(e), back(roe)))
+    return np.concatenate(out)
+
+
 def persistence() -> None:
-    """Base rates by business trend band (trend.band), per market, on every start public today: the share whose
+    """Base rates by business trend band (band), per market, on every start public today: the share whose
     profit kept up 5% / 10% a year for 3 and 5 years, the median duration, and the ROE change 3 and 5 years on;
     and within growth × ROE cells (60+ starts in both bands) improving minus deteriorating."""
     lines = ["# Base rates by business trend (backtest/v3.py persistence)\n"]
     for m in MARKETS:
         p = br.panel(m)
-        st, tol = br.starts(p, "9999-12-31", m), br.per_market(br.TOL, m)
+        st, tol = br.starts(p, "9999-12-31", m), v3.per_market(br.TOL, m)
+        st["tb"] = start_bands(p, m)
         rows = []
         for b, name in ((2, "improving"), (1, "stable"), (0, "deteriorating")):
             part, row = st[st["tb"] == b], {"band": name}

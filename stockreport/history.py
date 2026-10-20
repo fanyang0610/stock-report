@@ -199,9 +199,7 @@ def own_pb_us(snap: pd.DataFrame, today: date) -> pd.DataFrame:
     m = monthly[monthly["code"].isin(currency.index)].copy()
     cur = m["code"].map(currency)
     m["fx"] = np.where(cur == "USD", 1.0, fx.reindex(pd.MultiIndex.from_arrays([cur, m["month"]])).to_numpy())
-    start = a.groupby("code")["year"].min()  # the year a comparable history starts, after a cut
-    out = own_pb(books, m, splits, today).join(start[start.index.isin(cut_codes)].rename("history_from"), how="outer")
-    return out.join(dilution.rename("dilution"), how="outer")  # share count change over 5 years (a flag)
+    return own_pb(books, m, splits, today).join(dilution.rename("dilution"), how="outer")  # 5-year share count change
 
 
 def us_preferred(snap: pd.DataFrame, today: date) -> pd.DataFrame:

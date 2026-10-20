@@ -50,14 +50,10 @@ def verdicts(v: pd.DataFrame, df: pd.DataFrame, market: str, today: date) -> pd.
 def drivers(x: pd.Series) -> str:
     """What an unexplained outlier's value rests on (the inputs at or near the model's limits)."""
     parts = [f"增长率 {x['g']:.0%}" + ("（上限）" if x["g"] >= CONFIG["v3"]["growth"][1] - 1e-9 else "")
-             + ("，按自身营收趋势（分析师不足 3 位）" if x["t0"] == 0 else "，前 3 年按分析师预测")]
-    if x["d50"] >= br.DMAX - 0.01:
-        parts.append(f"中位久期到 {br.DMAX} 年上限（类似公司 10 年后仍有 {x['s10']:.0%} 保持）")
-    if x["starts"] < 100:
-        parts.append(f"基础比率仅 {x['starts']:.0f} 例")
-    if x["light"]:
-        parts.append("轻资产（按 40% 回报的资本估值）")
-    return "；".join(parts)
+             + ("，按自身营收趋势（分析师不足 3 位）" if x["t0"] == 0 else "，前 3 年按分析师预测"),
+             f"中位久期到 {br.DMAX} 年上限（类似公司 10 年后仍有 {x['s10']:.0%} 保持）" if x["d50"] >= br.DMAX - 0.01 else "",
+             f"基础比率仅 {x['starts']:.0f} 例" if x["starts"] < 100 else "", "轻资产（按 40% 回报的资本估值）" if x["light"] else ""]
+    return "；".join(p for p in parts if p)
 
 
 def second_gaps(df: pd.DataFrame, market: str, own: pd.Series) -> dict[str, str]:
@@ -69,9 +65,7 @@ def second_gaps(df: pd.DataFrame, market: str, own: pd.Series) -> dict[str, str]
     except Exception:  # the backtest and a missing table: no second source
         return {}
     out = {}
-    for label, g, *_ in sources:
-        if "close" in label or "shares" in label:
-            continue
+    for label, g, *_ in [s for s in sources if "close" not in s[0] and "shares" not in s[0]]:
         for code in g.index[(g > crosscheck.CFG["drop_gap"]) & (own | ~label.startswith("TTM revenue"))]:
             out.setdefault(code, f"{label} 相差 {g[code]:.0%}")
     return out
@@ -79,17 +73,14 @@ def second_gaps(df: pd.DataFrame, market: str, own: pd.Series) -> dict[str, str]
 
 def recent_events(market: str, today: date, days: int = 30) -> dict[str, str]:
     """The newest deal, risk or capital filing of the last 30 days per stock (fetch/events.py)."""
-    from stockreport.events import KINDS, short
-    from stockreport.fetch import events as feed
-    ev = feed.load(market)
-    since = (pd.Timestamp(today) - pd.Timedelta(days=days)).strftime("%Y-%m-%d")
-    ev = ev[ev["kind"].isin(["deal", "risk", "capital"]) & (ev["date"] >= since) & (ev["date"] <= today.isoformat())]
-    ev = ev.sort_values("date").groupby("code").tail(1)
+    from stockreport.events import KINDS, load, short
+    ev, since = load(market), (pd.Timestamp(today) - pd.Timedelta(days=days)).strftime("%Y-%m-%d")
+    ev = ev[ev["kind"].isin(["deal", "risk", "capital"]) & ev["date"].between(since, today.isoformat())].sort_values("date").groupby("code").tail(1)
     return {c: f"{d[5:]} {KINDS[k]}公告：{short(t)}" for c, d, k, t in ev[["code", "date", "kind", "title"]].itertuples(index=False)}
 
 
 def deep_dives(market: str, today: date) -> dict[str, tuple[str, str]]:
     """The newest deep-dive results up to `today` (reports/<date>/<market>_deepdive.json): action and line."""
     days = sorted(p for p in REPORTS.glob(f"*/{market}_deepdive.json") if p.parent.name <= today.isoformat())
-    res = json.loads(days[-1].read_text(encoding="utf-8")).get("results", {}) if days else {}
-    return {c: (r.get("action", ""), r.get("line", "")) for c, r in res.items() if r.get("action") != "none" or r.get("line")}
+    return {c: (r.get("action", ""), r.get("line", "")) for c, r in (json.loads(days[-1].read_text(encoding="utf-8")).get(
+        "results", {}) if days else {}).items()}

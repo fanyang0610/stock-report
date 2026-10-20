@@ -1,5 +1,5 @@
 """Business trend (Phase 13, "Trend first"): the evidence on the saved CN panel sample, by hand; the votes and the
-class; the trend band in the base-rate starts; the trend × valuation map's never-buy and never-sell rules."""
+class; the band per base-rate start (backtest); the trend × valuation map's never-buy and never-sell rules."""
 
 from pathlib import Path
 
@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from backtest import v3 as bt
 from stockreport import baserates as br, shadow, trend
 
 DATA = Path(__file__).parent / "data"
@@ -26,7 +27,6 @@ def test_evidence_by_hand_ping_an_bank():
     assert ev["acc_rev"] == pytest.approx(g[0] - (g[1] + g[2]) / 2, rel=1e-3)  # −0.7 points: no vote
     assert ev["acc_profit"] == pytest.approx(p[0] - (p[1] + p[2]) / 2, rel=1e-2)  # −4 points: no vote
     assert ev["acc_roe"] == pytest.approx(0.0915 - (0.1138 + 0.1230) / 2)  # −2.7 points: −1
-    assert ev["tb"] == 1  # one business vote: stable
 
 
 def test_evidence_point_in_time():
@@ -45,7 +45,7 @@ def test_accelerations_with_a_loss_year():
     assert acc["rev"][0] == pytest.approx(0.10)
     assert acc["profit"][0] == pytest.approx(0.0)
     assert acc["roe"][0] == pytest.approx(0.085)
-    assert trend.band(rev, earn, roe)[0] == 2  # revenue and ROE vote +1: improving
+    assert bt.band(rev, earn, roe)[0] == 2  # revenue and ROE vote +1: improving
 
 
 def test_classify_counts_the_markets_evidence(monkeypatch):
@@ -64,20 +64,14 @@ def test_classify_counts_the_markets_evidence(monkeypatch):
     assert t["trend"].tolist() == [1, -1, -1] and t.at["flat", "trend_why"] == "预期修正 -5%"
 
 
-def test_trend_band_in_base_rates(monkeypatch):
+def test_trend_band_per_base_rate_start():
+    # the persistence study's band, aligned with br.starts' rows; 000001's FY2025 start: one business vote, stable
     p = sample().rename(columns={"core": "earn"})
-    st = br.starts(p, "2026-10-19", "cn")
-    assert set(st["tb"]) <= {0, 1, 2} and st["tb"].notna().all()
-    one = st[(st["year"] == 2025) & (st["sector"] == "银行")]
-    assert (one["tb"] == 1).any()  # 000001's FY2025 start: stable (above)
-    monkeypatch.setitem(br.CELL, "cn", "trend")
-    st = br.starts(p, "2026-10-19", "cn")
-    assert st.attrs["levels"][0] == ("sector", "gb", "qb", "tb")
-    want = pd.DataFrame({"sector": ["银行"], "gb": [1], "qb": [1], "sb": [2], "tb": [1]}, index=["bank"])
-    monkeypatch.setattr(br, "MIN_STARTS", 5)
-    cell = br.cell_of(st, want).loc["bank"]
-    assert cell["level"] == 0 and cell["key"] == ("银行", 1, 1, 1)
-    assert br.describe(cell["level"], cell["key"], "cn") == "银行 · 营收增速 0%-10% · ROE 8%-15% · 业务稳定"
+    st = br.starts(p, "9999-12-31", "cn")
+    st["tb"] = bt.start_bands(p, "cn")
+    assert set(st["tb"]) <= {0, 1, 2} and len(st) == len(bt.start_bands(p, "cn"))
+    bank25 = st[(st["year"] == 2025) & (st["sector"] == "银行") & (st["q0"].round(4) == 0.0915)]
+    assert bank25["tb"].tolist() == [1]
 
 
 def test_map_never_buys_a_value_trap_never_sells_an_improver(monkeypatch):

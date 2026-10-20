@@ -15,6 +15,7 @@ from stockreport.pick import BUCKETS
 C2 = CONFIG["shadow"]  # bucket rules kept from v2 (Phase 9 calibration): thresholds, momentum, size floor
 MAP = CONFIG["trend"]["map"]  # per market: the trend × valuation map (else v2's rules), chosen in-sample
 BUY = CONFIG["trend"]["buy"]  # per market: strict buys from "improving" only or "stable" too
+HEAT = CONFIG["trend"]["sell_heat"]  # per market: strict sells need this many limit-up days in 3 months (0: off)
 HOME = "United States"  # US: foreign listings can't be bought (config buy_home_only)
 HAND = {"us": ["TM", "GM", "F", "STLA", "TSLA", "RACE", "LLY", "JNJ", "NVDA", "MU", "ARM", "CRWD", "JPM"],
         "cn": ["601668", "601390", "600019", "600519", "300750", "002594", "300308"],
@@ -22,7 +23,7 @@ HAND = {"us": ["TM", "GM", "F", "STLA", "TSLA", "RACE", "LLY", "JNJ", "NVDA", "M
 COLUMNS = ["e0", "book", "light", "t0", "g", "roe0", "roe_now", "level", "starts", "base", "s1", "s3", "s5", "s10", "d25", "d50", "d75",
            "r", "r_mkt", "roe_long", "irr", "v_low", "v_mid", "v_high", "upside", "d_implied", "implied_share", "implied_side",
            "implied_label", "roe_implied", "roe_reached", "implied", "v_peer", "screen_fails", "dilution", "flags", "conf_points",
-           "confidence", "tb", "trend", "trend_score", "trend_why", "verdict", "verdict_why", "bucket", "rank", "tier", "conviction"]
+           "confidence", "limit_ups", "trend", "trend_score", "trend_why", "verdict", "verdict_why", "bucket", "rank", "tier", "conviction"]
 
 
 def parents(df: pd.DataFrame, market: str) -> pd.Series:
@@ -37,23 +38,25 @@ def parents(df: pd.DataFrame, market: str) -> pd.Series:
 def load(df: pd.DataFrame, market: str, today: date) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series]:
     """History features, the base-rate starts (with the market's long-run ROE) and each stock's base-rate sector,
     from what was public on `today`."""
-    day = today.isoformat()
-    p = br.panel(market)
+    day, p, sec = today.isoformat(), br.panel(market), br.sectors(market)
     st = br.starts(p, day, market)
     st.attrs["roe_long"] = v3.roe_long(p, day, market)
-    sec = br.sectors(market)
     if market == "us":  # keyed by CIK
         from stockreport.fetch import sec as edgar
         cik = df["cik"] if "cik" in df else edgar.load_ciks().reindex(df.index)
         sector = cik.map(lambda c: sec.get(str(int(float(c))), "") if pd.notna(c) and str(c) != "" else "")
     else:
         sector = parents(df, market) if market == "hk" else sec.reindex(df.index)
-    return with_trend(history.load(market, df, today), market, df.index, day), st, sector.fillna("")
+    h = with_trend(history.load(market, df, today), market, df.index, day)
+    if market == "cn":  # speculative heat (limit-up days), the CN sell rule
+        from stockreport.fetch import tdx
+        h["limit_ups"] = trend.limit_ups(tdx.load_prices(), df.index, df["price_date"].astype(str).max())
+    return h, st, sector.fillna("")
 
 
 def with_trend(h: pd.DataFrame, market: str, codes, day: str) -> pd.DataFrame:
     """History features plus the business-trend evidence (trend.py) from the fiscal years public on `day`."""
-    return h.drop(columns=[c for c in h if c.startswith("acc_") or c == "tb"]).join(
+    return h.drop(columns=[c for c in h if c.startswith("acc_")]).join(
         trend.evidence(history.YEARS[market](), codes, day))
 
 
@@ -61,7 +64,7 @@ def value(df: pd.DataFrame, market: str, today: date, loaded: tuple | None = Non
     """The v3 frame for one market's snapshot `df` (v1 columns)."""
     h, st, sector = loaded or load(df, market, today)
     v = v3.value(df, h, st, market, sector)
-    v = v.join(trend.classify(h, df["mom_12_1"], h.get("revision"), market)).assign(tb=h["tb"])
+    v = v.join(trend.classify(h, df["mom_12_1"], h.get("revision"), market)).assign(limit_ups=h.get("limit_ups", np.nan))
     v["base"] = [br.describe(lv, k, market) for lv, k in zip(v["level"], v["key"])]
     v["implied"] = sentences(v, df, v3.per_market(v3.FADE, market))
     v["v_peer"] = peer(df, v, parents(df, market))
@@ -187,14 +190,10 @@ def buy_universe(df: pd.DataFrame, market: str) -> pd.Series:
 
 
 def buckets(v: pd.DataFrame, df: pd.DataFrame, market: str = "cn") -> pd.DataFrame:
-    """买入 / 持有 / 卖出, 5 each, strict rules first and relaxed fills marked 低信心; at most 2 per industry per
-    bucket, each stock once. The trend × valuation map (Method 16 "Trend first"; config [trend] map, per market):
-    a buy needs an improving business (or, by config, a stable one) at a price that doesn't reflect it (upside ≥
-    20%), among the largest (US: home listings), confidence 中/高 and the quality screen passed, ranked by
-    range-weighted upside + 0.5 × momentum; cheap but deteriorating is a value trap, never a buy; expensive but
-    improving is a hold (quality top 30%), never a sell; a sell needs upside ≤ −25% and a deteriorating business,
-    中/高, among the 400 largest (fills: not improving). Data errors (verdicts) are left out. Without the map:
-    v2's rules (Phase 9): a buy needs momentum z ≥ −0.5, a sell weak momentum, falling profit or a screen failure."""
+    """买入 / 持有 / 卖出, 5 each, strict rules first and relaxed fills marked 低信心, at most 2 per industry, each
+    stock once, data errors left out; per market (config [trend], PLAN.md Method 16): v2's rules (Phase 9), or the
+    trend × valuation map (a buy needs an improving or stable trend, a value trap is never a buy, an improver never
+    a sell, a strict sell needs a deteriorating trend), and in CN strict sells need speculative heat instead."""
     n, cap = CONFIG["buckets"]["per_bucket"], CONFIG["buckets"]["max_per_group"]
     ok = v["valued"] & (v["verdict"] != "数据错误")
     up, good, passed, mom = v["upside"], v["confidence"].isin(["高", "中"]), v["screen_ok"], df["z_momentum"]
@@ -204,6 +203,8 @@ def buckets(v: pd.DataFrame, df: pd.DataFrame, market: str = "cn") -> pd.DataFra
         trap, weak, protect = det, det, imp
     else:
         lead, trap, weak, protect = mom >= -0.5, False, (mom <= -0.5) | (df["np_growth"] < 0) | ~passed, False
+    if v3.per_market(HEAT, market):  # CN: an expensive stock is a sell while it is speculated on, not while calm
+        weak = v["limit_ups"] >= v3.per_market(HEAT, market)
     can_buy = ok & buy_universe(df, market) & ~trap
     width = (np.log(v["v_high"] / v["v_low"]) / 2).clip(upper=0.5).fillna(0.5)
     cw = np.log1p(up.clip(lower=-0.99)) * (1 - width)
@@ -264,23 +265,19 @@ def report(df: pd.DataFrame, picks: pd.DataFrame, v: pd.DataFrame, market: str) 
                       "low": (lab == "价格隐含过低").groupby(by).sum(), "d_implied": v.loc[ok, "d_implied"].groupby(by).median(),
                       "d50": v.loc[ok, "d50"].groupby(by).median()})
     far = t[(t["n"] >= 5) & (t["median"].abs() > 0.3)].sort_values("median")
-    print(f"industries (5+ valued) beyond ±30%: {len(far)} of {(t['n'] >= 5).sum()}; why: labels and median implied vs "
-          f"base-rate durations (years)")
-    if len(far):
-        print(far.assign(median=far["median"].map("{:+.0%}".format)).round(1).to_string())
+    print(f"industries (5+ valued) beyond ±30% (the method is checked per industry): {len(far)} of {(t['n'] >= 5).sum()}; "
+          f"labels and median implied vs base-rate durations (years)\n" + far.assign(median=far["median"].map("{:+.0%}".format)).round(1).to_string())
     cell = pd.cut(up[ok], [-np.inf, C2["sell_max_upside"], C2["buy_min_upside"], np.inf], labels=["昂贵", "中间", "便宜"])
     grid = pd.crosstab(cell, v.loc[ok, "trend"].map(trend.LABELS)).reindex(columns=list(trend.LABELS.values()), fill_value=0)
-    print(f"\ntrend × valuation (votes: {', '.join(trend.EVIDENCE[market])}; ±{trend.NEED[market]}): "
-          + "; ".join(f"{c} " + " / ".join(f"{t} {n}" for t, n in row.items()) for c, row in grid.iterrows()))
-    ver = v.loc[v["verdict"] != ""]
-    print(f"outlier verdicts ({len(ver)}: beyond ±100% or labelled): " + ", ".join(f"{k} {n}" for k, n in ver["verdict"].value_counts().items()))
+    print(f"\ntrend × valuation (votes: {', '.join(trend.EVIDENCE[market])}; ±{trend.NEED[market]}): " + "; ".join(
+        f"{c} " + " / ".join(f"{t} {n}" for t, n in row.items()) for c, row in grid.iterrows()) + "\noutlier verdicts (beyond "
+        f"±100% or labelled): " + ", ".join(f"{k} {n}" for k, n in v.loc[v["verdict"] != "", "verdict"].value_counts().items()))
     show = v.join(df[["name", "price"]])
-    for kind in ("数据错误", "需复核"):
+    for kind in ("数据错误", "需复核"):  # data errors and your review list, the largest 15 by upside
         part = show[show["verdict"] == kind].sort_values("upside", ascending=False)
-        print(f"-- {kind} ({len(part)}{', the largest 15 by upside' if len(part) > 15 else ''})")
-        for code, x in part.head(15).iterrows():
-            print(f"  {code} {str(x['name'])[:16]} {x['upside']:+.0%} {x['implied_label']}: {x['verdict_why']}")
-    cols = ["name", "price", "v_low", "v_mid", "v_high", "upside", "confidence", "implied_label", "trend", "conviction", "flags"]
+        print(f"-- {kind} ({len(part)})\n" + "\n".join(f"  {c} {str(x['name'])[:16]} {x['upside']:+.0%} {x['implied_label']}: "
+                                                    f"{x['verdict_why']}" for c, x in part.head(15).iterrows()))
+    cols = ["name", "price", "v_low", "v_mid", "v_high", "upside", "confidence", "implied_label", "trend", "verdict", "conviction", "flags"]
     for bucket, label in BUCKETS.items():
         part = show[show["bucket"] == bucket].sort_values("rank")
         print(f"\n-- v3 {label} ({len(part)})")
@@ -297,8 +294,8 @@ def report(df: pd.DataFrame, picks: pd.DataFrame, v: pd.DataFrame, market: str) 
               + f"\n  业务趋势：{trend.LABELS[x['trend']]}（{x['trend_why'] or '无明显变化'}）"
               + (f"\n  异常值判断：{x['verdict']}，{x['verdict_why']}" if x["verdict"] else ""))
     v1 = picks[picks["role"] == "pick"].set_index("code")
-    same = {b: len(set(v1.index[v1["bucket"] == b]) & set(v.index[v["bucket"] == b])) for b in BUCKETS}
-    print("same name in v1 and v3: " + ", ".join(f"{BUCKETS[b]} {k}/5" for b, k in same.items()))
+    print("same name in v1 and v3: " + ", ".join(f"{BUCKETS[b]} {len(set(v1.index[v1['bucket'] == b]) & set(v.index[v['bucket'] == b]))}/5"
+                                                 for b in BUCKETS))
 
 
 def fmt(part: pd.DataFrame) -> pd.DataFrame:

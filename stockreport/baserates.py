@@ -1,5 +1,5 @@
 """Base rates, the outside view (Phase 13, PLAN.md Method 16). Of the companies that looked like this one in some
-year (sector, revenue growth, ROE and size bands, or the business trend band), the share whose profit kept up a
+year (sector, revenue growth, ROE and size bands), the share whose profit kept up a
 growth rate for 1..10 years: profit summed over years 1..k at least the sum of (1 + g)^j × the start's, less a
 tolerance. Counted over the companies still reporting (Kaplan-Meier: one that stops reporting leaves without
 counting as a failure). US from SEC's frames (dead filers included); CN and HK from listed companies' history."""
@@ -7,7 +7,7 @@ counting as a failure). US from SEC's frames (dead filers included); CN and HK f
 import numpy as np
 import pandas as pd
 
-from stockreport import history, trend
+from stockreport import history
 from stockreport.config import CONFIG
 
 H = 10  # years measured; beyond, the hazard of the last 3 measured years continues (to DMAX)
@@ -19,11 +19,7 @@ ROE = [-np.inf, 0.08, 0.15, 0.25, np.inf]
 G_GRID = np.round(np.arange(-0.10, 0.401, 0.025), 3)  # survival is measured at these rates and interpolated
 MIN_STARTS = CONFIG["v3"]["min_starts"]
 TOL = CONFIG["v3"]["tolerance"]  # per market
-# cells, finest first; "trend" puts the business trend band (trend.py) where "size" puts the revenue tercile
-CELLS = {"size": [("sector", "gb", "qb", "sb"), ("sector", "gb", "qb"), ("sector", "qb"), ("gb", "qb", "sb"), ("gb", "qb"), ("gb",)],
-         "trend": [("sector", "gb", "qb", "tb"), ("sector", "gb", "qb"), ("sector", "qb"), ("gb", "qb", "tb"), ("gb", "qb"), ("gb",)]}
-CELL = CONFIG["v3"]["cells"]  # per market (in-sample)
-LEVELS = CELLS["size"]
+LEVELS = [("sector", "gb", "qb", "sb"), ("sector", "gb", "qb"), ("sector", "qb"), ("gb", "qb", "sb"), ("gb", "qb"), ("gb",)]
 US_MIN_REVENUE = 5e7  # US frames: filers with $50m+ revenue in the start year (shells and funds out)
 # Fama-French 12 industries by SIC code (US: SEC gives every filer, dead ones too, a SIC code, not a Nasdaq sector)
 FF12 = [("耐用消费品", [(2500, 2519), (2590, 2599), (3630, 3659), (3710, 3711), (3714, 3714), (3716, 3716), (3750, 3751),
@@ -89,8 +85,7 @@ def bands(growth, roe, size_rank) -> pd.DataFrame:
 def starts(p: pd.DataFrame, today: str, market: str) -> pd.DataFrame:
     """Every profitable company-year public by `today` (a start; US: $50m+ revenue), with its bands, its profit
     k = 1..H years later over the start's (e1..e10) and its ROE then (q1..q10); NaN once the company stops
-    reporting or the year isn't public yet; its business trend band (tb, from the start year and the 3 before).
-    The latest year's revenue terciles are in .attrs["size_cuts"], the market's cells in .attrs["levels"]."""
+    reporting or the year isn't public yet. The latest year's revenue terciles are in .attrs["size_cuts"]."""
     p = p[p["avail"] <= today]
     years = list(range(int(p["year"].min()), int(p["year"].max()) + 1))
     wide = {c: p.pivot(index="code", columns="year", values=c).reindex(columns=years) for c in ("earn", "rev", "roe")}
@@ -107,16 +102,10 @@ def starts(p: pd.DataFrame, today: str, market: str) -> pd.DataFrame:
         with np.errstate(divide="ignore", invalid="ignore"):
             growth = rev[ok, j] / rev[ok, j - 1] - 1
         b = bands(growth, roe[ok, j], np.searchsorted(cuts[year], rev[ok, j]))
-        back = lambda m: np.column_stack([m[ok, j - i] if j >= i else np.full(ok.sum(), np.nan) for i in range(4)])
-        b["tb"] = trend.band(back(rev), back(e), back(roe))
         rows.append(pd.DataFrame(cols).assign(year=year, sector=sector[ok], **b))
     out = pd.concat(rows, ignore_index=True)
-    out.attrs["size_cuts"], out.attrs["levels"] = cuts[max(cuts)], CELLS[per_market(CELL, market)]
+    out.attrs["size_cuts"] = cuts[max(cuts)]
     return out
-
-
-def per_market(value, market: str):
-    return value[market] if isinstance(value, dict) else value  # the backtest sets one value for every market
 
 
 ECOLS, QCOLS = [f"e{k}" for k in range(1, H + 1)], [f"q{k}" for k in range(0, H + 1)]
@@ -141,9 +130,8 @@ def roe_path(q: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def km(values: np.ndarray, path: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Kaplan-Meier share still at or above `path` (per year 1..H, or per start × year) after 0..H years, and
-    how many were at risk each year. A start is at risk in year k while it stayed on the path through k − 1 and
-    still reports in year k; the first missing year ends its record."""
+    """Kaplan-Meier share still at or above `path` after 0..H years and how many were at risk each year (at risk in
+    year k: on the path through k − 1 and still reporting; the first missing year ends a record)."""
     seen = np.cumprod(~np.isnan(values), axis=1).astype(bool)
     kept = np.where(seen, values >= path, False)
     through = np.cumprod(np.where(seen, kept, True), axis=1).astype(bool)
@@ -154,15 +142,13 @@ def km(values: np.ndarray, path: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def track(g: float, tol: float | None = None) -> np.ndarray:
-    """Cumulative profit that counts as keeping up g after k = 1..H years: the sum of (1 + g)^j × the start's
-    profit over j ≤ k, less the tolerance. Cumulative, because value depends on the profit summed over the
-    years: one weak year (profit is noisy) doesn't end a run whose trend holds."""
+    """Cumulative profit that keeps up g after k = 1..H years: the sum of (1 + g)^j over j ≤ k, less the tolerance
+    (cumulative: one weak year doesn't end a run whose trend holds)."""
     return np.cumsum((1 + g) ** np.arange(1, H + 1)) * (1 - (TOL["cn"] if tol is None else tol))
 
 
 def extend(s: np.ndarray, risk: np.ndarray) -> np.ndarray:
-    """Survival to DMAX: measured while MIN_RISK companies are at risk, then the hazard of the last 3 measured
-    years continues."""
+    """Survival to DMAX: measured while MIN_RISK are at risk, then the last 3 measured years' hazard continues."""
     k = int(np.argmax(risk < MIN_RISK)) if (risk < MIN_RISK).any() else H  # years measured
     k = max(k, 1)
     base = s[max(k - 3, 0)]
@@ -172,10 +158,9 @@ def extend(s: np.ndarray, risk: np.ndarray) -> np.ndarray:
 
 
 def cell_of(st: pd.DataFrame, want: pd.DataFrame) -> pd.DataFrame:
-    """Per stock (rows of `want`: sector, gb, qb, sb, tb), the finest cell of the market's levels with MIN_STARTS
-    starts: its level number and key."""
+    """Per stock (rows of `want`: sector, gb, qb, sb), the finest LEVELS cell with MIN_STARTS starts: level, key."""
     out = pd.DataFrame({"level": np.nan, "key": None}, index=want.index)
-    for i, cols in enumerate(st.attrs.get("levels", LEVELS)):
+    for i, cols in enumerate(LEVELS):
         counts = st.groupby(list(cols)).size()
         keys = pd.MultiIndex.from_frame(want[list(cols)]) if len(cols) > 1 else pd.Index(want[cols[0]])
         n = pd.Series(counts.reindex(keys).to_numpy(), index=want.index)
@@ -186,7 +171,7 @@ def cell_of(st: pd.DataFrame, want: pd.DataFrame) -> pd.DataFrame:
 
 
 def members(st: pd.DataFrame, level, key) -> np.ndarray:
-    cols = list(st.attrs.get("levels", LEVELS)[int(level)])
+    cols = list(LEVELS[int(level)])
     return np.logical_and.reduce([st[c].to_numpy() == v for c, v in zip(cols, key)])
 
 
@@ -232,9 +217,8 @@ def describe(level, key, market: str) -> str:
     if pd.isna(level):
         return ""
     names = {"gb": lambda b: f"营收增速 {band(GROWTH, b)}", "qb": lambda b: f"ROE {band(ROE, b)}",
-             "sb": lambda b: ["小", "中", "大"][int(b)] + "规模", "sector": lambda s: s,
-             "tb": lambda b: "业务" + trend.LABELS[int(b) - 1]}
-    return " · ".join(names[c](v) for c, v in zip(CELLS[per_market(CELL, market)][int(level)], key))
+             "sb": lambda b: ["小", "中", "大"][int(b)] + "规模", "sector": lambda s: s}
+    return " · ".join(names[c](v) for c, v in zip(LEVELS[int(level)], key))
 
 
 def band(edges: list, b) -> str:

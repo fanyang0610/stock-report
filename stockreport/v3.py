@@ -15,7 +15,6 @@ from stockreport.config import CONFIG
 CFG = CONFIG["v3"]
 G_LONG = CFG["long_growth"]
 FADE = CFG["fade_years"]
-HAIRCUT = CFG["haircut"]
 LONG_ROE = CFG["long_roe"]  # per market: "market" (the largest third's median ROE) or "r" (no long-run excess)
 LAMBDA = CFG["industry_lambda"]  # per market: share of an industry's implied premium accepted as its risk
 COUNTRY_LAMBDA = CFG["country_lambda"]  # US: share of a foreign listing's country premium accepted as its risk
@@ -204,17 +203,16 @@ def value(df: pd.DataFrame, h: pd.DataFrame, st: pd.DataFrame, market: str, sect
     """The v3 columns for one market's snapshot `df`: inputs, base-rate cell and survival, the market's rate,
     the value range, upside and the implied duration with its label."""
     x = inputs(df, h, market)
-    g_long, fade, cut = per_market(G_LONG, market), per_market(FADE, market), per_market(HAIRCUT, market)
+    g_long, fade = per_market(G_LONG, market), per_market(FADE, market)
     roe_long = np.nan if per_market(LONG_ROE, market) == "r" else float(st.attrs["roe_long"])
     want = br.bands(df["rev_growth"], x["roe0"].where(x["b0"] > 0, 1.0),
                     np.searchsorted(st.attrs["size_cuts"], df["revenue_ttm"].fillna(0)))
     want.index = df.index
     want["sector"] = sector.reindex(df.index).fillna("")
-    want["tb"] = h["tb"].reindex(df.index).fillna(1) if "tb" in h else 1  # business trend band (trend.py)
     S, path, cells = br.survival(st, want, x["g"], per_market(br.TOL, market))
     x = x.join(cells)
     t0 = x["t0"].to_numpy(int)
-    q = quantile_durations(S) * (1 - cut)  # HK: survivors only
+    q = quantile_durations(S)
     ok, price = x["ok"].to_numpy(bool), df["price"].to_numpy(float)
     well = ok & (x["t0"].to_numpy() == 3) & (x["n_years"].to_numpy() >= 5)
     if well.sum() < 30:  # no consensus (the backtest): stocks with 5+ years of history
@@ -238,9 +236,7 @@ def value(df: pd.DataFrame, h: pd.DataFrame, st: pd.DataFrame, market: str, sect
     out["v_low"], out["v_mid"], out["v_high"] = rng[:, 0], np.where(good, vals[:, 1], np.nan), rng[:, 2]
     out["upside"] = out["v_mid"] / df["price"] - 1
     out["v_t0"] = np.where(good, grid[:, 0], np.nan)
-    imp = implied(np.where(good[:, None], grid, np.nan), price, S, np.zeros(len(x), int))
-    imp.index = df.index
-    out = out.join(imp)
+    out = out.join(implied(np.where(good[:, None], grid, np.nan), price, S, np.zeros(len(x), int)).set_axis(df.index))
     out["valued"] = good
     # where no duration explains the price (below a stop to growth, above 30 years, or growth at a low ROE): the
     # constant ROE on book forever that the price implies, and the share of similar companies whose ROE got there
