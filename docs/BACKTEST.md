@@ -832,3 +832,123 @@ market sees there (assets it doesn't believe, recoveries it doubts, assets that 
 - Rerun: `uv run python -m backtest.fetch sec` (once; resumable), `uv run python -m backtest.run build us`,
   `uv run python -m backtest.sense build us|cn|hk` (a few minutes each), `uv run python -m backtest.sense us|cn|hk
   [annual|final]`.
+
+## 18. Picking by funnel and score (Phase 13, PLAN.md Method 17, 2026-10-20; backtest/funnel.py)
+
+Your target: a buy beats its market's index (S&P 500, CSI 300, Hang Seng) over 6 months without a blow-up (25%+ below
+its start at any month-end within the 6 months); sells trail the index. Stock returns include dividends, the indexes
+don't (1-2 points easier over 6 months). In-sample from v3's first valued month (US 2019-02, CN 2019-01, HK 2019-06) to
+2023-12, out of sample 2024-01..2026-03 (27 starts). Ranges: 5-95% of a block bootstrap over dates (6-month blocks).
+The funnel, inputs, weightings and reading of the pass bar were written into PLAN.md and committed (ba4478b) before
+the score was run once.
+
+**Verdict: the funnel and score fail the registered bar.** HK passes every item; the US and CN don't, and the bar needs
+two markets. Nothing is built in the app; today's v3 lists stay.
+
+**1. The bar** (6-month returns, the index's and the worst month-end now in the backtest: panel.HORIZONS, `worst_6m`).
+Rebuilt with the committed code; the draft's scratch figures came from frames built minutes before the exclusion
+rule was removed (CN then 53% / 6.7%).
+
+| 6 months, out of sample (in-sample) | US | CN | HK |
+|---|---|---|---|
+| today's v3 buys beat the index | 68.9% (47.5%) | 50.4% (51.3%) | 63.7% (64.0%) |
+| their blow-ups | 3.7% (11.2%) | 8.1% (7.3%) | 2.2% (12.4%) |
+| all stocks: beat the index / blow-ups | 46.1% / 7.8% (49.2% / 10.4%) | 41.7% / 11.3% (45.1% / 18.6%) | 44.1% / 13.3% (52.0% / 24.3%) |
+| v1 buys beat the index | 50.4% (48.5%) | 37.8% (49.7%) | 50.4% (57.8%) |
+
+**2. Each input alone** (valued stocks; top fifth / bottom fifth by the input, share that beat the index without a
+blow-up; in-sample, then out of sample):
+
+| | US in | US out | CN in | CN out | HK in | HK out |
+|---|---|---|---|---|---|---|
+| valuation (v3's gap) | 52.1 / 48.4 | 49.0 / 46.3 | 50.1 / 41.8 | 44.3 / 44.9 | 56.7 / 44.5 | 51.3 / 40.1 |
+| 6-month price trend | 50.0 / 47.8 | 50.6 / 41.3 | 46.8 / 35.9 | 42.6 / 40.2 | 53.1 / 41.2 | 40.7 / 43.8 |
+| quality (v1 z) | 46.8 / 51.2 | 43.6 / 47.4 | 44.1 / 42.2 | 43.4 / 41.0 | 49.5 / 49.8 | 43.5 / 42.0 |
+| health (trend.health) | 49.0 / 49.5 | 48.6 / 44.5 | 47.6 / 43.3 | 46.3 / 40.3 | 49.2 / 47.7 | 39.1 / 46.1 |
+| business (quality + health without momentum) | 48.1 / 51.2 | 45.3 / 48.2 | 44.5 / 43.7 | 43.5 / 40.3 | 47.4 / 51.3 | 40.0 / 42.1 |
+| low volatility | 39.8 / 52.0 | 43.9 / 50.4 | 52.4 / 37.1 | 39.8 / 48.8 | 58.3 / 42.8 | 50.7 / 38.3 |
+| low debt (non-financials) | 48.8 / 49.6 | 45.2 / 43.4 | 41.5 / 40.9 | 38.9 / 39.2 | 44.8 / 49.8 | 43.7 / 43.5 |
+
+Blow-ups, top / bottom fifth in-sample: valuation US 11.5 / 11.0%, CN 8.8 / 28.5%, HK 15.2 / 32.0%; low volatility US
+5.2 / 16.7%, CN 3.7 / 32.8%, HK 10.1 / 35.7%. Valuation and the trend helped in every market in-sample; low volatility
+cut blow-ups everywhere but in the US also cut the beat rate (high-volatility US stocks beat the index more often), and
+in CN out of sample it reversed (2024-26 rewarded volatile small caps). Revisions: no history (CN's 2026 window has
+3 starts with 6 months of prices).
+
+**3. Confidence calibrated: it isn't.** Rank IC of v3's gap with the 6-month return over the index within each level,
+高 / 中 / 低: in-sample US 0.019 / 0.005 / 0.043, CN 0.050 / 0.060 / 0.090, HK 0.013 / 0.023 / 0.069; out of sample US
+0.063 / 0.022 / 0.005, CN 0.021 / 0.046 / −0.006, HK 0.084 / 0.092 / 0.108. 高 does not rank better than 低 in-sample in
+any market, so confidence leaves the score.
+
+**4. Overlaps** (in-sample mean per-date rank correlation): quality and low debt 0.33 / 0.52 / 0.59 (US / CN / HK;
+quality's z contains debt: debt dropped); health and the trend 0.31-0.36 (health's momentum vote: removed in
+"business"); valuation and low volatility −0.07 / 0.45 / 0.30 (cheap stocks are calm in CN and HK); valuation and
+confidence 0.11-0.26.
+
+**5. What preceded blow-ups** (blow-up rate with the sign over the market's, in-sample / out of sample):
+
+| sign | US | CN | HK |
+|---|---|---|---|
+| volatility, top fifth | 1.81× / 2.10× | 1.81× / 1.66× | 1.62× / 1.99× |
+| a loss over 12 months | 1.71× / 2.13× | 1.31× / 1.74× | 1.54× / 1.79× |
+| 6-month trend, bottom fifth | 1.39× / 1.63× | 1.18× / 1.06× | 1.40× / 1.20× |
+| CN: 2+ limit-up days in 3 months | | 1.61× / 1.89× | |
+| P/B over 4 | 0.96× / 1.36× | 1.63× / 1.70× | 1.63× / 2.14× |
+| debt, top fifth (non-financials) | 0.97× / 0.97× | 0.89× / 1.11× | 1.04× / 1.08× |
+| health ≤ −1 | 1.23× / 1.16× | 0.83× / 1.12× | 1.00× / 0.85× |
+| smallest fifth | 1.14× / 0.91× | 1.04× / 1.13× | 1.08× / 1.34× |
+| v3 gap beyond ±100% | 1.06× / 0.92× | 0.46× / 0.31× | 0.67× / 0.51× |
+
+The funnel's blow-up stage (registered signs: log volatility, a loss, the 6-month trend, CN limit-up days; logistic fit
+in-sample; out above twice the market's in-sample rate): US 1.7% / 0.9% of stocks set aside, their blow-ups 26.1% /
+29.1% against 10.2% / 7.7% (in practice none of them valued by v3: they are loss-makers); CN 8.5% / 9.5%, 42.3% / 22.0%
+against 16.4% / 10.2%; HK 3.4% / 2.7%, 56.4% / 23.9% against 23.1% / 13.0%. It finds the blow-ups out of sample too
+(2-4×), and costs little: the names it sets aside beat the index about as often or less (CN out of sample more: 46.7%
+against 41.2%).
+
+**6. The score, run once.** Inputs per market (in-sample alone test): US valuation, trend; CN valuation, trend,
+business, low volatility; HK valuation, trend, low volatility. Chosen in-sample by the funnel survivors' top fifth
+(beat without a blow-up): US valuation-led 48.6% (equal 47.8%), CN equal 56.8% (risk-led 57.2%, within 0.5),
+HK valuation-led 64.6% (equal 64.0%).
+
+| 6 months, out of sample (in-sample) | US | CN | HK |
+|---|---|---|---|
+| buys beat the index | 54.1% (54.2%), range 41-63% | 51.1% (57.7%), 32-64% | 64.4% (72.7%), 55-71% |
+| their blow-ups | 4.4% (9.8%), 2-9% | 2.2% (3.7%), 0-4% | 1.5% (8.0%), 0-4% |
+| today's v3 buys: beat / blow-ups | 68.9% / 3.7% (47.5% / 11.2%) | 50.4% / 8.1% (51.3% / 7.3%) | 63.7% / 2.2% (64.0% / 12.4%) |
+| both periods together: buys / today's v3 buys | 54.2% / 8.1% vs 54.2% / 8.8% | 55.6% / 3.2% vs 51.0% / 7.6% | 70.0% / 5.9% vs 63.9% / 9.0% |
+| sells trailed the index (today's v3 sells) | 60.0% (53.3%) | 62.2% (59.3%) | 59.3% (50.4%) |
+| all valued: top fifth vs bottom fifth over the index, out | +1.7% vs −1.5%; blow-ups 5.3% vs 10.5% | +0.7% vs +5.1%; 5.6% vs 16.7% | +4.0% vs +0.4%; 3.1% vs 22.2% |
+| the same, in-sample | +3.0% vs +0.4%; 10.3% vs 10.6% | +4.4% vs −1.7%; 8.8% vs 27.7% | +7.5% vs +3.2%; 10.7% vs 36.5% |
+| sub-periods where the top fifth wins on both | 3 of 4 (not 2019-20) | 3 of 4 (not 2024-26) | 3 of 4 (not 2019-20) |
+| side checks: buys beat the index at 12 months, out | 54.3% (today's 65.7%) | 44.8% (48.6%) | 58.1% (59.0%) |
+
+The pass bar, item by item (registered reading in PLAN.md Method 17):
+
+| | US | CN | HK |
+|---|---|---|---|
+| out: buys beat the index ≥ 55% | fail (54.1%) | fail (51.1%) | pass (64.4%) |
+| out: blow-ups ≤ half the market's | fail (4.4% > 3.9%) | pass (2.2% ≤ 5.65%) | pass (1.5% ≤ 6.65%) |
+| out: at least as good as today's v3 buys on both | fail | pass | pass (+0.7 points; 2 blow-ups against 3) |
+| in-sample, the same direction | pass | pass | pass |
+| top fifth beats bottom fifth, both samples | pass | fail (out: mean return; beat rate 43.5% vs 42.2%) | pass |
+| 3 of 4 sub-periods | pass | pass | pass |
+| at least two markets | fail: HK only | | |
+
+Costs and turnover: buys turn over 26-42% a month; one round trip (US 0.2%, CN 0.3%, HK 0.6%, assumed) moves the
+beat rate by 0-0.7 points. Gaps beyond +100% among the buys: US 49%, CN 14-35%, HK 33-63%; resting on the gap alone
+(the other inputs below their median): US 0, CN 0, HK 4 of 410.
+
+**7. Survivorship.** CN is close to point-in-time (it misses ~0.9% of turnover, section 9) and is where the score
+improved most on today's lists (both samples, both measures), so survivors don't make the design. In the US about
+3.8% of the 800 largest SEC filers a year stop filing (2009-2023, mostly takeovers): even if each had been a blow-up,
+the 6-month blow-up rates would be under ~2 points higher. HK can't be measured.
+
+**8. Today (2026-10-19, not built; scratch).** The funnel and score would buy US: Microsoft, Qualcomm, Sandisk, MetLife,
+Applied Materials; CN: 招商证券, 中国移动, 成都银行, 上港集团, 招商银行; HK: 中信股份, 民生银行, 工商银行, 海尔智家,
+中国海外发展. Your examples: MU (score 75th percentile), AMD (28th), LLY (38th) are not sells; GM and Ford rank high
+on value but fail the quality screen, Stellantis is set aside as a blow-up risk (chance 23% against 21%): none a buy.
+保利发展 (67th) and 中国太平 / 中国人寿 (81st / 79th) drop out of the buys; 绿的谐波 is set aside as a blow-up risk (51%).
+
+- Rerun: `uv run python -m backtest.run build us|cn|hk` (the 6-month columns; about a minute each), `uv run python -m
+  backtest.sense build us|cn|hk` (the frames, ~2 min), then `uv run python -m backtest.funnel checks|score us|cn|hk`.
