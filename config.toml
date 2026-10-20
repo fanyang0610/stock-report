@@ -117,7 +117,6 @@ evidence = { cn = ["rev", "profit", "roe", "momentum", "revision"], hk = ["rev",
 need = { cn = 2, hk = 2, us = 1 }   # improving at a vote sum >= need, deteriorating at <= -need
 buy = { cn = "stable", hk = "stable", us = "stable" }  # strict buys from "improving" only, or "stable" too; never deteriorating
 map = { cn = false, hk = false, us = true }   # the trend × valuation map for the shadow lists (false: v2's bucket rules); in-sample, BACKTEST.md 15
-sell_heat = { cn = 0, hk = 0, us = 0 }  # CN speculation: strict sells need this many limit-up days in the last 3 months (0: off)
 
 [events]                      # event layer (PLAN.md Method 14)
 backfill_days = 10            # the first fetch reads this many days back (CN ~30 s a day); later the days since the last

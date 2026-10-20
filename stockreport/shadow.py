@@ -15,7 +15,6 @@ from stockreport.pick import BUCKETS
 C2 = CONFIG["shadow"]  # bucket rules kept from v2 (Phase 9 calibration): thresholds, momentum, size floor
 MAP = CONFIG["trend"]["map"]  # per market: the trend × valuation map (else v2's rules), chosen in-sample
 BUY = CONFIG["trend"]["buy"]  # per market: strict buys from "improving" only or "stable" too
-HEAT = CONFIG["trend"]["sell_heat"]  # per market: strict sells need this many limit-up days in 3 months (0: off)
 HOME = "United States"  # US: foreign listings can't be bought (config buy_home_only)
 HAND = {"us": ["TM", "GM", "F", "STLA", "TSLA", "RACE", "LLY", "JNJ", "NVDA", "MU", "ARM", "CRWD", "JPM"],
         "cn": ["601668", "601390", "600019", "600519", "300750", "002594", "300308"],
@@ -23,7 +22,7 @@ HAND = {"us": ["TM", "GM", "F", "STLA", "TSLA", "RACE", "LLY", "JNJ", "NVDA", "M
 COLUMNS = ["e0", "book", "light", "t0", "g", "roe0", "roe_now", "level", "starts", "base", "s1", "s3", "s5", "s10", "d25", "d50", "d75",
            "r", "r_mkt", "roe_long", "irr", "v_low", "v_mid", "v_high", "upside", "d_implied", "implied_share", "implied_side",
            "implied_label", "roe_implied", "roe_reached", "implied", "v_peer", "screen_fails", "dilution", "flags", "conf_points",
-           "confidence", "limit_ups", "trend", "trend_score", "trend_why", "verdict", "verdict_why", "bucket", "rank", "tier", "conviction"]
+           "confidence", "trend", "trend_score", "trend_why", "verdict", "verdict_why", "bucket", "rank", "tier", "conviction"]
 
 
 def parents(df: pd.DataFrame, market: str) -> pd.Series:
@@ -47,11 +46,7 @@ def load(df: pd.DataFrame, market: str, today: date) -> tuple[pd.DataFrame, pd.D
         sector = cik.map(lambda c: sec.get(str(int(float(c))), "") if pd.notna(c) and str(c) != "" else "")
     else:
         sector = parents(df, market) if market == "hk" else sec.reindex(df.index)
-    h = with_trend(history.load(market, df, today), market, df.index, day)
-    if market == "cn":  # speculative heat (limit-up days), the CN sell rule
-        from stockreport.fetch import tdx
-        h["limit_ups"] = trend.limit_ups(tdx.load_prices(), df.index, df["price_date"].astype(str).max())
-    return h, st, sector.fillna("")
+    return with_trend(history.load(market, df, today), market, df.index, day), st, sector.fillna("")
 
 
 def with_trend(h: pd.DataFrame, market: str, codes, day: str) -> pd.DataFrame:
@@ -64,7 +59,7 @@ def value(df: pd.DataFrame, market: str, today: date, loaded: tuple | None = Non
     """The v3 frame for one market's snapshot `df` (v1 columns)."""
     h, st, sector = loaded or load(df, market, today)
     v = v3.value(df, h, st, market, sector)
-    v = v.join(trend.classify(h, df["mom_12_1"], h.get("revision"), market)).assign(limit_ups=h.get("limit_ups", np.nan))
+    v = v.join(trend.classify(h, df["mom_12_1"], h.get("revision"), market))
     v["base"] = [br.describe(lv, k, market) for lv, k in zip(v["level"], v["key"])]
     v["implied"] = sentences(v, df, v3.per_market(v3.FADE, market))
     v["v_peer"] = peer(df, v, parents(df, market))
@@ -193,7 +188,7 @@ def buckets(v: pd.DataFrame, df: pd.DataFrame, market: str = "cn") -> pd.DataFra
     """买入 / 持有 / 卖出, 5 each, strict rules first and relaxed fills marked 低信心, at most 2 per industry, each
     stock once, data errors left out; per market (config [trend], PLAN.md Method 16): v2's rules (Phase 9), or the
     trend × valuation map (a buy needs an improving or stable trend, a value trap is never a buy, an improver never
-    a sell, a strict sell needs a deteriorating trend), and in CN strict sells need speculative heat instead."""
+    a sell, a strict sell needs a deteriorating trend)."""
     n, cap = CONFIG["buckets"]["per_bucket"], CONFIG["buckets"]["max_per_group"]
     ok = v["valued"] & (v["verdict"] != "数据错误")
     up, good, passed, mom = v["upside"], v["confidence"].isin(["高", "中"]), v["screen_ok"], df["z_momentum"]
@@ -203,8 +198,6 @@ def buckets(v: pd.DataFrame, df: pd.DataFrame, market: str = "cn") -> pd.DataFra
         trap, weak, protect = det, det, imp
     else:
         lead, trap, weak, protect = mom >= -0.5, False, (mom <= -0.5) | (df["np_growth"] < 0) | ~passed, False
-    if v3.per_market(HEAT, market):  # CN: an expensive stock is a sell while it is speculated on, not while calm
-        weak = v["limit_ups"] >= v3.per_market(HEAT, market)
     can_buy = ok & buy_universe(df, market) & ~trap
     width = (np.log(v["v_high"] / v["v_low"]) / 2).clip(upper=0.5).fillna(0.5)
     cw = np.log1p(up.clip(lower=-0.99)) * (1 - width)

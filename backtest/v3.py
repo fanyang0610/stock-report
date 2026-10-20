@@ -9,6 +9,7 @@ frame, so their variants cost seconds.
   uv run python -m backtest.v3 map cn|us|hk       # trend × valuation map variants on the saved frame -> v3_map_<market>.csv
   uv run python -m backtest.v3 persistence        # base rates by business trend band (panel study) -> v3_persistence.md
   uv run python -m backtest.v3 outliers           # outlier verdicts and the returns after them -> v3_outliers.md
+  uv run python -m backtest.v3 cn                 # A-share sentiment signals (limit-up heat, turnover, MAX, 业绩预告) -> v3_cn_signals.md
 """
 
 import sys
@@ -26,7 +27,7 @@ MARKETS = ("cn", "us", "hk")
 V1_COLS = ["upside", "z_momentum", "z_quality", "quality_pct", "mom_12_1", "np_growth", "eps_ttm", "mcap_rank",
            "industry", "financial", "price", "ey", "by", "mcap", "country"]
 V3_COLS = ["upside", "v_mid", "v_low", "v_high", "bucket", "confidence", "implied_label", "valued", "light", "d50", "level",
-           "r", "irr", "screen_ok", "t0", "g", "limit_ups", "trend", "trend_score", "verdict", "verdict_why"] + [
+           "r", "irr", "screen_ok", "t0", "g", "trend", "trend_score", "verdict", "verdict_why"] + [
            f"vote_{k}" for k in trend.TEXT]
 LAMBDA_GRID = {"industry premium": [("v3__LAMBDA", x) for x in (0.0, 0.25, 0.5, 0.75, 1.0)]}
 COUNTRY_GRID = {"country premium": [("v3__COUNTRY_LAMBDA", x) for x in (0.0, 0.5, 1.0)]}
@@ -60,7 +61,7 @@ def frame(market: str, data: dict, **kw) -> pd.DataFrame:
     p = br.panel(market)
     secs = br.sectors(market)
     country = panel.today_snapshot("us")["country"] if market == "us" else None  # snapshots built before Phase 9's field
-    px = panel.CNPrices() if market == "cn" else None  # CN: limit-up days (the sell_heat rule)
+    px = panel.CNPrices() if market == "cn" else None  # CN: limit-up days (speculative heat, a cell study)
     rows, started = [], time.monotonic()
     with params(outliers__LIVE=False, **kw):
         for m, d in data.items():
@@ -71,10 +72,10 @@ def frame(market: str, data: dict, **kw) -> pd.DataFrame:
             st.attrs["roe_long"] = v3.roe_long(p, day.isoformat(), market)
             h = d["loaded"][0] if isinstance(d["loaded"], tuple) else d["loaded"]
             h = shadow.with_trend(h, market, s.index, day.isoformat())
-            if px is not None:
-                h = h.assign(limit_ups=cn_limit_ups(px, s.index, day.isoformat()))
             v = shadow.value(s, market, day, loaded=(h, st, sector_of(s, market, secs)))
             f = s.reindex(columns=V1_COLS).join(v[V3_COLS].add_prefix("v3_")).join(d["fwd"])
+            if px is not None:
+                f["limit_ups"] = cn_limit_ups(px, s.index, day.isoformat())
             picks = d["picks"]["both"]
             f["v1_bucket"] = picks[picks["role"] == "pick"].set_index("code")["bucket"].reindex(f.index)
             rows.append(f.assign(date=m, market=market))
@@ -86,7 +87,9 @@ def frame(market: str, data: dict, **kw) -> pd.DataFrame:
 
 
 def cn_limit_ups(px, codes, day: str, days: int = 63) -> pd.Series:
-    """trend.limit_ups on the backtest's daily matrices: limit-up days in the last 63 trading days."""
+    """CN speculative heat: limit-up days (≥ 9.5%, 19.5% on ChiNext / STAR) in the last 63 trading days. A sell rule
+    on it (strict sells need 2+ / 3+) was tested 2026-10-20 (commit 2263b4f): in-sample buy − sell +9.2% / +8.8%
+    against v2's +4.1%, out of sample −7.1% / −10.6% against +11.4%; not adopted, then removed from the app."""
     t = int(np.searchsorted(px.days, day, side="right")) - 1
     cols = pd.Index(codes).map(px.col)
     r = px.ret[max(t - days + 1, 0): t + 1][:, np.nan_to_num(cols.to_numpy(float), nan=0).astype(int)] - 1
@@ -96,7 +99,7 @@ def cn_limit_ups(px, codes, day: str, days: int = 63) -> pd.Series:
 
 def add_signals(f: pd.DataFrame, market: str) -> pd.DataFrame:
     """The lists with v2's rules on the same values (the before)."""
-    f["v3_bucket_v2"] = rebucket(f, market, shadow__MAP=False, shadow__HEAT=0)
+    f["v3_bucket_v2"] = rebucket(f, market, shadow__MAP=False)
     return f
 
 
@@ -206,32 +209,33 @@ def map_grid(market: str) -> pd.DataFrame:
     re-bucketed on the saved frame; the in-sample buy − sell decides (Phase 9's bar: +1 point)."""
     f = pd.read_pickle(panel.BT / f"v3_{market}.pkl")
     rows = [{"variant": "v2 rules (before)"} | metrics(f, "v3 before (v2 rules)")]
-    if market == "cn":  # CN: strict sells need speculative heat (limit-up days in 3 months) instead of v2's weakness
-        for k in (2, 3):
-            f["b"] = rebucket(f, market, shadow__MAP=False, shadow__HEAT=k)
-            rows.append({"variant": f"v2 rules, sells need {k}+ limit-up days"} | metrics(f, bucket="b"))
-            print(market, rows[-1]["variant"], {x: round(y, 3) for x, y in rows[-1].items() if "buy" in x and "t" not in x[-2:]}, flush=True)
     for ev in EVIDENCE:
         for buy in ("improving", "stable"):
-            f["b"] = rebucket(f, market, evidence=ev, shadow__MAP=True, shadow__BUY=buy, shadow__HEAT=0)
+            f["b"] = rebucket(f, market, evidence=ev, shadow__MAP=True, shadow__BUY=buy)
             rows.append({"variant": f"map, votes {ev}, buys {buy}"} | metrics(f, bucket="b"))
             print(market, rows[-1]["variant"], {k: round(x, 3) for k, x in rows[-1].items() if "buy" in k and "t" not in k[-2:]}, flush=True)
     cells = []
     for ev, (use, need) in EVIDENCE.items():  # the ranking: upside percentile + w × the class (w = 1: class first)
         score = f[[f"v3_vote_{k}" for k in use]].sum(axis=1)
         cls = np.select([score >= need, score <= -need], [1, -1], 0)
-        val = np.select([f["v3_upside"] >= 0.2, f["v3_upside"] <= -0.25], ["cheap", "expensive"], "middle")
-        by = f.assign(cls=cls, val=val).dropna(subset=["ex_12m"]).groupby(["sample", "val", "cls", "date"])["ex_12m"]
-        cells.append(pd.DataFrame({"ex_12m": by.mean().groupby(level=[0, 1, 2]).mean(),
-                                   "per_date": by.size().groupby(level=[0, 1, 2]).mean()}).assign(votes=ev))
+        cells.append(cell_table(f, cls).assign(votes=ev))
         for w in (0.05, 0.1, 0.25, 0.5, 1.0):
             f["s"] = f.groupby("date")["v3_upside"].rank(pct=True) + w * cls
             ic = {s: signal.summarize(signal.rank_ic(f[f["sample"] == s], "s", "ret_12m"), 12)["mean"] for s in ("in", "out")}
             rows.append({"variant": f"ranking, votes {ev}, class weight {w}", "in ic 12m": ic["in"], "out ic 12m": ic["out"]})
     out = pd.DataFrame(rows)
     out.to_csv(panel.BT / f"v3_map_{market}.csv", index=False)
+    if "limit_ups" in f:  # CN: valuation × speculative heat (2+ limit-up days in 3 months)
+        cells.append(cell_table(f, np.where(f["limit_ups"] >= 2, 1, 0)).assign(votes="heat 2+"))
     pd.concat(cells).to_csv(panel.BT / f"v3_map_cells_{market}.csv")  # valuation × trend class: 12-month excess return
     return out
+
+
+def cell_table(f: pd.DataFrame, cls) -> pd.DataFrame:
+    """Mean 12-month excess return (per date, then over dates) and stocks per date by sample × valuation × class."""
+    val = np.select([f["v3_upside"] >= 0.2, f["v3_upside"] <= -0.25], ["cheap", "expensive"], "middle")
+    by = f.assign(cls=cls, val=val).dropna(subset=["ex_12m"]).groupby(["sample", "val", "cls", "date"])["ex_12m"]
+    return pd.DataFrame({"ex_12m": by.mean().groupby(level=[0, 1, 2]).mean(), "per_date": by.size().groupby(level=[0, 1, 2]).mean()})
 
 
 def md(df: pd.DataFrame) -> str:
@@ -336,6 +340,44 @@ def outlier_study() -> None:
     print("\n".join(lines))
 
 
+def cn_study() -> None:
+    """A-share signals on the saved CN frame (your question, 2026-10-20: CN is emotional; a-stock-data lists the
+    A-share data): rank IC at 1 and 12 months of limit-up days (3 months), abnormal turnover (1-month over 12-month
+    traded value; the 通达信 packages start 2021-08), the largest daily return and the daily volatility of the last
+    month, the 1-month return, and the latest 业绩预告 in 90 days (+1 预增/扭亏/略增/续盈, −1 预减/首亏/续亏/略减/增亏);
+    and 12-month excess returns by valuation × heat (2+ and 3+ limit-up days)."""
+    warnings.simplefilter("ignore")  # empty turnover windows before the packages start
+    f, px = pd.read_pickle(panel.BT / "v3_cn.pkl"), panel.CNPrices()
+    fc = pd.read_csv(panel.BT / "cn_forecasts.csv.gz", dtype={"code": str}).assign(code=lambda d: d["code"].str.zfill(6))
+    tone = {**dict.fromkeys(["预增", "扭亏", "略增", "续盈"], 1), **dict.fromkeys(["预减", "首亏", "续亏", "略减", "增亏"], -1)}
+    rows = []
+    for d, g in f.groupby("date"):
+        t, cols = int(np.searchsorted(px.days, d, side="right")) - 1, g["code"].map(px.col)
+        idx, ok = np.nan_to_num(cols.to_numpy(float), nan=0).astype(int), cols.notna().to_numpy()
+        r, a = px.ret[t - 20: t + 1][:, idx], px.amount
+        since = (pd.Timestamp(d) - pd.Timedelta(days=90)).strftime("%Y-%m-%d")
+        pre = fc[(fc["notice_date"] <= d) & (fc["notice_date"] > since)].sort_values("notice_date").groupby("code").tail(1)
+        sig = {"rev1m": np.nanprod(r, axis=0) - 1, "max1m": np.nanmax(r, axis=0) - 1, "vol1m": np.nanstd(r, axis=0),
+               "abturn": np.nanmean(a[t - 20: t + 1][:, idx], axis=0) / np.nanmean(a[max(t - 250, 0): t + 1][:, idx], axis=0)}
+        rows.append(pd.DataFrame({k: np.where(ok, v, np.nan) for k, v in sig.items()}).assign(
+            date=d, code=g["code"].to_numpy(), preann=g["code"].map(pre.set_index("code")["type"].map(tone)).fillna(0).to_numpy()))
+    x = f.merge(pd.concat(rows), on=["date", "code"], how="left")
+    lines = ["# A-share signals on the CN backtest frame (backtest/v3.py cn)\n", "| signal | in IC 1m (t) | in IC 12m (t) | out IC 1m (t) | out IC 12m (t) |", "|---|---|---|---|---|"]
+    for c in ("limit_ups", "abturn", "max1m", "vol1m", "rev1m", "preann", "mom_12_1", "v3_upside"):
+        cell = []
+        for sample in ("in", "out"):
+            for h in ("1m", "12m"):
+                s = signal.summarize(signal.rank_ic(x[x["sample"] == sample], c, f"ret_{h}"), signal.HORIZONS[h])
+                cell.append(f"{s['mean']:+.3f} ({s['t']:+.1f}, {s['n']} dates)")
+        lines.append(f"| {c} | " + " | ".join(cell) + " |")
+    for k in (2, 3):
+        t = cell_table(x[x["v3_valued"] == True], np.where(x.loc[x["v3_valued"] == True, "limit_ups"] >= k, "hot", "calm"))
+        lines += [f"\n12-month excess return, valuation × {k}+ limit-up days in 3 months (stocks per date)\n",
+                  md((t["ex_12m"] * 100).round(1).astype(str).str.cat(t["per_date"].round(0).astype(int).astype(str), sep=" (").add(")").unstack("cls"))]
+    (panel.BT / "v3_cn_signals.md").write_text("\n".join(lines))
+    print("\n".join(lines))
+
+
 if __name__ == "__main__":
     if sys.argv[1] in ("grid", "lambda", "country", "cells"):
         grid(sys.argv[2], sys.argv[1])
@@ -347,3 +389,5 @@ if __name__ == "__main__":
         persistence()
     elif sys.argv[1] == "outliers":
         outlier_study()
+    elif sys.argv[1] == "cn":
+        cn_study()

@@ -8,7 +8,7 @@ docs/PLAN.md has the method, the phases and the current status. Do only the phas
 
 ## Layout
 stockreport/fetch/ (one module per data source) → universe.py → value.py → score.py → pick.py → notes.py (DeepSeek) → render/ (HTML → PDF) → deliver.py; plus listener.py and track.py.
-Valuation v3 (Phase 13, docs/PLAN.md Method 16) runs in shadow mode after pick.py: history.py + baserates.py (fetch/frames.py, fetch/swclass.py) → v3.py → shadow.py.
+Valuation v3 (Phase 13, docs/PLAN.md Method 16) runs in shadow mode after pick.py: history.py + baserates.py (fetch/frames.py, fetch/swclass.py) → v3.py → shadow.py (trend.py: business-trend votes and the trend × valuation lists; outliers.py: evidence verdicts for outliers).
 crosscheck.py compares each market's key figures with a second source and raises day-over-day drift alarms (Phase 12, docs/PLAN.md Method 13). Phase 11 (Methods 14-15): the event layer (fetch/events.py market-wide filing feeds → events.py classification and abnormal-move labels) and the deep-dive lane (deepdive.py: triggers, fetch/filings.py, DeepSeek questionnaire, quotes.py verification; verdicts.py for your vetoes and confirms). signal.py scores signals (the backtest and `track --signal`). backtest/ (outside the app) is the Phase 9 and 13 backtest; docs/BACKTEST.md has its results and commands.
 bridge/wechat.mjs is the WeChat helper (Node). data/ is the daily cache and reports/ the outputs; both are git-ignored.
 

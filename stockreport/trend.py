@@ -54,15 +54,6 @@ def classify(ev: pd.DataFrame, momentum: pd.Series, revision: pd.Series, market:
                                             trend_why=[describe(x.loc[c, use], votes.loc[c, use]) for c in ev.index])
 
 
-def limit_ups(daily: pd.DataFrame, codes, day: str, days: int = 63) -> pd.Series:
-    """CN speculative heat: limit-up days (close over the previous close ≥ 9.5%, 19.5% on ChiNext / STAR) in the
-    last `days` trading days to `day`, from the daily price table (date, code, close, prev_close)."""
-    d = daily[(daily["date"] <= day) & daily["code"].isin(set(codes))]
-    d = d[d["date"] >= np.sort(d["date"].unique())[-days:][0]] if len(d) else d
-    limit = np.where(d["code"].str[:3].isin(["300", "301", "688", "689"]), 0.195, 0.095)
-    return (d["close"] / d["prev_close"] - 1 >= limit).groupby(d["code"]).sum().reindex(pd.Index(codes)).fillna(0)
-
-
 def describe(x: pd.Series, v: pd.Series) -> str:
     """The votes cast, e.g. 营收增速 +12pt、ROE −3pt、12-1 月动量 +25%."""
     return "、".join(f"{TEXT[k][0]} {float(np.clip(x[k], -9.99, 9.99)) * 100:+.0f}{TEXT[k][1]}" for k in v.index[v != 0])

@@ -547,3 +547,124 @@ the country field the backtest's US buys are US listings only, as configured).
 - Rerun (~6 min; ~25 min for the grids): `uv run python -m backtest.v3 compare` (data/backtest/v3_results.md) and
   `uv run python -m backtest.v3 grid|lambda|country cn|us|hk` (data/backtest/v3_<grid>_<market>.csv), on the snapshots built by
   `uv run python -m backtest.run build cn|us|hk`.
+
+## 15. Trend first (Phase 13, 2026-10-20; trend.py, outliers.py, backtest/v3.py)
+
+Your call (2026-10-20): read the business trend first, then let valuation ask whether the price already reflects
+it, measured separately per market, and tested in- and out of sample before adopting anything. Every number
+below is on the same frames as section 14 (v3 without consensus, the industry premium as chosen), so v3's values
+and rank correlations are unchanged; what changes is the lists. Rule for adopting: Phase 9's bar in-sample (+0.005
+rank correlation, or +1 point of 12-month buy − sell) and then not losing out of sample.
+
+**The evidence** (trend.py, point-in-time): votes of +1 / −1 outside a dead band for revenue growth acceleration
+(latest fiscal year over the mean of the two before, ±5 points), profit growth acceleration (growth as the change
+over the mean absolute level, ±20 points), the ROE trend (latest over years 2-3 before, ±2 points), 12-1 month
+momentum over the market's median (±10 points) and the 4-week consensus revision (±2%, live only). Class: improving
+at a vote sum ≥ 2, deteriorating ≤ −2 (≥ 1 / ≤ −1 with price votes only).
+
+**1. Do improving companies keep their growth and ROE longer?** No. On every start public today (the base-rate
+panels, business votes only; `persistence`, data/backtest/v3_persistence.md):
+
+| | starts (imp / stable / det) | kept 5% a year, 5 years: imp / stable / det | median years at 10%: imp / det | ROE change in 3 years: imp / det |
+|---|---|---|---|---|
+| CN | 8,246 / 38,201 / 15,644 | 36% / 44% / 34% | 1.7 / 1.0 | −5.9 / −2.9 points |
+| US | 5,949 / 23,595 / 5,241 | 37% / 47% / 48% | 1.6 / 3.2 | −6.2 / +0.2 points |
+| HK | 2,464 / 10,946 / 3,242 | 25% / 29% / 23% | 0.9 / 0.9 | −7.4 / −4.4 points |
+
+Within the same growth × ROE cell, improvers kept 5% growth for 3 years as often as deteriorators in CN (+0.00),
+less often in the US (−0.15) and HK (−0.07). A year that just accelerated is usually a high base: profit and
+ROE revert. Splitting the base-rate cells by this band (in place of size) lowered the in-sample rank correlation
+(CN 0.131 vs 0.135, US 0.060 vs 0.060, HK 0.119 vs 0.123; out of sample 0.014 / 0.030 / 0.134 vs 0.016 / 0.032 /
+0.120), so it was not adopted and was removed from the app after the test (commit 2e1c2a9 has it).
+
+**2. Your thesis, cell by cell** (12-month return over the universe, in % per date; cheap = v3 upside ≥ 20%,
+expensive ≤ −25%; data/backtest/v3_map_cells_<market>.csv):
+
+| | price trend: expensive, rising / falling | cheap, rising / falling | business trend: cheap, improving / deteriorating |
+|---|---|---|---|
+| CN in / out | +1.2 / −3.4 · +9.4 / −2.4 | +3.5 / +0.2 · −5.4 / −3.1 | −2.2 / +7.1 · +4.6 / −3.9 |
+| US in / out | −0.9 / −2.4 · +5.1 / +0.1 | −3.1 / +4.0 · −1.7 / −1.8 | −1.4 / +1.8 · +1.6 / −2.0 |
+| HK in / out | +2.0 / −6.1 · +3.1 / +0.1 | +6.9 / −2.9 · −0.2 / +1.1 | +4.5 / −3.3 · +3.9 / −1.6 |
+
+- "Expensive but rising: don't sell" holds in all three markets in both samples.
+- "Cheap but deteriorating is a value trap" holds in HK in both samples; in CN and the US it reversed in-sample
+  (cheap and deteriorating did better: CN +7.1% against −2.2%), and held out of sample (2024-26, the AI boom).
+
+**3. The trend × valuation map** (shadow.buckets; `map`, data/backtest/v3_map_<market>.csv). Buy: improving (or
+stable too) at upside ≥ 20%; a cheap but deteriorating stock is never a buy; an expensive improver is a hold, never
+a sell; a strict sell needs a deteriorating trend. Votes counted: all, business only, or price only. 12-month buy −
+sell against the universe:
+
+| | v2 rules (before) in / out | best map variant in-sample | its in / out | adopted |
+|---|---|---|---|---|
+| CN | +4.1% / +11.4% | price votes, buys improving | +3.4% / −6.3% | no (no in-sample gain) |
+| US | −7.0% / −47.2% | price votes, buys stable too | +1.3% / −24.5% | **yes** (+8.3 in, +22.7 out) |
+| HK | +7.8% / +22.2% | price votes, buys stable too | +10.1% / −2.8% | no (lost 25 points out of sample) |
+
+The other variants: business or all votes lost in-sample in CN (−4.9% to −8.5%) and HK (−7.9% to +4.5%); in the
+US they gained less than price votes (−3.8% to −5.5% against −7.0%). The US gain comes from not selling high-momentum names: Micron, a sell on 11 of 21 dates
+with v2's rules, is an improver every time. Every t-statistic here is under 1.
+
+**4. The trend in the ranking**: upside percentile + w × class. CN with price votes and w = 0.1: rank
+correlation 0.140 in / 0.021 out against 0.135 / 0.016 (+0.005 both, at the bar; CN's buy ranking already adds
+0.5 × momentum). The US lost in-sample at every w; HK gained in-sample (up to +0.021) and lost out of sample at
+every w. Nothing adopted.
+
+**5. CN, an emotional market (your question, 2026-10-20; `cn`, data/backtest/v3_cn_signals.md).** The A-share
+signals a-stock-data documents that the backtest can see point-in-time: limit-up days in 3 months (speculative
+heat), abnormal turnover (1-month over 12-month traded value; packages from 2021-08 only), the month's largest
+daily return and volatility, the 1-month return, and the latest 业绩预告. Rank correlation, in / out of sample:
+
+| | 1 month | 12 months |
+|---|---|---|
+| limit-up days | −0.049 (t −3.3) / −0.056 (t −1.8) | −0.072 (t −2.1) / −0.028 |
+| abnormal turnover | −0.068 (29 dates) / −0.036 | −0.043 / −0.057 |
+| largest daily return | −0.054 / −0.042 | −0.104 / +0.032 |
+| volatility | −0.061 / −0.046 | −0.136 / +0.050 |
+| 1-month return | −0.031 / −0.046 | +0.025 / −0.010 |
+| 业绩预告 tone | +0.010 / +0.022 | −0.033 / +0.068 |
+
+Heat is the one signal with the same sign in both samples at both horizons. By cell, an expensive stock with 2+
+limit-up days trailed the universe by 6.0% (in) and 4.4% (out) over 12 months, against +0.2% / +6.7% for an
+expensive calm one; for cheap stocks it flips. As a sell rule (strict sells need 2+ / 3+ limit-up days instead of
+v2's weakness) it gained in-sample (+9.2% / +8.8% against +4.1%) and lost out of sample (−7.1% / −10.6% against
++11.4%: v2's sells, weak momentum, falling profit or a screen failure, did −16.8%). Not adopted; removed from the
+app after the test (commit 2263b4f has it). Northbound flows, margin balances, shareholder counts, lock-up
+expiries, institutional visits and the 龙虎榜 have no point-in-time history here; they can be collected from now.
+
+**6. Outliers checked, not normalized (your rule; `outliers`, data/backtest/v3_outliers.md).** Every valued stock
+beyond ±100% or labelled gets a verdict (outliers.py): 行业 (its industry is off as a whole: check the method for the
+industry), 数据错误 (a figure 20%+ off its second source, revenue too for own-trend growth, or a deep-dive veto:
+out of the lists), 证据支持 (the trend explains the price, or a deal / risk / capital filing in 30 days: kept, risk
+flagged), else 需复核 (your review list, with what the value rests on). The backtest has no second sources, filings
+or deep dives in the past, so its verdicts are 行业 / 证据支持 by the trend / 需复核. Outliers are 24-39% of valued
+stock-dates. 12 months later (out of sample; the market was "right" when a cheap one trailed or an expensive one beat
+the universe):
+
+| | cheap: 行业 / 证据支持 / 需复核 | expensive: 行业 / 证据支持 / 需复核 |
+|---|---|---|
+| CN | −4.5% / −1.6% / −0.6% | +22.9% / +3.3% / +1.4% |
+| US | −3.5% / −2.2% / −1.5% | +4.5% / −1.3% / −9.5% |
+| HK | +2.6% / −5.4% / +3.5% | +2.2% / −2.6% / −9.7% |
+
+Out of sample the market was right about whole industries that looked expensive (CN +22.9%: semiconductors +39%,
+communications equipment +98%, electronic components +77%; expensive software fell 16-20%) and about cheap stocks whose trend was deteriorating (证据支持, the value-trap flag: −1.6% / −2.2% /
+−5.4%); v3 was right about unexplained expensive outliers in the US and HK (−9.5% / −9.7%). In-sample several of
+these signs differ (e.g. CN cheap outliers +1.8% to +2.5%). `track --signal` now reports the same split live.
+
+**7. v1, v3 and the plain benchmarks with the lists as adopted, out of sample, 12 months** (v3's rank correlation
+is the same in both rows; the US row is the only change from section 14):
+
+| | rank IC v3 / v1 / better of E/P, B/P | buy − sell v3 before / v3 now / v1 / E/P / B/P |
+|---|---|---|
+| CN | +0.016 / −0.009 / −0.003 | +11.4% / +11.4% / −4.0% / +7.6% / −42.1% |
+| US | +0.032 / +0.076 / +0.160 | −47.2% / **−24.5%** / +1.4% / +0.7% / +29.6% |
+| HK | +0.120 / +0.049 / +0.116 | +22.2% / +22.2% / +30.6% / −6.7% / +11.5% |
+
+What didn't work: the business trend as a buy filter in CN and the US, the trend band in the base rates, the trend
+in the ranking, the HK map, and the CN heat sell rule. What did: price momentum protecting expensive names from the
+sell list (adopted in the US), and the evidence verdicts, which separate whole-industry anomalies (a method
+question) from single stocks (a review list) without changing any value.
+
+- Rerun (~6 min for compare; seconds for the rest, on the saved frames): `uv run python -m backtest.v3 compare`,
+  then `map cn|us|hk`, `persistence`, `outliers`, `cn`.
