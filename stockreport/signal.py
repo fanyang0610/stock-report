@@ -1,8 +1,7 @@
 """Signal tracking (Phase 9, docs/BACKTEST.md): how well a valuation ranks stocks and how its buckets did
-afterwards. The backtest and `track --signal` (the live snapshots, v1 and v3) use the same measures:
+afterwards. The backtest and `track --signal` (the live snapshots, v1 and v3, and v3's outlier verdicts) use the same measures:
 rank correlation of the signal with later returns per date, bucket returns against the equal-weight
-universe and the index, hit rates by confidence band, and β (the share of the log gap to the value that
-closed within the horizon)."""
+universe and the index, and hit rates by confidence band (β, the share of the log gap closed, is in backtest/v3.py)."""
 
 from datetime import date, timedelta
 
@@ -60,23 +59,6 @@ def bucket_table(df: pd.DataFrame, bucket: str, h: str) -> pd.DataFrame:
     return out
 
 
-def beta(df: pd.DataFrame, gap: str, h: str, by: list[str] | None = None) -> pd.DataFrame:
-    """β per group: the slope of the log return over the universe on the log gap log(value / price),
-    pooled over dates (A2.5: E[price] = price × (V / price)^β)."""
-    d = df.dropna(subset=[gap, f"ret_{h}"]).copy()
-    d = d[np.isfinite(d[gap])]
-    d["y"] = np.log1p(d[f"ret_{h}"]) - d.groupby("date")[f"ret_{h}"].transform(lambda r: np.log1p(r).mean())
-    d["x"] = d[gap] - d.groupby("date")[gap].transform("mean")
-    groups = d.groupby(by) if by else [("all", d)]
-    rows = []
-    for key, g in groups:
-        if len(g) < 50:
-            continue
-        b = (g["x"] * g["y"]).sum() / (g["x"] ** 2).sum()
-        rows.append({"group": key, "n": len(g), "beta": b})
-    return pd.DataFrame(rows)
-
-
 # ---------------------------------------------------------------- live snapshots (`track --signal`)
 
 def live(market: str, prices: pd.DataFrame, index: str) -> pd.DataFrame:
@@ -112,27 +94,6 @@ def live(market: str, prices: pd.DataFrame, index: str) -> pd.DataFrame:
     return add_excess(pd.concat([df, pd.DataFrame(new, index=df.index)], axis=1))
 
 
-def check_events(df: pd.DataFrame) -> pd.DataFrame:
-    """Checks 1-2 on every snapshot (PLAN Method 8): v1's buy and hold picks with the checks against
-    without them. excluded = picked only without the checks, replacement = picked only with them; check 1
-    exclusions split by whether 3+ analysts expected next year's EPS at or above the last 12 months."""
-    from stockreport import pick
-    rows = []
-    for day, snap in df.groupby("date"):
-        s = snap.set_index("code")
-        on, off = (pick.pick(s, use) for use in (("c1", "c2"), ()))
-        checks = pick.one_off(s[s["fv_mid"].notna()])
-        for bucket in ("buy", "hold"):
-            a, b = (set(p.loc[(p["role"] == "pick") & (p["bucket"] == bucket), "code"]) for p in (on, off))
-            for code, role in [(c, "excluded") for c in b - a] + [(c, "replacement") for c in a - b]:
-                if role == "excluded":
-                    role = "excluded by check 2" if checks.at[code, "c2"] is True else (
-                        "excluded by check 1, analysts ≥ trailing" if s.at[code, "analysts"] >= 3
-                        and s.at[code, "eps_e2"] >= s.at[code, "eps_ttm"] else "excluded by check 1, other")
-                rows.append({"date": day, "code": code, "role": role} | s.loc[code, [f"ex_{h}" for h in HORIZONS]].to_dict())
-    return pd.DataFrame(rows, columns=["date", "code", "role"] + [f"ex_{h}" for h in HORIZONS])
-
-
 def forecast_pieces(df: pd.DataFrame, market: str, h: str) -> list[str]:
     """The parts of v3 the backtest couldn't test (no consensus history; docs/BACKTEST.md): its rank correlation
     among stocks valued on analysts' years 1-3 against those on their own trend, how the stocks the price labels
@@ -142,10 +103,11 @@ def forecast_pieces(df: pd.DataFrame, market: str, h: str) -> list[str]:
     for label, part in (("analysts' years 1-3", df[df["v3_t0"] == 3]), ("own trend", df[df["v3_t0"] == 0])):
         s = summarize(rank_ic(part, "v3_upside", ret), HORIZONS[h])
         out.append(f"{h} rank IC v3 upside, {label}: {s['mean']:+.3f} ({s['n']} dates)")
-    lab = df[df["v3_implied_label"].fillna("") != ""].dropna(subset=[ex])
-    if len(lab):
-        out.append(f"{h} labelled stocks vs the universe: " + ", ".join(
-            f"{k} {v['mean']:+.1%} ({v['count']:.0f})" for k, v in lab.groupby("v3_implied_label")[ex].agg(["mean", "count"]).iterrows()))
+    if "v3_verdict" in df:  # which kinds of outliers the market was right about (cheap ones trailing, expensive ones beating it)
+        o = df[df["v3_verdict"].fillna("") != ""].dropna(subset=[ex])
+        side = np.where((o["v3_upside"] > 1) | (o["v3_implied_label"] == "价格隐含过低"), "便宜", "昂贵")
+        out += [f"{h} outliers {k[1]} {k[0]} vs the universe: {v['mean']:+.1%} ({v['count']:.0f})"
+                for k, v in o[ex].groupby([o["v3_verdict"], side]).agg(["mean", "count"]).iterrows()]
     rev = pd.concat([history.revisions(market, date.fromisoformat(d)).rename("revision").to_frame().assign(date=d)
                      for d in df["date"].unique()]).rename_axis("code").reset_index()
     if len(rev):
@@ -158,7 +120,6 @@ def report(market: str, df: pd.DataFrame) -> None:
     """The same tables the backtest reports, for v1 and v3, at every horizon that has returns yet, plus
     the forecast-dependent pieces the backtest couldn't test."""
     print(f"\n== {market.upper()}: {df['date'].nunique()} snapshots with v3 columns, {df['date'].min()} to {df['date'].max()}")
-    ev = check_events(df) if df["ret_1m"].notna().any() else pd.DataFrame()
     for h in HORIZONS:
         if df[f"ret_{h}"].notna().sum() == 0:
             print(f"{h}: no returns yet (the first snapshot reaches {h} later)")
@@ -169,9 +130,6 @@ def report(market: str, df: pd.DataFrame) -> None:
         for name, col in (("v1", "v1_bucket"), ("v3", "v3_bucket")):
             if col in df and df[col].notna().any():
                 print(f"{h} {name} buckets:\n{bucket_table(df, col, h).round(3).to_string()}")
-        if len(ev):
-            t = ev.groupby("role")[f"ex_{h}"].agg(["count", "mean"]).rename(columns={"mean": "vs universe"})
-            print(f"{h} checks 1-2, names they excluded vs the names that took their places:\n{t.round(3).to_string()}")
         buys = df[df["v3_bucket"] == "buy"]
         print(f"{h} v3 buys beating the universe by confidence: "
               + ", ".join(f"{k} {v:.0%}" for k, v in (buys[f"ex_{h}"] > 0).groupby(buys["v3_confidence"]).mean().items()))

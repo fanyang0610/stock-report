@@ -111,6 +111,14 @@ long_growth = { cn = 0.03, hk = 0.03, us = 0.04 }   # long-run nominal growth (a
 long_roe = { cn = "market", hk = "market", us = "r" }  # long-run ROE: "market" (the largest third's median) or "r" (no excess)
 industry_lambda = { cn = 0.75, hk = 0.5, us = 0.5 }  # share of an industry's implied premium over the market's rate taken as risk
 country_lambda = 0.5          # US: share of a foreign listing's country premium (its country's implied rate over home listings')
+cells = { cn = "size", hk = "size", us = "size" }  # base-rate cells split by revenue size ("size") or the business trend band ("trend")
+
+[trend]                       # business trend (PLAN.md Method 16, "Trend first"); a vote is +1 / -1 outside its dead band
+dead = { rev = 0.05, profit = 0.2, roe = 0.02, momentum = 0.1, revision = 0.02 }  # growth acceleration, ROE change, 12-1 return over the median, 4-week EPS revision
+evidence = { cn = ["rev", "profit", "roe", "momentum", "revision"], hk = ["rev", "profit", "roe", "momentum", "revision"], us = ["momentum", "revision"] }  # the votes the class counts (US in-sample; CN, HK: all, descriptive)
+need = { cn = 2, hk = 2, us = 1 }   # improving at a vote sum >= need, deteriorating at <= -need
+buy = { cn = "stable", hk = "stable", us = "stable" }  # strict buys from "improving" only, or "stable" too; never deteriorating
+map = { cn = false, hk = false, us = true }   # the trend × valuation map for the shadow lists (false: v2's bucket rules); in-sample, BACKTEST.md 15
 
 [events]                      # event layer (PLAN.md Method 14)
 backfill_days = 10            # the first fetch reads this many days back (CN ~30 s a day); later the days since the last

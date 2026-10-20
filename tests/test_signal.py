@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from backtest import v3 as bt
 from stockreport import signal
 
 
@@ -34,7 +35,7 @@ def test_beta_recovers_the_share_of_the_gap_that_closed():
     rng = np.random.default_rng(0)
     gap = rng.normal(0, 0.5, 400)
     df = pd.DataFrame({"date": np.repeat(["a", "b"], 200), "gap": gap, "ret_12m": np.expm1(0.3 * gap)})
-    b = signal.beta(df, "gap", "12m")
+    b = bt.beta(df, "gap", "12m")
     assert np.isclose(b["beta"].iloc[0], 0.3, atol=1e-6)
 
 

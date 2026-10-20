@@ -88,6 +88,3 @@ def _send_media(command: str, path: Path, title: str | None) -> None:
 def send_file(path: Path, title: str | None = None) -> None:
     _send_media("send-file", path, title)
 
-
-def send_image(path: Path) -> None:
-    _send_media("send-image", path, None)

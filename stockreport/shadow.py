@@ -1,19 +1,20 @@
-"""Valuation v3 (Phase 13, PLAN.md Method 16) in shadow mode next to v1: its columns (v3_*) go into the snapshot
-and the run prints the v3 lists, the common-sense checks and the hand-checked names. The report stays v1 until
-Phase 10. Per stock: the value range, upside, what the price implies and how often similar companies did it,
-the base-rate cell, what peers pay (a cross-check line, never blended), confidence and 需复核 flags. The lists
-skip the AI swaps and the cross-market issuer dedupe."""
+"""Valuation v3 (Phase 13, PLAN.md Method 16) in shadow mode next to v1 (the report stays v1 until Phase 10): its
+columns (v3_*) go into the snapshot and the run prints the lists, checks, outlier verdicts and hand-checked names.
+Per stock: the value range, upside, what the price implies, the base-rate cell, what peers pay (never blended),
+confidence, 需复核 flags and the business trend. The lists skip the AI swaps and the cross-market issuer dedupe."""
 
 from datetime import date
 
 import numpy as np
 import pandas as pd
 
-from stockreport import baserates as br, history, v3
+from stockreport import baserates as br, history, outliers, trend, v3
 from stockreport.config import CONFIG
 from stockreport.pick import BUCKETS
 
 C2 = CONFIG["shadow"]  # bucket rules kept from v2 (Phase 9 calibration): thresholds, momentum, size floor
+MAP = CONFIG["trend"]["map"]  # per market: the trend × valuation map (else v2's rules), chosen in-sample
+BUY = CONFIG["trend"]["buy"]  # per market: strict buys from "improving" only or "stable" too
 HOME = "United States"  # US: foreign listings can't be bought (config buy_home_only)
 HAND = {"us": ["TM", "GM", "F", "STLA", "TSLA", "RACE", "LLY", "JNJ", "NVDA", "MU", "ARM", "CRWD", "JPM"],
         "cn": ["601668", "601390", "600019", "600519", "300750", "002594", "300308"],
@@ -21,7 +22,7 @@ HAND = {"us": ["TM", "GM", "F", "STLA", "TSLA", "RACE", "LLY", "JNJ", "NVDA", "M
 COLUMNS = ["e0", "book", "light", "t0", "g", "roe0", "roe_now", "level", "starts", "base", "s1", "s3", "s5", "s10", "d25", "d50", "d75",
            "r", "r_mkt", "roe_long", "irr", "v_low", "v_mid", "v_high", "upside", "d_implied", "implied_share", "implied_side",
            "implied_label", "roe_implied", "roe_reached", "implied", "v_peer", "screen_fails", "dilution", "flags", "conf_points",
-           "confidence", "bucket", "rank", "tier", "conviction"]
+           "confidence", "tb", "trend", "trend_score", "trend_why", "verdict", "verdict_why", "bucket", "rank", "tier", "conviction"]
 
 
 def parents(df: pd.DataFrame, market: str) -> pd.Series:
@@ -47,20 +48,27 @@ def load(df: pd.DataFrame, market: str, today: date) -> tuple[pd.DataFrame, pd.D
         sector = cik.map(lambda c: sec.get(str(int(float(c))), "") if pd.notna(c) and str(c) != "" else "")
     else:
         sector = parents(df, market) if market == "hk" else sec.reindex(df.index)
-    return history.load(market, df, today), st, sector.fillna("")
+    return with_trend(history.load(market, df, today), market, df.index, day), st, sector.fillna("")
+
+
+def with_trend(h: pd.DataFrame, market: str, codes, day: str) -> pd.DataFrame:
+    """History features plus the business-trend evidence (trend.py) from the fiscal years public on `day`."""
+    return h.drop(columns=[c for c in h if c.startswith("acc_") or c == "tb"]).join(
+        trend.evidence(history.YEARS[market](), codes, day))
 
 
 def value(df: pd.DataFrame, market: str, today: date, loaded: tuple | None = None) -> pd.DataFrame:
     """The v3 frame for one market's snapshot `df` (v1 columns)."""
     h, st, sector = loaded or load(df, market, today)
     v = v3.value(df, h, st, market, sector)
+    v = v.join(trend.classify(h, df["mom_12_1"], h.get("revision"), market)).assign(tb=h["tb"])
     v["base"] = [br.describe(lv, k, market) for lv, k in zip(v["level"], v["key"])]
     v["implied"] = sentences(v, df, v3.per_market(v3.FADE, market))
     v["v_peer"] = peer(df, v, parents(df, market))
     v = v.join(screen(df, h))
     v["dilution"] = h["dilution"] if "dilution" in h else np.nan  # US: 5-year share count change (deep-dive trigger)
     v["flags"] = flags(v, df, h)
-    v = v.join(confidence(v, df))
+    v = v.join(confidence(v, df)).join(outliers.verdicts(v, df, market, today))
     return v.join(buckets(v, df, market))
 
 
@@ -91,10 +99,8 @@ def sentences(v: pd.DataFrame, df: pd.DataFrame, fade: int) -> pd.Series:
 
 
 def peer(df: pd.DataFrame, v: pd.DataFrame, parent: pd.Series, min_group: int = 8, min_own: int = 3) -> pd.Series:
-    """What peers pay, a cross-check line (never blended): log P/E on core EPS fitted on the growth rate g within the
-    industry (financials: log P/B on ROE) when it has 8+ valued members; a smaller industry takes its parent
-    sector's slope at its own median level (3+ members, else the parent's), never the whole market. A slope of
-    the wrong sign (more growth, a lower multiple) is dropped."""
+    """What peers pay (a cross-check, never blended): log P/E on g within the industry (financials log P/B on ROE),
+    8+ members, else the parent sector's slope at the industry's own level; a wrong-sign slope is dropped."""
     fin = df["financial"].astype(bool)
     base = v["book"].where(fin, v["e0"])
     y = np.log((df["price"] / base).where(base > 0))
@@ -119,10 +125,8 @@ def peer(df: pd.DataFrame, v: pd.DataFrame, parent: pd.Series, min_group: int = 
 
 
 def screen(df: pd.DataFrame, h: pd.DataFrame) -> pd.DataFrame:
-    """Quality screen (buy and hold only): 10-year ROE < 8% (exempt: under 10 years of history, gross margin > 30%,
-    operating cash flow positive in the last 2 years); 5-year OCF/NI < 0.7; 5-year free cash flow < 0 (US: the CN
-    and HK tables have no capex); long-run net margin < 5% (exempt: gross margin > 30% and the last 2 years at 5%+
-    or rising; or 10-year ROE > 20% and OCF/NI > 1). Banks, insurers and brokers on ROE alone."""
+    """Quality screen (buy and hold; PLAN.md Method 12): 10-year ROE < 8%, 5-year OCF/NI < 0.7, 5-year FCF < 0 (US),
+    long-run net margin < 5%, each with its exemptions; financials on ROE alone."""
     fin, gm = df["financial"].astype(bool), df["gross_margin"]
     young = (h["n_years"] < 10) & (gm > 0.3) & h["ocf_2y_pos"].eq(True)
     exempt = ((gm > 0.3) & ((h["margin_2y"] >= 0.05) | (h["margin_2y"] > h["margin_hist"]))) | (
@@ -135,14 +139,11 @@ def screen(df: pd.DataFrame, h: pd.DataFrame) -> pd.DataFrame:
 
 
 def flags(v: pd.DataFrame, df: pd.DataFrame, h: pd.DataFrame) -> pd.Series:
-    """Common-sense checks (需复核), each with its reason: value and price an order apart (beyond ±100%) without
-    an implied-expectations label; the stock's industry as a whole far off (median beyond ±30%, 5+ valued); a
-    value implying a P/B outside the stock's own 7-year range by half again; peers paying more than 2× or under
-    ½ of the value."""
+    """Common-sense checks (需复核) with their reasons: beyond ±100% without a label, the industry beyond ±30%, a
+    P/B 1.5× outside the stock's own 7-year range, peers paying over 2× or under ½ of the value."""
     ok, up = v["valued"], v["upside"]
     out = pd.Series([[] for _ in v.index], v.index)
-    ind = up[ok].groupby(df["industry"][ok]).agg(["median", "count"])
-    far = ind[(ind["count"] >= 5) & (ind["median"].abs() > 0.3)]["median"]
+    far = outliers.far_industries(v, df)
     implied_pb = v["v_mid"] / (df["price"] / df["pb_mrq_em"] if "pb_mrq_em" in df else v["book"])
     pb_lo, pb_hi = h.get("own_pb_lo"), h.get("own_pb_hi")
     for code in v.index[ok]:
@@ -160,9 +161,7 @@ def flags(v: pd.DataFrame, df: pd.DataFrame, h: pd.DataFrame) -> pd.Series:
 
 
 def confidence(v: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
-    """Points: the 25-75% range within ±15% of the value +1, wider than ±40% −1; 7+ years of history +1, under 5
-    −1; 5+ analysts +1, under 3 −1; a base-rate cell with the stock's sector and bands +1, market-wide −1; peers
-    within 30% of the value +1, 2× apart −1; an implied-expectations label −1; each 需复核 flag −1 (at most −2).
+    """Points (range width, years of history, analysts, base-rate cell, peers, label, flags; PLAN.md Method 16):
     3+ = 高, 1-2 = 中, else 低."""
     width = (v["v_high"] - v["v_low"]) / v["v_mid"] / 2
     peer_gap = (v["v_peer"] / v["v_mid"] - 1).abs()
@@ -189,27 +188,36 @@ def buy_universe(df: pd.DataFrame, market: str) -> pd.Series:
 
 def buckets(v: pd.DataFrame, df: pd.DataFrame, market: str = "cn") -> pd.DataFrame:
     """买入 / 持有 / 卖出, 5 each, strict rules first and relaxed fills marked 低信心; at most 2 per industry per
-    bucket, each stock once (v2's rules, Phase 9 calibration). Buy: among the largest (US: home listings), upside
-    ≥ 20%, confidence 中/高, quality screen passed, momentum z ≥ −0.5; ranked by range-weighted upside + 0.5 ×
-    momentum. Hold: quality top 30%, screen passed, |upside| ≤ 15%, 中/高; by quality. Sell: upside ≤ −25%, 中/高,
-    among the 400 largest, and momentum z ≤ −0.5, falling profit or a screen failure."""
+    bucket, each stock once. The trend × valuation map (Method 16 "Trend first"; config [trend] map, per market):
+    a buy needs an improving business (or, by config, a stable one) at a price that doesn't reflect it (upside ≥
+    20%), among the largest (US: home listings), confidence 中/高 and the quality screen passed, ranked by
+    range-weighted upside + 0.5 × momentum; cheap but deteriorating is a value trap, never a buy; expensive but
+    improving is a hold (quality top 30%), never a sell; a sell needs upside ≤ −25% and a deteriorating business,
+    中/高, among the 400 largest (fills: not improving). Data errors (verdicts) are left out. Without the map:
+    v2's rules (Phase 9): a buy needs momentum z ≥ −0.5, a sell weak momentum, falling profit or a screen failure."""
     n, cap = CONFIG["buckets"]["per_bucket"], CONFIG["buckets"]["max_per_group"]
-    ok = v["valued"]
-    can_buy = ok & buy_universe(df, market)
+    ok = v["valued"] & (v["verdict"] != "数据错误")
     up, good, passed, mom = v["upside"], v["confidence"].isin(["高", "中"]), v["screen_ok"], df["z_momentum"]
+    imp, det = v["trend"] == 1, v["trend"] == -1
+    if v3.per_market(MAP, market):
+        lead = imp | ((v["trend"] == 0) & (v3.per_market(BUY, market) == "stable"))
+        trap, weak, protect = det, det, imp
+    else:
+        lead, trap, weak, protect = mom >= -0.5, False, (mom <= -0.5) | (df["np_growth"] < 0) | ~passed, False
+    can_buy = ok & buy_universe(df, market) & ~trap
     width = (np.log(v["v_high"] / v["v_low"]) / 2).clip(upper=0.5).fillna(0.5)
     cw = np.log1p(up.clip(lower=-0.99)) * (1 - width)
     rank_key = cw / cw[ok].std() + C2["momentum_weight"] * mom.fillna(0)
     largest = df["mcap_rank"] <= CONFIG["buckets"]["sell_largest_n"]
-    weak = (mom <= -0.5) | (df["np_growth"] < 0) | ~passed
-    band = C2["hold_max_abs_upside"]
+    band, fair = C2["hold_max_abs_upside"], up.abs() <= C2["hold_max_abs_upside"]
     rules = {
-        "buy": [(can_buy & (up >= C2["buy_min_upside"]) & good & passed & (mom >= -0.5), rank_key, False),
+        "buy": [(can_buy & (up >= C2["buy_min_upside"]) & good & passed & lead, rank_key, False),
                 (can_buy & (up >= 0.15) & passed, rank_key, False), (can_buy & (up > 0), rank_key, False)],
-        "hold": [(ok & (df["quality_pct"] >= 0.7) & passed & (up.abs() <= band) & good, df["z_quality"], False),
-                 (ok & passed & (up.abs() <= band + 0.05), df["z_quality"], False), (ok & (up.abs() < 0.25), df["z_quality"], False)],
+        "hold": [(ok & (df["quality_pct"] >= 0.7) & passed & good & (fair | (protect & (up < -band))), df["z_quality"], False),
+                 (ok & passed & ((up.abs() <= band + 0.05) | (protect & (up < 0))), df["z_quality"], False),
+                 (ok & ((up.abs() < 0.25) | (protect & (up < 0))), df["z_quality"], False)],
         "sell": [(ok & (up <= C2["sell_max_upside"]) & good & largest & weak, cw, True),
-                 (ok & (up <= -0.15) & largest, cw, True), (ok & (up < 0) & largest, cw, True)],
+                 (ok & (up <= -0.15) & largest & ~protect, cw, True), (ok & (up < 0) & largest & ~protect, cw, True)],
     }
     chosen, taken = {k: [] for k in BUCKETS}, set()
     for strict in (True, False):  # strict rules for every bucket first, so fills never crowd out real picks
@@ -251,18 +259,28 @@ def report(df: pd.DataFrame, picks: pd.DataFrame, v: pd.DataFrame, market: str) 
           f"beyond ±100%: {(up[ok].abs() > 1).mean():.1%} of valued, {(up[shown].abs() > 1).sum()} shown; labels "
           + ", ".join(f"{k} {n}" for k, n in v.loc[ok, "implied_label"].replace("", "无").value_counts().items())
           + f"; 需复核 {(v['flags'] != '').sum()}")
-    ind = up[ok].groupby(df["industry"][ok])
-    t = pd.DataFrame({"median": ind.median(), "n": ind.count(), "high": (v.loc[ok, "implied_label"] == "价格隐含过高").groupby(df["industry"][ok]).sum(),
-                      "low": (v.loc[ok, "implied_label"] == "价格隐含过低").groupby(df["industry"][ok]).sum(),
-                      "d_implied": v.loc[ok, "d_implied"].groupby(df["industry"][ok]).median(),
-                      "d50": v.loc[ok, "d50"].groupby(df["industry"][ok]).median()})
+    lab, by = v.loc[ok, "implied_label"], df["industry"][ok]
+    t = pd.DataFrame({"median": up[ok].groupby(by).median(), "n": up[ok].groupby(by).count(), "high": (lab == "价格隐含过高").groupby(by).sum(),
+                      "low": (lab == "价格隐含过低").groupby(by).sum(), "d_implied": v.loc[ok, "d_implied"].groupby(by).median(),
+                      "d50": v.loc[ok, "d50"].groupby(by).median()})
     far = t[(t["n"] >= 5) & (t["median"].abs() > 0.3)].sort_values("median")
     print(f"industries (5+ valued) beyond ±30%: {len(far)} of {(t['n'] >= 5).sum()}; why: labels and median implied vs "
           f"base-rate durations (years)")
     if len(far):
         print(far.assign(median=far["median"].map("{:+.0%}".format)).round(1).to_string())
+    cell = pd.cut(up[ok], [-np.inf, C2["sell_max_upside"], C2["buy_min_upside"], np.inf], labels=["昂贵", "中间", "便宜"])
+    grid = pd.crosstab(cell, v.loc[ok, "trend"].map(trend.LABELS)).reindex(columns=list(trend.LABELS.values()), fill_value=0)
+    print(f"\ntrend × valuation (votes: {', '.join(trend.EVIDENCE[market])}; ±{trend.NEED[market]}): "
+          + "; ".join(f"{c} " + " / ".join(f"{t} {n}" for t, n in row.items()) for c, row in grid.iterrows()))
+    ver = v.loc[v["verdict"] != ""]
+    print(f"outlier verdicts ({len(ver)}: beyond ±100% or labelled): " + ", ".join(f"{k} {n}" for k, n in ver["verdict"].value_counts().items()))
     show = v.join(df[["name", "price"]])
-    cols = ["name", "price", "v_low", "v_mid", "v_high", "upside", "confidence", "implied_label", "conviction", "flags"]
+    for kind in ("数据错误", "需复核"):
+        part = show[show["verdict"] == kind].sort_values("upside", ascending=False)
+        print(f"-- {kind} ({len(part)}{', the largest 15 by upside' if len(part) > 15 else ''})")
+        for code, x in part.head(15).iterrows():
+            print(f"  {code} {str(x['name'])[:16]} {x['upside']:+.0%} {x['implied_label']}: {x['verdict_why']}")
+    cols = ["name", "price", "v_low", "v_mid", "v_high", "upside", "confidence", "implied_label", "trend", "conviction", "flags"]
     for bucket, label in BUCKETS.items():
         part = show[show["bucket"] == bucket].sort_values("rank")
         print(f"\n-- v3 {label} ({len(part)})")
@@ -275,7 +293,9 @@ def report(df: pd.DataFrame, picks: pd.DataFrame, v: pd.DataFrame, market: str) 
             f"{x['v_low']:,.2f} / {x['v_mid']:,.2f} / {x['v_high']:,.2f}（{x['upside']:+.0%}，{x['confidence']}）{x['implied_label']}")
         print(f"{code} {x['name']}: 价格 {x['price']:,.2f}；估值 {val}\n  {x['implied']}\n  基础比率：{x['base']}，"
               f"{x['starts']:.0f} 例；利润以年均 {x['g']:.0%} 增长 3/5/10 年的比例 {x['s3']:.0%}/{x['s5']:.0%}/{x['s10']:.0%}"
-              + (f"\n  同行定价 {x['v_peer']:,.2f}" if pd.notna(x["v_peer"]) else "") + (f"\n  需复核：{x['flags']}" if x["flags"] else ""))
+              + (f"\n  同行定价 {x['v_peer']:,.2f}" if pd.notna(x["v_peer"]) else "") + (f"\n  需复核：{x['flags']}" if x["flags"] else "")
+              + f"\n  业务趋势：{trend.LABELS[x['trend']]}（{x['trend_why'] or '无明显变化'}）"
+              + (f"\n  异常值判断：{x['verdict']}，{x['verdict_why']}" if x["verdict"] else ""))
     v1 = picks[picks["role"] == "pick"].set_index("code")
     same = {b: len(set(v1.index[v1["bucket"] == b]) & set(v.index[v["bucket"] == b])) for b in BUCKETS}
     print("same name in v1 and v3: " + ", ".join(f"{BUCKETS[b]} {k}/5" for b, k in same.items()))

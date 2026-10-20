@@ -1,23 +1,10 @@
-"""Valuation v3, the Phase 13 redesign (PLAN.md Method 16): what the company's own future earnings are worth,
-with the assumptions written out, and what the price expects. Per share, in the quote currency.
-
-- Earnings path: years 1-3 from analysts' EPS (3+ analysts), else the company's own trend (also the backtest
-  version). Then profit grows at the same rate g with ROE held for a duration D, then growth and ROE fade to the
-  market's long-run levels over a fixed number of years (config fade_years), the same for every company.
-- D comes from the base rates (baserates.py): the share of similar companies whose profit kept up g for D
-  years. The fair value range is the value at the 25th / 50th / 75th percentile of that distribution, upside the
-  50th over the price. The duration the price needs is solved for and placed in the distribution: past the 90th
-  percentile 价格隐含过高, under the 10th 价格隐含过低.
-- Residual income on book. Book-light companies (negative book without a loss in 5 years, i.e. after buybacks,
-  or a 5-year ROE above 40%) are valued on their
-  earnings path instead (the value-driver formula: earnings less the reinvestment growth needs, here at a 40%
-  return on reinvested capital), written as residual income on the capital that earns 40% (earnings ÷ 40%):
-  the value is continuous at the threshold and their excess returns fade like every company's. (Keeping today's
-  earnings forever, the formula's usual form, put US book-light stocks at a median +65% against −11% for the
-  rest on 2026-10-19, NVIDIA at +331%.)
-- Loss-makers get a value only when 3+ analysts expect a profit within 3 years. The discount rate: the market's,
-  the median rate at which well-covered stocks' values equal their prices, plus λ × the industry's premium (the
-  industry's median implied rate over the market's; config industry_lambda, 0 = one rate per market)."""
+"""Valuation v3, the Phase 13 redesign (PLAN.md Method 16 has the method and every choice): what the company's
+own future earnings are worth, and what the price expects; per share, in the quote currency. Residual income on
+book (book-light companies: on the capital that earns 40%): years 1-3 from 3+ analysts' EPS, else the own
+trend; growth g with ROE held for a duration D from the base rates (baserates.py), then the base-rate ROE path
+and a fixed fade to the long-run levels. The range is the value at the 25th / 50th / 75th percentile of D; the
+duration the price needs, placed in that distribution, gives 价格隐含过高 / 过低. Loss-makers only with 3+
+analysts expecting a profit within 3 years. The rate: the market's implied rate + λ × the industry's premium."""
 
 import numpy as np
 import pandas as pd
@@ -43,10 +30,8 @@ def per_market(value, market: str):
 
 
 def inputs(df: pd.DataFrame, h: pd.DataFrame, market: str) -> pd.DataFrame:
-    """Per stock: core EPS e0 and book b0 (CN 扣非 EPS updated by a newer 业绩预告; US net of preferred), analysts'
-    EPS e1-e3 (HK year 3 = year 2 × (1 + expected growth ≤ 15%)), explicit years t0 (3 with consensus, else 0),
-    the growth rate g held during the duration, today's and the 5-year ROE, book-light and its RONIC, and
-    whether the stock can be valued at all (a profit today, or analysts expecting one within 3 years)."""
+    """Per stock: core EPS e0, book b0, analysts' EPS e1-e3 (HK year 3 from year 2), explicit years t0, growth g,
+    today's and the 5-year ROE, book-light and the capital it is valued on, and whether it can be valued at all."""
     x = pd.DataFrame(index=df.index)
     col = lambda c, default=np.nan: df[c] if c in df else pd.Series(default, df.index)
     if market == "cn":
@@ -78,13 +63,9 @@ def inputs(df: pd.DataFrame, h: pd.DataFrame, market: str) -> pd.DataFrame:
 
 
 def paths(x: pd.DataFrame, path: np.ndarray, r, D: np.ndarray, roe_long: float, g_long: float, fade: int) -> np.ndarray:
-    """Value per share for growth durations D (stocks × options: years from today the company keeps up its
-    growth rate g and its ROE) at discount rate r (scalar or per stock): book + discounted residual income
-    (E − r·B). While growing: analysts' EPS for years 1-3 (up to D), then ROE held and book growing at g (at most
-    at ROE: no new equity). After D: ROE follows its base-rate cell's path from where it stood (`path`: A and B
-    per year, ROE ≈ A + B × ROE at the start) for H years, then fades linearly to roe_long over `fade` years;
-    growth fades linearly to g_long over `fade` years; then the long-run residual income (roe_long − r)·B
-    grows at g_long forever. Book is the capital that earns 40% for book-light companies (inputs)."""
+    """Value per share for growth durations D (stocks × options) at rate r: book + discounted residual income. While
+    growing, analysts' EPS (years 1-3) then ROE held with book growing at g; after D the cell's ROE path (ROE ≈ A
+    + B × ROE at the start) for H years, then a linear fade to roe_long and g_long over `fade` years, then forever."""
     n, k = D.shape
     col = lambda c: x[c].to_numpy(float)[:, None]
     r = np.broadcast_to(np.asarray(r, float).reshape(-1, 1) if np.ndim(r) else np.asarray(r, float), (n, k))
@@ -141,11 +122,9 @@ def quantile_durations(S: np.ndarray, qs=QUANTILES) -> np.ndarray:
 
 
 def implied(V: np.ndarray, price: np.ndarray, Sc: np.ndarray, t0: np.ndarray) -> pd.DataFrame:
-    """The duration the price needs (first crossing on the grid from t0), the share of similar companies that
-    lasted that long and its percentile. Values usually rise with D; they fall with D when ROE is below the
-    long-run level (growth then destroys value), so a long implied D is pessimistic there. Label: the price
-    needs more than 90% of similar companies achieved (or more than any duration: side "above") 价格隐含过高;
-    less than 10% fell short of (or less than none: side "below") 价格隐含过低."""
+    """The duration the price needs (first crossing from t0; values fall with D when ROE is below the long-run
+    level), the share of similar companies that lasted that long, and the label: past the 90th percentile (or
+    any duration: "above") 价格隐含过高, under the 10th (or none: "below") 价格隐含过低."""
     n, m = V.shape
     grid = np.arange(m)
     d_imp, side, rising = np.full(n, np.nan), np.full(n, "", dtype=object), np.ones(n, bool)
@@ -231,6 +210,7 @@ def value(df: pd.DataFrame, h: pd.DataFrame, st: pd.DataFrame, market: str, sect
                     np.searchsorted(st.attrs["size_cuts"], df["revenue_ttm"].fillna(0)))
     want.index = df.index
     want["sector"] = sector.reindex(df.index).fillna("")
+    want["tb"] = h["tb"].reindex(df.index).fillna(1) if "tb" in h else 1  # business trend band (trend.py)
     S, path, cells = br.survival(st, want, x["g"], per_market(br.TOL, market))
     x = x.join(cells)
     t0 = x["t0"].to_numpy(int)
