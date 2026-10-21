@@ -49,3 +49,12 @@ def test_hkgb_benchmark_10_year_yield():
     df = hkgb.parse_closings((SAMPLES / "hkgb_closings_sample.xls").read_bytes())  # real workbook 2026-10-16
     assert df.iloc[-1].to_dict() == {"date": "2026-10-16", "market": "hk", "y10": 3.994}
     assert len(df) == 11 and df["date"].is_monotonic_increasing
+
+
+def test_trading_days_ignore_a_stray_row_and_a_lagging_index():
+    # Real HK prices (Yahoo, 2026-10-08..20): ^HSI has no 2026-10-20 row though its stocks traded (10-19 was a holiday).
+    prices = pd.read_csv(SAMPLES / "hk_prices_2026-10-20_sample.csv", dtype={"code": str, "date": str})
+    assert universe.trading_days(prices)[-1] == "2026-10-20"
+    # The 2026-10-21 06:30 table: only 02945 had a 10-20 row, which made "the last day" one stock's and emptied HK.
+    stray = prices[(prices["date"] < "2026-10-20") | (prices["code"] == "02945")]
+    assert universe.trading_days(stray)[-1] == "2026-10-16"

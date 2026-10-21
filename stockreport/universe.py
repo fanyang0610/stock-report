@@ -46,10 +46,18 @@ def ttm(results: pd.DataFrame) -> pd.DataFrame:
     return latest.set_index("code")
 
 
-def price_metrics(prices: pd.DataFrame, codes: list[str], index: str = "CSI300") -> pd.DataFrame:
+def trading_days(prices: pd.DataFrame) -> np.ndarray:
+    """The market's trading days: days with prices for at least half as many stocks as its busiest day, so one
+    stock's stray newer row doesn't make a day, and an index that skipped a day (Yahoo's ^HSI, 2026-10-20) doesn't
+    remove one."""
+    n = prices.groupby("date")["code"].nunique()
+    return np.sort(n.index[n >= n.max() / 2].to_numpy())
+
+
+def price_metrics(prices: pd.DataFrame, codes: list[str]) -> pd.DataFrame:
     """12-1 month momentum and 1-year volatility from returns chained as close / prev-close
-    (ex-rights adjusted), on the trading days of the market's index."""
-    dates = np.sort(prices.loc[prices["code"] == index, "date"].unique())
+    (ex-rights adjusted), on the market's trading days."""
+    dates = trading_days(prices)
     px = prices[prices["code"].isin(codes)]
     traded = px["volume"] > 0
     ret = (px["close"] / px["prev_close"] - 1).where(traded)
@@ -87,7 +95,7 @@ def winsorize(df: pd.DataFrame, cols: list[str], lo: float, hi: float) -> pd.Dat
 def screen(df: pd.DataFrame, prices: pd.DataFrame, today: date, market: str, info: dict) -> pd.DataFrame:
     """Traded on the last day, listed at least a year, 20-day average turnover above the minimum."""
     cfg = CONFIG["universe"]
-    last = prices["date"].max()
+    last = str(trading_days(prices)[-1])
     today_px = prices[prices["date"] == last].set_index("code")
     df = df[df.index.isin(today_px.index[today_px["volume"] > 0])]
     info["stages"]["traded on last day"] = len(df)
@@ -151,7 +159,7 @@ def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
     cfg = CONFIG["universe"]
     quotes = pd.read_csv(DATA / "quotes" / "cn.csv.gz", dtype={"code": str, "trade_date": str})
     prices = tdx.load_prices()
-    last = prices["date"].max()
+    last = str(trading_days(prices)[-1])
     info = {"quote_date": quotes["trade_date"].iloc[0], "price_date": last, "stages": {}, "dropped": {}}
     if info["quote_date"] != last:
         log.warning("quotes are for %s but the latest daily package is %s", info["quote_date"], last)
@@ -215,7 +223,7 @@ def join_consensus(df: pd.DataFrame, path: Path, cols: list[str]) -> pd.DataFram
 
 def build_us(today: date) -> tuple[pd.DataFrame, dict]:
     prices = yahoo.load_prices()
-    last = prices.loc[prices["code"] == yahoo.MARKETS["us"][1], "date"].max()
+    last = str(trading_days(prices)[-1])
     info = {"quote_date": last, "price_date": last, "stages": {}, "dropped": {}}
     codes = nasdaq.candidates()
     df = nasdaq.load_list().drop_duplicates("code").set_index("code").loc[codes]
@@ -232,7 +240,7 @@ def build_us(today: date) -> tuple[pd.DataFrame, dict]:
     df["shares"] = df["mcap"] / df["last"]  # the screener's market value is company-wide; its price can lag a day
     df["mcap"] = df["shares"] * df["price"]
     df = top_by_value(df, info)
-    df = df.join(price_metrics(prices, list(df.index), index=yahoo.MARKETS["us"][1]))
+    df = df.join(price_metrics(prices, list(df.index)))
     df = df.join(us_fundamentals())
     df["bps"] = df["equity"] / df["shares"]
     df["debt_ratio"] = df["liabilities"] / df["assets"]
@@ -272,7 +280,7 @@ def hk_fundamentals(currency: pd.Series) -> pd.DataFrame:
 
 def build_hk(today: date) -> tuple[pd.DataFrame, dict]:
     prices = yahoo.load_prices("hk")
-    last = prices.loc[prices["code"] == yahoo.MARKETS["hk"][1], "date"].max()
+    last = str(trading_days(prices)[-1])
     info = {"quote_date": last, "price_date": last, "stages": {}, "dropped": {}}
     codes = eastmoney.hk_candidates()
     df = eastmoney.load_hk_list().drop_duplicates("code").set_index("code").loc[codes]
@@ -284,7 +292,7 @@ def build_hk(today: date) -> tuple[pd.DataFrame, dict]:
     df["price"] = prices[prices["date"] == last].set_index("code")["close"].reindex(df.index)
     df["mcap"] = df["price"] * df["shares"]  # all issued shares (H + A + unlisted) at the HK price
     df = top_by_value(df, info)
-    df = df.join(price_metrics(prices, list(df.index), index=yahoo.MARKETS["hk"][1]))
+    df = df.join(price_metrics(prices, list(df.index)))
     df["gross_margin"], df["debt_ratio"] = df["gross_margin"] / 100, df["debt_ratio"] / 100
     df["cash_conv"] = (df["ocf"] / df["np"]).where(df["np"] > 0)
     df["rev_growth"], df["np_growth"] = df["rev_yoy"] / 100, df["np_yoy"] / 100  # year to date, reporting currency

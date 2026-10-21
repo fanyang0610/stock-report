@@ -90,11 +90,14 @@ def update_prices(today: date, codes: list[str], market: str = "us") -> None:
     old = load_prices(market) if path.exists() else pd.DataFrame(columns=["date", "code"])
     last = old.groupby("code")["date"].max()
     start = lambda c: date.fromisoformat(last[c]) - timedelta(days=10) if c in last else keep_from
-    index, _ = chart(make_http(), (index_code, index_symbol, start(index_code)))
-    latest = index["date"].max()
-    todo = [(c, symbol(c), start(c)) for c in codes if last.get(c, "") < latest]
-    log.info("yahoo %s prices: %d of %d stocks to update to %s", market, len(todo), len(codes), latest)
-    frames, divs = [old, index], []
+    http = make_http()
+    index, _ = chart(http, (index_code, index_symbol, start(index_code)))
+    # the newest day: the index's or the largest stock's, whichever is newer (Yahoo's ^HSI skipped 2026-10-20)
+    lead = chart(http, (codes[0], symbol(codes[0]), start(codes[0]))) if codes else None
+    latest = max(index["date"].max(), lead[0]["date"].max() if lead and len(lead[0]) else "")
+    todo = [(c, symbol(c), start(c)) for c in codes[1:] if last.get(c, "") < latest]
+    log.info("yahoo %s prices: %d of %d stocks to update to %s", market, len(todo) + 1, len(codes), latest)
+    frames, divs = [old, index] + ([lead[0]] if lead else []), [lead[1]] if lead else []
     for i, got in enumerate(each(make_http, chart, todo, workers=2), 1):
         if got:
             frames.append(got[0])
