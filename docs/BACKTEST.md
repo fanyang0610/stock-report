@@ -1060,8 +1060,15 @@ portfolios; random portfolios use no score:
 
 **Verdict: fails; the report doesn't switch.** CN and HK fail only item 2: their portfolios beat the index fund with
 smaller drawdowns and fewer falls than random picks, but beat 79% and 86% of random portfolios from the same funnel,
-under the 90% line. Across all stocks the score does sort returns (CN's line slopes up in all four sub-periods); a
-10-name portfolio is too concentrated for that to clear the luck test over ~15 independent half-years. In the US the
+under the 90% line. The stage review (fresh context) reproduced both percentiles and found the corrections implemented as
+registered, with no sign of tuning (they cut both ways: CN +4.0% -> +1.8% per 6 months, the US 90% -> 18% of random
+portfolios). Its reading, which replaces a kinder one here: in CN the score's edge sat in the trend signals and reversed
+in 2024-26 (-7.5% against -1.7% for random portfolios; the line's slope there +0.006, flat), so CN looks short of edge,
+not only of statistical power; HK looks under-powered (29 names entered in 119 months). The line to clear sits at about
++2.8% (CN) and +3.5% (HK) per 6 months over random picks, 4-5% a year: a 10-name, low-turnover portfolio over these
+years can't confirm an edge of the size the plan expects. Signals were chosen on the whole sample, which flatters the
+score. CN's avoid-list pass is largely in-sample by construction (the blow-up fit and the risk signals were chosen on
+the same falls; high-volatility stocks fall 25%+ more often almost mechanically): not standalone evidence. In the US the
 risk signals made it worse: in 2018-2026 the riskier US stocks did better, and nothing beat SPY. This is the third run
 on the same data; no further variant is run on it for stage 1.
 
