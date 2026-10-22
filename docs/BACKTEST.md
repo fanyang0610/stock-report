@@ -1041,3 +1041,27 @@ found the first run's deviation; also: inputs are winsorized at 2/98% (ties at t
 momentum cap inside the funnel, small); two look-aheads that favour passing (the blow-up fit on 2019-23 outcomes applied
 to those dates; signals chosen on the whole sample), so they don't weaken the fail; US negative-book buyback stocks (MCD,
 LOW) land at the bottom of B/P and in the avoid list, a definition to fix if the US ever ships.
+
+**The corrected test** (your OK 2026-10-22; the three corrections in docs/PLAN.md, committed before one run, aea2862;
+backtest/stage1_fix.py). Risk signals judged on falls entered everywhere they were offered (volatility, a loss, CN heat:
+the risky side fell 25%+ more often in 3-4 of 4 sub-periods in every market); return signals as before. Holding-rule
+portfolios; random portfolios use no score:
+
+| 6 months from every start, after costs, over the index fund | CN | US | HK |
+|---|---|---|---|
+| score (signals) | +1.8% (accruals, both trends, volatility, loss, heat) | −2.3% (B/P, 6m trend, volatility, loss) | +3.2% (as before) |
+| sub-periods positive | 3/4 (2024-26 −7.5%) | 2/4 | 3/4 |
+| random portfolios' median / share beaten | +0.2% / 79% | −1.1% / 18% | +1.5% / 86% |
+| 25%+ falls per entry: score / random | 10.3% / 12.4% | 7.7% / 6.7% | 3.4% / 10.5% |
+| a year over the fund; max drawdown (fund's) | +2.9%; −16% (−32%) | −4.8%; −25% (−24%) | +5.6%; −35% (−47%) |
+| expected-return line, sub-periods up | 4/4 | 0/4 | 3/4 |
+| items failed | 2 | 1, 2, 4, 5 | 2 |
+| avoid list: trailed the 400 largest and fell more, sub-periods | 4/4 (falls 33% vs 16%) | 2/4 | 2/4 |
+
+**Verdict: fails; the report doesn't switch.** CN and HK fail only item 2: their portfolios beat the index fund with
+smaller drawdowns and fewer falls than random picks, but beat 79% and 86% of random portfolios from the same funnel,
+under the 90% line. Across all stocks the score does sort returns (CN's line slopes up in all four sub-periods); a
+10-name portfolio is too concentrated for that to clear the luck test over ~15 independent half-years. In the US the
+risk signals made it worse: in 2018-2026 the riskier US stocks did better, and nothing beat SPY. This is the third run
+on the same data; no further variant is run on it for stage 1.
+
