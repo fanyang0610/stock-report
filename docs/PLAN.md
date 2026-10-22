@@ -138,6 +138,26 @@ A benchmark is in the bar only if losing to it would change what we do. v1 isn't
   3. it is at least as good as the best single-signal list (otherwise that signal ships instead);
   4. its 25%+ falls are no more frequent than the random lists';
   5. the expected-return line slopes the right way in at least 3 of 4 sub-periods.
+- **Corrections after the first stage-1 test (your OK, 2026-10-22; registered before the corrected run).** The first runs
+  (docs/BACKTEST.md section 19) failed, and the diagnosis found three items that measured the wrong thing. The pass levels
+  above stay as they are; what each item measures changes, each for its reason:
+  1. *Signals are judged on what they are for.* Return signals (E/P, B/P, profitability, accruals, the two trends,
+     issuance) enter on the mean 6-month return as before. Risk signals (volatility, a loss, CN heat) enter if their safe
+     side had fewer 25%+ falls than their risky side (lowest-volatility fifth against the highest; without a loss against
+     with one; without 2+ limit-ups against with) in at least 3 of 4 sub-periods. Reason: their job in your goal is to cut
+     big falls; judging them on return left CN's score all trend, and its picks fell as often as random ones.
+  2. *Random portfolios use no score.* They buy at random from the funnel and sell at random: names that leave the funnel
+     are sold, and each month a random number of the rest (binomial, at the score portfolio's average monthly turnover)
+     too. Reason: in the first holding-rule run they sold by our score, so they shared its skill and item 2 compared the
+     score with itself. Their turnover is at least the score portfolio's, so they pay at least as much in costs.
+  3. *Simpler versions are compared on your whole goal.* A single signal beats the score only if its portfolio has the
+     higher return and no more 25%+ falls; then it ships instead. Reason: HK's momentum had the higher return with
+     falls 22.7% of the time against the score's 3.4%.
+  The portfolio is the registered holding-rule one (backtest/stage1_hold.py's rules). The avoid list ships in a market
+  that passes if its names trailed the 400 largest on the mean 6-month return and fell 25%+ more often, in at least 3 of
+  4 sub-periods. A market that fails shows no buys: its section says no list beat its index fund and names the fund
+  (SPY, the 2800.HK Tracker Fund, the 510300 CSI 300 ETF). The report still switches only if CN and one other market
+  pass. These runs are on data looked at before, so a pass here is weaker evidence than a first run; the report says so.
 - **Adding a part (stages 3-5).** It must:
   - (a) forecast what it claims to better than the simple alternative. For the earnings engine, that's earnings 1 and 3 years ahead against "this year's margin persists": this is how the valuation approach itself is judged;
   - (b) raise the list's 6-month excess return, or cut its falls, against the same score without the part, without worsening the other, in CN and one other market, in 3 of 4 sub-periods.
