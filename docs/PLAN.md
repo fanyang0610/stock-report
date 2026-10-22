@@ -3,7 +3,8 @@
 ## Status
 - Adopted 2026-10-22 (your call), replacing the v1-v3 plan (Phases 1-13), which is kept in docs/archive/PLAN-v1-v3.md as reference only. The universe build and metrics, the data cross-checks, the event layer and the deep-dive lane stay as built; their details are in the archive (Methods 1-3, 13, 14, 15).
 - Stage 1 (data fixes, the score and the new report): **closed 2026-10-22 as a fail**, after the corrected test (your OK; Evaluation, "Corrections"): CN and HK fail only item 2 (their portfolios beat 79% and 86% of random portfolios from the same funnel, under the 90% line; CN +2.9% a year over the CSI 300 fund with half its drawdown, HK +5.6% over the Tracker Fund), the US fails four items, so no buy list ships; CN's avoid list passed its own check in all four sub-periods, but the stage review found that largely in-sample by construction, so it isn't standalone evidence. The review's reading: CN's edge sat in the trend signals and reversed in 2024-26 (short of edge), HK looks under-powered, and a 10-name portfolio can't confirm an edge under about 4-5% a year over random picks. No further variant runs on this data (docs/BACKTEST.md section 19). Earlier on the same day: the ship bar fails in every market, in both the first run (fresh monthly lists) and the registered holding-rule run (docs/BACKTEST.md section 19), so the report doesn't switch and the keyword reply stays off. CN: the portfolio beat the CSI 300 index fund by +6.7% a year after costs (4/4 sub-periods) but only 78% of random portfolios from the same funnel, and its names fell 25%+ as often as random ones; HK: +5.6% a year over the Tracker Fund with a third of the random falls, but 81% of random portfolios and momentum alone returned more; US: nothing beat SPY. Done: the preferred-dividend fix (deductions above zero 178 → 116, at the cap 41 → 3), backtest/stage1.py and stage1_hold.py, the index-fund benchmark, the stage-reviewer agent. Not done, by rule 12 (they change nothing the stage-1 score uses), for your OK: consensus fiscal years on the calendar (moves to stage 5) and raw inputs (the score is rank-based; winsorizing ties 1-2 names a date at the extremes). Housekeeping (your OK, 2026-10-22): the 06:30 job fetches the data only (no report, no v1 or v3, no DeepSeek) until a report ships; the 10 worktrees of Phases 7-13 removed (4.2 GB; their branches stay in git); data/backtest (382 MB) in main.
-- Stages 2-5: not started.
+- Stage 3 (the earnings engine, your call 2026-10-22: it runs now, stage 2 waits until some market's list passes): its test is registered below (Evaluation, "Stage 3's test"), committed before anything that produces results was built.
+- Stages 2, 4 and 5: not started.
 - Until stage 1 ships, the 06:30 job only fetches the data and cleans up (launchd/com.stockreport.daily.plist), and the keyword reply stays off.
 
 ## Why a new plan
@@ -161,6 +162,77 @@ A benchmark is in the bar only if losing to it would change what we do. v1 isn't
 - **Adding a part (stages 3-5).** It must:
   - (a) forecast what it claims to better than the simple alternative. For the earnings engine, that's earnings 1 and 3 years ahead against "this year's margin persists": this is how the valuation approach itself is judged;
   - (b) raise the list's 6-month excess return, or cut its falls, against the same score without the part, without worsening the other, in CN and one other market, in 3 of 4 sub-periods.
+- **Stage 3's test (registered 2026-10-22, committed before anything that produces results was built).** Each part runs
+  once; no variant after seeing results. Code in backtest/ (outside the app's line budget): earn_panel.py (the panels),
+  earnings.py (the forecast and part a), implied.py (the implied return), stage3.py (parts b-d). No analyst data anywhere.
+  The open definitions, fixed here with their reasons:
+  - *Panels*, one row per company and fiscal year, each public from: CN 业绩报表 since 2009 (core earnings = 扣非, as
+    history.cn_years; book = BPS × profit ÷ EPS), the notice date. US: the SEC frames 2009-2025, every us-gaap filer
+    with the dead ones (net income, equity at the calendar year end, revenue as fetch/frames.py, gross profit else revenue
+    less the cost of revenue, operating cash flow), each fact's period end + 120 days (10-K deadlines are 60-90 days),
+    filers with $50m+ revenue in the base year (the base rates' floor: shells and funds out). HK: Eastmoney's annual rows
+    since 2015, 90 days after the period. The US stocks' own inputs come from us_annual (their fiscal years and filing
+    dates, continuing operations less preferred dividends, book net of preferred, 20-F filers too), with the coefficients
+    fit on the frames (dead filers in the fit, not survivors only). Operating income is fetched but unused: CN and HK
+    have none, and one model serves every market.
+  - *Financials* (banks, brokers, insurers) are forecast on ROE: CN 申万 48, 4901, 4902 and HK the industry types of
+    config `financial_industries_hk` (both as the snapshots); US SIC 6000-6411 (the frames carry no Nasdaq industry; real
+    estate, REITs and funds aren't financials). *Sectors:* CN 申万 level 1 at the year end, US the Fama-French 12
+    industry of the SIC code, HK the first level of Eastmoney's industry type (as baserates.py). Sector medians are taken
+    within the group (financials or not); on a date, over the rows public by then, for the stock's base year (10+
+    companies, else the year before, else the market's).
+  - *Non-financials:* earnings = revenue × margin (core earnings ÷ revenue). For each horizon h = 1..5 years one direct
+    OLS fit of margin(t+h) on margin(t), its change from t−1, accruals ((earnings − operating cash flow) ÷ revenue), the
+    gross-margin change, a loss flag (earnings < 0) and the sector median margin; and one of revenue's log growth t→t+h
+    on its log growth t−1→t and the sector median log growth. A missing change, accrual or gross margin counts as 0, in
+    the fits and the forecasts alike. *Financials:* ROE(t+h) (earnings ÷ the previous year-end book) on ROE(t), its
+    change from t−1, the loss flag and the sector median ROE.
+  - *Fits:* every 30 June, on every pair (base year t, outcome t+h) whose outcome was public by then (an expanding
+    window, Hou-van Dijk-Zhang style); at least 300 pairs, else that horizon has no fit yet. Training values are
+    winsorized at the fit sample's 1st and 99th percentiles, for stable coefficients; forecasts take each company's raw
+    inputs (the plan's "raw, not winsorized").
+  - *Book path:* book grows by earnings less a net payout, paid on positive earnings only (clean surplus). Net payout =
+    1 − book growth ÷ earnings over the last 3 years, within 0-1; without 3 years of book or with 3-year earnings ≤ 0,
+    the sector median. Reason: CN and HK have no free dividend history; this also counts buybacks and share issues.
+  - *Implied expected return,* per stock and month end: the rate r at which P/B (stage 1's B/P, from the snapshot)
+    equals 1 + Σ (earnings_k − r × book_k−1) ÷ (1+r)^k over years 1..T, plus year T's residual income held flat for ever
+    (÷ r; Gebhardt-Lee-Swaminathan's convention, since a growing perpetuity needs a chosen growth rate). Years 1..H come
+    from the fits (H = the longest horizon fit by then, at most 5); margin and revenue growth (financials: ROE) then fade
+    in a straight line over 10 years to the sector's long-run level (the median company-year of the last 10 fiscal years
+    public by then, 30+ company-years, else the market's), so T = H + 10. Inputs: the latest fiscal year public on the
+    date, at most 18 months old; the forecast, in units of that year's book, is applied to the snapshot's latest book.
+    r is read on a grid from 0.5% to 50% in 0.25-point steps, linear in between: the first rate at which the value falls
+    to the price (below 0.5%: 0.5%; never: 50%; ties at the ends). No r when book ≤ 0 or the inputs are missing; in the
+    score a missing signal counts as the middle, as in stage 1.
+  - **(a) Forecast accuracy, in every market** (the engine's own test). Forecasts made on 30 June of t+1 from base year t
+    with that day's fit, for every base year with a fit and an outcome (at most CN and US 2010-2024 at 1 year, 2012-2022
+    at 3 years; HK 2016-2024 and 2018-2022); the US on the frames (dead filers included). Evaluated per base year: the 800
+    companies with the largest book among those public by the forecast day with revenue > 0, book > 0 (financials: the
+    previous book too) and an outcome. Error: |forecast earnings(t+h) − actual| ÷ book(t), each capped at 1 (else a few
+    tiny books decide the mean); financials' earnings = ROE × the forecast book path, the same payout on both sides.
+    Against "this year's margin persists, revenue at the sector median growth" (financials: ROE persists). Pass: at 3
+    years the mean error is lower, pooled over the base years and in at least half of them; at 1 year it is at most 2%
+    above the benchmark's (relative; a near-tie counts as not worse). The median error is shown, not deciding.
+  - **(b) The signal across all stocks, CN and one other market.** On each month end, the stocks of the stage-1 frame
+    with the implied return, plain E/P and plain B/P (stage 1's) and a 6-month return, each signal a percentile within
+    that set. Its top fifth minus bottom fifth on the mean 6-month return (pooled over the sub-period's dates, as stage
+    1's test) and its mean monthly rank correlation with the 6-month return are both positive in at least 3 of 4
+    sub-periods (2019-20, 2021-22, 2023, 2024-26), and both higher than plain E/P's and than plain B/P's in at least 3
+    of 4 ("on the same measure"). Shown, not deciding: its mean rank correlation with 12-1 momentum and the 6-month trend
+    per sub-period, since CN needs an edge that isn't trend.
+  - **(c) In the score, CN and one other market.** Stage 1's corrected score with the implied return in place of E/P and
+    B/P (a return signal under the corrected inclusion rule: top fifth minus bottom fifth positive in 3 of 4 sub-periods)
+    against stage 1's corrected score as it ran (E/P and B/P where they entered); the same funnel, holding-rule portfolio,
+    costs and index fund. Per sub-period: the mean 6-month return over the fund from its start months, and 25%+ falls per
+    entry for the names entered in it. A sub-period counts when one is better and the other no worse (return higher and
+    falls not higher, or falls lower and return not lower); pass in at least 3 of 4. Where the implied return doesn't
+    enter, the score is unchanged and (c) fails.
+  - **(d) The shipping check, unchanged:** stage1_fix.py's items 1-5 with the new score (random portfolios with no score
+    at its turnover; plain E/P, plain B/P and 12-1 momentum as the simpler versions), CN and one other market.
+  - *Decision.* The engine enters the score only if (a) passes in every market and (b) and (c) pass in CN and one other
+    market. A buy list ships only if the engine enters and (d) passes in CN and one other market. Every part's numbers are
+    reported whatever the outcome; the runs reuse data looked at in Phases 9-13 and stage 1, so a pass is weaker evidence
+    than a first look, and the report says so.
 - **Bug fixes** are adopted because they are correct; their effect is reported, not tested.
 - **The results review (stage 2)** is adopted on its narrow mandate, because it can't be backtested; the scoreboard follows what it removes.
 - **Scoreboard:** `track` keeps scoring every list (and every removed name against its replacement) against the index and the random lists, and the report shows it once a month. It never holds up a stage or a decision: it is there so you can see how the picks are doing, and to catch a fault in the live data that a backtest can't show.
