@@ -971,3 +971,73 @@ on value but fail the quality screen, Stellantis is set aside as a blow-up risk 
 
 - Rerun: `uv run python -m backtest.run build us|cn|hk` (the 6-month columns; about a minute each), `uv run python -m
   backtest.sense build us|cn|hk` (the frames, ~2 min), then `uv run python -m backtest.funnel checks|score us|cn|hk`.
+
+## 19. Stage 1 of the new plan: the signal score against the ship bar (2026-10-22; backtest/stage1.py)
+
+The test docs/PLAN.md registers, run once on the month-end frames (CN 2019-01..2026-09, 87 starts with 6-month returns;
+US 2018-01.., 99; HK 2016-10.., 114), after the definitions were committed (714e1a7). The benchmark is each market's index
+fund with dividends reinvested (SPY, 2800.HK, 510300.SS adjusted closes): the backtest snapshots carry no dividend yields,
+so the plan's stopgap (price index + dividend yield) couldn't be built. Lists pay a round trip of costs. The harness
+reproduces Method 17's all-stock beat and blow-up rates (CN 45.1/18.6 and 41.7/11.3, exactly; US out-of-sample blow-ups
+7.9 vs 7.8).
+
+**Verdict: the bar fails in every market, in both runs below; the report doesn't switch.**
+
+Two runs. The first (stage1.py `bar`) scored a fresh 10-name list each month held 6 months. The stage review found that the
+plan registers the buys held or sold by the holding rule, with random lists held the same way; the second run
+(stage1_hold.py, committed before it ran, d2a8c56) does that. Both are below; the plan's own definition is the second.
+
+**Which signals entered** (top fifth − bottom fifth on the mean 6-month return, positive in 3+ of 2019-20, 2021-22, 2023,
+2024-26): CN accruals, 12-1 momentum, 6-month trend, no loss, no CN heat (E/P 1/4, B/P 2/4, volatility 2/4 stayed out);
+US B/P and the 6-month trend only (volatility and losses were negative in all four: risky US stocks did better); HK E/P,
+B/P, accruals, both trends, low volatility, no loss and low issuance.
+
+| 6 months, after costs, over the index fund | CN | US | HK |
+|---|---|---|---|
+| score's 10 buys: mean (sub-periods positive) | +6.0% (4/4) | −1.0% (1/4) | +4.6% (4/4) |
+| share of 1,000 random lists from the same funnel beaten | 100% | 77% | 100% |
+| random lists' median | +0.5% | −1.4% | +1.0% |
+| best single signal | 12-1 momentum +3.5% | 12-1 momentum −0.7% | 12-1 momentum +8.1% |
+| 25%+ falls: buys / random lists | 16.3% / 13.4% | 8.7% / 7.4% | 6.1% / 14.7% |
+| beat the index fund | 52.9% | 45.7% | 55.7% |
+| expected-return line slope, sub-periods up | 4/4 | 4/4 | 3/4 |
+| items failed | 4 (falls) | 1, 2, 3, 4 | 3 (a simpler signal did better) |
+
+HK's item 3 sends the simpler signal: the 12-1 momentum list, checked against items 1, 2 and 4, has the returns (+8.1%,
+4/4, all random lists beaten) and fails item 4 (25%+ falls 22.7% against 14.7%).
+
+**The registered holding-rule portfolio** (keep a name while it is in the funnel at or above the median score, fill
+to 10 from the top, at most 2 per industry; random portfolios fill at random and sell by the same rule; 25%+ falls per
+entered name):
+
+| 6 months from every start, after costs, over the index fund | CN | US | HK |
+|---|---|---|---|
+| score portfolio: mean (sub-periods positive) | +4.0% (4/4) | +0.7% (2/4) | +3.2% (3/4) |
+| random portfolios' median / share beaten | +2.6% / 78% | −0.7% / 90% | +2.0% / 81% |
+| best single signal | 12-1 momentum +0.6% | plain E/P −0.2% | 12-1 momentum +5.4% |
+| 25%+ falls per entry: score / random | 14.0% / 13.8% | 13.3% / 7.0% | 3.4% / 11.7% |
+| a year over the fund; max drawdown (fund's) | +6.7%; −32% (−32%) | +0.6%; −31% (−24%) | +5.6%; −35% (−47%) |
+| items failed | 2, 4 | 1, 2, 4 | 2, 3 |
+
+The random portfolios sell by the score too ("held the same way"), so they share part of its skill: in CN and HK the
+funnel (large, profitable for 3 years, no extreme blow-up chance) plus that sell rule already beat the index fund by
+2-2.6 points per 6 months; the score's buying order adds 1-1.4 points more, which isn't enough to separate it from luck
+at the 90% line.
+
+**What it says.** In CN and HK the evidence-based signals pick lists that beat the index fund and every random list,
+in every sub-period; what pays (momentum) also crashes more often. The HK score, with low volatility and value in it,
+cut the falls to under half the random lists' rate at a lower return. In the US nothing beat SPY: equal-weight lists of
+large companies trailed the cap-weighted index over 2018-2026 (random lists −1.4% per 6 months), and the score adds
+little. The holding-rule portfolio (reported, not deciding): CN +6.7% a year over the index fund (5 names +10.0%),
+drawdown −32% like the fund's; HK +5.6% (5 names +8.4%), −35% against −47%; US +0.6% (5 names −2.7%), −31% against −24%.
+Avoid lists: CN beat the index 32% of the time with 29% falls (the 400 largest: 44%, 16%), HK 37% and 38% (48%, 18%);
+the US avoid list did no worse than the rest on return.
+
+Rerun: `uv run python -m backtest.run build cn|us|hk`, then `uv run python -m backtest.stage1 frame|bar cn|us|hk`
+(data/backtest/index_etf.csv.gz: the index funds' daily adjusted closes from Yahoo, fetched 2026-10-22).
+
+**The stage review** (a fresh-context agent, .claude/agents/stage-reviewer.md) confirmed the verdict item by item and
+found the first run's deviation; also: inputs are winsorized at 2/98% (ties at the extremes: 1-2 names a date at the
+momentum cap inside the funnel, small); two look-aheads that favour passing (the blow-up fit on 2019-23 outcomes applied
+to those dates; signals chosen on the whole sample), so they don't weaken the fail; US negative-book buyback stocks (MCD,
+LOW) land at the bottom of B/P and in the avoid list, a definition to fix if the US ever ships.
