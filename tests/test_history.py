@@ -94,3 +94,22 @@ def test_history_is_point_in_time(tmp_path, monkeypatch):
     assert history.us_annual(date(2023, 3, 31))["code"].tolist().count("Y") == 1
     assert history.us_annual(date(2023, 3, 30))["code"].tolist().count("Y") == 0
 
+
+
+def test_us_preferred_uses_one_fiscal_year(tmp_path, monkeypatch):
+    # Saved rows (2026-10-21): the latest 10-K of Palantir, ServiceNow, Leidos and Apple has no common-share income
+    # tag; taking each column's newest value paired it with an older year's figure and halved their earnings.
+    from stockreport import history
+    a = pd.read_csv(SAMPLES / "us_annual_pref_sample.csv", dtype={"code": str, "fy_end": str, "filed": str})
+    extra = pd.DataFrame({"code": ["XPF", "XPF", "XPU", "XPU"], "fy_end": ["2024-12-31", "2025-12-31", "2021-12-31", "2025-12-31"],
+                          "filed": ["2025-02-01", "2026-02-01", "2022-02-01", "2026-02-01"], "ni": [100, 200, 100, 200],
+                          "ni_common": [90, None, 90, None], "pref": [50, 50, 50, 50], "equity": [1000, 1000, 1000, 1000]})
+    pd.concat([a, extra]).to_csv(tmp_path / "us_annual.csv.gz", index=False, compression="gzip")
+    monkeypatch.setattr(history, "HISTORY", tmp_path)
+    codes = ["PLTR", "NOW", "LDOS", "AAPL", "JPM", "MET", "XPF", "XPU"]
+    p = history.us_preferred(pd.DataFrame(index=codes), date(2026, 10, 21))
+    assert (p.loc[["PLTR", "NOW", "LDOS", "AAPL"], "pref_div_share"] == 0).all()  # no preferred: no deduction
+    assert p.at["JPM", "pref_div_share"] == pytest.approx((57048 - 55681) / 57048, rel=1e-3)  # same row
+    assert p.at["MET", "pref_div_share"] == pytest.approx((3379 - 3173) / 3379, rel=1e-3)
+    assert p.at["XPF", "pref_div_share"] == pytest.approx(0.1) and not p.at["XPF", "pref_unknown"]  # a year older
+    assert p.at["XPU", "pref_div_share"] == 0 and p.at["XPU", "pref_unknown"]  # preferred, no figure within 2 years

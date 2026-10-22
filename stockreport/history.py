@@ -202,11 +202,21 @@ def own_pb_us(snap: pd.DataFrame, today: date) -> pd.DataFrame:
 
 def us_preferred(snap: pd.DataFrame, today: date) -> pd.DataFrame:
     """Share of book that is preferred equity and of profit that goes to preferred dividends, from each
-    company's latest annual report (at most 18 months old), for book and earnings net of preferred."""
-    a = us_annual(today).groupby("code").last()
-    a = a[a.index.isin(snap.index) & (a["fy_end"] >= (today - timedelta(days=548)).isoformat())]
-    return pd.DataFrame({"pref_share": (a["pref"] / a["equity"]).where(a["equity"] > 0).clip(0, 0.5).fillna(0),
-                         "pref_div_share": ((a["ni"] - a["ni_common"]) / a["ni"]).where(a["ni"] > 0).clip(0, 0.5).fillna(0)})
+    company's latest annual report (at most 18 months old), every figure from that same fiscal year (taking
+    each column's newest non-empty value paired one year's profit with another year's common-share income).
+    Without the common-share figure: no deduction when that year shows no preferred equity, else the share
+    from the latest year with both figures (at most 2 years older), else none (pref_unknown)."""
+    a = us_annual(today)
+    a = a[a["code"].isin(snap.index)]
+    last = a.groupby("code").tail(1).set_index("code")
+    last = last[last["fy_end"] >= (today - timedelta(days=548)).isoformat()]
+    share = lambda r: ((r["ni"] - r["ni_common"]) / r["ni"]).where(r["ni"] > 0)
+    pair = a.dropna(subset=["ni", "ni_common"]).groupby("code").tail(1).set_index("code").reindex(last.index)
+    has_pref, missing = last["pref"].fillna(0) > 0, last["ni_common"].isna()
+    near = pair["year"] >= last["year"] - 2
+    div = share(last).where(~missing, share(pair).where(has_pref & near, np.where(has_pref, np.nan, 0.0)))
+    return pd.DataFrame({"pref_share": (last["pref"] / last["equity"]).where(last["equity"] > 0).clip(0, 0.5).fillna(0),
+                         "pref_div_share": div.clip(0, 0.5).fillna(0), "pref_unknown": has_pref & missing & ~near})
 
 
 def own_pb_hk(snap: pd.DataFrame, today: date) -> pd.DataFrame:
