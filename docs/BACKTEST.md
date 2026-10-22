@@ -1072,3 +1072,81 @@ the same falls; high-volatility stocks fall 25%+ more often almost mechanically)
 risk signals made it worse: in 2018-2026 the riskier US stocks did better, and nothing beat SPY. This is the third run
 on the same data; no further variant is run on it for stage 1.
 
+
+## 20. Stage 3: the earnings engine (2026-10-22; backtest/earn_panel.py, earnings.py, implied.py, stage3.py)
+
+The test docs/PLAN.md registers (Evaluation, "Stage 3's test"), committed before the build (0ae169c); the build
+committed before the one run (048fb96). The first (b)-(d) run stopped at its first rank correlation, before printing any
+result (pandas' Spearman needs scipy, which isn't a dependency); a41ae2f computes it as Pearson on the date's ranks and
+the run went once. Panels: CN 业绩报表 2009-2025 (5,237 companies), US SEC frames 2009-2025 (15,908 filers, dead ones
+included; re-read with each fact's period end, gross profit, operating income and operating cash flow:
+data/backtest/us_frames_ext.csv.gz, 3.6 MB) with us_annual for the 1,091 candidates' own inputs, HK 2015-2026 (2,924
+companies). The implied return covers 99.7% (CN), 95.6% (US) and 98.7% (HK) of the frames' stock-months; its median is
+7.1%, 3.0% and 5.5%.
+
+**Verdict: fails. The engine doesn't enter the score, no buy list ships, and the report doesn't switch.** (a) fails in
+every market, (b) and (c) in every market, and (d) is unchanged from stage 1 in CN and HK (item 2) and fails all five
+items in the US.
+
+**(a) Forecast accuracy** (mean |forecast − actual earnings| ÷ book at the base year, each capped at 1; the 800 largest
+books a year; forecasts on 30 June after the base year with that day's fit):
+
+| against "margin persists, revenue at the sector median growth" (financials: ROE persists) | CN | US | HK |
+|---|---|---|---|
+| 1 year: model / benchmark (base years model lower) | 0.063 / 0.052, +22% (0/15) | 0.105 / 0.099, +5.5% (3/15) | 0.161 / 0.086, +88% (0/11) |
+| 3 years: model / benchmark (base years model lower) | 0.101 / 0.104, −2.5% (5/11) | 0.155 / 0.158, −2.2% (5/11) | 0.199 / 0.158, +26% (1/7) |
+| median error, 1 year / 3 years: model vs benchmark | 0.034 vs 0.025 / 0.059 vs 0.056 | 0.055 vs 0.043 / 0.090 vs 0.080 | 0.078 vs 0.034 / 0.104 vs 0.082 |
+| (a) | fail | fail | fail |
+
+At 3 years the CN and US models are slightly lower pooled but lower in only 5 of 11 base years (the bar: half), and at 1
+year they are worse in nearly every year. Where it loses (looked at after the run, nothing changed): at 1 year it is the
+margin forecast (CN base year 2018: 0.058 with the model's margin and the benchmark's growth, 0.055 the other way round,
+benchmark 0.054; the US alike); the growth forecast is about neutral. The margin's reversion is fit on every company,
+and the 800 largest revert more slowly. In HK the flat loss flag does it: the fit sets it near −0.32 of margin (small
+companies with deep losses), so a large company at −1.5% is forecast near −36% (base year 2023: model 0.149 against
+0.075, the same with the benchmark's growth). A size-aware loss term would be a different model; by the rules it isn't
+run on this data. HK's base years ran 2015-2025 (1 year) and 2017-2023 (3 years), wider than the registration's "at
+most" 2016-2024 and 2018-2022, because March-year companies have fits and outcomes earlier and later; the primary
+definition ("every base year with a fit and an outcome") is what ran, and on the narrower ranges the model is worse in
+every year at 1 year and in 4 of 5 at 3 years: the same verdict.
+
+**(b) The signal across all stocks** (the frames' stocks with the implied return, E/P, B/P and a 6-month return):
+
+| | CN | US | HK |
+|---|---|---|---|
+| top − bottom fifth, mean 6-month return: sub-periods positive (2019-20, 21-22, 23, 24-26) | 2/4 (−10.2, +5.0, +14.2, −8.9 points) | 4/4 (+0.7, +1.5, +2.7, +2.4) | 2/4 (−11.6, +11.5, +8.0, −3.0) |
+| mean rank correlation: all (sub-periods positive) | 0.051 (2/4) | 0.022 (3/4) | 0.059 (3/4) |
+| higher than plain E/P: spread, rank correlation | 1/4, 3/4 | 4/4, 4/4 | 2/4, 2/4 |
+| higher than plain B/P: spread, rank correlation | 1/4, 1/4 | 1/4, 3/4 | 2/4, 2/4 |
+| rank correlation with 12-1 momentum / 6m trend (E/P's; B/P's) | −0.22 / −0.17 (−0.16 / −0.17; −0.29 / −0.22) | −0.16 / −0.12 (−0.12 / −0.15; −0.26 / −0.19) | −0.14 / −0.12 (−0.08 / −0.10; −0.22 / −0.17) |
+| (b) | fail | fail (doesn't beat B/P) | fail |
+
+It is a value signal, distinct from trend: it runs against momentum, between E/P and B/P. In CN it has no steady edge
+of its own: like plain E/P and B/P it lost in 2019-20 and 2024-26. In the US it is the steadiest value signal (positive
+in every sub-period, above E/P in all four) but not above B/P's spread.
+
+**(c) In the score** (holding-rule portfolios, 6 months over the index fund after costs; 25%+ falls per entry):
+
+| | CN | US | HK |
+|---|---|---|---|
+| implied return enters (top − bottom positive) | no (2/4): score unchanged | yes (4/4): replaces B/P | no (2/4): score unchanged |
+| return, stage 1's score → new | +1.8% → +1.8% | −2.3% → −1.0% | +3.2% → +3.2% |
+| 25%+ falls per entry | 10.3% → 10.3% | 7.7% → 13.9% | 3.4% → 3.4% |
+| sub-periods one better and the other no worse | 0/4 | 2/4 (2023, 2024-26; more falls in 2021-22) | 0/4 |
+| (c) | fail | fail | fail |
+
+**(d) The ship bar with the new score** (stage1_fix.py's items): CN and HK are stage 1's score, so stage 1's result
+(CN +1.8% per 6 months, beat 79.1% of random portfolios; HK +3.2%, 85.6%; both fail item 2). US: −1.0% (2/4
+sub-periods), beat 53.7% of random portfolios, falls 13.9% against 6.6%, dominated by plain E/P and 12-1 momentum, the
+line sloping down in every sub-period: fails all five items. The harness reproduced stage 1's corrected score and
+portfolio exactly in every market (CN +1.8% / 79.1%, US −2.3% / 18.1%, HK +3.2% / 85.6%).
+
+**Also seen, recorded and not fixed (the engine isn't adopted):** financials and the rest aren't on one scale. The ROE
+model gives financials a median implied return of 8.1% in the US (others 2.5%) and 9.7% in HK (4.6%), so the US new
+score's buys are 44% financials over the sample (15% of valued stocks) and 9 of 10 on 2026-09 (Elevance through SIC
+6324). In the US 9.9% of stock-months sit at the 0.5% floor (the price is above the value even near 0%), tied at the
+bottom.
+
+Rerun (data/backtest/s1_<market>_result.pkl and _fix.pkl from stage 1 must exist):
+`uv run python -m backtest.earn_panel fetch` (the frames, ~5 min), `uv run python -m backtest.implied build cn|us|hk`,
+`uv run python -m backtest.earnings accuracy cn|us|hk` (a), `uv run python -m backtest.stage3 run cn|us|hk` (b-d).
