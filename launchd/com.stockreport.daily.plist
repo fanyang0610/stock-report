@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Daily build (docs/PLAN.md Method section 10): `run` for all three markets at 06:30 (the Mac's clock is
-     China Standard Time). It never polls the bot; the listener sends the report. A run missed while the Mac
-     sleeps starts when it wakes. Output goes to logs/<date>-daily.log (removed by cleanup). Install: see README. -->
+<!-- Daily data fetch at 06:30 (the Mac's clock is China Standard Time): `fetch` for CN, US and HK, then cleanup.
+     Since 2026-10-22 (docs/PLAN.md, your OK) it builds no report: no v1, v3, DeepSeek notes or deep dives until
+     stage 1's report ships. A run missed while the Mac sleeps starts when it wakes. Output goes to
+     logs/<date>-daily.log (removed by cleanup). Install: see README. -->
 <plist version="1.0">
 <dict>
   <key>Label</key>
@@ -11,7 +12,7 @@
   <array>
     <string>/bin/sh</string>
     <string>-c</string>
-    <string>exec .venv/bin/python -u -m stockreport run &gt;&gt; "logs/$(date +%F)-daily.log" 2&gt;&amp;1</string>
+    <string>{ for m in cn us hk; do .venv/bin/python -u -m stockreport fetch --market $m; done; .venv/bin/python -u -m stockreport cleanup; } &gt;&gt; "logs/$(date +%F)-daily.log" 2&gt;&amp;1</string>
   </array>
   <key>WorkingDirectory</key>
   <string>/Users/fanyang/Developer/stock-report</string>
