@@ -1076,7 +1076,8 @@ on the same data; no further variant is run on it for stage 1.
 ## 20. Stage 3: the earnings engine (2026-10-22; backtest/earn_panel.py, earnings.py, implied.py, stage3.py)
 
 The test docs/PLAN.md registers (Evaluation, "Stage 3's test"), committed before the build (0ae169c); the build
-committed before the one run (048fb96). The first (b)-(d) run stopped at its first rank correlation, before printing any
+committed before the test's one run (048fb96; the implied-return values, which involve no returns, were built 45 s
+before that commit, from the same code). The first (b)-(d) run stopped at its first rank correlation, before printing any
 result (pandas' Spearman needs scipy, which isn't a dependency); a41ae2f computes it as Pearson on the date's ranks and
 the run went once. Panels: CN 业绩报表 2009-2025 (5,237 companies), US SEC frames 2009-2025 (15,908 filers, dead ones
 included; re-read with each fact's period end, gross profit, operating income and operating cash flow:
@@ -1103,8 +1104,8 @@ year they are worse in nearly every year. Where it loses (looked at after the ru
 margin forecast (CN base year 2018: 0.058 with the model's margin and the benchmark's growth, 0.055 the other way round,
 benchmark 0.054; the US alike); the growth forecast is about neutral. The margin's reversion is fit on every company,
 and the 800 largest revert more slowly. In HK the flat loss flag does it: the fit sets it near −0.32 of margin (small
-companies with deep losses), so a large company at −1.5% is forecast near −36% (base year 2023: model 0.149 against
-0.075, the same with the benchmark's growth). A size-aware loss term would be a different model; by the rules it isn't
+companies with deep losses), so a large company at −1.5% is forecast near −36% (base year 2023, the 700 largest
+non-financials: model about 0.15 against 0.075, the same with the benchmark's growth). A size-aware loss term would be a different model; by the rules it isn't
 run on this data. HK's base years ran 2015-2025 (1 year) and 2017-2023 (3 years), wider than the registration's "at
 most" 2016-2024 and 2018-2022, because March-year companies have fits and outcomes earlier and later; the primary
 definition ("every base year with a fit and an outcome") is what ran, and on the narrower ranges the model is worse in
@@ -1143,9 +1144,26 @@ portfolio exactly in every market (CN +1.8% / 79.1%, US −2.3% / 18.1%, HK +3.2
 
 **Also seen, recorded and not fixed (the engine isn't adopted):** financials and the rest aren't on one scale. The ROE
 model gives financials a median implied return of 8.1% in the US (others 2.5%) and 9.7% in HK (4.6%), so the US new
-score's buys are 44% financials over the sample (15% of valued stocks) and 9 of 10 on 2026-09 (Elevance through SIC
+score's buys are 43% financials over the sample (15% of valued stocks) and 9 of 10 on 2026-09 (Elevance through SIC
 6324). In the US 9.9% of stock-months sit at the 0.5% floor (the price is above the value even near 0%), tied at the
-bottom.
+bottom. The stage review traced this to the fade's anchor rather than the ROE model: non-financials fade to the median
+company-year of every filer in their sector, small loss-makers included (US on 2026-09: healthcare −0.3%, technology
+1.5%, the market 3.5%), while financials fade to an ROE of about 11%; so NVIDIA (ROE 84%), Pfizer and Abbott sit at the
+floor. In CN, the main test, the two groups are on one scale (financials 7.9%, others 7.0%) and (b) still fails. The CN
+and HK panels hold survivors (9 of 5,237 and 19 of 2,924 companies end by 2022; 业绩报表 drops delisted names), and HK
+industries and US SIC codes are today's; the US frames include dead filers.
+
+**The stage review** (a fresh-context agent, .claude/agents/stage-reviewer.md) re-ran every part from the committed code
+with writes disabled: the (a) and (b)-(d) logs and the implied-return tables came out identical. It confirmed the code
+matches the registration (panels, flags, fit timing, training-only winsorizing, payout, the solve and fade, each part's
+sets and pass rules; (d) line for line stage1_fix.bar), found no look-ahead in the stage-3 code (fits on outcomes public
+by 30 June, medians and long-run levels on rows public by the date), no rule aimed at names, no app, config or test
+change (5,997 lines; pytest 112 passed), and that the scipy fix and HK's wider base years change nothing (on the
+registration's ranges: 1 year worse in 9 of 9 years, 3 years in 4 of 5). The implied return is a value composite (rank
+correlation with B/P 0.70 / 0.59 / 0.62, with E/P 0.54 / 0.50 / 0.52 in CN / US / HK), distinct from trend. Its main
+finding: the engine's levels are wrong (the fade anchor above, and HK's large wrong-signed sector-median coefficients on
+raw inputs: Swire 39.7%), so the fail says more about this specification than about forecasting earnings as such; US
+(c) rests on 1-7 entries per sub-period. Its verdict: section 20's fail matches the evidence.
 
 Rerun (data/backtest/s1_<market>_result.pkl and _fix.pkl from stage 1 must exist):
 `uv run python -m backtest.earn_panel fetch` (the frames, ~5 min), `uv run python -m backtest.implied build cn|us|hk`,
