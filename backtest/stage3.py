@@ -36,8 +36,10 @@ def load(market: str) -> pd.DataFrame:
 
 
 def rank_corr(g: pd.DataFrame, a: str, b: str) -> pd.Series:
-    """Per date: Spearman rank correlation of a and b."""
-    return g.groupby("date").apply(lambda x: x[a].corr(x[b], method="spearman"))
+    """Per date: Spearman rank correlation of a and b (Pearson on the date's ranks; no scipy)."""
+    r = g[["date", a, b]].copy()
+    r[[a, b]] = r.groupby("date")[[a, b]].rank()
+    return r.groupby("date").apply(lambda x: x[a].corr(x[b]))
 
 
 # ---------------------------------------------------------------- (b)
