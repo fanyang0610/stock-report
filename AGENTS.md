@@ -7,10 +7,9 @@ On a WeChat keyword (股票报告 / 股票简报 / stock report / stock brief), 
 docs/PLAN.md has the method, the stages and the current status. The earlier plans (v1-v3 with Phases 1-13, and the 2026-10-22 plan) are in docs/archive/ as reference only, not as paths to follow. Do only the stage you were asked to do.
 
 ## Layout
-stockreport/fetch/ (one module per data source) → universe.py → value.py → score.py → pick.py → notes.py (DeepSeek) → render/ (HTML → PDF) → deliver.py; plus listener.py and track.py.
-v3 (history.py + baserates.py → v3.py → shadow.py, trend.py, outliers.py) and signal.py are left from the earlier plans and go in stage 1.
+stockreport/fetch/ (one module per data source) → universe.py → signals.py (the value, quality and momentum components, percentiles) → score.py (families, score, grades, card lines) → lists.py (buys, holdings, avoid; `hold`) → report.py + render/ (HTML → PDF, text summary) → deliver.py; plus listener.py, track.py and history.py (the multi-year tables).
 crosscheck.py compares each market's key figures with a second source and raises day-over-day drift alarms. The event layer (fetch/events.py market-wide filing feeds → events.py classification and abnormal-move labels) and the deep-dive lane (deepdive.py: triggers, fetch/filings.py, DeepSeek questionnaire, quotes.py verification; verdicts.py for your vetoes and confirms) feed the results review. backtest/ (outside the app) holds the backtest harness and data builders; docs/BACKTEST.md has its results and commands.
-Target after stage 1 (docs/PLAN.md): signals.py (the value, quality and momentum families) → score.py → lists.py (buys, holdings, avoid) → review.py (the results review, from stage 2; notes.py and deepdive.py feed it).
+Stage 2 adds review.py (the results review; notes.py and deepdive.py, not called by the stage-1 build, feed it).
 bridge/wechat.mjs is the WeChat helper (Node). data/ is the daily cache and reports/ the outputs; both are git-ignored.
 
 ## Rules
@@ -29,11 +28,11 @@ bridge/wechat.mjs is the WeChat helper (Node). data/ is the daily cache and repo
 
 ## Commands
 uv run python -m stockreport fetch --market cn|us|hk
-uv run python -m stockreport run [--market cn|us|hk] [--no-notes]   # picks + notes + PDF
+uv run python -m stockreport run [--market cn|us|hk]                # fetch + score + lists + PDF (no DeepSeek)
 uv run python -m stockreport send [--test]                          # text summary + PDF to WeChat
 uv run python -m stockreport listen                                 # keyword listener (launchd)
-uv run python -m stockreport v3 [--market cn|us|hk] [--date D]      # valuation v3 (shadow; goes in stage 1)
-uv run python -m stockreport track [--signal]                       # performance scorecard (--signal goes in stage 1)
+uv run python -m stockreport hold [CODE [--date D] [--sold]]        # your holdings (no args: list)
+uv run python -m stockreport track                                  # performance scorecard
 uv run python -m stockreport verdict [CODE veto|confirm --until D --reason "..."]  # your verdicts (no args: list)
 uv run python -m stockreport cleanup [--dry-run]                    # apply storage retention
 uv run pytest

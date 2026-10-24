@@ -1,40 +1,28 @@
-"""Fake report used only by `send --test`: 3 made-up rows per market, all marked 测试数据."""
+"""Fake report used only by `send --test`: a few made-up rows per market, all marked 测试数据."""
 
 from datetime import date, timedelta
 
-_ROWS = [  # bucket, action, price, fair value low/mid/high
-    ("buy", "买入", 100.0, 112.0, 125.0, 140.0),
-    ("hold", "持有", 50.0, 45.0, 52.0, 58.0),
-    ("sell", "卖出", 80.0, 52.0, 60.0, 68.0),
-]
-_MARKETS = [("US", "美股 US", "USD"), ("HK", "港股 HK", "HKD"), ("CN", "A股 CN", "CNY")]
+_MARKETS = [("CN", "A股 CN", "CNY", "元"), ("US", "美股 US", "USD", "美元"), ("HK", "港股 HK", "HKD", "港元")]
 _NAMES = ["测试公司甲", "测试公司乙", "测试公司丙"]
-_TRIGGERS = {
-    "buy": "若股价跌破公允价下限或下季利润下滑，重新评估",
-    "hold": "若空间升至 +15% 以上或质量分跌出前 30%，重新评估",
-    "sell": "若空间回到 −10% 以内且利润转增，重新评估",
-}
+
+
+def _card(code: str, i: int, data_date: str, unit: str, grades: str) -> dict:
+    return {"rank": i + 1, "ticker": f"TEST-{code}-{i + 1}", "name": _NAMES[i], "sector": "测试行业", "price": 100.0 + i,
+            "price_date": data_date, "score_rank": i + 1, "grades": dict(zip(["价值", "质量", "动量"], grades)),
+            "lot_text": f"一手 100 股约 {10_000 + 100 * i:,} {unit}", "why": "测试数据：市盈率低（PE 8.0）；ROE 高（18%）",
+            "weak": "测试数据：近一年股价走弱（-20%）", "risk": "测试数据：负债率 72%", "recheck": "2099-01-01",
+            "weakest": "动量 E"}
 
 
 def test_report(today: date | None = None) -> dict:
     today = today or date.today()
     data_date = (today - timedelta(days=1)).isoformat()
     markets = []
-    for code, name, currency in _MARKETS:
-        picks = []
-        for i, (bucket, action, price, low, mid, high) in enumerate(_ROWS):
-            picks.append({
-                "ticker": f"TEST-{code}-{i + 1}", "name": _NAMES[i], "bucket": bucket, "action": action,
-                "price": price, "price_date": data_date,
-                "fv_low": low, "fv_mid": mid, "fv_high": high, "upside": mid / price - 1,
-                "drivers": ["测试数据：估值偏低", "测试数据：ROE 高于同行"],
-                "risk": "测试数据：动量偏弱",
-                "trigger": _TRIGGERS[bucket],
-                "note": "测试数据，非真实点评。这一行用来检查中文长句在手机上的换行与排版效果。",
-                "low_conviction": i == 2,
-            })
-        markets.append({"code": code, "name": name, "currency": currency, "data_date": data_date, "picks": picks})
-    return {
-        "title": "股票报告", "date": today.isoformat(), "test": True, "markets": markets,
-        "method": "同行业估值（同业倍数回归 + 剩余收益交叉检验），综合价值/质量/成长/动量/风险打分分档。",
-    }
+    for code, name, currency, unit in _MARKETS:
+        buys = [_card(code, i, data_date, unit, "ABA") for i in range(3)]
+        hold = _card(code, 0, data_date, unit, "BCB") | {"since": data_date, "status": "继续持有", "reason": "测试数据"}
+        markets.append({"code": code, "name": name, "currency": currency, "data_date": data_date, "buys": buys,
+                        "holdings": [hold], "avoid": [_card(code, 2, data_date, unit, "EDE")], "vetoes": [],
+                        "expect": ["测试数据：模拟回测数字为虚构。"]})
+    return {"title": "股票报告", "date": today.isoformat(), "test": True, "markets": markets,
+            "method": "测试数据：价值、质量、动量三类打分。", "common": "测试数据。"}

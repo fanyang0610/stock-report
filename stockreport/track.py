@@ -1,6 +1,7 @@
-"""Tracking (PLAN.md Method 10): every report's final picks go to data/picks.csv; `track` prints their average return by
-market and bucket against the index at 1 week, 1 and 3 months, from the close each pick was priced at, chained from close
-/ prev_close (dividends and splits included; the indexes are price indexes)."""
+"""Tracking (PLAN.md, the live scoreboard): every report's buys and avoid names go to data/picks.csv (bucket buy / avoid
+with the score; the old method's buy / hold / sell rows stay as they were); `track` prints their average return by
+market and bucket against the index at 1 week, 1 and 3 months, from the close each pick was priced at, chained from
+close / prev_close (dividends and splits included; the indexes are price indexes)."""
 
 from datetime import date, timedelta
 
@@ -9,7 +10,7 @@ import pandas as pd
 from stockreport.config import DATA
 
 PICKS_LOG = DATA / "picks.csv"
-COLUMNS = ["date", "market", "bucket", "ticker", "name", "price", "price_date", "fv_mid", "composite", "conviction"]
+COLUMNS = ["date", "market", "bucket", "ticker", "name", "price", "price_date", "score", "rank"]
 INDEX = {"us": "SPX", "hk": "HSI", "cn": "CSI300"}
 HORIZONS = {"1w": 7, "1m": 30, "3m": 91}  # calendar days after the price date
 
@@ -20,7 +21,7 @@ def load() -> pd.DataFrame:
 
 
 def log_picks(today: date, final: dict[str, pd.DataFrame]) -> None:
-    """Upsert the day's final picks per market (after AI swaps and the issuer dedupe)."""
+    """Upsert the day's lists per market (frames with code, bucket, name, price, price_date, score and rank)."""
     new = pd.concat([f.assign(date=today.isoformat(), market=m, ticker=f["code"]) for m, f in final.items()])
     old = load()
     old = old[(old["date"] != today.isoformat()) | ~old["market"].isin(final)]
@@ -88,22 +89,7 @@ def scorecard() -> int:
     print(f"Scorecard: {len(picks)} picks (one per stock, bucket and price date) from "
           f"{picks['price_date'].min()} to {picks['price_date'].max()}, against CSI 300 / Hang Seng / S&P 500.")
     print("Return from the close the pick was priced at; 1w / 1m / 3m = 7 / 30 / 91 days later (blank until then).")
-    print("'vs index' = average of pick return minus the index over the same days; a sell worked if it is negative.\n")
+    print("'vs index' = average of pick return minus the index over the same days; an avoid name worked if it is negative.\n")
     print(show.to_string())
     return 0
 
-
-def signals() -> int:
-    """`track --signal`: the backtest's measures (stockreport/signal.py) on the live snapshots, v1 and v3."""
-    from stockreport import signal
-    from stockreport.fetch import tdx, yahoo
-    loaders = {"cn": tdx.load_prices, "us": lambda: yahoo.load_prices("us"), "hk": lambda: yahoo.load_prices("hk")}
-    print("Signal tracking on the saved snapshots: rank correlation of v1's and v3's upside with the returns since,\n"
-          "and the buckets against the equal-weight snapshot universe (docs/BACKTEST.md has the backtest's numbers).")
-    for market in INDEX:
-        df = signal.live(market, loaders[market](), INDEX[market])
-        if df.empty:
-            print(f"\n== {market.upper()}: no snapshot with v3 columns yet")
-            continue
-        signal.report(market, df)
-    return 0

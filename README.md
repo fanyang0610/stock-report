@@ -1,8 +1,8 @@
 # stock-report
 
 Text the WeChat bot "股票报告" / "股票简报" / "stock report" / "stock brief" and get back a short
-text summary plus a PDF of 45 stocks (US, HK, CN × buy / hold / sell × 5), picked by valuing each
-market in peer groups. Free data only. Method, phases and status: [docs/PLAN.md](docs/PLAN.md).
+text summary plus a PDF: per market (CN, US, HK) a 20-name buy portfolio, a check of the names you hold and 10 names
+to avoid, ranked on value, quality and momentum (Stockopedia-style, equal weights). Free data only. Method, phases and status: [docs/PLAN.md](docs/PLAN.md).
 Rules for coding agents: [AGENTS.md](AGENTS.md).
 
 ## Setup
@@ -16,19 +16,19 @@ Rules for coding agents: [AGENTS.md](AGENTS.md).
 ## Commands
 ```
 uv run python -m stockreport fetch --market cn   # update data/ (first run backfills ~13 months of prices, ~40 min)
-uv run python -m stockreport run                 # CN, US and HK: fetch, value, pick, DeepSeek notes -> reports/<date>/report.pdf + summary.txt
-uv run python -m stockreport run --market us     # one market, then the report (other markets: their newest picks)
-uv run python -m stockreport run --no-notes      # same with template notes (no DeepSeek calls)
-uv run python -m stockreport track               # average return of past picks (data/picks.csv) vs each market's index
+uv run python -m stockreport run                 # CN, US and HK: fetch, score, lists -> reports/<date>/report.pdf + summary.txt
+uv run python -m stockreport run --market us     # one market, then the report (other markets: their newest lists)
+uv run python -m stockreport hold 600519 --date 2026-10-24   # record a holding (--sold removes it; no code: list them)
+uv run python -m stockreport track               # average return of past lists (data/picks.csv) vs each market's index
 uv run python -m stockreport send                # send the newest report's text + PDF (asks first); --test sends fake data
 uv run python -m stockreport listen              # answer the keyword for ~55 s (launchd restarts it 10 s after it ends)
-uv run python -m stockreport verdict 600519 veto --until 2026-12-31 --reason "..."  # swap a pick out (confirm: lift 低信心)
+uv run python -m stockreport verdict 600519 veto --until 2026-12-31 --reason "..."  # keep a name out of the buys
 uv run python -m stockreport verdict             # list the verdicts in force (they end at their date or the next report)
 uv run python -m stockreport cleanup --dry-run   # what retention would delete, and data/ + reports/ size
 node bridge/wechat.mjs status                    # is the bot's reply window open?
 uv run pytest
 ```
-Weights, thresholds, retention periods and the DeepSeek model are in `config.toml`.
+List sizes, thresholds, retention periods and the DeepSeek model are in `config.toml`.
 
 ## Keyword listener (launchd)
 `launchd/com.stockreport.listen.plist` runs `listen` with the project's `.venv` Python: each run polls for ~55 s
@@ -53,9 +53,10 @@ launchctl bootout gui/$(id -u)/com.stockreport.daily
 ```
 
 ## Layout
-- `stockreport/`: `fetch/` (one module per source) → `universe.py` → `value.py` → `score.py` → `pick.py` →
-  `notes.py` (DeepSeek, CNINFO titles) → `report.py` + `render/` (HTML, PDF, text summary); `deliver.py` talks
-  to WeChat; `listener.py` answers the keyword; `track.py` logs picks and prints the scorecard; `cleanup.py` applies retention
+- `stockreport/`: `fetch/` (one module per source) → `universe.py` → `signals.py` → `score.py` → `lists.py` →
+  `report.py` + `render/` (HTML, PDF, text summary); `deliver.py` talks to WeChat; `listener.py` answers the keyword;
+  `track.py` logs the lists and prints the scorecard; `cleanup.py` applies retention; `notes.py` and `deepdive.py`
+  (DeepSeek) wait for stage 2's results review
 - `bridge/wechat.mjs`: Node helper with the commands `status`, `poll-messages`, `notify`, `notify-batch`, `send-file`, `send-image`
 - `data/`, `reports/`, `logs/`: caches and outputs (git-ignored)
 

@@ -1,8 +1,8 @@
-"""Point-in-time month-end snapshots for the backtest (Phase 9): v1 (value, score, picks with and without
-checks 1-2) and the history inputs per date, built once per market and cached (data/backtest/snap_<market>.pkl);
-backtest/v3.py runs valuation v3 on them (Phase 13).
+"""Point-in-time month-end snapshots for the backtest (Phase 9) and the history inputs per date, built once per market
+and cached (data/backtest/snap_<market>.pkl); backtest/qvm.py scores them (stage 1). Snapshots built before stage 1
+also carry the old v1 columns (value, score, picks), which nothing reads now.
 
-  uv run python -m backtest.run build cn|us|hk   # snapshots, v1, history inputs (cached)
+  uv run python -m backtest.run build cn|us|hk   # snapshots and history inputs (cached)
 """
 
 import logging
@@ -16,15 +16,12 @@ import numpy as np
 import pandas as pd
 
 from backtest import panel
-from stockreport import history, pick, score, value
+from stockreport import history
 
 log = logging.getLogger("backtest.run")
 IN_SAMPLE_END = "2023-12-31"  # calibrate on month ends up to here, check on the rest (A4)
 QUARTERLY = True  # US: trailing numbers from 10-Qs (Phase 13); False rebuilds the annual-only snapshots
 START = {"us": "2018-01"}  # the SEC table starts with FY2015 and growth needs two years: ~400 US names from 2018
-V1_COLS = ["upside", "composite", "z_value", "z_quality", "z_growth", "z_momentum", "z_risk", "quality_pct", "mom_12_1",
-           "np_growth", "cash_conv", "eps_ttm", "eps_e2", "analysts", "mcap_rank", "industry", "financial", "price",
-           "ey", "by", "mcap"]
 
 
 def months(market: str) -> list[str]:
@@ -38,13 +35,8 @@ def day_of(market: str, m: str) -> date:
     return date.fromisoformat(m) if market == "cn" else (pd.Period(m, "M").end_time.date())
 
 
-def v1_picks(s: pd.DataFrame, checks: str = "both") -> pd.DataFrame:
-    """v1's picks with checks 1-2 as in production ("both"), or with only one of them, or none."""
-    return pick.pick(s, {"both": ("c1", "c2"), "none": (), "c1": ("c1",), "c2": ("c2",)}[checks])
-
-
 def build(market: str) -> None:
-    """Snapshots → v1 (value, score, picks with and without checks 1-2) → the history inputs, per date."""
+    """Snapshots and the history inputs, per date."""
     warnings.simplefilter("ignore")
     panel.setup_history(market)
     out, started = {}, time.monotonic()
@@ -55,29 +47,23 @@ def build(market: str) -> None:
         px, res, bal, val = panel.CNPrices(), panel.cn_results(), panel.cn_balance(), panel.cn_valuations()
         tdx_names = pd.concat([pd.read_csv(p, dtype={"code": str}, usecols=["date", "code", "name"])
                                for p in sorted((panel.BT / "tdx").glob("*.csv.gz"))]).dropna(subset=["name"])
-        rates = panel.rates_series("cn")
     else:
-        mon, today_snap, rates = panel.Monthly(market), panel.today_snapshot(market), panel.rates_series(market)
+        mon, today_snap = panel.Monthly(market), panel.today_snapshot(market)
         res = history.hk_results() if market == "hk" else panel.us_books(today_snap)
         quarters = pd.read_csv(panel.BT / "us_quarterly.csv.gz", dtype={"code": str, "end": str, "filed": str}).dropna(
             subset=["end", "filed"]).sort_values(["code", "end"]) if market == "us" and QUARTERLY else None  # backtest.fetch sec
     for m in months(market):
-        day = day_of(market, m)
         if market == "cn":
-            snap, info = panel.cn_snapshot(m, px, res, bal, val, tdx_names, rates, cons.get(m))
+            snap, info = panel.cn_snapshot(m, px, res, bal, val, tdx_names, cons.get(m))
             fwd = px.forward(m, list(snap.index))
         elif market == "us":
-            snap, info = panel.us_snapshot(m, mon, today_snap, res, rates, quarters)
+            snap, info = panel.us_snapshot(m, mon, today_snap, res, quarters)
             fwd = mon.forward(m, snap.index)
         else:
-            snap, info = panel.hk_snapshot(m, mon, today_snap, res, rates)
+            snap, info = panel.hk_snapshot(m, mon, today_snap, res)
             fwd = mon.forward(m, snap.index)
-        s = score.score(value.value(snap, float(snap["r"].iloc[0])))
-        picks = {c: v1_picks(s, c) for c in ("both", "none", "c1", "c2")}
-        loaded = history.load(market, s, day)
-        out[m] = {"snap": s, "picks": picks, "loaded": loaded, "fwd": fwd, "info": info}
-        log.info("%s %s: %d stocks, %d v1 picks (%.0fs)", market, m, len(s),
-                 (picks["both"]["role"] == "pick").sum(), time.monotonic() - started)
+        out[m] = {"snap": snap, "fwd": fwd, "info": info}
+        log.info("%s %s: %d stocks (%.0fs)", market, m, len(snap), time.monotonic() - started)
     with open(panel.BT / f"snap_{market}.pkl", "wb") as f:
         pickle.dump(out, f)
 

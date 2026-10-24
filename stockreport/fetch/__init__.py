@@ -173,6 +173,7 @@ def steps(market: str, today: date) -> list:
                 ("consensus", lambda: eastmoney.update_consensus(today)),
                 ("10y yield", lambda: eastmoney.update_yield()),
                 ("history", lambda: eastmoney.update_cn_history(today)),
+                ("扣非 history", lambda: eastmoney.update_cn_deduct(today)),
                 ("pre-announcements", lambda: eastmoney.update_forecasts(today)),
                 ("申万 industries", lambda: swclass.update(today)),
                 ("consensus snapshot", lambda: snapshot(DATA / "fundamentals" / "cn_consensus.csv.gz", "cn", today)),
@@ -193,8 +194,9 @@ def steps(market: str, today: date) -> list:
                 ("consensus snapshot", lambda: snapshot(nasdaq.CONSENSUS, "us", today)),
                 ("filings", lambda: events.update("us", today))]
     if market == "hk":
-        from stockreport.fetch import eastmoney, hkgb, yahoo
+        from stockreport.fetch import eastmoney, hkex, hkgb, yahoo
         return [("company list", lambda: eastmoney.update_hk_list(today)),
+                ("board lots", lambda: hkex.update_lots(today)),
                 ("fundamentals", lambda: eastmoney.update_hk_fundamentals(today)),
                 ("prices", lambda: yahoo.update_prices(today, tracked("hk", today, eastmoney.hk_candidates()), "hk")),
                 ("consensus and reporting currency", lambda: yahoo.update_consensus(today, eastmoney.hk_candidates())),

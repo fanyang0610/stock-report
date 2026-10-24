@@ -17,9 +17,8 @@
                color: rgba(212, 56, 13, 0.08); transform: rotate(-30deg); pointer-events: none; z-index: -1; }
   .legend { background: #f7f8fa; border-left: 3px solid #c9cdd4; padding: 2mm 3mm; margin: 3mm 0 4mm;
             color: #3c4149; font-size: 8.5pt; }
-  .legend p { margin: 0 0 1mm; }
-  .swaps { background: #fffbe6; border-left: 3px solid #d48806; padding: 2mm 3mm; margin: 2mm 0 1mm; font-size: 8.5pt; }
-  .swaps div { margin-top: 0.5mm; }
+  .legend p, .expect p { margin: 0 0 1mm; }
+  .expect { background: #f0f5ff; border-left: 3px solid #2f54eb; padding: 2mm 3mm; margin: 2mm 0 3mm; font-size: 8.5pt; }
   .warn { color: #d4380d; font-weight: 600; }
   section { margin-top: 5mm; }
   section.market { break-before: page; }
@@ -29,57 +28,53 @@
        border-bottom: 1px solid #c9cdd4; padding: 1mm 1.5mm; }
   td { padding: 1.2mm 1.5mm; vertical-align: top; }
   .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .overview td { border-bottom: 1px solid #eef0f3; }
+  .rows td { border-bottom: 1px solid #eef0f3; }
   tbody.card { break-inside: avoid; }
   tbody.card tr.head td { border-top: 1px solid #c9cdd4; padding-top: 2mm; }
   tbody.card tr.body td { padding-bottom: 2.5mm; color: #3c4149; }
   .ticker { font-weight: 700; }
-  .action { font-weight: 600; white-space: nowrap; }
-  .buy { color: #c41d1d; } .hold { color: #ad6800; } .sell { color: #237804; }
-  .up { color: #c41d1d; } .down { color: #237804; }
+  .grade { display: inline-block; min-width: 4.5mm; text-align: center; font-weight: 700; border-radius: 2px;
+           padding: 0 1mm; margin-left: 0.5mm; }
+  .gA { background: #d9f7be; } .gB { background: #f4ffb8; } .gC { background: #f5f5f5; }
+  .gD { background: #fff1b8; } .gE { background: #ffccc7; }
+  .status { font-weight: 600; white-space: nowrap; }
+  .s继续持有 { color: #237804; } .s复核 { color: #ad6800; } .s卖出 { color: #c41d1d; }
   .tag { display: inline-block; font-size: 8pt; padding: 0 1.5mm; border-radius: 2px; margin-left: 1mm; }
-  .tag.low { background: #f2f3f5; color: #646a73; border: 1px solid #c9cdd4; }
-  .tag.flag { background: #fffbe6; color: #ad6800; border: 1px solid #ffe58f; }
   .tag.test { background: #fff2e8; color: #d4380d; border: 1px solid #ffbb96; }
   .label { color: #8f959e; }
-  .bucket-title { font-size: 11pt; font-weight: 700; margin: 4mm 0 1mm; }
+  .list-title { font-size: 11pt; font-weight: 700; margin: 4mm 0 1mm; }
   footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px solid #c9cdd4; color: #646a73; font-size: 8.5pt; }
 </style>
 </head>
 <body>
+{% macro grades(p) %}{% for k, g in p.grades.items() %}{{ k[0] }}<span class="grade g{{ g }}">{{ g }}</span> {% endfor %}{% endmacro %}
 {% if r.test %}<div class="watermark">测试数据</div>{% endif %}
 
 <section class="overview">
   <h1>{{ r.title }}{% if r.test %} <span class="tag test">测试数据</span>{% endif %}</h1>
   <div class="sub">{{ r.date }} · {% for m in r.markets %}{{ m.name }}{% if not loop.last %} / {% endif %}{% endfor %}
-    · 每个市场 买入 / 持有 / 卖出 各 5 只</div>
-  {% if r.test %}<div class="test-banner">测试数据：本报告所有公司、价格和估值均为虚构，仅用于测试微信发送与手机打开效果。</div>{% endif %}
-  {% if not r.test %}
+    · 每个市场：买入组合 20 只 / 持仓检查 / 回避 10 只</div>
+  {% if r.test %}<div class="test-banner">测试数据：本报告所有公司、价格和评分均为虚构，仅用于测试微信发送与手机打开效果。</div>{% endif %}
   <div class="legend">
-    <p><b>怎么读：</b>公允价是同行业公司对相近盈利能力和增长所付的估值，给出低 / 中 / 高三档；空间 = 公允价中值 ÷ 现价 − 1。
-      买入：空间 ≥ 15% 且质量、趋势不差；持有：质量好、价格大致合理；卖出：明显高估且基本面或趋势偏弱。</p>
-    <p><b>低信心：</b>两种估值视角（近期利润 vs 分析师预期）方向相反，或该档合格标的不足 5 只、由排名靠后的标的补足。</p>
-    <p><b>AI 点评：</b>由 DeepSeek 根据卡片上的数字和近 60 日公告标题撰写，不改变任何数字；被它标记为利润一次性/异常、
-      重大交易进行中、退市/ST 风险或数据可疑的标的，已换成同档下一名。</p>
-    <p><b>利润异常剔除：</b>净利润暴增但经营现金流不足，或分析师预期明年 EPS 明显回落的买入、持有候选，由程序在选股时直接剔除，不依赖 AI。</p>
-    <p><b>近期事件：</b>交易所全市场公告按规则分类（业绩、交易、风险、股本、增减持、经营），只作标注，不改估值。<b>异动</b>指 1-5 日相对指数涨跌超过
-      2.5 个标准差：有对应公告视为信息，没有则按噪音处理。</p>
-    <p><b>深度核查：</b>规则触发（重大公告、估值与现价相差两倍以上、保险/地产/控股等特殊结构、无公告异动），每个市场每天最多读 3 份新文件。
-      DeepSeek 只负责找出原文句子，程序逐句核对原文并从引文里取数；核实的事实可导致替换（如非经常性损益过高、要约收购、非标审计意见）或标为低信心。</p>
+    <p><b>怎么读：</b>{{ r.method }}</p>
+    <p><b>评级：</b>价、质、动分别是价值、质量、动量在本市场的五分位，A 为最好的五分之一，E 为最差的五分之一。
+      <b>理由</b>是该股最强的两项指标，<b>风险</b>是亏损、负债率 70% 以上、近 6 个月跌超 30%，否则为最弱的一项。</p>
+    <p><b>持仓检查（每只持有 12 个月）：</b>继续持有 = 未满 12 个月且评分在前半，或满 12 个月仍在前五分之一；复核 = 未满 12 个月但评分跌入后半；
+      卖出 = 满 12 个月已不在前五分之一（换入未持有的最高分股票）。记录持仓：<code>hold 代码 --date 买入日</code>；没有记录时检查过去 12 个月买入组合里今天不在组合的股票。</p>
+    <p><b>预期：</b>{{ r.common }}</p>
   </div>
-  {% endif %}
-  <table class="overview">
-    <thead><tr><th>市场</th><th>分档</th><th>代码</th><th>名称</th><th class="num">现价</th><th class="num">公允价(中)</th><th class="num">空间</th></tr></thead>
+  <table class="rows">
+    <colgroup><col style="width:13%"><col style="width:44%"><col style="width:11%"><col style="width:32%"></colgroup>
+    <thead><tr><th>市场</th><th>买入组合前 10</th><th>持仓检查</th><th>回避</th></tr></thead>
     <tbody>
-    {% for m in r.markets %}{% for key, label in buckets %}{% for p in m.picks if p.bucket == key %}
+    {% for m in r.markets %}
       <tr>
-        <td>{{ m.name }}</td><td class="action {{ key }}">{{ label }}</td>
-        <td class="ticker">{{ p.ticker }}</td>
-        <td>{{ p.name }}{% if p.low_conviction %}<span class="tag low">低信心</span>{% endif %}</td>
-        <td class="num">{{ p.price | num }}</td><td class="num">{{ p.fv_mid | num }}</td>
-        <td class="num {{ 'up' if p.upside >= 0 else 'down' }}">{{ p.upside | pct }}</td>
+        <td><b>{{ m.name }}</b><br><span class="sub">数据 {{ m.data_date }}</span>{% if m.stale %}<br><span class="warn">{{ m.stale }}</span>{% endif %}</td>
+        <td>{% for p in m.buys[:10] %}{{ p.ticker }} {{ p.name }}{% if not loop.last %}、{% endif %}{% endfor %}</td>
+        <td>{% for s in ["继续持有", "复核", "卖出"] %}{% set n = m.holdings | selectattr("status", "equalto", s) | list | length %}{% if n %}<span class="status s{{ s }}">{{ s }} {{ n }}</span> {% endif %}{% endfor %}{% if not m.holdings %}—{% endif %}</td>
+        <td>{% for p in m.avoid %}{{ p.name }}{% if not loop.last %}、{% endif %}{% endfor %}</td>
       </tr>
-    {% endfor %}{% endfor %}{% endfor %}
+    {% endfor %}
     </tbody>
   </table>
 </section>
@@ -87,55 +82,63 @@
 {% for m in r.markets %}
 <section class="market">
   <h2>{{ m.name }}{% if r.test %} <span class="tag test">测试数据</span>{% endif %}</h2>
-  <div class="sub">数据日期 {{ m.data_date }} · 计价 {{ m.currency }}{% if m.r %} · 折现率 r = {{ '%.1f' % (m.r * 100) }}%{% endif %}
-    {% if m.ai_notes is defined %} · AI 点评 {{ m.ai_notes }}/{{ m.picks | length }}{% endif %}</div>
+  <div class="sub">数据日期 {{ m.data_date }} · 计价 {{ m.currency }}</div>
   {% if m.stale %}<div class="warn">{{ m.stale }}</div>{% endif %}
-  {% if m.excluded %}
-  <div class="swaps"><b>利润异常已剔除（{{ m.excluded | length }}）</b>
-    {% for e in m.excluded %}<div>{{ e.code }} {{ e.name }}（{{ e.action }}候选）　{{ e.reason }}</div>{% endfor %}
-  </div>
-  {% endif %}
-  {% if m.swaps %}
-  <div class="swaps"><b>替换（{{ m.swaps | length }}）</b>
-    {% for s in m.swaps %}<div>{{ s.out }} → {{ s.in }}　<span class="label">{{ s.flag }}：</span>{{ s.reason }}</div>{% endfor %}
-  </div>
-  {% endif %}
-  {% for key, label in buckets %}
-  <div class="bucket-title {{ key }}">{{ label }}</div>
+  <div class="expect"><b>预期</b>{% for line in m.expect %}<p>{{ line }}</p>{% endfor %}</div>
+
+  <div class="list-title">买入组合（{{ m.buys | length }} 只，等额买入，持有 12 个月）</div>
   <table class="cards">
-    <colgroup><col style="width:40%"><col style="width:14%"><col style="width:13%"><col style="width:23%"><col style="width:10%"></colgroup>
-    <thead><tr><th>代码 / 名称</th><th>动作</th><th class="num">现价</th><th class="num">公允价 低 / 中 / 高</th><th class="num">空间</th></tr></thead>
-    {% for p in m.picks if p.bucket == key %}
+    <colgroup><col style="width:6%"><col style="width:36%"><col style="width:14%"><col style="width:24%"><col style="width:20%"></colgroup>
+    <thead><tr><th>#</th><th>代码 / 名称 / 行业</th><th class="num">现价</th><th>评级</th><th class="num">一手</th></tr></thead>
+    {% for p in m.buys %}
     <tbody class="card">
       <tr class="head">
-        <td><span class="ticker">{{ p.ticker }}</span> {{ p.name }}
-          {% if p.low_conviction %}<span class="tag low">低信心</span>{% endif %}
-          {% if p.flag %}<span class="tag flag">AI 标记：{{ p.flag }}</span>{% endif %}
-          {% if r.test %}<span class="tag test">测试数据</span>{% endif %}</td>
-        <td class="action {{ key }}">{{ p.action }}</td>
+        <td><b>{{ p.rank }}</b></td>
+        <td><span class="ticker">{{ p.ticker }}</span> {{ p.name }} <span class="sub">{{ p.sector }}</span></td>
         <td class="num">{{ p.price | num }}<br><span class="sub">{{ p.price_date }}</span></td>
-        <td class="num">{{ p.fv_low | num }} / <b>{{ p.fv_mid | num }}</b> / {{ p.fv_high | num }}</td>
-        <td class="num {{ 'up' if p.upside >= 0 else 'down' }}"><b>{{ p.upside | pct }}</b></td>
+        <td>{{ grades(p) }}<br><span class="sub">市场第 {{ p.score_rank }} 名</span></td>
+        <td class="num">{{ p.lot_text }}</td>
       </tr>
       <tr class="body">
-        <td colspan="5">
-          <span class="label">驱动：</span>{{ p.drivers | join('；') }}　<span class="label">短板：</span>{{ p.risk }}<br>
-          <span class="label">AI 点评：</span>{{ p.note }}{% if p.ai_risk %}　<span class="label">风险：</span>{{ p.ai_risk }}{% endif %}<br>
-          <span class="label">复查条件：</span>{{ p.trigger }}
-          {% if p.events is defined %}<br><span class="label">近期事件：</span>{{ p.events }}{% if p.move %}<br>{{ p.move }}{% endif %}{% endif %}
-          {% if p.deep_dive %}<br><span class="label">{{ p.deep_dive.split('：', 1)[0] }}：</span>{{ p.deep_dive.split('：', 1)[1] }}{% endif %}
-        </td>
+        <td></td>
+        <td colspan="4"><span class="label">理由：</span>{{ p.why }}　<span class="label">风险：</span>{{ p.risk }}<br>
+          <span class="label">复查：</span>{{ p.recheck }}（满 12 个月）；若评分跌入后半，提前复查</td>
       </tr>
     </tbody>
     {% endfor %}
   </table>
-  {% endfor %}
+  {% if m.vetoes %}<p class="sub">不列入（你的否决）：{% for v in m.vetoes %}{{ v.ticker }} {{ v.name }} {{ v.reason }}{% if not loop.last %}；{% endif %}{% endfor %}</p>{% endif %}
+
+  <div class="list-title">持仓检查</div>
+  {% if m.holdings %}
+  <table class="rows">
+    <thead><tr><th>代码 / 名称</th><th>买入日</th><th>结论</th><th>原因</th><th>评级</th><th>复查</th></tr></thead>
+    <tbody>
+    {% for h in m.holdings %}
+      <tr><td><span class="ticker">{{ h.ticker }}</span> {{ h.name or "" }}</td><td>{{ h.since }}</td>
+        <td class="status s{{ h.status }}">{{ h.status }}</td><td>{{ h.reason }}</td>
+        <td>{% if h.grades["价值"] %}{{ grades(h) }}{% endif %}</td><td>{{ h.recheck }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="sub">没有记录的持仓，也没有过去 12 个月的组合记录。</p>{% endif %}
+
+  <div class="list-title">回避（市值前 400 中评分最低的 {{ m.avoid | length }} 只）</div>
+  <table class="rows">
+    <thead><tr><th>代码 / 名称 / 行业</th><th class="num">现价</th><th>评级</th><th>最弱</th><th>原因</th></tr></thead>
+    <tbody>
+    {% for p in m.avoid %}
+      <tr><td><span class="ticker">{{ p.ticker }}</span> {{ p.name }} <span class="sub">{{ p.sector }}</span></td>
+        <td class="num">{{ p.price | num }}</td><td>{{ grades(p) }}</td><td>{{ p.weakest }}</td>
+        <td>{{ p.weak }}{% if p.risk and p.risk not in p.weak %}；{{ p.risk }}{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
 </section>
 {% endfor %}
 
 <footer>
   {% for m in r.markets %}{{ m.name }} 数据日期 {{ m.data_date }}{% if m.stale %}（<span class="warn">{{ m.stale }}</span>）{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}<br>
-  方法：{{ r.method }}<br>
   {% if r.storage_warning %}<span class="warn">{{ r.storage_warning }}</span><br>{% endif %}
   本报告由程序根据公开数据自动生成，不构成投资建议。{% if r.test %}<b>（测试数据）</b>{% endif %}
 </footer>

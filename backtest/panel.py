@@ -20,7 +20,6 @@ HIST = BT / "history"  # history tables as the v2 code reads them (CN rebuilt po
 A_SHARE = re.compile(r"^(60[0-5]\d{3}|68[89]\d{3}|00[0-3]\d{3}|30[01]\d{3})$")
 HORIZONS = {"1m": 30, "3m": 91, "6m": 182, "12m": 365}  # calendar days (CN); 1, 3, 6, 12 months (US, HK)
 BLOWUP = "6m"  # worst_<h>: the lowest month-end total return within the window (Method 17: a blow-up is <= -25%)
-PREMIUM = CONFIG["value"]["equity_premium"]
 HK_TOP = 410  # HK: the turnover screen needs volumes the monthly table lacks; ~410 names pass it today (Method 1)
 FIN_SW = ("48", "4901", "4902")  # 申万 banks (L1), brokers and insurers (L2)
 
@@ -177,7 +176,7 @@ def sw_industry(day: str, codes) -> pd.Series:
 
 
 def cn_snapshot(day: str, px: CNPrices, res: pd.DataFrame, bal: pd.DataFrame, val: pd.DataFrame,
-                names: pd.DataFrame, rates: pd.Series, consensus: pd.DataFrame | None = None) -> tuple[pd.DataFrame, dict]:
+                names: pd.DataFrame, consensus: pd.DataFrame | None = None) -> tuple[pd.DataFrame, dict]:
     """The CN v1 snapshot of `day` (a month end), as universe.build_cn builds it, from what was public."""
     info = {"stages": {}, "dropped": {}}
     q = val[val["date"] == day].set_index("code")
@@ -217,9 +216,9 @@ def cn_snapshot(day: str, px: CNPrices, res: pd.DataFrame, bal: pd.DataFrame, va
     sw = sw_industry(day, df.index)
     df["industry"] = "SW" + sw.str[:4].fillna("0000")
     df["financial"] = sw.fillna("").str.startswith(FIN_SW)
-    df["r"], df["price_date"] = rates.asof(pd.Timestamp(day)) / 100 + PREMIUM["cn"], day
+    df["price_date"] = day
     checks = {
-        "missing fundamentals": df[["np_ttm", "revenue_ttm", "bps", "rev_growth", "np_growth"]].isna().any(axis=1),
+        "missing fundamentals": df[universe.NEEDED].isna().any(axis=1),
         "missing price history": df[["mom_12_1", "vol_1y"]].isna().any(axis=1),
         "P/E disagrees with source": df["pe_ttm_em"].notna() & (((df["pe_ttm_em"] > 0) != (df["np_ttm"] > 0))
                                                               | ((df["pe"] / df["pe_ttm_em"]).sub(1).abs() > 0.5)),
@@ -286,7 +285,7 @@ def us_books(today_snap: pd.DataFrame) -> pd.DataFrame:
 
 
 def us_snapshot(month: str, mon: Monthly, today_snap: pd.DataFrame, books: pd.DataFrame,
-                rates: pd.Series, quarters: pd.DataFrame | None = None) -> tuple[pd.DataFrame, dict]:
+                quarters: pd.DataFrame | None = None) -> tuple[pd.DataFrame, dict]:
     """The US v1 snapshot at a month end: the last annual report filed by then, in today's listed units; USD at that
     month's FX. With `quarters`, a USD reporter's trailing 12 months, growth and balance sheet come from its latest
     10-Q/10-K filed by then when that is newer than the annual report (shares stay the annual report's)."""
@@ -327,19 +326,13 @@ def us_snapshot(month: str, mon: Monthly, today_snap: pd.DataFrame, books: pd.Da
     df[["eps_e1", "eps_e2", "eps_e3"]] = np.nan
     df = universe.ratios(df)
     df["industry"] = df["industry_raw"]
-    df["r"], df["price_date"] = rates.asof(day) / 100 + PREMIUM["us"], month
-    checks = {"missing fundamentals": df[["np_ttm", "revenue_ttm", "bps", "rev_growth", "np_growth"]].isna().any(axis=1),
+    df["price_date"] = month
+    checks = {"missing fundamentals": df[universe.NEEDED].isna().any(axis=1),
               "missing price history": df[["mom_12_1", "vol_1y"]].isna().any(axis=1)}
-    df, info = universe.finish(df, info, checks)
-    small = (df.groupby("industry")["industry"].transform("size") < CONFIG["peers"]["min_group_size"]) & ~df["financial"]
-    df.loc[small, "industry"] = np.where(df.loc[small, "sector"].fillna("") != "", df.loc[small, "sector"] + " (other)",
-                                         "Miscellaneous")
-    df.loc[df["industry"].fillna("") == "", "industry"] = "Miscellaneous"
-    return df, info
+    return universe.finish(df, info, checks)
 
 
-def hk_snapshot(month: str, mon: Monthly, today_snap: pd.DataFrame, res: pd.DataFrame,
-                rates: pd.Series) -> tuple[pd.DataFrame, dict]:
+def hk_snapshot(month: str, mon: Monthly, today_snap: pd.DataFrame, res: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """The HK v1 snapshot at a month end: Eastmoney results public 90 days after the period (A4), CNY
     amounts in HKD at that month's HKDCNY, prices in today's units."""
     day = (pd.Timestamp(f"{month}-01") + pd.offsets.MonthEnd(0)).strftime("%Y-%m-%d")
@@ -367,8 +360,8 @@ def hk_snapshot(month: str, mon: Monthly, today_snap: pd.DataFrame, res: pd.Data
     df["dps_ttm"], df["analysts"] = 0.0, 0.0
     df[["eps_e0", "eps_e1", "eps_e2", "eps_e3"]] = np.nan
     df = universe.ratios(df.assign(notice_date=None))
-    df["r"], df["price_date"] = rates.asof(pd.Timestamp(day)) / 100 + PREMIUM["hk"], month
-    checks = {"missing fundamentals": df[["np_ttm", "revenue_ttm", "bps", "rev_growth", "np_growth"]].isna().any(axis=1),
+    df["price_date"] = month
+    checks = {"missing fundamentals": df[universe.NEEDED].isna().any(axis=1),
               "no report in the last 300 days": pd.to_datetime(df["period"]) < pd.Timestamp(day) - pd.Timedelta(days=300),
               "missing price history": df[["mom_12_1", "vol_1y"]].isna().any(axis=1)}
     return universe.finish(df, info, checks)
@@ -397,12 +390,3 @@ def today_snapshot(market: str) -> pd.DataFrame:
     out["financial"] = out["industry_type"].fillna("").str.split("-").str[-1].isin(CONFIG["peers"]["financial_industries_hk"])
     return out.combine_first(snap[["name"]])
 
-
-def rates_series(market: str) -> pd.Series:
-    """10-year yield (%) by day; HK has no free history: the US 10-year less today's HK-US gap (HKD peg)."""
-    r = pd.read_csv(BT / "rates.csv")
-    r = r.set_axis(pd.to_datetime(r["date"]))
-    if market == "hk":
-        now = pd.read_csv(DATA / "rates.csv").groupby("market")["y10"].last()
-        return r.loc[r["market"] == "us", "y10"].sort_index() + (now["hk"] - now["us"])
-    return r.loc[r["market"] == market, "y10"].sort_index()

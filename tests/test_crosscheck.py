@@ -109,7 +109,7 @@ def test_consensus_units_drop_and_basis_gaps_count():
 
 def test_drift_alarms_against_the_previous_snapshot(monkeypatch, tmp_path):
     prev = pd.DataFrame({"code": list("ABCDE"), "price": 10.0, "mcap": 1000.0, "shares": 100.0, "bps": 5.0,
-                         "np_ttm": 50.0, "period": "2026-06-30", "eps_e2": 1.0, "fv_mid": 12.0, "price_date": "2026-10-16"})
+                         "np_ttm": 50.0, "period": "2026-06-30", "eps_e2": 1.0, "price_date": "2026-10-16"})
     (tmp_path / "snapshots" / "2026-10-18").mkdir(parents=True)
     prev.to_csv(tmp_path / "snapshots" / "2026-10-18" / "cn.csv.gz", index=False, compression="gzip")
     now = prev.set_index("code").assign(price_date="2026-10-19", e1_year="2026")
@@ -117,11 +117,10 @@ def test_drift_alarms_against_the_previous_snapshot(monkeypatch, tmp_path):
     now.loc["B", "np_ttm"] = 60.0  # profit moved without a new report
     now.loc["C", ["np_ttm", "period"]] = [80.0, "2026-09-30"]  # a new report: no alarm
     now.loc["D", "eps_e2"] = 1.5
-    now.loc["E", "fv_mid"] = 18.0
     monkeypatch.setattr(crosscheck, "DATA", tmp_path)
     monkeypatch.setattr(crosscheck, "returns", lambda market, start, end: pd.Series(1.0, index=list("ABCDE")))
     line = crosscheck.drift(now, "cn", date(2026, 10, 19))[0]
     assert line.startswith("Drift alarms since 2026-10-18 (5 stocks in both")
     assert ("price vs the stock's return (a split?) 0, market value vs the stock's return 1, "
             "TTM profit without a new report 1, book without a new report 0, "
-            "next year's consensus EPS 1, fair value with a flat price 1") in line
+            "next year's consensus EPS 1") in line

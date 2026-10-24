@@ -1168,3 +1168,66 @@ raw inputs: Swire 39.7%), so the fail says more about this specification than ab
 Rerun (data/backtest/s1_<market>_result.pkl and _fix.pkl from stage 1 must exist):
 `uv run python -m backtest.earn_panel fetch` (the frames, ~5 min), `uv run python -m backtest.implied build cn|us|hk`,
 `uv run python -m backtest.earnings accuracy cn|us|hk` (a), `uv run python -m backtest.stage3 run cn|us|hk` (b-d).
+
+
+## 21. Stage 1 of the 2026-10-24 plan: the history run (2026-10-24; backtest/qvm.py)
+
+docs/PLAN.md's history run, once: the app's own code (stockreport.score and stockreport.lists, the same functions the
+daily build calls) on every month-end snapshot (CN 2019-01.., US 2018-01.., HK 2016-10..), each month's 20-, 10- and
+5-name portfolio (the largest 300 / 200, US home listings, at most 2 per sector, equal amounts) held 12 months with a
+round trip of costs (0.3% CN, 0.2% US, 0.6% HK) against the index fund with dividends (510300.SS, SPY, 2800.HK). A
+cohort's 12 months run month end to month end (CN: month-end trading days; delisted names stay flat after their last
+day). The largest fall is the overlapping (Jegadeesh-Titman) portfolio's: 1/12 of the money in each of the last 12
+cohorts. CN momentum is the SUE from the new quarterly 扣非 table (data/history/cn_deduct.csv.gz), by notice date.
+These numbers fill the report's 预期 line (data/history/expect.json) and look for bugs; they decide nothing.
+
+| 12 months from each month end, after costs | CN (510300) | US (SPY) | HK (2800) |
+|---|---|---|---|
+| windows | 81 (2019-01..2025-09) | 93 (2018-01..2025-09) | 108 (2016-10..2025-09) |
+| 20 names: mean return / the fund's | +9.1% / +6.6% | +13.7% / +15.9% | +11.8% / +5.5% |
+| over the fund (windows ahead) | **+2.5% (63%)** | **−2.2% (31%)** | **+6.3% (65%)** |
+| 10th / 90th percentile over the fund | −14.0% / +15.2% | −12.7% / +13.2% | −11.0% / +26.2% |
+| worst 12 months (the fund's; start) | −17.7% (−20.4%; 2021-09) | −13.7% (−6.9%; 2019-03) | −25.3% (−8.4%; 2018-05) |
+| largest fall, overlapping portfolio (the fund's) | −22.7% (−36.5%) | −22.0% (−23.9%) | −32.7% (−47.2%) |
+| over the fund by sub-period: 2019-20 / 2021-22 / 2023 / 2024-26 | −7.3 / +8.8 / +9.3 / +2.6 | −8.3 / +2.5 / −5.6 / +5.1 | +12.5 / +11.4 / +9.9 / +4.6 |
+| 10 names: over the fund, windows ahead, 10th / 90th pct, worst | +2.5%, 58%, −11.6 / +16.6, −31.4% | −2.2%, 30%, −14.8 / +19.5, −27.8% | +7.6%, 56%, −12.2 / +32.9, −29.3% |
+| 5 names: the same | +1.8%, 56%, −13.1 / +16.9, −39.1% | −2.3%, 41%, −17.2 / +13.6, −30.2% | +11.0%, 59%, −15.4 / +51.7, −27.5% |
+
+**The family check** (each family's top fifth minus its bottom fifth among all the snapshot's stocks, mean 12-month
+return; in brackets the sub-periods positive of 4):
+
+| | CN | US | HK |
+|---|---|---|---|
+| value | −2.3% (2) | −0.1% (3) | +0.7% (2) |
+| quality | +1.4% (2) | −1.2% (1) | +1.0% (3) |
+| momentum | +2.8% (2; SUE) | −2.6% (2) | +7.3% (3) |
+| the score | +1.5% (2) | −1.1% (2) | +6.7% (3) |
+
+CN's components: E/P −2.5%, B/P −3.5%, S/P −1.2%, ROE −2.3%, cash backing +2.9%, debt +1.4%, SUE +3.0%.
+
+**What it says.** CN: the 20-name portfolio beat the CSI 300 fund by 2.5 points a year, ahead in 63% of 12-month
+windows, with a largest fall of −23% against the fund's −37%; it lost in 2019-20, the growth rally. HK: +6.3 points a
+year, ahead in 65%, falls well below the fund's; most of the edge is price momentum. US: 2.2 points a year behind SPY,
+ahead in 31%: equal-weight large-company lists trailed the cap-weighted index over 2018-2026 (the old stage 1's random
+lists: −1.4 points per 6 months), and in these years quality and momentum ran backwards. These are in line with the
+plan's honest expectations for CN and HK (a few points a year, behind the fund in about 4 windows of 10) and below them
+for the US. Fewer names widen the range: in HK the 10th-90th percentile spread over the fund goes from 37 points (20
+names) to 45 (10) and 67 (5); in CN the worst 12 months against the fund from −28% (20) to −31% (10) and −39% (5).
+
+**Families against their published direction**, so I looked for a bug: CN value over the whole sample (−2.3%), US
+quality (−1.2%) and US momentum (−2.6%). None found. CN's top value fifth is banks, property, utilities and steel and its
+bottom fifth pharma, IT and electronics (2020-06 and 2023-06 checked), the signs of every component are as defined
+(stockreport/signals.py; tests/test_score.py), and the sub-periods swing the way the A-share market did (value −27
+points in 2019-20, +19 and +27 in 2021-22 and 2023, −16 in 2024-26). US quality and momentum are short samples with a
+survivor tilt: the US frames hold today's listings, so the low-quality and falling stocks that are in them are the ones
+that survived. The families stay (the published evidence is far longer than these 8 years) and the report says so.
+
+**Limits.** US and HK hold today's listings with today's sectors (the numbers are flattered; the report says so); CN is
+point-in-time with delisted names and 申万 of the day. The snapshots were built before stage 1: ROE, debt and 12-1
+momentum in them are winsorized at 2/98% (ties at the extremes, percentiles otherwise unchanged), a stock without growth
+figures was dropped, and the US gross profit has no Yahoo fill (present for 82% of stock-months against 97% live) and
+liabilities ÷ assets is present for 66% (88% live). The live build has none of these.
+
+Rerun: `uv run python -m backtest.qvm frame cn|us|hk` (the score on each snapshot of `backtest.run build`;
+data/backtest/qvm_<market>.pkl), then `uv run python -m backtest.qvm run cn|us|hk` (prints the tables, writes
+data/history/expect.json).

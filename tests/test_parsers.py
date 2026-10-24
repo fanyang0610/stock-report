@@ -5,9 +5,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from stockreport.fetch.eastmoney import consensus_table, forecast_table, is_open, quarter_ends, results_table
+from stockreport.fetch.eastmoney import (consensus_table, deduct_table, forecast_table, is_open, quarter_ends,
+                                         results_table)
 from stockreport.fetch.tdx import parse_package
-from stockreport.universe import WINSORIZED, finish, ttm
+from stockreport.universe import finish, ttm
 
 SAMPLES = Path(__file__).parent / "data"
 
@@ -156,13 +157,20 @@ def test_ttm_includes_deducted_eps_when_the_table_has_it():
 
 
 def test_cash_conversion_is_clipped_and_needs_a_margin():
-    # 兖煤澳大利亚-like: profit down 90%, cash conversion 31.6; a near-zero margin makes the ratio meaningless.
-    df = pd.DataFrame({c: [0.1] * 4 for c in WINSORIZED}, index=list("ABCD"))
-    df["cash_conv"] = [31.6, -5.0, 0.8, 2.0]
-    df["np_ttm"], df["revenue_ttm"] = [10.0, 10.0, 10.0, 1.0], [100.0, 100.0, 100.0, 100.0]
+    # 兖煤澳大利亚-like: profit down 90%, cash conversion 31.6; a near-zero margin makes the ratio meaningless. The other
+    # figures are kept as reported (no winsorizing: the cards show them).
+    df = pd.DataFrame({"cash_conv": [31.6, -5.0, 0.8, 2.0], "roe": [9.0, 0.1, 0.1, 0.1],
+                       "np_ttm": [10.0, 10.0, 10.0, 1.0], "revenue_ttm": [100.0] * 4}, index=list("ABCD"))
     out, _ = finish(df, {"stages": {}, "dropped": {}}, {})
-    assert out["cash_conv"].tolist()[:3] == pytest.approx([3.0, -1.0, 0.8], abs=0.1)  # after the 2/98% winsor
+    assert out["cash_conv"].tolist()[:3] == [3.0, -1.0, 0.8] and out.loc["A", "roe"] == 9.0
     assert pd.isna(out.loc["D", "cash_conv"])  # net margin 1% < 2%
+
+
+def test_deduct_table_keeps_the_first_notice_date():
+    rows = json.loads((SAMPLES / "cn_deduct_sample.json").read_text(encoding="utf-8"))  # 主要财务指标, real rows
+    df = deduct_table(rows, "2025-09-30").set_index("code")
+    assert df.loc["000001", "deduct"] == 38_269_000_000 and df.loc["000001", "notice_date"] == "2025-10-25"
+    assert df.loc["000002", "deduct"] < 0 and set(df["period"]) == {"2025-09-30"}
 
 
 def test_results_table_keeps_deducted_eps_and_roe():

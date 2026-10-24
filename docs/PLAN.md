@@ -4,11 +4,14 @@
 - Adopted 2026-10-24. It replaces the 2026-10-22 plan (stages 1 and 3 failed; docs/archive/PLAN-2026-10-22.md) and
   v1-v3 (Phases 1-13; docs/archive/PLAN-v1-v3.md). Both are reference only, not paths to follow. The fetchers, the
   cross-checks, the event feed, the deep-dive lane, the backtest data and the delivery stay as built.
-- Stage 1 (the ranking and the new report): not started. Stages 2 and 3: not started.
+- Stage 1 (the ranking and the new report): built 2026-10-24. signals.py, score.py, lists.py (`hold`), the new cards
+  and report; v1, v3, signal.py and the stage-3 scripts removed; the history run is docs/BACKTEST.md section 21 (20
+  names over the index fund a year: CN +2.5%, US −2.2%, HK +6.3%). Waiting for your OK (rule 9) to load the daily job,
+  send a test, and turn the keyword reply back on. Stages 2 and 3: not started.
 - Nothing runs on a schedule (your call, 2026-10-24: a fresh start). The 06:30 job (com.stockreport.daily) is unloaded
-  and disabled; the keyword listener (com.stockreport.listen) was already off. Their plists stay in launchd/ and
-  ~/Library/LaunchAgents/. Stage 1 sets up the daily job again for the new report, with your OK (rule 9). While it's
-  off, no daily snapshots or weekly consensus snapshots are collected.
+  and disabled; the keyword listener (com.stockreport.listen) was already off. launchd/com.stockreport.daily.plist is
+  rewritten for `run` (no DeepSeek); the copy in ~/Library/LaunchAgents is still the old one until it's loaded. While
+  it's off, no daily snapshots or weekly consensus snapshots are collected.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -71,6 +74,23 @@ percentiles (a missing component is skipped; a missing family counts as 50); the
   mixed rather than negative, so it keeps the standard definition.
 - No weights are fitted and nothing is chosen on our backtest. Sectors: CN 申万 level 1, US the Nasdaq sector, HK
   Eastmoney's first-level industry type.
+- **How each ingredient is built** (stage 1; stockreport/signals.py):
+  - Percentiles are taken over the whole scored universe (the 800 largest after the filters), so a holding outside the
+    buy universe still has a score; the buy and avoid lists then take their own size cuts.
+  - CN 扣非 comes from 主要财务指标 (year-to-date 扣非 net profit as an amount, each quarter since 2015, by its first
+    notice date), because 业绩报表 has 扣非 EPS only in half-year and annual reports. E/P = 扣非 TTM profit ÷ market value
+    (reported profit for the ~1% without it). The SUE uses amounts, not per-share figures, so bonus shares (送转) don't
+    read as a fall, and needs at least 6 of the last 8 year-on-year changes (the usual minimum in the SUE literature).
+  - Cash backing is left out for banks, insurers and brokers (their operating cash flow moves with deposits and loans;
+    Sloan's sample excludes financials). CN and HK use the latest report's year to date (CN: operating cash flow per
+    share × shares; HK in the reporting currency), the US the trailing 12 months.
+  - US financials have no gross profit: their profitability is ROE ranked among financials (Novy-Marx's gross
+    profitability excludes them). US E/P and B/P are to common shareholders (preferred dividends and equity taken
+    out, history.us_preferred). US gross profit comes from SEC, else Yahoo's standardized figure (a quarter of SEC
+    filers tag neither gross profit nor a cost of revenue).
+  - Figures are kept as reported (no winsorizing): the score uses percentiles, and the cards show the numbers. A
+    missing growth figure no longer drops a stock: growth isn't scored (out only on facts).
+  - An issuer listed in two markets can appear in both lists: each market's portfolio is measured on its own.
 
 ### Lists
 - **Buys:** the 20 highest scores in the buy universe, at most 2 per sector, equal amounts. The text summary shows the top
@@ -83,14 +103,20 @@ percentiles (a missing component is skipped; a missing family counts as 50); the
   - 卖出: a hard red flag at any time, or at the anniversary outside the top fifth (replace it with the best name you
     don't hold).
   - Your holdings live in data/holdings.csv (code, buy date), set with `hold CODE [--date D]` and `hold CODE --sold`.
-    Without the file, the check covers the buy portfolios of the last 12 months.
+    Without the file, the check covers the names of the last 12 months' buy portfolios (data/picks.csv) that aren't
+    in today's, each from the first day it was listed.
+  - "Top fifth" and "bottom half" are against the scores of the buy universe (the largest 300 / 200), so a holding that
+    has shrunk out of it is still judged on the same scale. A holding the build couldn't score (dropped on facts, or no
+    longer among the 800 largest) gets 复核 with the reason.
 - **Avoid:** the 10 lowest scores among the 400 largest, at most 2 per sector, each with its weakest family named.
 
 ### Cards
 - The price; the rank; the three grades A-E (fifths of each family); one line on why it's there (its two strongest
-  components in words); the key risk (its weakest component, or a loss, heavy debt or a 30%+ fall in 6 months); the cost
-  of one board lot (CN 100 shares, US 1 share, HK the board lot: source to verify); the re-check date (the anniversary,
-  or sooner if the rank falls into the bottom half).
+  components in words, with the figure); the key risk (a loss, heavy debt (70%+ of assets, the SASAC warning line; not
+  financials) or a 30%+ fall in 6 months, else its weakest component); the cost of one board lot (CN 100 shares, US 1
+  share, HK the board lot from HKEX's List of Securities, verified 2026-10-24: Tencent 100, HSBC 400, China Mobile 500,
+  AIA 200); the re-check date (the anniversary, or sooner if the rank falls into the bottom half). A ratio is worded by
+  its side of the market's median (市盈率低 / 高), cash backing, momentum and the SUE by their sign.
 - From stage 2: the review's line (市场可能在担心 … with its quoted source, or 审核未见重大风险) and the AI note (words only).
 - Each market section opens with its 预期 line: from the history run, the 20-name portfolio's average 12-month return
   over the index fund, the share of 12-month windows it beat the fund, its worst 12 months and its largest fall against
@@ -235,6 +261,10 @@ beta strategies work in the Hong Kong market".
   - A/H pairs: the Eastmoney AH list.
   - 10-year yield: the ChinaBond 10-year yield as republished in Eastmoney datacenter RPTA_WEB_TREASURYYIELD (EMM00166466).
   - Not used (2026-10-17): the push2 list API (clist) and push2delay dropped every connection after ~25 requests; Eastmoney kline is the same push2 family; Tencent's adjusted kline adds dividends instead of compounding them (understates momentum); yield.chinabond.com.cn timed out.
+  - 扣非 net profit per quarter (stage 1, verified 2026-10-24): Eastmoney datacenter 主要财务指标
+    RPT_F10_FINANCE_MAINFINADATA filtered by REPORT_DATE and the A-share types: KCFJCXSYJLR (year-to-date 扣非 net
+    profit, CNY) with the first NOTICE_DATE, ~6,500 rows a quarter back to 2015 (99.4% filled for 2026-06-30), ~22 s a
+    quarter. data/history/cn_deduct.csv.gz (2.6 MB, 2015-03..), each quarter once, the open one daily.
   - Announcements: CNINFO. Phase 11: the same query without a stock gives the whole market per day (Method 14); periodic reports by category (category_ndbg_szsh, _bndbg_, _yjdbg_, _sjdbg_); PDFs at static.cninfo.com.cn, text by pypdf (most read; some A+H issuers' PDFs have fonts without a Unicode map).
   - Second source for the quotes (Phase 12, verified 2026-10-19): Tencent qt.gtimg.cn, 60 codes per call, GBK, fields split by ~: 3 price, 4 previous close, 30 time (YYYYMMDDhhmmss), 39 PE-TTM, 45 total market value (100m CNY; 44 is the float value), 46 P/B, 73 total shares. Daily for the 1,200 largest A-shares (20 calls, ~1 s); 1,197 answered. Price, market value and shares matched Eastmoney's quote table exactly for all 800 of the universe.
   - 申万 industries for daily use (Phase 13, verified 2026-10-19): swsresearch.com's change-history file (codes only; the 31 level-1 names of the 2021 scheme are fixed), weekly with curl (its certificate chain isn't in Python's trust store); every one of the 791 CN stocks matched, and Eastmoney's BOARD_NAME (the 申万 level 2 name) maps to one level 1 for all but 5 names.
@@ -265,6 +295,10 @@ beta strategies work in the Hong Kong market".
   - Price history and dividends: the Yahoo chart API (symbol 0700.HK), as for US, with the same trading-day rule; index ^HSI (stored as HSI). ~9 min for the first 385 days of 1,200 stocks.
   - 10-year yield: hkgb.gov.hk daily closing reference pricings workbook (HKD_DailyClosingReferencePricings_IBPandGSBP.xls, benchmark 10-year), read with xlrd. The HKMA API (api.hkma.gov.hk, IBP/GSBP) stops at June 2026 (monthly bulletin) and answered 405 after ~7 quick calls.
   - Issuer ids for the dedupe: ORG_CODE from the HK profiles above, the CN quotes (RPT_VALUEANALYSIS_DET) and Eastmoney RPT_USF10_INFO_ORGPROFILE (every US ticker, weekly).
+  - Board lots (stage 1, verified 2026-10-24): HKEX's List of Securities,
+    www.hkex.com.hk/eng/services/trading/securities/securitieslists/ListOfSecurities.xlsx (one sheet, inline strings,
+    read with zipfile and ElementTree; no Excel package): stock code, category, board lot (also short-sell eligibility,
+    for stage 3). 2,817 equities; weekly into data/fundamentals/hk_lots.csv.gz.
   - Headlines: HKEXnews titleSearchServlet.do with the stockId from activestock_sehk_c.json. Phase 11: stockId -1 with a one-day range returns all of a day's filings in one call (rowRange 5000); t1code 40000 (lang en) lists a stock's annual and interim reports.
   - FX: Yahoo "<CUR>=X" for HKD and the reporting and estimate currencies (CNY, USD, SGD, JPY, EUR...), and ~900 days of daily "<CUR>CNY=X" closes for the period-end rates.
 - FX, only needed when a company reports in a different currency from the one it trades in: ECB rates via api.frankfurter.dev.

@@ -174,7 +174,26 @@ def update_yield() -> None:
 
 
 CN_ANNUAL, CN_VALUATION = HISTORY / "cn_annual.csv.gz", HISTORY / "cn_valuation.csv.gz"
-CN_FORECASTS = HISTORY / "cn_forecasts.csv.gz"
+CN_FORECASTS, CN_DEDUCT = HISTORY / "cn_forecasts.csv.gz", HISTORY / "cn_deduct.csv.gz"
+DEDUCT_FIELDS = {"SECURITY_CODE": "code", "NOTICE_DATE": "notice_date", "KCFJCXSYJLR": "deduct"}
+
+
+def deduct_table(rows: list[dict], period: str) -> pd.DataFrame:
+    df = pd.DataFrame(rows, columns=list(DEDUCT_FIELDS)).rename(columns=DEDUCT_FIELDS)
+    return df.assign(notice_date=df["notice_date"].str[:10], period=period)
+
+
+def update_cn_deduct(today: date) -> None:
+    """Year-to-date 扣非 net profit (CNY) of every A-share for every quarter since 2015, from 主要财务指标
+    (RPT_F10_FINANCE_MAINFINADATA, with the first notice date): E/P and the SUE (PLAN.md, the score). 业绩报表
+    has 扣非 EPS only in half-year and annual reports. Each quarter once; one still reporting daily."""
+    have, fresh = periods_in(CN_DEDUCT), not needs_refresh(CN_DEDUCT, today, True)
+    for period in reversed(quarter_ends(today, 4 * (today.year - 2015) + 4)):
+        p = period.isoformat()
+        if p >= "2015" and (p not in have or (is_open(period, today) and not fresh)):
+            rows = datacenter("RPT_F10_FINANCE_MAINFINADATA", f"(REPORT_DATE='{p}'){A_SHARES}", ",".join(DEDUCT_FIELDS))
+            merge(CN_DEDUCT, deduct_table(rows, p), ["code", "period"])  # each quarter as it comes: the first run is ~17 min
+            log.info("cn 扣非 %s: %d rows", p, len(rows))
 VALUATION_FIELDS = {"SECURITY_CODE": "code", "TRADE_DATE": "trade_date", "CLOSE_PRICE": "close",
                     "TOTAL_MARKET_CAP": "mcap", "TOTAL_SHARES": "shares", "PE_TTM": "pe_ttm", "PB_MRQ": "pb_mrq", "PS_TTM": "ps_ttm"}
 FORECAST_FIELDS = {"SECURITY_CODE": "code", "SECURITY_NAME_ABBR": "name", "NOTICE_DATE": "notice_date",

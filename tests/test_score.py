@@ -1,96 +1,130 @@
-from pathlib import Path
+"""The score's math (PLAN.md, "The score" and "Lists"): percentiles, families, grades, the SUE, the sector cap, the
+holding rule and the card's key risk, on small made-up frames."""
 
+from datetime import date
+
+import numpy as np
 import pandas as pd
 import pytest
 
-from stockreport.config import CONFIG
-from stockreport.pick import one_off, pick
-from stockreport.score import COMPONENTS, explain, neutral_z, score
-from stockreport.value import value
+from stockreport import lists, track
+from stockreport.score import grade, score
+from stockreport.signals import cn_deduct, quarters
 
-SAMPLE = Path(__file__).parent / "data" / "cn_sample.csv"
-R = 0.0765
+DAY = date(2026, 10, 24)
 
 
-@pytest.fixture(scope="module")
-def scored() -> pd.DataFrame:
-    return score(value(pd.read_csv(SAMPLE, dtype={"code": str}).set_index("code"), R))
+def universe(n: int = 10, **cols) -> pd.DataFrame:
+    """n stocks whose every input improves with the position (stock 9 is the best on everything)."""
+    i = np.arange(n, dtype=float)
+    df = pd.DataFrame({
+        "name": [f"S{k}" for k in range(n)], "sector": ["a", "b"] * (n // 2), "financial": False,
+        "mcap": 100.0, "price": 10.0, "np_ttm": 1 + i, "revenue_ttm": 10 + i, "bps": 1 + i, "roe": 0.05 + i / 100,
+        "debt_ratio": 0.9 - i / 20, "ocf_ytd": 2 + i, "np_ytd": np.full(n, 2.0), "revenue_ytd": np.full(n, 10.0),
+        "ocf_ttm": 2 + i, "gp_ttm": 1 + i, "assets": np.full(n, 10.0), "mom_12_1": i / 10, "ret_6m": 0.0,
+        "mcap_rank": np.arange(n, 0, -1), "country": "United States", "period": "2026-06-30"},
+        index=[f"C{k}" for k in range(n)])
+    return df.assign(**cols)
 
 
-def test_neutral_z_removes_group_means():
-    x = pd.Series([1.0, 2.0, 3.0, 10.0, 11.0, 12.0])
-    groups = pd.Series(["a", "a", "a", "b", "b", "b"])
-    z = neutral_z(x, groups)
-    assert z.groupby(groups).mean().abs().max() == pytest.approx(0)
-    assert z.iloc[0] == pytest.approx(z.iloc[3])  # same position within its group, same score
+def test_percentiles_rank_within_the_market_and_low_debt_is_better():
+    s = score(universe(), "hk")
+    assert s["p_ep"].tolist() == pytest.approx(np.arange(1, 11) / 10)
+    assert s["p_debt"].tolist() == pytest.approx(np.arange(1, 11) / 10)  # lower debt, higher percentile
+    assert s.loc["C9", "score"] == pytest.approx(1.0) and s.loc["C9", "score_rank"] == 1
+    assert s.loc["C0", "g_value"] == "E" and s.loc["C9", "g_quality"] == "A"
 
 
-def test_composite_is_the_weighted_sum(scored):
-    w = CONFIG["score"]["weights"]
-    assert sum(w.values()) == pytest.approx(1.0)
-    expected = sum(w[c] * scored[f"z_{c}"].fillna(0) for c in COMPONENTS)
-    assert scored["composite"].to_numpy() == pytest.approx(expected.to_numpy())
-    assert scored["z_value"].mean() == pytest.approx(0, abs=1e-9)
+def test_a_family_skips_missing_components_and_a_missing_family_counts_50():
+    df = universe(financial=[True] + [False] * 9)  # a bank: no S/P, cash backing or debt
+    df.loc["C1", "bps"] = -1.0                     # negative book: no B/P
+    s = score(df, "hk")
+    assert np.isnan(s.loc["C0", "p_sp"]) and np.isnan(s.loc["C1", "p_bp"])
+    assert s.loc["C1", "f_value"] == pytest.approx((s.loc["C1", "p_ep"] + s.loc["C1", "p_sp"]) / 2)
+    assert s.loc["C0", "f_quality"] == pytest.approx(s.loc["C0", "p_roe"])  # ROE alone
+    cn = score(universe(), "cn", pd.DataFrame(index=[]).assign(deduct_ttm=[], sue=[]))  # no SUE anywhere
+    assert (cn["f_momentum"] == 0.5).all()
+    assert cn["score"].tolist() == pytest.approx(((cn["f_value"] + cn["f_quality"] + 0.5) / 3).tolist())
 
 
-def test_buckets_follow_the_rules(scored):
-    c = CONFIG["buckets"]
-    picks = pick(scored)
-    picks = picks[picks["role"] != "excluded"]
-    main = picks[picks["role"] == "pick"]
-    assert main.groupby("bucket").size().to_dict() == {"buy": 5, "hold": 5, "sell": 5}
-    assert not picks["code"].duplicated().any()  # one bucket per stock, runners-up included
-    assert (picks.groupby(["bucket", "industry"]).size() <= c["max_per_group"]).all()
-    strict = main[main["tier"] == 1]
-    buy, hold, sell = (strict[strict["bucket"] == b] for b in ("buy", "hold", "sell"))
-    assert (buy["upside"] >= c["buy_min_upside"]).all() and (buy["z_momentum"] >= c["buy_min_momentum_z"]).all()
-    assert hold["upside"].between(*c["hold_upside"]).all()
-    assert (hold["quality_pct"] >= 1 - c["hold_quality_top"]).all()
-    assert (sell["upside"] <= c["sell_max_upside"]).all() and (sell["mcap_rank"] <= c["sell_largest_n"]).all()
-    assert (main.loc[main["tier"] > 1, "conviction"] == "低信心").all()
-    assert buy["composite"].is_monotonic_decreasing and sell["composite"].is_monotonic_increasing
-    assert hold["z_quality"].is_monotonic_decreasing
+def test_us_financials_profitability_is_roe_among_financials():
+    df = universe(financial=[True, True, True] + [False] * 7, roe=[0.30, 0.10, 0.20] + [0.0] * 7)
+    s = score(df, "us")
+    assert s.loc[["C0", "C1", "C2"], "p_gpa"].tolist() == pytest.approx([1.0, 1 / 3, 2 / 3])
+    assert s.loc["C9", "p_gpa"] == pytest.approx(1.0)  # the best gross profit ÷ assets among the others
+    assert "ROE 高（30%）" in s.loc["C0", "why"]  # the card words it as ROE, not gross profit
 
 
-
-def test_a_simpler_lens_or_a_kept_source_gap_is_low_conviction(scored):
-    picks = pick(scored)
-    a, b = picks.query("role == 'pick' and conviction == 'normal'")["code"].iloc[:2]
-    out = pick(scored.assign(simple_lens=scored.index == a, source_gap=scored.index == b)).set_index("code")
-    assert (out.loc[[a, b], "conviction"] == "低信心").all() and (out.loc[[a, b], "bucket"] == picks.set_index("code").loc[[a, b], "bucket"]).all()
+def test_grades_are_fifths():
+    assert grade(pd.Series(range(10))).tolist() == list("EEDDCCBBAA")
 
 
-def test_drivers_point_the_right_way(scored):
-    row = scored.iloc[0]
-    drivers, risk = explain(row, "buy")
-    assert len(drivers.split("；")) == 2 and risk
+def ytd_table(single: list[float], start: int = 2022, code: str = "A") -> pd.DataFrame:
+    """Year-to-date rows from single-quarter values, each noticed a month after its quarter."""
+    rows, ytd = [], 0.0
+    for k, q in enumerate(single):
+        year, quarter = start + k // 4, k % 4 + 1
+        ytd = q if quarter == 1 else ytd + q
+        end = pd.Period(f"{year}Q{quarter}").end_time
+        rows.append({"code": code, "period": end.strftime("%Y-%m-%d"), "deduct": ytd,
+                     "notice_date": (end + pd.Timedelta(days=30)).strftime("%Y-%m-%d")})
+    return pd.DataFrame(rows)
 
 
-def test_one_off_checks_apply_at_pick_time(scored):
-    # Checks 1-2 run in pick(), not only in the DeepSeek path: in the sample, 寒武纪 (buy) and 中微公司 (hold)
-    # grew profit 123% / 300% on cash conversion 0.13 / 0.17. They take no place and are listed as excluded.
-    picks = pick(scored).set_index("code")
-    checks = one_off(scored)
-    spiked = checks.index[checks["c1"].eq(True) | checks["c2"].eq(True)]
-    placed = picks[picks["role"].isin(["pick", "runner_up"]) & (picks["bucket"] != "sell")]
-    assert not placed.index.isin(spiked).any()
-    excluded = picks[picks["role"] == "excluded"]
-    assert excluded["bucket"].to_dict() == {"688256": "buy", "688012": "hold"}
-    assert excluded.loc["688012", "exclusion"] == "净利润同比 +300%，但经营现金流/净利润只有 0.17，利润缺少现金支撑。"
-    assert (picks.loc[picks["role"] == "pick"].groupby("bucket").size() == 5).all()
+def test_sue_is_the_quarters_change_over_its_spread():
+    single = [10, 11, 12, 13, 12, 12, 15, 14, 13, 16, 15, 18, 20, 15, 17, 25]  # 2022Q1..2025Q4
+    ttm, sue = quarters(ytd_table(single))
+    change = np.array(single[4:]) - np.array(single[:-4])  # 12 year-on-year changes
+    assert sue.loc["A", "2025-12-31"] == pytest.approx(change[-1] / change[-8:].std(ddof=1))
+    assert ttm.loc["A", "2025-12-31"] == pytest.approx(sum(single[-4:]))
+    assert np.isnan(sue.loc["A", "2023-12-31"])  # 4 changes known, 6 needed
 
 
-def test_check_2_and_financials():
-    row = {"method": "P/B", "cash_conv": 1.0, "np_ttm": 10.0, "analysts": 5, "eps_ttm": 2.0, "eps_e2": 1.0,
-           "np_growth": 2.0, "rev_growth": 0.1}
-    bank = row | {"method": "P/B on ROE", "cash_conv": 0.1, "analysts": 0}
-    c = one_off(pd.DataFrame([row, bank], index=["A", "BANK"]))
-    assert c.loc["A", "c2"] and not c.loc["A", "c1"]  # EPS expected to halve; cash conversion is fine
-    assert c.loc["A", "eps_ratio"] == pytest.approx(0.5)
-    assert pd.isna(c.loc["BANK", "c1"]) and pd.isna(c.loc["BANK", "c2"])  # banks' investment income is core
+def test_sue_uses_only_reports_noticed_by_the_day():
+    table = ytd_table([10, 11, 12, 13, 12, 12, 15, 14, 13, 16, 15, 18, 20, 15, 17, 25, 30])  # .. 2026Q1, noticed 2026-04-30
+    before, after = cn_deduct(table, "2026-04-29"), cn_deduct(table, "2026-04-30")
+    assert before.loc["A", "deduct_period"] == "2025-12-31" and after.loc["A", "deduct_period"] == "2026-03-31"
+    assert after.loc["A", "deduct_ttm"] == pytest.approx(15 + 17 + 25 + 30)
 
 
-def test_quality_spread_is_similar_for_financials_and_the_rest(scored):
-    # Financial quality is one metric (ROE), the rest four; each side is standardized before combining.
-    spread = scored.groupby("financial")["z_quality"].std()
-    assert spread[True] == pytest.approx(spread[False], rel=0.1)
+def test_buys_keep_at_most_two_per_sector():
+    ranked = pd.DataFrame({"sector": list("aaabbbcd")}, index=list("12345678"))
+    assert list(lists.capped(ranked, 5, 2).index) == ["1", "2", "4", "5", "7"]
+
+
+def test_holding_rule(tmp_path, monkeypatch):
+    df = universe(100).assign(score=np.linspace(0, 1, 100), mcap_rank=np.arange(1, 101))
+    df["score_rank"] = df["score"].rank(ascending=False).astype(int)
+    monkeypatch.setattr(lists, "HOLDINGS", tmp_path / "holdings.csv")
+    pd.DataFrame({"market": "cn", "code": ["C95", "C10", "C90", "C60", "X1"], "name": "",
+                  "since": ["2026-07-01", "2026-07-01", "2025-10-01", "2025-10-01", "2026-01-05"]}).to_csv(lists.HOLDINGS, index=False)
+    buys = df.sort_values("score", ascending=False).head(3)  # C99, C98, C97: none held
+    out = lists.check(df, "cn", DAY, buys, {"X1": "missing fundamentals"}).set_index("code")
+    assert out.loc["C95", "status"] == "继续持有" and out.loc["C95", "recheck"] == "2027-07-01"
+    assert out.loc["C10", "status"] == "复核"                      # before the anniversary, in the bottom half
+    assert out.loc["C90", "status"] == "继续持有" and out.loc["C90", "recheck"] == "2027-10-01"
+    assert out.loc["C60", "status"] == "卖出" and "C99 S99" in out.loc["C60", "reason"]  # outside the top fifth at 12 months
+    assert out.loc["X1", "status"] == "复核" and "missing fundamentals" in out.loc["X1", "reason"]
+
+
+def test_without_holdings_the_check_covers_the_last_years_buy_lists(tmp_path, monkeypatch):
+    monkeypatch.setattr(lists, "HOLDINGS", tmp_path / "none.csv")
+    monkeypatch.setattr(track, "PICKS_LOG", tmp_path / "picks.csv")
+    pd.DataFrame({"date": ["2025-10-01", "2026-03-02", "2026-03-03", "2026-03-02"], "market": "cn", "bucket": "buy",
+                  "ticker": ["OLD", "C5", "C5", "C9"], "name": "x", "score": 0.9}).to_csv(track.PICKS_LOG, index=False)
+    held = lists.held("cn", DAY, pd.Index(["C9"]))  # C9 is in today's list; OLD is over a year old
+    assert held.index.tolist() == ["C5"] and held.loc["C5", "since"] == "2026-03-02"
+
+
+def test_key_risk_names_a_loss_heavy_debt_or_a_big_fall_first():
+    df = universe(np_ttm=[-1.0] + [1.0] * 9, ret_6m=[0.0, -0.4] + [0.0] * 8, debt_ratio=[0.5, 0.5, 0.75] + [0.3] * 7)
+    s = score(df, "hk")
+    assert s.loc["C0", "risk"] == "近 12 个月亏损"
+    assert s.loc["C1", "risk"] == "近 6 个月下跌 40%" and s.loc["C2", "risk"] == "负债率 75%"
+    assert s.loc["C9", "risk"].startswith("无明显短板，最弱一项：") and s.loc["C3", "risk"].startswith("最弱一项：")
+
+
+def test_words_follow_the_figure_not_the_rank():
+    s = score(universe(mom_12_1=[-0.1] + [-0.2] * 9), "hk")  # C0's best component is momentum, still a fall
+    assert s.loc["C0", "why"].startswith("近一年股价走弱（-10%）")
+    assert s.loc["C0", "weak"].startswith("市净率高（PB 10.00）")  # its worst ratios, worded as such

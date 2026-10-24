@@ -133,8 +133,7 @@ def returns(market: str, start: str, end: str) -> pd.Series:
 def drift(df: pd.DataFrame, market: str, today: date) -> list[str]:
     """Day-over-day alarms against the newest earlier snapshot: price and market value moving apart from the
     stock's chained return (a split, a bad price or a share count the quote doesn't reflect), TTM profit or
-    book changing without a new report, next year's consensus jumping, and fair value moving while the price
-    stayed flat. Logged, never dropped."""
+    book changing without a new report, and next year's consensus jumping. Logged, never dropped."""
     days = sorted(p.parent.name for p in (DATA / "snapshots").glob(f"*/{market}.csv.gz")
                   if p.parent.name < today.isoformat())
     if not days:
@@ -147,13 +146,11 @@ def drift(df: pd.DataFrame, market: str, today: date) -> list[str]:
     same = df["period"].astype(str) == prev["period"]
     year = (df["e1_year"].astype(str) == prev["e1_year"].astype(str)) if "e1_year" in prev else True
     book = gap(prev["bps"] * prev["shares"], df["bps"] * df["shares"])
-    flat = (ret - 1).abs() < lim["value"]
     alarms = {"price vs the stock's return (a split?)": gap(prev["price"] * ret, df["price"]) > lim["value"],
               "market value vs the stock's return": gap(prev["mcap"] * ret, df["mcap"]) > lim["value"],
               "TTM profit without a new report": same & (gap(prev["np_ttm"], df["np_ttm"]) > lim["profit"]),
               "book without a new report": same & (book > lim["book"]),
-              "next year's consensus EPS": year & (gap(prev["eps_e2"], df["eps_e2"]) > lim["consensus"]),
-              "fair value with a flat price": flat & (gap(prev["fv_mid"], df["fv_mid"]) > lim["fair_value"])}
+              "next year's consensus EPS": year & (gap(prev["eps_e2"], df["eps_e2"]) > lim["consensus"])}
     for label, mask in alarms.items():
         if mask.any():
             log.info("%s drift since %s, %s: %s", market.upper(), days[-1], label, names(mask, 40))

@@ -37,6 +37,12 @@ def test_trend_takes_this_and_next_fiscal_year():
                                                                          "report_currency": None} | no_stats
 
 
+def test_board_lots_from_hkex_list_of_securities():
+    # HKEX's List of Securities, real rows 2026-10-24 cut down to a few (a warrant and an ETF are skipped)
+    lots = hkex.parse_lots((SAMPLES / "hkex_lots_sample.xlsx").read_bytes()).set_index("code")["lot"]
+    assert lots.to_dict() == {"00001": 500, "00002": 500, "00003": 1000, "00005": 400, "00700": 100}
+
+
 def test_hkex_titles_skip_routine_filings():
     # Ping An, real rows 2026-10-17: board lists, dividend forms and reposted A-share governance rules go.
     lines = hkex.parse_titles(load("hkex_titles_sample.json"), 10)

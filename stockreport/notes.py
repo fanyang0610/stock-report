@@ -13,12 +13,28 @@ from dotenv import dotenv_values
 
 from stockreport.config import CONFIG, REPORTS, ROOT
 from stockreport.fetch import cninfo, hkex, sec
-from stockreport.pick import BUCKETS, one_off
 
 log = logging.getLogger(__name__)
 # Announcement titles per market: org_ids() -> {code: id}, titles(code, id, today, days, limit)
 TITLE_SOURCES = {"cn": cninfo, "us": sec, "hk": hkex}
 UNITS = {"cn": "亿元", "us": "亿美元", "hk": "亿港元"}  # revenue and profit in the quote currency
+BUCKETS = {"buy": "买入", "hold": "持有", "sell": "卖出"}  # the old method's lists; stage 2 rewrites the notes
+
+
+def one_off(df: pd.DataFrame) -> pd.DataFrame:
+    """The one_off_gain checks per stock (config.toml [notes]; NaN = doesn't apply). 1: profit jump without cash (not
+    financials, whose investment income is core); 2: analysts expect EPS to fall back; 3: profit outgrew revenue, which
+    lets a one-off item in the announcement titles count."""
+    cfg = CONFIG["notes"]
+    applies1 = ~df["financial"].astype(bool) & df["cash_conv"].notna() & (df["np_ttm"] > 0)
+    applies2 = (df["analysts"] >= cfg["min_analysts"]) & (df["eps_ttm"] > 0) & df["eps_e2"].notna()
+    ratio = (df["eps_e2"] / df["eps_ttm"]).where(applies2)
+    c1 = (df["np_growth"] > cfg["spike_growth"]) & (df["cash_conv"] < cfg["spike_cash_conv"])
+    c2 = ratio < cfg["eps_fall"]
+    return pd.DataFrame({"c1": c1.astype(object).where(applies1), "c2": c2.astype(object).where(applies2),
+                         "c3": df["np_growth"] - df["rev_growth"] >= cfg["title_gap"], "eps_ratio": ratio})
+
+
 FLAGS = ("none", "one_off_gain", "pending_deal", "delisting_or_st", "data_suspect")
 FLAG_WORDS = {"one_off_gain": "利润一次性/异常", "pending_deal": "重大交易进行中",
               "delisting_or_st": "退市/ST 风险", "data_suspect": "数据可疑", "dual_listed": "其他市场已入选",
@@ -65,7 +81,7 @@ def checks(row: pd.Series) -> list[str]:
              f"{cfg['spike_cash_conv']}）：" + ("不适用" if c["c1"] is None else yes(c["c1"])))
     second = f"检查二（分析师预期利润回落：明年一致预期 EPS 不到近 12 个月 EPS 的 {cfg['eps_fall']:.0%}）："
     if c["c2"] is None:
-        second += f"不适用（覆盖分析师不足 {CONFIG['value']['forward_min_analysts']} 家或近期亏损）"
+        second += f"不适用（覆盖分析师不足 {CONFIG['notes']['min_analysts']} 家或近期亏损）"
     else:
         second += f"{yes(c['c2'])}（{c['ratio']:.2f} 倍，{row['analysts']:.0f} 家分析师）"
     third = (f"检查三（净利润增速比营收增速高 {cfg['title_gap'] * 100:.0f} 个百分点以上）：{yes(c['c3'])}"

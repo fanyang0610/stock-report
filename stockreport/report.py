@@ -1,6 +1,6 @@
-"""The report: each market's picks with notes and swaps -> reports/<date>/report.pdf and summary.txt
-(PLAN.md Method sections 7, 9 and 10). A market without a picks CSV for the day shows its newest
-earlier one, marked as such; the final picks of the day go to data/picks.csv for `track`."""
+"""The report (PLAN.md, "Goal" and "Cards"): per market (CN → US → HK) the 预期 line, the 20-name buy portfolio, the
+holdings check and the 10 avoid names, from each market's lists CSV (a market without one for the day shows its newest
+earlier lists, with their date) -> reports/<date>/report.pdf and summary.txt; the day's lists go to data/picks.csv."""
 
 import json
 from datetime import date
@@ -8,67 +8,55 @@ from pathlib import Path
 
 import pandas as pd
 
-from stockreport import deliver, events, track, verdicts
+from stockreport import deliver, track
 from stockreport.cleanup import size_of
 from stockreport.config import CONFIG, DATA, REPORTS
-from stockreport.fetch import eastmoney
-from stockreport.notes import FLAG_WORDS, annotate
-from stockreport.pick import BUCKETS
 from stockreport.render import html_to_pdf, render_html, text_summary
+from stockreport.score import NAMES
 
-MARKETS = {"us": ("美股 US", "USD"), "hk": ("港股 HK", "HKD"), "cn": ("A股 CN", "CNY")}  # PDF order
-# An issuer picked in two markets keeps the listing first in this order and is swapped out of the
-# other (PLAN.md Method 6): the A-share is the primary listing of an A/H issuer, and the US-listed
-# China ADRs listed in New York first (their HK lines are mostly secondary listings).
-PRIORITY = ["cn", "us", "hk"]
-METHOD = ("各市场取市值前 800（剔除 ST、上市不满 1 年和成交过少的股票），在行业同业组内估值：盈利公司看同业为同等 "
-          "ROE 和增长支付的 P/B（银行、券商、保险只看 ROE），并与按分析师一致预期 EPS 的远期 P/E 各占一半；净资产为负时只用远期 P/E；"
-          "亏损公司用 P/S。再按价值、质量、成长、动量、风险综合打分，每档取 5 只。")
-
-
-def trigger(p: dict) -> str:
-    """Rule-based re-check condition (PLAN.md Method section 7)."""
-    lo, hi = CONFIG["buckets"]["hold_upside"]
-    if p["bucket"] == "buy":
-        return f"股价跌破公允价下限 {p['fv_low']:,.2f}，或下季净利润同比转负时复查"
-    if p["bucket"] == "hold":
-        return (f"股价低于 {p['fv_mid'] / (1 + hi):,.2f}（空间超过 {hi:+.0%}）"
-                f"或高于 {p['fv_mid'] / (1 + lo):,.2f}（空间低于 {lo:+.0%}）时复查")
-    return f"股价回落到 {p['fv_mid'] / (1 + lo):,.2f} 以下（空间回到 {lo:+.0%} 以内），或净利润转为增长时复查"
+MARKETS = {"cn": ("A股 CN", "CNY", "元", "沪深300ETF"), "us": ("美股 US", "USD", "美元", "SPY"),
+           "hk": ("港股 HK", "HKD", "港元", "盈富基金")}
+EXPECT = DATA / "history" / "expect.json"  # written by the history run (backtest/qvm.py)
+EVIDENCE = {
+    "cn": "已发表研究：A 股的价值（尤其 E/P）和业绩超预期后的漂移长期有效；价格动量在 A 股 20 年不赚钱，所以 A 股的动量用业绩意外。",
+    "us": "已发表研究：价值、质量、动量在美国有几十年记录，但公开后超额收益平均缩水过半（McLean-Pontiff 2016）。",
+    "hk": "已发表研究：港股价值和质量的证据较多，价格动量的证据不一。",
+}
+COMMON = ("公开的因子组合平均每年跑赢指数几个百分点，但约 4 成年份跑输（AAII 实盘组合 55% 的滚动年份跑赢）；"
+          "证据针对整个组合，只买其中几只结果更分散。任何名单都不保证收益。")
+METHOD = ("每个市场按价值（E/P、B/P、S/P）、质量（盈利能力、利润的现金支撑、负债率）和动量（美股、港股：过去 12 个月除最近 1 个月的"
+          "涨幅；A 股：最新季度扣非利润相对往年同期的意外 SUE）三类打分，各占三分之一，每项取市场内百分位，A-E 为各类的五分位。"
+          "买入组合：市值前 300（港股前 200，美股只含美国本土公司）里评分最高的 20 只，每个行业最多 2 只，等额买入，持有 12 个月。"
+          "回避：市值前 400 里评分最低的 10 只。数字全部来自程序和公开数据。")
 
 
-def card(p: dict, dives: dict, lines: dict) -> dict:
-    """The label comes from the bucket, so picks CSVs from before the rename read 买入 / 持有 / 卖出 too."""
-    ev = lines.get(p["code"], {})
-    return {"ticker": p["code"], "name": p["name"], "bucket": p["bucket"], "action": BUCKETS[p["bucket"]],
-            "price": p["price"], "price_date": p["price_date"], "fv_low": p["fv_low"], "fv_mid": p["fv_mid"],
-            "fv_high": p["fv_high"], "upside": p["upside"], "drivers": str(p["drivers"]).split("；"),
-            "risk": p["key_risk"], "ai_risk": p["ai_risk"], "note": p["note"], "trigger": trigger(p),
-            "low_conviction": p["conviction"] == "低信心", "flag": FLAG_WORDS.get(p["flag"]),
-            "deep_dive": dives.get(p["code"], {}).get("line", ""), "events": ev.get("events", ""),
-            "move": ev.get("move", "")}
+def expect_lines(market: str) -> list[str]:
+    """The 预期 line from the history run's numbers, plus the published evidence."""
+    fund = MARKETS[market][3]
+    runs = json.loads(EXPECT.read_text(encoding="utf-8")) if EXPECT.exists() else {}
+    if market not in runs:
+        return ["历史模拟尚未运行。", EVIDENCE[market]]
+    e, n20 = runs[market], runs[market]["portfolios"]["20"]
+    lines = [f"模拟回测（{e['first']} 至 {e['last']} 每月建仓的 {e['windows']} 个 12 个月，扣交易成本）：20 只组合平均每 12 个月比{fund}"
+             f"{'多' if n20['excess'] >= 0 else '少'}赚 {abs(n20['excess']):.1%}，{n20['beat']:.0%} 的 12 个月跑赢；最差 12 个月 "
+             f"{n20['worst']:+.0%}（同期{fund} {n20['worst_fund']:+.0%}）；最大回撤 {n20['drawdown']:.0%}（{fund} {e['fund_drawdown']:.0%}）。",
+             "只买 10 只 / 5 只：最差的 12 个月相对基金 " + " / ".join(
+                 f"{e['portfolios'][n]['worst_excess']:+.0%}" for n in ("10", "5")) +
+             f"（20 只 {n20['worst_excess']:+.0%}），名单越短结果越分散。"]
+    if market != "cn":
+        lines.append("美股、港股的历史只含今天仍上市的公司，模拟结果偏乐观。")
+    return lines + [EVIDENCE[market]]
 
 
-def judged(market: str, day: date, today: date, picks: pd.DataFrame) -> tuple[dict, dict, dict]:
-    """The day's deep-dive results, and the vetoes (code -> (flag, reason)) and 低信心 changes (code -> True to
-    mark, False to lift) from them and from your verdicts in force."""
-    path = REPORTS / day.isoformat() / f"{market}_deepdive.json"
-    dives = json.loads(path.read_text(encoding="utf-8"))["results"] if path.exists() else {}
-    vetoes = {c: ("deep_dive", d["reason"]) for c, d in dives.items() if d["action"] == "veto"}
-    low = {c: True for c, d in dives.items() if d["action"] == "low"}
-    for code, v in verdicts.active(market, today, picks.set_index("code")["period"].astype(str)).items():
-        if v["verdict"] == "veto":
-            vetoes[code] = ("user_veto", f"你的否决（至 {v['until']}）：{v['reason']}")
-        else:
-            low[code] = False
-    return dives, vetoes, low
-
-
-def issuers() -> dict[str, pd.Series]:
-    """Ticker -> Eastmoney org code per market: one id for every listing of the same issuer."""
-    paths = {"cn": DATA / "quotes" / "cn.csv.gz", "us": eastmoney.US_ORGS, "hk": eastmoney.HK_LIST}
-    read = lambda p: pd.read_csv(p, usecols=["code", "org_code"], dtype=str).drop_duplicates("code").set_index("code")["org_code"]
-    return {m: read(p) if p.exists() else pd.Series(dtype=str) for m, p in paths.items()}
+def card(r: dict, unit: str) -> dict:
+    lot = r.get("lot")
+    lot_text = "一手股数未知" if pd.isna(lot) else (f"1 股约 {r['lot_cost']:,.0f} {unit}" if lot == 1 else
+                                                 f"一手 {lot:,.0f} 股约 {r['lot_cost']:,.0f} {unit}")
+    fams = {f: r.get(f"f_{f}") for f in NAMES}
+    weakest = min((f for f in fams if pd.notna(fams[f])), key=fams.get, default=None)
+    ranks = {k: int(r[k]) for k in ("rank", "score_rank") if r.get(k) is not None}  # floats after the CSV
+    return r | ranks | {"ticker": r["code"], "lot_text": lot_text, "grades": {NAMES[f]: r.get(f"g_{f}") for f in NAMES},
+                "weakest": f"{NAMES[weakest]} {r[f'g_{weakest}']}" if weakest else ""}
 
 
 def save_failed(today: date, market: str, failed: list[str]) -> None:
@@ -79,55 +67,45 @@ def save_failed(today: date, market: str, failed: list[str]) -> None:
     path.write_text(json.dumps(state | {market: failed}, ensure_ascii=False), encoding="utf-8")
 
 
-def latest_picks(market: str, today: date) -> Path | None:
-    """Today's picks CSV for the market, else the newest earlier one."""
-    found = [p for p in sorted(REPORTS.glob(f"????-??-??/{market}_picks.csv")) if p.parent.name <= today.isoformat()]
+def latest_lists(market: str, today: date) -> Path | None:
+    """Today's lists CSV for the market, else the newest earlier one."""
+    found = [p for p in sorted(REPORTS.glob(f"????-??-??/{market}_lists.csv")) if p.parent.name <= today.isoformat()]
     return found[-1] if found else None
 
 
-def build(today: date, use_ai: bool = True) -> tuple[Path, str]:
+def section(market: str, rows: pd.DataFrame, day: str, today: date, failed: list[str]) -> dict:
+    name, currency, unit, _ = MARKETS[market]
+    rows = rows.astype(object).where(rows.notna(), None)
+    cards = {k: [card(r, unit) for r in rows[rows["list"] == k].to_dict("records")] for k in ("buy", "holding", "avoid", "veto")}
+    return {"code": market.upper(), "name": name, "currency": currency, "expect": expect_lines(market),
+            "data_date": max((c["price_date"] for c in cards["buy"] if c["price_date"]), default=day),
+            "stale": (f"今日未能更新，沿用 {day} 的名单" if day != today.isoformat() else
+                      f"今日部分数据获取失败（{'、'.join(failed)}），沿用上次的缓存数据" if failed else ""),
+            "buys": cards["buy"], "holdings": cards["holding"], "avoid": cards["avoid"], "vetoes": cards["veto"]}
+
+
+def build(today: date) -> tuple[Path, str]:
     """Write report.html/.pdf and summary.txt for the day; returns the PDF path and the summary."""
-    out, orgs, kept, done, logged = REPORTS / today.isoformat(), issuers(), {}, {}, {}
+    out = REPORTS / today.isoformat()
     status = out / "fetch_failed.json"
     failed = json.loads(status.read_text(encoding="utf-8")) if status.exists() else {}
-    for code in PRIORITY:
-        path = latest_picks(code, today)
+    markets, logged = [], {}
+    for market in MARKETS:
+        path = latest_lists(market, today)
         if not path:
             continue
-        day = date.fromisoformat(path.parent.name)
-        picks = pd.read_csv(path, dtype={"code": str, "price_date": str})
-        org = picks["code"].map(orgs[code])
-        taken = {c: f"同一发行人已在{kept[o]}入选" for c, o in zip(picks["code"], org) if o in kept}
-        dives, vetoes, low = judged(code, day, today, picks)
-        final, swaps = annotate(picks, code, day, use_ai, taken, vetoes)
-        for c, mark in low.items():
-            final.loc[final["code"] == c, "conviction"] = "低信心" if mark else "normal"
-        lines = events.lines(code, final, today)
-        if day == today:
-            logged[code] = final
-        final_org = final["code"].map(orgs[code])
-        kept |= {o: f" {MARKETS[code][0]}（{c} {n}）" for o, c, n in zip(final_org, final["code"], final["name"]) if pd.notna(o)}
-        for s in swaps:
-            s["group"] = {"dual_listed": "dual", "deep_dive": "check", "user_veto": "check"}.get(s["flag"], "ai")
-            s["flag"] = FLAG_WORDS[s["flag"]]
-        done[code] = {"code": code.upper(), "name": MARKETS[code][0], "currency": MARKETS[code][1],
-                      "r": final["r"].iloc[0], "data_date": final["price_date"].max(), "swaps": swaps,
-                      "ai_notes": int((final["note_source"] != "template").sum()),
-                      "excluded": [{"code": e["code"], "name": e["name"], "action": BUCKETS[e["bucket"]],
-                                    "reason": e["exclusion"]} for e in picks[picks["role"] == "excluded"].to_dict("records")],
-                      "stale": (f"今日未能更新，沿用 {day} 的选股" if day != today else
-                                f"今日部分数据获取失败（{'、'.join(failed[code])}），沿用上次的缓存数据" if failed.get(code) else ""),
-                      "picks": [card(p, dives, lines) for p in final.to_dict("records")]}
-    markets = [done[code] for code in MARKETS if code in done]
+        rows = pd.read_csv(path, dtype={"code": str, "price_date": str, "since": str, "recheck": str})
+        if path.parent.name == today.isoformat():
+            logged[market] = rows[rows["list"].isin(["buy", "avoid"])].rename(columns={"list": "bucket"})
+        markets.append(section(market, rows, path.parent.name, today, failed.get(market, [])))
     if not markets:
-        raise SystemExit(f"no picks CSV in {REPORTS}; run `run` first")
+        raise SystemExit(f"no lists CSV in {REPORTS}; run `run` first")
     if logged:
         track.log_picks(today, logged)
     size_gb = (size_of(DATA) + size_of(REPORTS)) / 1e9
-    report = {"title": "股票报告", "date": today.isoformat(), "markets": markets, "method": METHOD,
-              "storage_warning": (f"注意：data/ + reports/ 已占用 {size_gb:.1f} GB，超过 "
-                                  f"{CONFIG['storage']['warn_gb']} GB 上限。")
-              if size_gb > CONFIG["storage"]["warn_gb"] else ""}
+    report = {"title": "股票报告", "date": today.isoformat(), "markets": markets, "method": METHOD, "common": COMMON,
+              "storage_warning": (f"注意：data/ + reports/ 已占用 {size_gb:.1f} GB，超过 {CONFIG['storage']['warn_gb']} GB 上限。"
+                                  if size_gb > CONFIG["storage"]["warn_gb"] else "")}
     out.mkdir(parents=True, exist_ok=True)
     pdf = html_to_pdf(render_html(report, out / "report.html"), out / "report.tmp.pdf").replace(out / "report.pdf")
     summary = text_summary(report, deliver.MAX_TEXT_BYTES)

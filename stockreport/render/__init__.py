@@ -6,10 +6,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from stockreport.pick import BUCKETS as LABELS
-
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-BUCKETS = list(LABELS.items())  # [("buy", "买入"), ("hold", "持有"), ("sell", "卖出")]
 
 _env = Environment(
     loader=FileSystemLoader(Path(__file__).parent),
@@ -17,10 +14,11 @@ _env = Environment(
 )
 _env.filters["pct"] = lambda x: f"{x:+.1%}"
 _env.filters["num"] = lambda x: f"{x:,.2f}"
+_env.filters["pct0"] = lambda x: f"{x:.0%}"
 
 
 def render_html(report: dict, out: Path) -> Path:
-    html = _env.get_template("report.html.j2").render(r=report, buckets=BUCKETS)
+    html = _env.get_template("report.html.j2").render(r=report)
     out.write_text(html, encoding="utf-8")
     return out
 
@@ -50,29 +48,26 @@ def fit_bytes(lines: list[str], limit: int) -> str:
 
 
 def text_summary(report: dict, limit: int = 4000) -> str:
-    """One line per pick: 代码 名称 动作 现价→公允价 空间%, grouped by market and bucket."""
+    """Per market: the data date, the 预期 line's first sentence, the top 10 buys with their grades, the holdings that
+    need action, and the avoid names; the PDF has the cards."""
     lines = [f"{'【测试数据】' if report.get('test') else ''}{report['title']} {report['date']}"]
     if report.get("test"):
         lines.append("以下为虚构数据，仅用于测试发送。")
     for m in report["markets"]:
-        lines += ["", f"{m['name']}（数据 {m['data_date']}，{m['currency']}）"]
+        lines += ["", f"【{m['name']}】数据 {m['data_date']}，{m['currency']}"]
         if m.get("stale"):
             lines.append(f"注意：{m['stale']}")
-        for key, label in BUCKETS:
-            picks = [p for p in m["picks"] if p["bucket"] == key]
-            if not picks:
-                continue
-            lines.append(f"〔{label}〕")
-            for p in picks:
-                flag = " 低信心" if p.get("low_conviction") else ""
-                lines.append(f"{p['ticker']} {p['name']} {p['action']} "
-                             f"{p['price']:,.2f}→{p['fv_mid']:,.2f} {p['upside']:+.1%}{flag}")
-        if m.get("excluded"):
-            lines.append("利润异常已剔除：" + "、".join(e["name"] for e in m["excluded"]))
-        for group, label in (("ai", "AI 标记后替换："), ("check", "深度核查或人工否决后替换："),
-                             ("dual", "其他市场已入选、不重复列出：")):
-            out = [s["out"].split(" ", 1)[-1] for s in m.get("swaps", []) if s.get("group", "ai") == group]
-            if out:
-                lines.append(label + "、".join(out))
+        if m.get("expect"):
+            lines.append("预期：" + m["expect"][0])
+        lines.append(f"买入组合前 10（共 {len(m['buys'])} 只，等额，持有 12 个月）：")
+        for p in m["buys"][:10]:
+            g = p["grades"]
+            lines.append(f"{p['rank']}. {p['ticker']} {p['name']} 价{g['价值']}质{g['质量']}动{g['动量']}")
+        if m["holdings"]:
+            counts = {s: [h["name"] or h["ticker"] for h in m["holdings"] if h["status"] == s] for s in ("继续持有", "复核", "卖出")}
+            lines.append("持仓检查：" + "；".join(f"{s} {len(v)}" + (f"（{'、'.join(v)}）" if s != "继续持有" and v else "")
+                                            for s, v in counts.items() if v))
+        if m["avoid"]:
+            lines.append("回避：" + "、".join(p["name"] for p in m["avoid"]))
     lines += ["", "详见 PDF。非投资建议。"]
     return fit_bytes(lines, limit)

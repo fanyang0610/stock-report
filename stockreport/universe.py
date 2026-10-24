@@ -1,5 +1,6 @@
-"""Universe and metrics: filter the market, keep the top N by market value and compute the
-trailing metrics every later step uses (PLAN.md Method sections 1 and 3)."""
+"""Universe and metrics: filter the market, keep the top N by market value and compute the trailing figures the
+score (signals.py) and the cards use (PLAN.md, the method). Figures are kept as reported, not winsorized: the score
+uses percentiles, and the cards show them."""
 
 import logging
 import re
@@ -11,12 +12,11 @@ import pandas as pd
 
 from stockreport import crosscheck
 from stockreport.config import CONFIG, DATA
-from stockreport.fetch import eastmoney, nasdaq, sec, tdx, yahoo
+from stockreport.fetch import eastmoney, hkex, nasdaq, sec, swclass, tdx, yahoo
 
 log = logging.getLogger(__name__)
 A_SHARE = re.compile(r"^(60[0-5]\d{3}|68[89]\d{3}|00[0-3]\d{3}|30[01]\d{3})$")
-WINSORIZED = ["pe", "pb", "ps", "ey", "by", "roe", "rev_growth", "np_growth", "gross_margin",
-              "debt_ratio", "cash_conv", "div_yield", "mom_12_1", "vol_1y", "fwd_pe", "fwd_growth"]
+NEEDED = ["np_ttm", "revenue_ttm", "bps"]  # a stock without these is dropped (rule 5); growth isn't scored
 
 
 def load_results(table: str = "results") -> pd.DataFrame:
@@ -55,8 +55,8 @@ def trading_days(prices: pd.DataFrame) -> np.ndarray:
 
 
 def price_metrics(prices: pd.DataFrame, codes: list[str]) -> pd.DataFrame:
-    """12-1 month momentum and 1-year volatility from returns chained as close / prev-close
-    (ex-rights adjusted), on the market's trading days."""
+    """12-1 month momentum, the 6-month return (a card's key risk) and 1-year volatility from returns chained as
+    close / prev-close (ex-rights adjusted), on the market's trading days."""
     dates = trading_days(prices)
     px = prices[prices["code"].isin(codes)]
     traded = px["volume"] > 0
@@ -68,9 +68,12 @@ def price_metrics(prices: pd.DataFrame, codes: list[str]) -> pd.DataFrame:
     last = date.fromisoformat(dates[-1])
     t0 = dates[dates <= (last - timedelta(days=365)).isoformat()]  # last close a year ago
     t1 = dates[dates <= (last - timedelta(days=30)).isoformat()][-1]  # and a month ago
+    t6 = dates[dates <= (last - timedelta(days=182)).isoformat()]
     out = pd.DataFrame(index=codes)
     if len(t0):
         out["mom_12_1"] = (level.loc[t1] / level.loc[t0[-1]] - 1).where(first <= t0[-1])
+    if len(t6):
+        out["ret_6m"] = (level.iloc[-1] / level.loc[t6[-1]] - 1).where(first <= t6[-1])
     year = wide[wide.index > (last - timedelta(days=365)).isoformat()]
     out["vol_1y"] = year.std() * np.sqrt(252)
     out.loc[year.count() < 120, "vol_1y"] = np.nan
@@ -83,13 +86,6 @@ def dividends(path: Path, today: date) -> pd.Series:
         return pd.Series(dtype=float)
     div = pd.read_csv(path, dtype={"code": str, "ex_date": str})
     return div[div["ex_date"] > (today - timedelta(days=365)).isoformat()].groupby("code")["dps"].sum()
-
-
-def winsorize(df: pd.DataFrame, cols: list[str], lo: float, hi: float) -> pd.DataFrame:
-    for col in cols:
-        low, high = df[col].quantile([lo, hi])
-        df[col] = df[col].clip(low, high)
-    return df
 
 
 def screen(df: pd.DataFrame, prices: pd.DataFrame, today: date, market: str, info: dict) -> pd.DataFrame:
@@ -138,9 +134,9 @@ def ratios(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def finish(df: pd.DataFrame, info: dict, checks: dict) -> tuple[pd.DataFrame, dict]:
-    """Drop stocks failing a check (first failing reason is recorded), clip cash conversion, then
-    winsorize. Cash conversion explodes when profit is tiny (兖煤澳大利亚 31.6) and mixes consolidated
-    cash flow with attributable profit, so it is clipped and left out below a minimum net margin."""
+    """Drop stocks failing a check (first failing reason is recorded) and clip cash conversion (the DeepSeek notes'
+    figure). It explodes when profit is tiny (兖煤澳大利亚 31.6) and mixes consolidated cash flow with attributable
+    profit, so it is clipped and left out below a minimum net margin."""
     cfg = CONFIG["universe"]
     bad = pd.Series(False, index=df.index)
     for reason, mask in checks.items():
@@ -151,8 +147,7 @@ def finish(df: pd.DataFrame, info: dict, checks: dict) -> tuple[pd.DataFrame, di
     info["stages"]["complete, consistent data"] = len(df)
     margin = df["np_ttm"] / df["revenue_ttm"].where(df["revenue_ttm"] > 0)
     df["cash_conv"] = df["cash_conv"].clip(*cfg["cash_conv_range"]).where(margin >= cfg["cash_conv_min_margin"])
-    lo, hi = CONFIG["value"]["winsor"]
-    return winsorize(df, WINSORIZED, lo, hi), info
+    return df, info
 
 
 def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
@@ -175,7 +170,9 @@ def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
     df = df.join(price_metrics(prices, list(df.index)))
     fund = ttm(load_results())
     df = df.join(fund.reindex(columns=["period", "notice_date", "revenue_ttm", "np_ttm", "bps", "eps", "ocfps",
-                                       "gross_margin", "rev_yoy", "np_yoy", "eps_deduct_ttm"]))  # 扣非 TTM: for v2
+                                       "gross_margin", "rev_yoy", "np_yoy", "revenue", "np"]))
+    # cash backing on the latest report's year to date (operating cash flow per share × today's shares)
+    df = df.rename(columns={"revenue": "revenue_ytd", "np": "np_ytd"}).assign(ocf_ytd=df["ocfps"] * df["shares"])
     balance = load_results("balance").dropna(subset=["debt_ratio"]).sort_values("period")
     df["debt_ratio"] = balance.groupby("code")["debt_ratio"].last().reindex(df.index) / 100
     df["dps_ttm"] = dividends(DATA / "fundamentals" / "cn_dividends.csv.gz", today).reindex(df.index).fillna(0)
@@ -187,9 +184,10 @@ def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
     df["cash_conv"] = (df["ocfps"] / df["eps"]).where(df["eps"] > 0)
     fin = CONFIG["peers"]["financial_industries"]
     df["financial"] = df["industry"].fillna("").str.contains("|".join(fin))
+    df["sector"] = swclass.level1().reindex(df.index).fillna("未分类")
 
     checks = {
-        "missing fundamentals": df[["np_ttm", "revenue_ttm", "bps", "rev_growth", "np_growth"]].isna().any(axis=1),
+        "missing fundamentals": df[NEEDED].isna().any(axis=1),
         "missing price history": df[["mom_12_1", "vol_1y"]].isna().any(axis=1),
         "quote vs daily close differ >1%": (df["tdx_close"] / df["price"] - 1).abs() > 0.01,
         "P/E disagrees with source": df["pe_ttm_em"].notna() & (((df["pe_ttm_em"] > 0) != (df["np_ttm"] > 0))
@@ -210,8 +208,12 @@ def us_fundamentals() -> pd.DataFrame:
     gaps = read(yahoo.GAPS) if yahoo.GAPS.exists() else pd.DataFrame(columns=["code", "yahoo"])
     gaps = gaps[gaps["yahoo"] == "ok"].assign(source="Yahoo").reindex(columns=["code"] + cols)
     gaps[money] = gaps[money].div(gaps["currency"].map(yahoo.load_fx()), axis=0)
-    both = pd.concat([facts, gaps[~gaps["code"].isin(facts["code"])]])
-    return both.set_index("code")[cols]
+    both = pd.concat([facts, gaps[~gaps["code"].isin(facts["code"])]]).set_index("code")[cols]
+    # a quarter of SEC filers tag neither gross profit nor a cost of revenue (Mastercard, Oracle, GE): Yahoo's
+    # standardized gross profit (the cross-checks' second source) fills it, in USD
+    yahoo_gp = gaps.set_index("code")["gp_ttm"]
+    both["gp_ttm"] = both["gp_ttm"].fillna(yahoo_gp[~yahoo_gp.index.duplicated()].reindex(both.index))
+    return both
 
 
 def join_consensus(df: pd.DataFrame, path: Path, cols: list[str]) -> pd.DataFrame:
@@ -253,26 +255,25 @@ def build_us(today: date) -> tuple[pd.DataFrame, dict]:
     listed_px = (closes.loc[df.index].div(df["last"], axis=0) - 1).abs().min(axis=1)
     checks = {
         "no recent fundamentals (SEC or Yahoo)": df["source"].isna(),
-        "missing fundamentals": df[["np_ttm", "revenue_ttm", "bps", "rev_growth", "np_growth"]].isna().any(axis=1),
+        "missing fundamentals": df[NEEDED].isna().any(axis=1),
         "missing price history": df[["mom_12_1", "vol_1y"]].isna().any(axis=1),
         "listing price vs Yahoo closes differ >1%": listed_px > 0.01,
     }
     df["financial"] = df["industry"].isin(CONFIG["peers"]["financial_industries_us"])
-    df, info = finish(df, info, checks | crosscheck.checks(df, "us", info))
-    small = (df.groupby("industry")["industry"].transform("size") < CONFIG["peers"]["min_group_size"]) & ~df["financial"]
-    df.loc[small, "industry"] = np.where(df.loc[small, "sector"] != "", df.loc[small, "sector"] + " (other)", "Miscellaneous")
-    df.loc[df["industry"] == "", "industry"] = "Miscellaneous"
-    return df, info
+    df["sector"] = df["sector"].replace("", np.nan).fillna("Miscellaneous")
+    return finish(df, info, checks | crosscheck.checks(df, "us", info))
 
 
 def hk_fundamentals(currency: pd.Series) -> pd.DataFrame:
     """The latest Eastmoney report per company with TTM revenue and profit, in HKD. Eastmoney converts
     every company's amounts to CNY at each period-end rate: they go back to the reporting currency at
-    that rate (Yahoo's close, ~0.5% from Eastmoney's) before the TTM sum, then to HKD at today's rate."""
+    that rate (Yahoo's close, ~0.5% from Eastmoney's) before the TTM sum, then to HKD at today's rate. Year-to-date
+    revenue, profit and operating cash flow stay in the reporting currency (their ratios are what's used)."""
     rows = pd.read_csv(eastmoney.HK_RESULTS, dtype={"code": str, "period": str, "start": str, "date_type": str})
     rows["currency"] = rows["code"].map(currency)
     rows = rows[rows["currency"].notna()]
-    rows[["revenue", "np", "bps"]] = rows[["revenue", "np", "bps"]].div(yahoo.cny_per(rows["currency"], rows["period"]), axis=0)
+    money = ["revenue", "np", "bps", "ocf"]
+    rows[money] = rows[money].div(yahoo.cny_per(rows["currency"], rows["period"]), axis=0)
     df, fx = ttm(rows), yahoo.load_fx()
     df[["revenue_ttm", "np_ttm", "bps"]] = df[["revenue_ttm", "np_ttm", "bps"]].mul(df["currency"].map(fx["HKD"] / fx), axis=0)
     return df
@@ -295,6 +296,7 @@ def build_hk(today: date) -> tuple[pd.DataFrame, dict]:
     df = df.join(price_metrics(prices, list(df.index)))
     df["gross_margin"], df["debt_ratio"] = df["gross_margin"] / 100, df["debt_ratio"] / 100
     df["cash_conv"] = (df["ocf"] / df["np"]).where(df["np"] > 0)
+    df["revenue_ytd"], df["np_ytd"], df["ocf_ytd"] = df["revenue"], df["np"], df["ocf"]  # reporting currency
     df["rev_growth"], df["np_growth"] = df["rev_yoy"] / 100, df["np_yoy"] / 100  # year to date, reporting currency
     df["dps_ttm"] = dividends(Path(str(yahoo.DIVIDENDS).format("hk")), today).reindex(df.index).fillna(0)
     est, fx = ["eps_e0", "eps_e1", "eps_e2"], yahoo.load_fx()
@@ -303,10 +305,12 @@ def build_hk(today: date) -> tuple[pd.DataFrame, dict]:
     # Yahoo has two estimate years, so the 2-year expected EPS growth runs from last year's actual to next year
     df["fwd_growth"] = (df["eps_e2"] / df["eps_e0"]).where((df["eps_e0"] > 0) & (df["eps_e2"] > 0)) ** 0.5 - 1
     df["financial"] = df["industry_type"].fillna("").str.split("-").str[-1].isin(CONFIG["peers"]["financial_industries_hk"])
+    df["sector"] = df["industry_type"].fillna("").str.split("-").str[0].replace("", "未分类")
+    df["lot"] = hkex.load_lots().reindex(df.index)
 
     checks = {
         "no reporting currency (Yahoo)": cons["report_currency"].reindex(df.index).isna(),
-        "missing fundamentals": df[["np_ttm", "revenue_ttm", "bps", "rev_growth", "np_growth"]].isna().any(axis=1),
+        "missing fundamentals": df[NEEDED].isna().any(axis=1),
         "no report in the last 300 days": pd.to_datetime(df["period"]) < pd.Timestamp(today - timedelta(days=300)),
         "missing price history": df[["mom_12_1", "vol_1y"]].isna().any(axis=1),
         "P/E disagrees with source": df["pe_ttm_em"].notna() & (((df["pe_ttm_em"] > 0) != (df["np_ttm"] > 0))

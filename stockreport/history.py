@@ -1,6 +1,6 @@
 """Company history from data/history: yearly core ROE, margins, cash flow and revenue summarised per stock (the
 v3 inputs and quality screen), the stock's own P/B over the last 7 years (v3's common-sense check), CN
-pre-announcements and consensus revisions. The yearly panels also feed the base rates (baserates.py)."""
+pre-announcements and consensus revisions."""
 
 import functools
 from datetime import date, timedelta

@@ -9,36 +9,44 @@ from pathlib import Path
 
 import pandas as pd
 
-from stockreport import crosscheck, deepdive, deliver, report, shadow, track, verdicts
+from stockreport import crosscheck, deliver, history, lists, report, signals, track, verdicts
 from stockreport.cleanup import cleanup
-from stockreport.config import CONFIG, DATA, REPORTS, ROOT, setup_logging
+from stockreport.config import DATA, REPORTS, ROOT, setup_logging
+from stockreport.fetch import eastmoney
 from stockreport.fetch import fetch as fetch_market
 from stockreport.listener import listen
-from stockreport.pick import CSV_COLUMNS, pick, print_table
 from stockreport.render import html_to_pdf, render_html, text_summary
 from stockreport.render.testdata import test_report
 from stockreport.score import score
 from stockreport.universe import build_cn, build_hk, build_us
-from stockreport.value import value
 
 log = logging.getLogger("stockreport")
-
-def discount_rate(market: str) -> tuple[float, str]:
-    """r = latest 10-year government yield + the market's equity premium."""
-    rates = pd.read_csv(DATA / "rates.csv", dtype={"date": str})
-    latest = rates[rates["market"] == market].sort_values("date").iloc[-1]
-    return latest["y10"] / 100 + CONFIG["value"]["equity_premium"][market], latest["date"]
+SHOW = ["rank", "code", "name", "sector", "price", "g_value", "g_quality", "g_momentum", "score", "why"]
 
 
-def build_market(market: str, today: date, use_ai: bool = True) -> None:
-    """Fetch (failed steps keep their cache), value, score and pick one market -> its picks CSV and snapshot."""
+def scored(market: str, today: date) -> tuple[pd.DataFrame, dict]:
+    """The market's universe with the score (CN: 扣非 TTM and SUE from the reports noticed by today; US: profit and
+    book to common shareholders)."""
+    universe, info = {"cn": build_cn, "us": build_us, "hk": build_hk}[market](today)
+    universe["price_date"] = info["quote_date"]
+    cn = None
+    if market == "cn":
+        table = pd.read_csv(eastmoney.CN_DEDUCT, dtype={"code": str, "period": str, "notice_date": str})
+        cn = signals.cn_deduct(table, today.isoformat())
+        universe = universe.join(cn)
+    if market == "us":
+        pref = history.us_preferred(universe, today)[["pref_share", "pref_div_share"]]
+        universe = universe.join(pref).fillna({"pref_share": 0.0, "pref_div_share": 0.0})
+    return score(universe, market, cn), info
+
+
+def build_market(market: str, today: date) -> None:
+    """Fetch (failed steps keep their cache), score and list one market -> its lists CSV and snapshot."""
     failed = fetch_market(market, today)
     report.save_failed(today, market, failed)
-    universe, info = {"cn": build_cn, "us": build_us, "hk": build_hk}[market](today)
-    r, rate_date = discount_rate(market)
-    df = score(value(universe, r))
-    df["r"], df["price_date"] = r, info["quote_date"]
-    picks = pick(df)
+    df, info = scored(market, today)
+    dropped = {code: reason for reason, codes in info["dropped"].items() for code in codes}
+    out_lists = lists.build(df, market, today, dropped)
     try:  # alarms only: a failure is logged and never stops the build
         drift = crosscheck.drift(df, market, today)
     except Exception:
@@ -49,10 +57,10 @@ def build_market(market: str, today: date, use_ai: bool = True) -> None:
     snap.mkdir(parents=True, exist_ok=True)
     out = REPORTS / today.isoformat()
     out.mkdir(parents=True, exist_ok=True)
-    picks[CSV_COLUMNS].to_csv(out / f"{market}_picks.csv", index=False, encoding="utf-8-sig")
+    out_lists.to_csv(out / f"{market}_lists.csv", index=False, encoding="utf-8-sig")
+    df.to_csv(snap / f"{market}.csv.gz", compression="gzip")
 
-    print(f"{market.upper()} data: quotes {info['quote_date']}, daily prices {info['price_date']}, "
-          f"10y yield {rate_date} -> r = {r:.2%}")
+    print(f"{market.upper()} data: quotes {info['quote_date']}, daily prices {info['price_date']}")
     if failed:
         print(f"WARNING: fetch failed for {', '.join(failed)}; used the last cached data")
     print("Universe: " + " -> ".join(f"{k} {v}" for k, v in info["stages"].items()))
@@ -60,51 +68,30 @@ def build_market(market: str, today: date, use_ai: bool = True) -> None:
         if codes:
             print(f"  dropped {len(codes)} ({reason}): {' '.join(codes[:12])}{' ...' if len(codes) > 12 else ''}")
     print("\n".join(info.get("checks", [])))
-    print(f"Fair value: {df['fv_mid'].notna().sum()} of {len(df)} valued; "
-          f"methods {df['method'].value_counts().to_dict()}")
+    have = {c[2:]: f"{df[c].notna().mean():.0%}" for c in df.columns if c.startswith("p_")}
+    print(f"Scored {len(df)}; components present: {have}")
     print("\n".join(drift))
-    print_table(picks)
-    try:  # valuation v3 (Phase 13) in shadow mode: its columns go into the snapshot, the report stays v1
-        df = shadow.run(df, picks, market, today)
-    except Exception:
-        log.exception("%s valuation v3 (shadow) failed; v1 is unaffected", market.upper())
-    df.to_csv(snap / f"{market}.csv.gz", compression="gzip")
-    try:  # deep-dive lane (DeepSeek only with notes on): vetoes and 低信心 are applied when the report is built
-        deepdive.run(market, today, picks, df, use_ai)
-    except Exception:
-        log.exception("%s deep dives failed; the report goes out without them", market.upper())
-    print(f"\nWrote {(out / f'{market}_picks.csv').relative_to(ROOT)} and the snapshot "
-          f"{(snap / f'{market}.csv.gz').relative_to(ROOT)}")
+    show = out_lists.assign(score=out_lists["score"].round(3))
+    for name, words in (("buy", "why"), ("avoid", "weak")):
+        part = show.loc[show["list"] == name, SHOW[:-1] + [words, "risk"]]
+        print(f"\n== {name} ({len(part)})\n" + part.to_string(index=False))
+    held = show[show["list"] == "holding"]
+    if len(held):
+        print("\n== holdings\n" + held[["code", "name", "since", "status", "reason"]].to_string(index=False))
+    print(f"\nWrote {(out / f'{market}_lists.csv').relative_to(ROOT)} and the snapshot {(snap / f'{market}.csv.gz').relative_to(ROOT)}")
 
 
-def shadow_only(markets: list[str], day: str | None) -> int:
-    """Valuation v3 on a saved snapshot and its picks CSV (default: the newest), without fetching: prints the
-    v3 lists and checks and writes the v3 columns back into the snapshot."""
-    days = sorted(p.name for p in (DATA / "snapshots").iterdir() if p.is_dir())
-    day = day or days[-1]
-    started = time.monotonic()
-    for market in markets:
-        path, picks = DATA / "snapshots" / day / f"{market}.csv.gz", REPORTS / day / f"{market}_picks.csv"
-        if not path.exists() or not picks.exists():
-            print(f"{market.upper()}: no snapshot or picks for {day}")
-            continue
-        df = pd.read_csv(path, dtype={"code": str, "period": str, "notice_date": str}).set_index("code")
-        df = shadow.run(df, pd.read_csv(picks, dtype={"code": str}), market, date.fromisoformat(day))
-        df.to_csv(path, compression="gzip")
-    print(f"\nv3 for {', '.join(m.upper() for m in markets)} on {day} in {time.monotonic() - started:.1f}s")
-    return 0
-
-
-def run(markets: list[str], use_ai: bool) -> int:
-    """Build each market, then the report once; a market that fails keeps its newest earlier picks."""
+def run(markets: list[str]) -> int:
+    """Build each market, then the report once; a market that fails keeps its newest earlier lists. No DeepSeek
+    calls: the results review comes with stage 2."""
     started, today, crashed = time.monotonic(), date.today(), []
     for market in markets:
         try:
-            build_market(market, today, use_ai)
+            build_market(market, today)
         except Exception:
-            log.exception("%s build failed; the report shows its newest earlier picks", market.upper())
+            log.exception("%s build failed; the report shows its newest earlier lists", market.upper())
             crashed.append(market)
-    pdf, summary = report.build(today, use_ai)
+    pdf, summary = report.build(today)
     print(f"Wrote {pdf.relative_to(ROOT)} ({pdf.stat().st_size // 1024} KB) and summary.txt "
           f"({len(summary.encode('utf-8'))} bytes)")
     cleanup()
@@ -185,15 +172,13 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("listen", help="answer the WeChat keyword for ~55 s (launchd restarts it 10 s after it ends)")
     fetch = sub.add_parser("fetch", help="update the cached data for a market")
     fetch.add_argument("--market", choices=["cn", "us", "hk"], required=True)
-    run_p = sub.add_parser("run", help="fetch, value, score, pick, write notes and the PDF")
+    run_p = sub.add_parser("run", help="fetch, score, list and write the report (PDF + text summary)")
     run_p.add_argument("--market", choices=["cn", "us", "hk"], help="one market (default: all three)")
-    run_p.add_argument("--no-notes", action="store_true", help="template notes instead of DeepSeek")
-    track_p = sub.add_parser("track", help="average return of past picks vs each market's index")
-    track_p.add_argument("--signal", action="store_true",
-                         help="score the saved snapshots' v1 and v3 signals as the backtest does (docs/BACKTEST.md)")
-    v3 = sub.add_parser("v3", help="valuation v3 (Phase 13, shadow) on a saved snapshot: v3 lists and checks")
-    v3.add_argument("--market", choices=["cn", "us", "hk"], help="one market (default: all three)")
-    v3.add_argument("--date", help="snapshot date YYYY-MM-DD (default: the newest)")
+    sub.add_parser("track", help="average return of past lists vs each market's index")
+    hold = sub.add_parser("hold", help="record a holding (no arguments: list them); the next `run` checks it")
+    hold.add_argument("code", nargs="?", help="ticker, e.g. 600519, 00700 or AAPL")
+    hold.add_argument("--date", help="the day you bought it, YYYY-MM-DD (default: today)")
+    hold.add_argument("--sold", action="store_true", help="remove it")
     verdict = sub.add_parser("verdict", help="your veto or confirm for a stock (no arguments: list those in force)")
     verdict.add_argument("code", nargs="?", help="ticker, e.g. 600519, 00700 or AAPL")
     verdict.add_argument("action", nargs="?", choices=["veto", "confirm"])
@@ -205,11 +190,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "run":
         setup_logging()
-        return run([args.market] if args.market else ["cn", "us", "hk"], not args.no_notes)
-    if args.command == "v3":
-        return shadow_only([args.market] if args.market else ["cn", "us", "hk"], args.date)
+        return run([args.market] if args.market else ["cn", "us", "hk"])
     if args.command == "track":
-        return track.signals() if args.signal else track.scorecard()
+        return track.scorecard()
+    if args.command == "hold":
+        print(lists.hold(args.code, args.date, args.sold, date.today()))
+        return 0
     if args.command == "listen":
         setup_logging(console=False)
         return listen()
