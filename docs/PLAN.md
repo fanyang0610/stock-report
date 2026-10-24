@@ -1,297 +1,188 @@
 # Plan
 
 ## Status
-- Adopted 2026-10-22 (your call), replacing the v1-v3 plan (Phases 1-13), which is kept in docs/archive/PLAN-v1-v3.md as reference only. The universe build and metrics, the data cross-checks, the event layer and the deep-dive lane stay as built; their details are in the archive (Methods 1-3, 13, 14, 15).
-- Stage 1 (data fixes, the score and the new report): **closed 2026-10-22 as a fail**, after the corrected test (your OK; Evaluation, "Corrections"): CN and HK fail only item 2 (their portfolios beat 79% and 86% of random portfolios from the same funnel, under the 90% line; CN +2.9% a year over the CSI 300 fund with half its drawdown, HK +5.6% over the Tracker Fund), the US fails four items, so no buy list ships; CN's avoid list passed its own check in all four sub-periods, but the stage review found that largely in-sample by construction, so it isn't standalone evidence. The review's reading: CN's edge sat in the trend signals and reversed in 2024-26 (short of edge), HK looks under-powered, and a 10-name portfolio can't confirm an edge under about 4-5% a year over random picks. No further variant runs on this data (docs/BACKTEST.md section 19). Earlier on the same day: the ship bar fails in every market, in both the first run (fresh monthly lists) and the registered holding-rule run (docs/BACKTEST.md section 19), so the report doesn't switch and the keyword reply stays off. CN: the portfolio beat the CSI 300 index fund by +6.7% a year after costs (4/4 sub-periods) but only 78% of random portfolios from the same funnel, and its names fell 25%+ as often as random ones; HK: +5.6% a year over the Tracker Fund with a third of the random falls, but 81% of random portfolios and momentum alone returned more; US: nothing beat SPY. Done: the preferred-dividend fix (deductions above zero 178 → 116, at the cap 41 → 3), backtest/stage1.py and stage1_hold.py, the index-fund benchmark, the stage-reviewer agent. Not done, by rule 12 (they change nothing the stage-1 score uses), for your OK: consensus fiscal years on the calendar (moves to stage 5) and raw inputs (the score is rank-based; winsorizing ties 1-2 names a date at the extremes). Housekeeping (your OK, 2026-10-22): the 06:30 job fetches the data only (no report, no v1 or v3, no DeepSeek) until a report ships; the 10 worktrees of Phases 7-13 removed (4.2 GB; their branches stay in git); data/backtest (382 MB) in main.
-- Stage 3 (the earnings engine, your call 2026-10-22: it runs now, stage 2 waits until some market's list passes): **closed 2026-10-22 as a fail** after its registered test (Evaluation, "Stage 3's test") ran once (docs/BACKTEST.md section 20). (a) The forecast loses to "margin persists" at 1 year in every market (CN +22% error, US +5.5%, HK +88%) and is lower at 3 years only pooled (CN −2.5%, US −2.2%) in 5 of 11 years, under the half the bar needs; (b) the implied return is a value signal distinct from trend (rank correlation with 12-1 momentum −0.22 in CN) but positive in only 2 of 4 sub-periods in CN and HK, and in the US it doesn't beat B/P; (c) it enters the score only in the US, where it helps in 2 of 4 sub-periods. So the score stays stage 1's, no buy list ships, and the report doesn't switch. The stage review found the levels wrong (non-financials fade to sector medians that include small loss-makers; HK's flat loss flag), so the fail says more about this specification than about forecasting earnings. "What the price implies" wasn't built (no card ships). No variant runs on this data.
-- Stages 2, 4 and 5: not started.
-- Until stage 1 ships, the 06:30 job only fetches the data and cleans up (launchd/com.stockreport.daily.plist), and the keyword reply stays off.
+- Adopted 2026-10-24. It replaces the 2026-10-22 plan (stages 1 and 3 failed; docs/archive/PLAN-2026-10-22.md) and
+  v1-v3 (Phases 1-13; docs/archive/PLAN-v1-v3.md). Both are reference only, not paths to follow. The fetchers, the
+  cross-checks, the event feed, the deep-dive lane, the backtest data and the delivery stay as built.
+- Stage 1 (the ranking and the new report): not started. Stages 2 and 3: not started.
+- Nothing runs on a schedule (your call, 2026-10-24: a fresh start). The 06:30 job (com.stockreport.daily) is unloaded
+  and disabled; the keyword listener (com.stockreport.listen) was already off. Their plists stay in launchd/ and
+  ~/Library/LaunchAgents/. Stage 1 sets up the daily job again for the new report, with your OK (rule 9). While it's
+  off, no daily snapshots or weekly consensus snapshots are collected.
 
-## Why a new plan
+## Why this plan
+- **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
+  fair value per stock, an earnings forecast, an implied return), and judged them on ship bars I proposed that no
+  realistic edge could pass: a 10-name list beating 90% of random lists over about 8 years needs an edge of 4-5% a year
+  over random picks (a track record's t-statistic is about its information ratio × √years). Signals were also chosen on
+  our own 8 years: CN's score took the price trend, which 20 years of A-share research says doesn't pay, and it reversed
+  in 2024-26. So nothing shipped.
+- **What others do.** Stockopedia's StockRanks, Seeking Alpha's quant grades, Alpha Architect's and Greenblatt's
+  published rules and AAII's real-money portfolios rank stocks on a few published factor families and hold a diversified
+  list. None forecasts a value for each stock. Their evidence is decades of research in many countries (most published
+  factors replicate across 93 countries: Jensen-Kelly-Pedersen 2023) plus a live record, not one backtest.
+- **This plan borrows a complete method.** Stockopedia's ranking (quality, value and momentum, equal weights) and its
+  NAPS portfolio rules (2 names per sector, equal amounts, hold a year, then repeat), with each market's ingredients taken
+  from published research on that market.
 
-v1 to v3 tried to compute a fair value per stock that looks sensible. Thirteen phases in five days added rules after specific names looked wrong, and the registered bars mostly failed. Measured on the 2026-10-20/21 snapshots and in docs/BACKTEST.md:
-- **The fair value isn't a forecast.** A valuation gap has closed 0-5% of itself within a year (BACKTEST.md section 17), so "+117% upside" on Microsoft has historically meant about +1-2% over the market in a year.
-- **v3's levels are plugged.** Its discount rate is solved from its own values: 46 of the 100 largest US stocks sit at 5.5%, against a 5.15% 10-year yield. Its ranking is close to plain book-to-price (rank correlation 0.81 in CN, 0.80 in HK).
-- **The live model isn't the backtested one.** The live engine uses analysts for 93% / 88% / 74% (US / CN / HK) of valued stocks, the backtest for none. Their rankings correlate 0.71, and single names flip (Micron −5% vs +225%).
-- **Wrong earnings go in.** A preferred-dividend bug halves earnings for 38 US companies (89 affected), and forecast fiscal years aren't placed on the calendar.
-- **What held up was simple:** cheapness, the 6-12-month price trend, and the warning signs before 25%+ falls. Volatility, a loss, a falling price and CN limit-up days ran at 1.2-2.1× the market's blow-up rate in every market and both samples. The confidence labels didn't predict accuracy.
+## Goal
+- On the WeChat keyword (股票报告 / 股票简报 / stock report / stock brief), within 30 s, two messages (a text summary and
+  a PDF), in Chinese. Per market (CN → US → HK):
+  - **买入组合 (buy portfolio):** 20 names, ranked, at most 2 per sector;
+  - **持仓检查 (your holdings):** 继续持有 / 复核 / 卖出 for each name you hold;
+  - **回避 (avoid):** 10 names;
+  - **预期 (what to expect):** how this method did in our history and in published research.
+- **Moderate.** The aim is to beat the market's index fund over the year you hold the names, at about the market's level
+  of risk. Not a defensive tilt (low volatility, dividends) and not an aggressive one (small caps, a few concentrated
+  bets, chasing the hottest stocks).
+- **Honest expectations.** Published factor portfolios have beaten their index by a few percent a year on average, have
+  lost to it in roughly 4 years out of 10 (AAII's real-money portfolio: beat the index in 55% of rolling years), and
+  their edge shrank after publication (McLean-Pontiff: about −58%). No list is a guarantee; the report says so.
 
-## Goal and how you use it
+## The method
 
-- You buy a handful of names per market and hold them for months. "Sell" means avoid, or sell if you own it. Shorting, where it's possible, is a bonus.
-- Success: the names you'd buy beat their market's total-return index over 6 and 12 months, on average, with fewer 25%+ falls than the market.
-- Realistic size of an edge: a few percent a year, with losing stretches. No single list is a guarantee.
-- Delivery as today: a WeChat keyword gets a text summary and a PDF, for US, HK and CN, in Chinese.
-- A new report as soon as the evidence supports one: stage 1 ships it; later stages only improve it.
+### Universe
+- Buys: the largest 300 stocks (CN, US home listings) and 200 (HK), with the liquidity floors as built. Avoid names: the
+  largest 400.
+- Out only on facts: figures that fail the cross-checks, ST / *ST, suspended, under 12 months of prices, and (from stage
+  2) a hard red flag. Everything else is left to the score, so a troubled company ranks low rather than vanishing.
 
-## The report, per market
+### The score: three families, equal weights
+Each component is a percentile within its market on the date, point-in-time; a family is the mean of its components'
+percentiles (a missing component is skipped; a missing family counts as 50); the score is the mean of the three families.
 
-- **买入候选 (buy shortlist):** 10 names, ranked, at most 2 per industry. You pick a handful. Why 10 rather than 5:
-  - a 10-name list is steadier (the 5-name lists' 6-month beat rates ranged 41-71%);
-  - you can add what you know (industries you understand, what you already hold);
-  - ranks 6-10 are slightly weaker on average, and each card shows its own expected return.
+| Family | CN | HK | US |
+|---|---|---|---|
+| 价值 Value | E/P on 扣非 TTM, B/P, S/P | E/P, B/P, S/P | E/P, B/P, S/P |
+| 质量 Quality | ROE, cash backing, debt ÷ assets | ROE, cash backing, debt ÷ assets | gross profit ÷ assets, cash backing, liabilities ÷ assets |
+| 动量 Momentum | earnings momentum (SUE) | 12-1-month price return | 12-1-month price return |
 
-  The length doesn't remove extreme picks. Ranking on several signals at once does: the top names look good on most signals rather than extreme on one, and no single signal can carry a name.
-- **持仓检查 (your holdings):** every name in data/holdings.csv (a small `hold CODE` / `hold CODE --sold` command), marked 继续持有 / 复核 / 卖出 by the holding rule. Without the file, it checks the buy-list names of the last 6 months.
-- **回避 (avoid):** 10 names among the market's 400 largest, at most 2 per industry. Each is marked 可做空 where shorting is possible:
-  - US: shortable through brokers;
-  - HK: HKEX's list of designated securities (endpoint to verify);
-  - CN: not offered, since securities lending for individuals was largely halted in 2024 (to verify).
-- **The 持有 bucket goes.** "Good companies priced about right" isn't an action for a buy-and-hold investor; the holdings check replaces it.
-- **Each card shows:**
-  - the price;
-  - the expected excess return over the index for 6 and 12 months, with the range history gave stocks with that score, e.g. "+3%（历史区间 −12%~+16%）";
-  - the 2-3 signals behind it, in plain words;
-  - what the price implies: the margin and growth the price needs, against our forecast (from stage 3);
-  - the key risk (the largest warning sign) and the re-check trigger;
-  - the reviewer's line: 市场可能在担心 … (with its quoted source), or 审核未见重大风险;
-  - the AI note (words only), and the 近期事件 and 深度核查 lines as today.
-- **审核剔除 (removed by the review):** the names the review took out, each with its reason and quoted source, and the name that replaced it.
-- **Text summary:** at most 4,000 bytes. Today's 45 lines take 3,015 bytes. 60+ names need compact lines (short names, no repeated action word); if they still don't fit, the avoid names go in the PDF only.
-
-## Method
-
-### Signals
-
-Each signal is defined from published evidence before any test and isn't tuned. Each is computed within each market, point-in-time.
-1. **Cheapness:** earnings yield on trailing core earnings (CN 扣非) and book yield. From stage 3, the expected return implied by our own earnings forecast replaces both, if it does better.
-2. **Profitability and cash backing:** gross profit ÷ assets where assets exist (US; CN from the balance-sheet table, to verify), else ROE and gross margin; plus accruals, i.e. (net profit − operating cash flow) ÷ revenue (Novy-Marx 2013; Sloan 1996).
-3. **Price trend:** the 12-1-month return and the 6-month return.
-4. **Risk:** 1-year volatility, a loss over the last 12 months, and CN limit-up days in 3 months.
-5. **Share issuance:** the 1-year change in the diluted share count (US; CN and HK where the share history exists).
-6. **Analysts (stage 5):** the 4-week revision of next year's EPS, and the gap between consensus and our own forecast (So 2013: stocks where analysts are more optimistic than a fundamentals model tend to lag). Analysts never enter the valuation itself, so the valuation is the same model live and in the backtest.
-
-### Combining
-
-- Each signal becomes a percentile within its market on each date.
-- A signal enters a market's score only if its top fifth beat its bottom fifth, with the expected sign, in at least 3 of 4 sub-periods (2019-20, 2021-22, 2023, 2024-26) in that market.
-- Equal weights among the signals that enter; no weight fitting. Because nothing is tuned to the backtest, the backtest can decide whether to ship, without waiting for a live record.
-- Expected excess return, per market: the line of realized 6- and 12-month excess return on the score percentile over all dates, shown with the realized 25th-75th percentile for the stock's score tenth.
+- **Value:** a composite of three ratios, as Stockopedia's value rank uses several, so no single ratio decides. E/P is
+  CN's strongest value measure (Liu-Stambaugh-Yuan 2019). B/P only where book > 0 (negative book from buybacks is
+  undefined, not cheap or dear). S/P not for banks, insurers and brokers.
+- **Quality:** profitability (Novy-Marx 2013; Asness-Frazzini-Pedersen's quality-minus-junk, which holds in 23 of 24
+  countries), cash backing = −(net profit − operating cash flow) ÷ revenue (Sloan 1996), and balance-sheet strength
+  (lower debt is better; not for financials, whose leverage is their business).
+- **Momentum:** the 12-1-month price return in the US and HK. In CN the price trend hasn't paid over 20 years (Jansen,
+  Swinkels and Zhou 2021: past-return anomalies weak in A-shares), while earnings surprises are followed by drift
+  (A-share studies, 2000-2020). So CN uses SUE: the latest quarter's 扣非 EPS minus the same quarter a year earlier,
+  divided by the standard deviation of that change over the last 8 quarters, from the notice date. Stockopedia's own
+  momentum rank mixes price and earnings momentum, so this stays within the method. HK's evidence on price momentum is
+  mixed rather than negative, so it keeps the standard definition.
+- No weights are fitted and nothing is chosen on our backtest. Sectors: CN 申万 level 1, US the Nasdaq sector, HK
+  Eastmoney's first-level industry type.
 
 ### Lists
+- **Buys:** the 20 highest scores in the buy universe, at most 2 per sector, equal amounts. The text summary shows the top
+  10, which still spans at least 5 sectors. The evidence is for the whole portfolio: buying fewer names makes the
+  result swing more widely around the average, and the report says so.
+- **Holding rule (NAPS):** hold each name 12 months from the day you bought it.
+  - 继续持有: no hard red flag, and either before its anniversary or still in the top fifth of the score at it;
+  - 复核: before the anniversary it has fallen into the bottom half of the score, or the review (stage 2) found a soft
+    concern;
+  - 卖出: a hard red flag at any time, or at the anniversary outside the top fifth (replace it with the best name you
+    don't hold).
+  - Your holdings live in data/holdings.csv (code, buy date), set with `hold CODE [--date D]` and `hold CODE --sold`.
+    Without the file, the check covers the buy portfolios of the last 12 months.
+- **Avoid:** the 10 lowest scores among the 400 largest, at most 2 per sector, each with its weakest family named.
 
-- **The funnel:**
-  - the data cross-checks pass;
-  - investable: the largest 300 (CN, US) / 200 (HK) for buys, with the liquidity floors as today;
-  - blow-up chance under twice the market's (Method 17's fit on volatility, a loss, the 6-month trend and CN limit-up days);
-  - profitable on core earnings over 3 years, or (from stage 4) a forecast recovery.
-- **Buys:** the 10 highest scores among the funnel's survivors.
-- **Holding rule:**
-  - 继续持有 while the name stays in the top 30% of the score and passes the funnel;
-  - 复核 when it falls into the middle, or on a new warning sign (analysts cutting 10%+, an abnormal move without a filing, a review note, a deep-dive veto);
-  - 卖出 below the median, when it fails the funnel, or on a review veto.
-- **Avoid:** among the 400 largest, the highest blow-up chances, and the bottom scores that carry a warning sign.
-- **Shorts (stage 5):** the avoid names count as a short list only if, in the backtest, they fell in absolute terms over 6 months net of a borrow cost; otherwise they stay "avoid".
+### Cards
+- The price; the rank; the three grades A-E (fifths of each family); one line on why it's there (its two strongest
+  components in words); the key risk (its weakest component, or a loss, heavy debt or a 30%+ fall in 6 months); the cost
+  of one board lot (CN 100 shares, US 1 share, HK the board lot: source to verify); the re-check date (the anniversary,
+  or sooner if the rank falls into the bottom half).
+- From stage 2: the review's line (市场可能在担心 … with its quoted source, or 审核未见重大风险) and the AI note (words only).
+- Each market section opens with its 预期 line: from the history run, the 20-name portfolio's average 12-month return
+  over the index fund, the share of 12-month windows it beat the fund, its worst 12 months and its largest fall against
+  the fund's, marked 模拟回测 (simulated, after costs), plus one line on the published evidence.
 
-### Results review (only when you ask for a report)
+### The history run (stage 1, once)
+- On the existing month-end frames (CN 2019-01.., US 2018-01.., HK 2016-10..): each month's 20-name portfolio, held 12
+  months with a round trip of costs (0.2% US, 0.3% CN, 0.6% HK), against the index fund with dividends (SPY, 2800.HK,
+  510300.SS). Also the 10-name and 5-name versions, to show how much fewer names widen the range.
+- Each family's top fifth against its bottom fifth over the whole sample, per market.
+- The CN frames are point-in-time with delisted names; US and HK hold today's listings, so their numbers are flattered,
+  and the report says so.
 
-The numbers can't see a fraud investigation, a going-concern doubt, a takeover at a fixed price, or a story the market is worried about. A reviewer reads what the numbers can't, before you see the lists.
-- **Who reviews:** DeepSeek, already used for the notes. Temperature 0, a fixed checklist, JSON out. Every finding must quote a filing or headline, and code checks the quote (quotes.py, as the deep-dive lane does). It never changes a number (rule 2).
-- **What it reviews:** per market, the 10 buys, the next 5 runners-up, the 10 avoid names and your holdings.
-- **When it runs:** only when you send the keyword. The 06:30 build makes no DeepSeek calls at all; it fetches the data and builds the lists and cards with code. The AI notes and the deep dives move to the keyword too.
-  - Each review is cached per stock with what it read. A name is reviewed again only when it is new to a list, a new filing or headline has appeared since its last review, or the review is more than 7 days old. Lists change slowly (at most a few names a day), so most requests need a handful of calls.
-  - Order and time budget: buys first, then holdings, then the avoid names, with up to 10 calls at a time and a 20-second budget. A name not reviewed in time shows 审核进行中 on its card and is finished in the background for your next request. Then the PDF is rendered and both messages go out.
-  - Expected time (estimates, measured in stage 2): a request on a warm cache adds about 2-5 seconds; the first request after a week away is about 20-25 seconds of review, plus a few seconds to render. Deep dives read whole filings (2-15 s each), so they finish in the background when the budget runs out and show on the next request. If DeepSeek is down or slow, the report goes out without the review, marked 审核暂不可用.
-- **What it reads:** the stock's non-routine filings of the last 90 days from the event feed (CNINFO, HKEXnews, SEC), plus headlines from a free news source (CN: Eastmoney or 财联社, as the a-stock-data skill documents; HK and US: to verify), plus the card's numbers.
-- **Hard red flags remove a buy** (the next-ranked name takes its place, listed under 审核剔除), turn a holding into 卖出, and are noted on an avoid name:
-  - a regulator's investigation, a fraud finding, or a Wells notice;
-  - a non-standard audit opinion, or the auditor resigning;
-  - a going-concern doubt, or a default on debt;
-  - delisting or ST risk, or a trading suspension;
-  - a takeover or privatisation at a fixed price (the upside is capped);
-  - sanctions or a ban naming the company.
+### Results review (stage 2; only when you ask for a report)
+The numbers can't see a fraud investigation, a going-concern doubt, a takeover at a fixed price, or a story the market is
+worried about. DeepSeek reads the stock's non-routine filings of the last 90 days (CNINFO, HKEXnews, SEC) and free
+headlines, at temperature 0 with a fixed checklist and JSON out; every finding quotes its source and code checks the
+quote (quotes.py). It never changes a number (rule 2). It reviews the 20 buys, the next 5, your holdings and the 10 avoid
+names, buys first, up to 10 calls at a time, within a 20-second budget; each review is cached per stock and redone only
+for a name new to a list, a new filing or headline, or a review over 7 days old. A name not reviewed in time shows
+审核进行中 and is finished in the background; if DeepSeek is down, the report goes out marked 审核暂不可用. The 06:30
+build makes no DeepSeek calls.
+- **Hard red flags** remove a buy (the next-ranked name takes its place, listed under 审核剔除 with the reason and
+  source), turn a holding into 卖出, and are noted on an avoid name: a regulator's investigation, a fraud finding or a
+  Wells notice; a non-standard audit opinion or the auditor resigning; a going-concern doubt or a debt default; delisting
+  or ST risk, or a suspension; a takeover or privatisation at a fixed price; sanctions or a ban naming the company.
+- **Soft concerns only annotate** (an industry downturn, a lost customer, a guidance cut, management leaving,
+  litigation, a one-off gain): the card says 市场可能在担心 … and a holding gets 复核. Cheap stocks carry bad news by
+  nature, and that is where value pays off on average.
+- **Data check:** a latest filing that contradicts a card's figure by 20%+ drops the name as data_suspect, and the next
+  one takes its place (rule 5).
+- The review can't be backtested (an LLM reading old news knows what happened next), so its powers stay this narrow; the
+  scoreboard follows each removed name against the name that replaced it.
 
-  These are discrete facts with a quoted source, and the old checks 1-3 and the deep-dive vetoes fold into this list.
-- **Soft concerns only annotate:** an industry downturn, a lost customer, a guidance cut, management leaving, litigation, a one-off gain. The card says 市场可能在担心 … with the source, and a holding gets 复核. They don't remove a name. Cheap stocks carry bad news by nature, and that is where cheapness pays off on average. The score's trend, risk and (from stage 3) earnings-forecast signals already price the systematic part of "troubled".
-- **Data check:** if the latest filing contradicts a card's figure by 20%+, the name is dropped as data_suspect, and the next one takes its place (rule 5).
-- **Limits:** the review can't be backtested. An LLM reading old news knows what happened next, and there's no free point-in-time news archive. So its powers stay narrow. The scoreboard follows each removed name against the name that replaced it.
-- **Cost:** nothing on days you don't ask. On a day you do, a few calls for what changed, and about 120-130 calls (cents) after a long gap.
+## Checks, and what each one decides
+- **pytest** on the score math (percentiles, families, SUE, the sector cap, the holding rule) and the parsers, on small
+  saved samples: catches calculation and parsing bugs.
+- **The data cross-checks** (built): a stock whose figures disagree with the second source is dropped (rule 5).
+- **The history run's family check:** a family running strongly against its published direction over the whole sample
+  in a market sends me looking for a data or definition bug. If none is found, the family stays (the published evidence
+  is far longer than ours), and the report says so.
+- **The history run's portfolio numbers:** they fill the report's 预期 line. They don't decide whether the report ships.
+- **The fresh-eyes review** at the end of each stage (.claude/agents/stage-reviewer.md): catches what I missed, and
+  spot-checks a few buys and avoid names against their filings and news for common sense.
+- **The live scoreboard** (`track`): each month's portfolio against the index fund, shown in the report once a month;
+  it catches live data faults and builds the method's own record. It never holds anything up.
 
-### Earnings engine (stages 3-4; from the two reviews)
+## How decisions are made
+- Investment-method choices are mine to make from published evidence, each with its reason written here. You are asked
+  only for approvals: starting a stage, any WeChat send, a new dependency, GitHub, launchd, or a paid service (rule 9).
+- The method changes only to fix a bug or to follow new published evidence; never because a backtest number, a
+  sub-period or one stock looked wrong, and no rule is written for a named stock.
+- No pass/fail gates on shipping, and no test whose result would change nothing.
+- The reviewers propose; nothing changes the method automatically.
 
-- **Correct inputs first (stage 1):** net income, common-share income and book from the same fiscal-year row; consensus fiscal years placed on the calendar; raw, not winsorized, inputs.
-- **Earning power:** a sales forecast times a lasting-margin forecast, refit each year on each market's panel from what was public then.
-  - The margin's level persists and its unusual changes partly reverse; profit that cash doesn't back counts for less (Nissim–Penman; Hou–van Dijk–Zhang 2012).
-  - Banks, insurers and brokers are forecast on ROE's level and change instead.
-- **Implied expected return:** the rate at which book plus discounted residual income on that forecast equals the price. After year 5, margin and growth fade to the sector's long-run levels over 10 years. No discount rate is chosen: the rate is the answer.
-- **What the price implies:** the margin, or growth, at which the implied return equals the market's median, shown against our forecast, with the share of similar company-years that reached it.
-- **Reinvestment and financing (US first):** growth needs capital (capital intensity × the revenue added); it is financed by retained earnings, then debt, then new shares at today's price, which dilutes each share.
-- **Losses and recoveries:** loss years are part of the margin fit, so the way back is estimated, not assumed. A funding gap is raised in new shares. Labels: 可恢复 / 需融资 / 持续亏损.
-- **Deep-dive facts:** a one-off item quoted from the filing and verified by code may be removed from the earnings base, as CN's 扣非 already does for every A-share. Live only, at most 3 a day per market.
-
-## Evaluation (registered before anything is built)
-
-A benchmark is in the bar only if losing to it would change what we do. v1 isn't: we wouldn't go back to it if it won. Its buys beat the index over 6 months only a few points more often than the average stock in the US and HK, and less often in CN (out of sample: US 50.4%, CN 37.8%, HK 50.4%, against 46.1% / 41.7% / 44.1% for all stocks), so beating it proves nothing. v1 and v3 leave the bar; their numbers may be shown for reference.
-
-- **The test portfolio is what you'd do:**
-  - each month-end, per market, buy the 10 buys equal-weight (and a top-5 variant), then hold or sell by the holding rule;
-  - returns include dividends; after costs of a round trip of 0.2% (US), 0.3% (CN) and 0.6% (HK), as in Method 17.
-- **The benchmarks, each with the decision it drives:**
-  - **The total-return index** (US ^SP500TR; CN and HK: the price index plus its dividend yield until a free total-return series is verified). This is your real alternative, an index fund. Losing to it: don't use the list; buy the index.
-  - **Random lists from the same pool:** each month, 1,000 random 10-name lists drawn from the funnel's survivors (at most 2 per industry), held the same way. Losing to them: the score has no skill, whatever the market did. It answers "is this luck?" in plain terms: our list beat X% of the random lists.
-  - **The funnel alone:** random lists from the funnel against random lists from the whole investable universe. Losing: the filters (blow-up chance, profitability) don't cut falls; drop them.
-  - **Simpler versions:** stage 1 against single-signal lists (plain E/P, plain B/P, 12-1 momentum) under the same funnel; each later stage against the stage before it. Losing: ship the simpler version (a tie goes to the simpler one).
-- **Measures:** 6- and 12-month excess return over the index (mean and median); the share of months beating the index; the share of random lists beaten; 25%+ falls; the worst drawdown; turnover. Ranges come from a date-block bootstrap. For each signal and for the score: top fifth minus bottom fifth.
-- **Samples:** about 8 years of month-ends per market (CN from 2019, US from 2018, HK from 2016), reported by sub-period. CN is point-in-time, with nearly all delisted names, so it is the main test. The US and HK backtests hold today's listings only, so they are secondary. All of it was looked at in Phases 9-13; that's why nothing is tuned to it.
-- **Ship bar (stage 1).** In CN and at least one other market, after costs, every item must hold:
-  1. the mean 6-month excess return over the index is above zero, and positive in at least 3 of 4 sub-periods;
-  2. the list beats at least 90% of the random lists over the whole sample, and the random median in at least 3 of 4 sub-periods;
-  3. it is at least as good as the best single-signal list (otherwise that signal ships instead);
-  4. its 25%+ falls are no more frequent than the random lists';
-  5. the expected-return line slopes the right way in at least 3 of 4 sub-periods.
-- **Corrections after the first stage-1 test (your OK, 2026-10-22; registered before the corrected run).** The first runs
-  (docs/BACKTEST.md section 19) failed, and the diagnosis found three items that measured the wrong thing. The pass levels
-  above stay as they are; what each item measures changes, each for its reason:
-  1. *Signals are judged on what they are for.* Return signals (E/P, B/P, profitability, accruals, the two trends,
-     issuance) enter on the mean 6-month return as before. Risk signals (volatility, a loss, CN heat) enter if their safe
-     side had fewer 25%+ falls than their risky side (lowest-volatility fifth against the highest; without a loss against
-     with one; without 2+ limit-ups against with) in at least 3 of 4 sub-periods. Reason: their job in your goal is to cut
-     big falls; judging them on return left CN's score all trend, and its picks fell as often as random ones.
-  2. *Random portfolios use no score.* They buy at random from the funnel and sell at random: names that leave the funnel
-     are sold, and each month a random number of the rest (binomial, at the score portfolio's average monthly turnover)
-     too. Reason: in the first holding-rule run they sold by our score, so they shared its skill and item 2 compared the
-     score with itself. Their turnover is at least the score portfolio's, so they pay at least as much in costs.
-  3. *Simpler versions are compared on your whole goal.* A single signal beats the score only if its portfolio has the
-     higher return and no more 25%+ falls; then it ships instead. Reason: HK's momentum had the higher return with
-     falls 22.7% of the time against the score's 3.4%.
-  The portfolio is the registered holding-rule one (backtest/stage1_hold.py's rules). The avoid list ships in a market
-  that passes if its names trailed the 400 largest on the mean 6-month return and fell 25%+ more often, in at least 3 of
-  4 sub-periods. A market that fails shows no buys: its section says no list beat its index fund and names the fund
-  (SPY, the 2800.HK Tracker Fund, the 510300 CSI 300 ETF). The report still switches only if CN and one other market
-  pass. These runs are on data looked at before, so a pass here is weaker evidence than a first run; the report says so.
-- **Adding a part (stages 3-5).** It must:
-  - (a) forecast what it claims to better than the simple alternative. For the earnings engine, that's earnings 1 and 3 years ahead against "this year's margin persists": this is how the valuation approach itself is judged;
-  - (b) raise the list's 6-month excess return, or cut its falls, against the same score without the part, without worsening the other, in CN and one other market, in 3 of 4 sub-periods.
-- **Stage 3's test (registered 2026-10-22, committed before anything that produces results was built).** Each part runs
-  once; no variant after seeing results. Code in backtest/ (outside the app's line budget): earn_panel.py (the panels),
-  earnings.py (the forecast and part a), implied.py (the implied return), stage3.py (parts b-d). No analyst data anywhere.
-  The open definitions, fixed here with their reasons:
-  - *Panels*, one row per company and fiscal year, each public from: CN 业绩报表 since 2009 (core earnings = 扣非, as
-    history.cn_years; book = BPS × profit ÷ EPS), the notice date. US: the SEC frames 2009-2025, every us-gaap filer
-    with the dead ones (net income, equity at the calendar year end, revenue as fetch/frames.py, gross profit else revenue
-    less the cost of revenue, operating cash flow), each fact's period end + 120 days (10-K deadlines are 60-90 days),
-    filers with $50m+ revenue in the base year (the base rates' floor: shells and funds out). HK: Eastmoney's annual rows
-    since 2015, 90 days after the period. The US stocks' own inputs come from us_annual (their fiscal years and filing
-    dates, continuing operations less preferred dividends, book net of preferred, 20-F filers too), with the coefficients
-    fit on the frames (dead filers in the fit, not survivors only). Operating income is fetched but unused: CN and HK
-    have none, and one model serves every market.
-  - *Financials* (banks, brokers, insurers) are forecast on ROE: CN 申万 48, 4901, 4902 and HK the industry types of
-    config `financial_industries_hk` (both as the snapshots); US SIC 6000-6411 (the frames carry no Nasdaq industry; real
-    estate, REITs and funds aren't financials). *Sectors:* CN 申万 level 1 at the year end, US the Fama-French 12
-    industry of the SIC code, HK the first level of Eastmoney's industry type (as baserates.py). Sector medians are taken
-    within the group (financials or not); on a date, over the rows public by then, for the stock's base year (10+
-    companies, else the year before, else the market's).
-  - *Non-financials:* earnings = revenue × margin (core earnings ÷ revenue). For each horizon h = 1..5 years one direct
-    OLS fit of margin(t+h) on margin(t), its change from t−1, accruals ((earnings − operating cash flow) ÷ revenue), the
-    gross-margin change, a loss flag (earnings < 0) and the sector median margin; and one of revenue's log growth t→t+h
-    on its log growth t−1→t and the sector median log growth. A missing change, accrual or gross margin counts as 0, in
-    the fits and the forecasts alike. *Financials:* ROE(t+h) (earnings ÷ the previous year-end book) on ROE(t), its
-    change from t−1, the loss flag and the sector median ROE.
-  - *Fits:* every 30 June, on every pair (base year t, outcome t+h) whose outcome was public by then (an expanding
-    window, Hou-van Dijk-Zhang style); at least 300 pairs, else that horizon has no fit yet. Training values are
-    winsorized at the fit sample's 1st and 99th percentiles, for stable coefficients; forecasts take each company's raw
-    inputs (the plan's "raw, not winsorized").
-  - *Book path:* book grows by earnings less a net payout, paid on positive earnings only (clean surplus). Net payout =
-    1 − book growth ÷ earnings over the last 3 years, within 0-1; without 3 years of book or with 3-year earnings ≤ 0,
-    the sector median. Reason: CN and HK have no free dividend history; this also counts buybacks and share issues.
-  - *Implied expected return,* per stock and month end: the rate r at which P/B (stage 1's B/P, from the snapshot)
-    equals 1 + Σ (earnings_k − r × book_k−1) ÷ (1+r)^k over years 1..T, plus year T's residual income held flat for ever
-    (÷ r; Gebhardt-Lee-Swaminathan's convention, since a growing perpetuity needs a chosen growth rate). Years 1..H come
-    from the fits (H = the longest horizon fit by then, at most 5); margin and revenue growth (financials: ROE) then fade
-    in a straight line over 10 years to the sector's long-run level (the median company-year of the last 10 fiscal years
-    public by then, 30+ company-years, else the market's), so T = H + 10. Inputs: the latest fiscal year public on the
-    date, at most 18 months old; the forecast, in units of that year's book, is applied to the snapshot's latest book.
-    r is read on a grid from 0.5% to 50% in 0.25-point steps, linear in between: the first rate at which the value falls
-    to the price (below 0.5%: 0.5%; never: 50%; ties at the ends). No r when book ≤ 0 or the inputs are missing; in the
-    score a missing signal counts as the middle, as in stage 1.
-  - **(a) Forecast accuracy, in every market** (the engine's own test). Forecasts made on 30 June of t+1 from base year t
-    with that day's fit, for every base year with a fit and an outcome (at most CN and US 2010-2024 at 1 year, 2012-2022
-    at 3 years; HK 2016-2024 and 2018-2022); the US on the frames (dead filers included). Evaluated per base year: the 800
-    companies with the largest book among those public by the forecast day with revenue > 0, book > 0 (financials: the
-    previous book too) and an outcome. Error: |forecast earnings(t+h) − actual| ÷ book(t), each capped at 1 (else a few
-    tiny books decide the mean); financials' earnings = ROE × the forecast book path, the same payout on both sides.
-    Against "this year's margin persists, revenue at the sector median growth" (financials: ROE persists). Pass: at 3
-    years the mean error is lower, pooled over the base years and in at least half of them; at 1 year it is at most 2%
-    above the benchmark's (relative; a near-tie counts as not worse). The median error is shown, not deciding.
-  - **(b) The signal across all stocks, CN and one other market.** On each month end, the stocks of the stage-1 frame
-    with the implied return, plain E/P and plain B/P (stage 1's) and a 6-month return, each signal a percentile within
-    that set. Its top fifth minus bottom fifth on the mean 6-month return (pooled over the sub-period's dates, as stage
-    1's test) and its mean monthly rank correlation with the 6-month return are both positive in at least 3 of 4
-    sub-periods (2019-20, 2021-22, 2023, 2024-26), and both higher than plain E/P's and than plain B/P's in at least 3
-    of 4 ("on the same measure"). Shown, not deciding: its mean rank correlation with 12-1 momentum and the 6-month trend
-    per sub-period, since CN needs an edge that isn't trend.
-  - **(c) In the score, CN and one other market.** Stage 1's corrected score with the implied return in place of E/P and
-    B/P (a return signal under the corrected inclusion rule: top fifth minus bottom fifth positive in 3 of 4 sub-periods)
-    against stage 1's corrected score as it ran (E/P and B/P where they entered); the same funnel, holding-rule portfolio,
-    costs and index fund. Per sub-period: the mean 6-month return over the fund from its start months, and 25%+ falls per
-    entry for the names entered in it. A sub-period counts when one is better and the other no worse (return higher and
-    falls not higher, or falls lower and return not lower); pass in at least 3 of 4. Where the implied return doesn't
-    enter, the score is unchanged and (c) fails.
-  - **(d) The shipping check, unchanged:** stage1_fix.py's items 1-5 with the new score (random portfolios with no score
-    at its turnover; plain E/P, plain B/P and 12-1 momentum as the simpler versions), CN and one other market.
-  - *Decision.* The engine enters the score only if (a) passes in every market and (b) and (c) pass in CN and one other
-    market. A buy list ships only if the engine enters and (d) passes in CN and one other market. Every part's numbers are
-    reported whatever the outcome; the runs reuse data looked at in Phases 9-13 and stage 1, so a pass is weaker evidence
-    than a first look, and the report says so.
-- **Bug fixes** are adopted because they are correct; their effect is reported, not tested.
-- **The results review (stage 2)** is adopted on its narrow mandate, because it can't be backtested; the scoreboard follows what it removes.
-- **Scoreboard:** `track` keeps scoring every list (and every removed name against its replacement) against the index and the random lists, and the report shows it once a month. It never holds up a stage or a decision: it is there so you can see how the picks are doing, and to catch a fault in the live data that a backtest can't show.
-
-## Keeping the project on course
-
-The old plan drifted: rules added after single names looked wrong, and targets that made results look plausible (median upsides, outlier labels) rather than more useful. Two guards, both cheap:
-- **Usefulness first (a rule in AGENTS.md).** A change is worth doing only if it changes what you'd buy, hold or avoid, or the expected return shown, and it passes its registered test. Work whose only effect is that results look more plausible or better explained is not done: normalizing medians, outlier labels, plausibility targets, or a rule added because one name looked wrong.
-- **A fresh-eyes review at the end of every stage.** A reviewer agent with fresh context (defined in .claude/agents/stage-reviewer.md, written in stage 1) reads the plan, the stage's diff, its test results and the scoreboard, and answers a fixed checklist. Its answers go into the stage report to you:
-  1. Did the stage change what's bought, held or avoided, or the expected return shown? If not, why was it done?
-  2. Did it pass its registered test, run once? Was any threshold chosen after seeing results?
-  3. Was any rule written in response to specific names?
-  4. Complexity before and after: config values, special-case rules, app lines.
-  5. Does every number on a card come from code and data (rule 2)?
-  6. Are the live lists within the backtest's range, and is there any sign of a data fault?
-  7. What would a sceptical investor ask about today's lists? Spot-check 3 buys and 3 avoid names against their latest filings.
-
-  For the larger stages, a second model (e.g. Codex) reviewing the same diff is worth it: in this review, the two models caught different things (Codex found the preferred-dividend bug).
-- **No self-modifying loop.** The reviewers propose; you decide; any change passes its registered test. Retuning automatically on live results would chase noise, and it repeats the old pattern of reacting to the latest names.
-
-## Stages (one per session; each done when its test has run once)
-
-1. **Data fixes, the score and the new report** (ships in this stage if it clears the bar).
-   - The preferred-dividend bug, consensus fiscal years on the calendar, and raw inputs (pytest on saved samples).
-   - data/backtest rebuilt in main (today it exists only in old worktrees); total-return benchmarks verified.
-   - The portfolio test: monthly buys, the holding rule, costs, random lists. Checked against Method 17's numbers for today's v3 lists within 1 point (a check that the test code is right, not a benchmark).
-   - Signals 1-5 (no new valuation engine yet), the funnel, buys / holdings check / avoid, and cards with the expected return; then the ship bar, run once.
-   - The daily build stops calling DeepSeek. Until stage 2 (the next session), the cards carry the code's lines only (signals, key risk, 近期事件 with recent filings), with no AI note.
-   - The stage-reviewer agent definition, used for this stage's own review.
-   - If it passes: the report switches; v1 and v3 leave the daily build, and their code is deleted as the line budget needs; the keyword reply comes back after a test send with your OK (rule 9).
-   - If it fails: I report which item failed and in which market; the report doesn't switch, and the keyword reply stays off.
-2. **The results review, on request:** the red-flag checklist on buys, runners-up, avoid names and holdings; the AI notes and deep dives back, all run from the keyword with the cache and the 20-second budget; a free news source per market verified; quote checks; 审核剔除 and the reviewer's card line.
-   - Done when its tests pass on saved filings and headlines (a quote not in the source is rejected; a hard flag removes a buy; a soft concern only annotates).
-   - Also: the keyword reply is measured at under 30 seconds both on a warm cache and on a cold one (every review missing).
-3. **The earnings engine:** the sales × lasting-margin forecast, the implied expected return, and "what the price implies". Done when its test (a) + (b) has run once; if it passes, the report uses it.
-4. **Reinvestment, financing, losses and recoveries:** US first; CN and HK need a statement fetch (capex, cash, debt), with your OK first. Done when its tests have run once.
-5. **Analysts and shorts:** revisions and the analyst-vs-model gap, measured on CN's 2026 consensus window and the weekly snapshots collected since 2026-10-19; shortable flags; the short test. Done when its tests have run once.
-
-## Decisions taken in this plan (override any)
-
-- 10 buys, a holdings check and 10 avoid names per market; no 持有 bucket.
-- The card shows an expected excess return, not a fair-value price, so there's no discount rate to choose.
-- Analysts are separate signals, never blended into the valuation.
-- Verified one-off items may leave the earnings base, like 扣非.
-- Equal weights among the signals that pass the sign test; no weight fitting.
-- The results review removes names only on hard red flags with a quoted source; soft concerns annotate.
-- DeepSeek runs only when you ask for a report (the review, the notes and the deep dives), cached, within a 20-second budget.
-- A fresh-eyes review closes every stage; nothing changes the method automatically.
-- Success is judged on the backtest against the index, random lists from the same pool and simpler versions of the method, never against v1 or v3; v1 and v3 keep running until stage 1 ships. No stage waits for a live record.
+## Stages (one per session)
+1. **The ranking and the new report.**
+   - signals.py (the families per market, point-in-time; stage 1's signal code reused where it matches these
+     definitions; CN SUE from the quarterly 扣非 EPS), score.py, lists.py (buys, the holding rule with `hold`, avoid).
+   - Cards with the grades, the key risk, the board-lot cost, the re-check date and the 预期 line; the text summary
+     under 4,000 bytes.
+   - The history run (backtest/), its numbers in docs/BACKTEST.md section 21.
+   - Removed: v1 (value.py, pick.py), v3 (baserates.py, v3.py, shadow.py, trend.py, outliers.py), signal.py and their
+     commands; the stage-3 engine scripts in backtest/.
+   - The daily build makes the report, with no DeepSeek calls (cards carry the code's lines only until stage 2); the
+     job file is rewritten for the new commands.
+   - Done when: pytest passes; a full build renders all three markets; the history numbers are recorded; the
+     fresh-eyes review is done; then, with your OK, the daily job is loaded again, a test send goes out, and the
+     keyword reply comes back on.
+2. **The results review, AI notes and deep dives, on request** (above): a free news source per market verified, the
+   quote checks, 审核剔除 and the card's review line. Done when its tests pass on saved filings and headlines (a quote not
+   in the source is rejected; a hard flag removes a buy; a soft concern only annotates) and the keyword reply takes
+   under 30 s on a warm cache and on a cold one.
+3. **Analyst revisions and short labels** (once 26 weekly consensus snapshots exist: one was collected, on 2026-10-19,
+   and collection resumes when stage 1's daily job runs): the 3-month revision of next year's EPS joins each market's momentum family, as in Stockopedia's
+   momentum rank (no free history exists to backtest it, so it's adopted on the published evidence); 可做空 on avoid
+   names where shorting is possible (US; HK's designated securities list, to verify; not CN). Done when it runs live and
+   its tests pass.
 
 ## Kept from the old build
-
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
-- The backtest snapshots, with 6-month returns and worst month-ends.
-- The event feed; the deep-dive lane with its quote checks; the verdicts.
-- The DeepSeek notes and flags (folded into the results review).
-- WeChat and PDF delivery.
-- The habit of registering a test before running it.
-- Method 17's blow-up fit, reused in the funnel.
+- The backtest snapshots and the stage-1 harness (index funds, costs, month-end frames).
+- The event feed; the deep-dive lane with its quote checks; the verdicts (veto or confirm with an expiry).
+- The DeepSeek notes (folded into the results review); WeChat and PDF delivery; the scoreboard.
+
+## Sources for the method
+Stockopedia StockRanks and NAPS (stockopedia.com/academy, "What are the StockRanks", "Strategies for systematic
+investors"); AAII Shadow Stock Portfolio (aaii.com/model-portfolios/shadowstockinvesting); Jensen, Kelly and Pedersen,
+"Is there a replication crisis in finance?" (JF 2023); McLean and Pontiff (JF 2016); Liu, Stambaugh and Yuan, "Size and
+value in China" (JFE 2019); Jansen, Swinkels and Zhou, "Anomalies in the China A-share market" (PBFJ 2021); Asness,
+Frazzini and Pedersen, "Quality minus junk" (RAST 2019); Novy-Marx (JFE 2013); Sloan (TAR 1996); S&P DJI, "How smart
+beta strategies work in the Hong Kong market".
 
 ## Decisions kept from the old plan
 - Python 3.12 + uv. The old Swift project is archived read-only at ~/Developer/EquitySignalsClawbot-legacy.
