@@ -6,7 +6,9 @@
   cross-checks, the event feed, the deep-dive lane, the backtest data and the delivery stay as built.
 - Stage 1 (the ranking and the new report): built 2026-10-24. signals.py, score.py, lists.py (`hold`), the new cards
   and report; v1, v3, signal.py and the stage-3 scripts removed; the history run is docs/BACKTEST.md section 21 (20
-  names over the index fund a year: CN +2.9%, US −2.9%, HK +6.3%). Two fresh-context stage reviews; their fixes are in.
+  names over the index fund a year: CN +2.9%, US −2.9%, HK +6.3%). Three fresh-context stage reviews; their fixes are in. Open fault, outside the stage: a
+  US share count from Nasdaq's market value ÷ price can be wrong while the shares cross-check only logs it (Monster
+  Beverage: 2.94bn against Yahoo's 1.96bn, so its card's P/E is about 50% too high).
   Waiting for your OK (rule 9) to load the daily job,
   send a test, and turn the keyword reply back on. Stages 2 and 3: not started.
 - Nothing runs on a schedule (your call, 2026-10-24: a fresh start). The 06:30 job (com.stockreport.daily) is unloaded
@@ -92,12 +94,15 @@ two components outrank everyone's three-component means, and financials filled h
     plus 消费信贷 and 特殊金融服务 (consumer lenders, lessors); US Nasdaq's bank, broker and insurer industries plus SEC SIC
     6000-6199 (credit institutions: AmEx, Synchrony, SoFi, NU sit in Nasdaq's "Finance: Consumer Services" with Moody's
     and Equifax) and 6300-6399 (insurance carriers, health insurers and Berkshire included). Exchanges, rating agencies,
-    data firms and asset managers are fee businesses, scored like other companies. SIC 6199 also holds Coinbase (a
+    data firms and asset managers are fee businesses, scored like other companies, except in the US, where Nasdaq's
+    broker industry also holds the exchanges (CME, ICE, Nasdaq, Cboe, Tradeweb) and BlackRock, so they count as
+    financials there. SIC 6199 also holds Coinbase (a
     retail broker, like Robinhood, which Nasdaq lists among brokers), Circle and BitMine (balance sheets that are their
     product), so they count as financials. Known gaps, left without name rules: Equitable (a life insurer under SIC
     6411), Ares Capital (no SIC), Annaly (a mortgage REIT) and HK 中国信达 (filed with asset managers).
   - "Debt ÷ assets" is total liabilities ÷ assets (资产负债率) in every market: the free tables have no interest-bearing
-    debt line.
+    debt line. It counts client funds and settlement obligations (ADP, Mastercard) and buyback-shrunk equity as
+    leverage, so such companies grade low on quality; the card's 负债率 is the reported ratio.
   - Cash backing is left out for banks, insurers and brokers (their operating cash flow moves with deposits and loans;
     Sloan's sample excludes financials). CN and HK use the latest report's year to date (CN: operating cash flow per
     share × shares; HK in the reporting currency), the US the trailing 12 months.

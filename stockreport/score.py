@@ -28,7 +28,7 @@ WORDS = {  # component -> (good, bad, the figure shown)
 
 
 def grade(x: pd.Series) -> pd.Series:
-    """A for the top fifth of the market, E for the bottom fifth."""
+    """A for the top fifth of the family's ranks (value and quality: among financials or among the rest), E for the bottom."""
     return pd.cut(x.rank(pct=True), [0, 0.2, 0.4, 0.6, 0.8, 1], labels=list("EDCBA")).astype(str)
 
 

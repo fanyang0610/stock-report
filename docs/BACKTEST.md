@@ -1230,7 +1230,7 @@ Fewer names widen the range: HK's 10th-90th percentile spread over the fund is 3
 quality (−1.1%) and US momentum (−2.6%). None found. CN's top value fifth is banks, property, utilities and steel and its
 bottom fifth pharma, IT and electronics (2020-06 and 2023-06 checked), the signs of every component are as defined
 (stockreport/signals.py; tests/test_score.py), and the sub-periods swing the way the A-share market did (value −23
-points in 2019-20, +19 and +24 in 2021-22 and 2023, −15 in 2024-26). US quality and momentum are short samples with a
+points in 2019-20, +19 and +24 in 2021-22 and 2023, −14 in 2024-26). US quality and momentum are short samples with a
 survivor tilt: the frames hold today's listings, so the low-quality and falling stocks in them are the ones that
 survived (US E/P alone ran −6.7% in the first run, the stage review's figure). The families stay (the published
 evidence is far longer than these 8 years), and the report's 预期 section names every family that ran backwards here.
@@ -1258,6 +1258,10 @@ Taiping sit at the top on insurance investment gains (trailing EPS well above ne
 licensing quarter, 招商证券 on a doubled broker profit, NTRA (a loss-maker) on gross profit, cash and momentum; each
 is where the method puts it, and the kind of case stage 2's review is for. HK's universe after the turnover floor is ~394
 names, so "the 400 largest" is all of it, and most HK avoid names are 2024-25 listings already down 46-85% in six months.
+The third review confirmed the grouped ranking is the same live and in the history frames (0 mismatches over 954
+date-family checks), every number above to the decimal, and that financials are now 24% / 12% / 14% of the live top 50
+(CN / US / HK) against 10% / 14% / 11% of each universe; it found the grade legend still describing market-wide
+fifths (fixed) and an older US share-count fault (Monster Beverage), left for a follow-up.
 
 Rerun: `uv run python -m backtest.qvm frame cn|us|hk` (the score on each snapshot of `backtest.run build`;
 data/backtest/qvm_<market>.pkl), then `uv run python -m backtest.qvm run cn|us|hk` (prints the tables, writes
