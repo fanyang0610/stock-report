@@ -65,7 +65,8 @@ def test_report_dry_run(tmp_path, monkeypatch):
     assert "你的否决（至 2026-12-31）：测试否决" in html and html.count('class="card"') == 60  # CN, US and HK buys
     us = summary.split("【美股 US】")[1].split("【港股 HK】")[0]
     assert "建议配置：50% 的资金买标普500指数基金" in us and "其余 50% 等额买下面 20 只（每只约 2.5%）" in us
-    assert "预期：模拟回测（2019-01 至 2025-09 每月建仓的 81 个 12 个月，扣交易成本）：按建议配置" in us and "少赚 1.5%" in us
+    assert "预期：模拟回测（2019-01 至 2025-09 每月建仓的 81 个 12 个月，扣交易成本）：50% 指数基金" in us and "少赚 1.5%" in us
+    assert "这样配置也跑输了基金" in us
     assert "建议配置" not in cn and "只买 20 只：" in html
     assert pdf.stat().st_size > 10_000 and report.newest() == ("2026-10-24", pdf, summary)
     logged = track.load()

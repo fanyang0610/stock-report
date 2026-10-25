@@ -175,7 +175,8 @@ def main(argv: list[str] | None = None) -> int:
     run_p = sub.add_parser("run", help="fetch, score, list and write the report (PDF + text summary)")
     run_p.add_argument("--market", choices=["cn", "us", "hk"], help="one market (default: all three)")
     sub.add_parser("track", help="average return of past lists vs each market's index")
-    hold = sub.add_parser("hold", help="record a holding (no arguments: list them); the next `run` checks it")
+    hold = sub.add_parser("hold", help="record a stock you hold (not the index fund; no arguments: list them); "
+                                       "the next `run` checks it")
     hold.add_argument("code", nargs="?", help="ticker, e.g. 600519, 00700 or AAPL")
     hold.add_argument("--date", help="the day you bought it, YYYY-MM-DD (default: today)")
     hold.add_argument("--sold", action="store_true", help="remove it")

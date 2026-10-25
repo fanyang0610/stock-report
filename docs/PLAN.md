@@ -137,15 +137,19 @@ two components outrank everyone's three-component means, and financials filled h
 - **US index core** (added 2026-10-25, with your OK, before stage 2): in the US the report recommends half the money in
   an S&P 500 index fund and the other half in equal amounts across the 20 names (config `index_core`). Why: the method
   buys a name only when it is good on value, quality and momentum at once, so it never holds the expensive leaders that
-  make up much of the S&P 500 (on 2026-10-25 NVIDIA, Microsoft and Apple rank 327, 441 and 522 of 791: quality A, value
-  E); judging value within sectors doesn't change that (NVIDIA would rank 242). In 2018-2026 the 20 names alone trailed
+  make up much of the S&P 500 (on 2026-10-25 NVIDIA, Microsoft and Apple rank 327, 441 and 522 of 791: value E, quality
+  A, A and C); judging value within sectors doesn't change that (NVIDIA would rank 242). In 2018-2026 the 20 names alone trailed
   SPY by 2.9 points a year, ahead in 24% of 12-month windows, and the US is where beating the index is hardest (most
   active US large-cap funds trail the S&P 500 over 10-15 years: S&P's SPIVA scorecards). Half in the fund keeps the
   leaders, halves the gap to the index in every year and keeps the list's long-run edge from the published evidence;
   half is the moderate midpoint (my choice). The 预期 line shows the combination first (2018-2026: 1.5 points a year
-  behind SPY, the same 24% of windows ahead, worst 12 months −12% against SPY's −16%, largest fall −22% against −24%),
-  then the 20 names alone. The ranking and the lists don't change. CN and HK stay list-only: there the 20 names beat
-  the fund on their own (CN +2.9, HK +6.3 points a year).
+  behind SPY, the same 24% of windows ahead, worst 12 months −11% against SPY's −16% over the same months, largest fall
+  −22% against −24%), then the 20 names alone, and the report says plainly that the combination also trailed the fund
+  here and that the 20 names are kept on the long published record, not a promise. The ranking and the lists don't
+  change. The change answers a US-specific gap (an index weighted to expensive leaders the method never holds, in the
+  market where indexes are hardest to beat); CN and HK stay list-only, where the published A-share studies find many
+  anomalies still paying (Jansen, Swinkels and Zhou 2021; Liu, Stambaugh and Yuan 2019). Their history numbers are
+  shown, not the reason. Holdings are stocks only: `hold` doesn't take the fund.
 
 ### Cards
 - The price; the rank; the three grades A-E (fifths of each family); one line on why it's there (its two strongest

@@ -1268,7 +1268,10 @@ in SPY and half in the 20 names, each cohort split at the start, would have been
 names alone: 2.9), ahead in the same 24% of windows, with a worst 12 months against SPY of −10.1% (alone −20.1%), a
 worst 12 months of −11.5% (SPY −15.5%, from 2021-09) and a largest fall of −21.7% (SPY −23.9%). The fund pays no cost
 here, and the overlapping portfolio mixes the two monthly (a monthly rebalance), a simplification. CN and HK are
-unchanged by it (`uv run python -m backtest.qvm run us` left their numbers and the US list's identical).
+unchanged by it (`uv run python -m backtest.qvm run us` left their numbers and the US list's identical). The step's
+review recomputed these from data/backtest/qvm_us.pkl (to 16 digits) and found holding each split unchanged for 12
+months instead of the monthly mix moves the largest fall from −21.68% to −21.65%. (The step's commit message says "worst
+12 months −12%": it is −11.5%.)
 
 Rerun: `uv run python -m backtest.qvm frame cn|us|hk` (the score on each snapshot of `backtest.run build`;
 data/backtest/qvm_<market>.pkl), then `uv run python -m backtest.qvm run cn|us|hk` (prints the tables, writes

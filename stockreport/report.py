@@ -17,7 +17,7 @@ from stockreport.score import NAMES
 MARKETS = {"cn": ("A股 CN", "CNY", "元", "沪深300ETF"), "us": ("美股 US", "USD", "美元", "标普500基金"),
            "hk": ("港股 HK", "HKD", "港元", "盈富基金")}
 EXPECT = DATA / "history" / "expect.json"  # written by the history run (backtest/qvm.py)
-CORE = {"us": ("标普500指数基金", "如 SPY、VOO，英伟达、微软、苹果等最大的公司都在里面")}  # the index-core markets' fund
+CORE = {"us": ("标普500指数基金", "如 SPY、VOO，市值最大的公司都在里面")}  # the index-core markets' fund
 EVIDENCE = {
     "cn": "已发表研究：A 股的价值（尤其 E/P）和业绩超预期后的漂移长期有效；价格动量在 A 股 20 年不赚钱，所以 A 股的动量用业绩意外。",
     "us": "已发表研究：价值、质量、动量在美国有几十年记录，但公开后超额收益平均缩水过半（McLean-Pontiff 2016）。",
@@ -44,7 +44,7 @@ def expect_lines(market: str) -> list[str]:
                      f"{e['fund_drawdown']:.0%}）。")
     lines = [period + "20 只组合" + say(n20)]
     if "core" in e:  # the recommended split first, then the 20 names alone
-        lines = [f"{period}按建议配置（{e['core']['share']:.0%} 指数基金、其余等额买 20 只）" + say(e["core"]), "只买 20 只：" + say(n20)]
+        lines = [f"{period}{e['core']['share']:.0%} 指数基金、其余等额买 20 只：" + say(e["core"]), "只买 20 只：" + say(n20)]
     lines += ["只买 10 只 / 5 只：最差的 12 个月相对基金 " + " / ".join(
                  f"{e['portfolios'][n]['worst_excess']:+.0%}" for n in ("10", "5")) +
              f"（20 只 {n20['worst_excess']:+.0%}），名单越短结果越分散。"]
@@ -89,7 +89,8 @@ def section(market: str, rows: pd.DataFrame, day: str, today: date, failed: list
     share = CONFIG["lists"]["index_core"].get(market)
     fund, note = CORE.get(market, ("", ""))
     core = (f"建议配置：{share:.0%} 的资金买{fund}（{note}）；其余 {1 - share:.0%} 等额买下面 20 只（每只约 {(1 - share) / 20:.1%}），"
-            "作为指数之外的价值、质量、动量押注。") if share else ""
+            "在指数之上加重价值、质量、动量都好的公司。美股大盘最难跑赢指数，下面的模拟里这样配置也跑输了基金；"
+            "保留这 20 只依据的是几十年的已发表研究，不保证跑赢。") if share else ""
     return {"code": market.upper(), "name": name, "currency": currency, "expect": expect_lines(market), "core": core,
             "core_short": f"{share:.0%} {fund}" if share else "",
             "data_date": max((c["price_date"] for c in cards["buy"] if c["price_date"]), default=day),
