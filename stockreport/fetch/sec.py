@@ -43,6 +43,10 @@ INSTANT = {
     "assets": ["Assets"],
 }
 MAX_AGE_DAYS = 200  # no 10-Q/10-K period this recent (e.g. 20-F/40-F filers): a gap, filled from Yahoo
+# Share counts for crosscheck.us_shares: the EPS denominator (the shares the parent's profit and book belong to) and
+# the cover page's count (as of a date a few weeks after the period). Multi-class filers often tag them per class
+# only (Berkshire, Ares; the cover: Alphabet, Carvana), which companyfacts leaves out.
+BASIC_SHARES, COVER_SHARES = "WeightedAverageNumberOfSharesOutstandingBasic", "EntityCommonStockSharesOutstanding"
 # Annual history: fiscal-year concepts per taxonomy (durations, instants), merged per year like DURATION.
 # 20-F filers report in us-gaap (ASML, BABA) or ifrs-full (TSM, NVO), often in their own currency.
 ANNUAL_FORMS, HISTORY_FROM = ("10-K", "20-F", "40-F"), "2015-01-01"
@@ -210,8 +214,10 @@ def chain(vals: dict, end: str) -> float | None:
 
 def parse_facts(code: str, payload: dict, today: date) -> dict:
     """One row per company: latest period, TTM revenue / profit / gross profit / operating cash flow,
-    growth against the TTM a year earlier (same concept), and the latest equity, liabilities and
-    assets. gap = True when there is no recent us-gaap 10-Q/10-K period in USD or no TTM profit/revenue."""
+    growth against the TTM a year earlier (same concept), the latest equity, liabilities and assets, the basic
+    weighted-average shares of the latest quarter (else of the period to the latest end, e.g. a 10-K's year) and the
+    latest filing's cover-page count with its date.
+    gap = True when there is no recent us-gaap 10-Q/10-K period in USD or no TTM profit/revenue."""
     gaap = payload.get("facts", {}).get("us-gaap", {})
     filed, year = {}, {}  # period end -> first filing date; 10-K period end -> its longest period
     for n in DURATION["np"]:
@@ -231,6 +237,13 @@ def parse_facts(code: str, payload: dict, today: date) -> dict:
     instant = lambda names: near(values(gaap, names), end, None, 5)
     for key, names in INSTANT.items():
         row[key] = instant(names)
+    basic = latest(gaap, BASIC_SHARES, "shares", quarterly)
+    quarter = near(basic, end, 91, 15)
+    row["shares_basic"] = quarter if quarter is not None else near(basic, end, None, 5)
+    dei = payload.get("facts", {}).get("dei", {})
+    cover = [(f["end"], f["val"]) for f in dei.get(COVER_SHARES, {}).get("units", {}).get("shares", [])
+             if f.get("form", "").startswith(("10-Q", "10-K")) and 0 <= days(end, f["end"]) <= 120]
+    row["cover_date"], row["shares_cover"] = max(cover) if cover else (None, None)
     for when in ("ttm", "prior"):
         if None not in (row[f"nii_{when}"], row[f"nonint_{when}"]):
             row[f"revenue_{when}"] = larger(row[f"revenue_{when}"], row[f"nii_{when}"] + row[f"nonint_{when}"])
@@ -332,11 +345,14 @@ def facts(client: Http, job: tuple[str, int, date]) -> tuple[dict, list[dict]]:
 
 def update_facts(today: date, codes: list[str]) -> None:
     """Weekly per company (4 at a time, under SEC's 10 requests/s); the same files give the annual
-    history. Companies read before the history existed (no annual_years) are read again once."""
+    history. Companies read before the history existed (no annual_years) are read again once; so is every company
+    when the table has no share counts yet."""
     update_ciks(today)
     cik = load_ciks()
     table = pd.read_csv(TABLE, dtype={"code": str}) if TABLE.exists() else pd.DataFrame(columns=["code"])
     again = set(stale(TABLE, codes, today)) | set(table.loc[table.reindex(columns=["annual_years"])["annual_years"].isna(), "code"])
+    if "shares_cover" not in table.columns:
+        again = set(codes)
     todo = [(c, int(cik[c]), today) for c in codes if c in again and c in cik.index]
     upsert_each(TABLE, make_http, facts, todo, today, 4, "sec facts", history=ANNUAL)
 

@@ -134,6 +134,13 @@ def test_equity_and_net_income_are_the_parents():
     assert sec.parse_annual("MTB", FIXES["MTB"])[0]["revenue"] == (6_948 + 2_742) * 1e6
 
 
+def test_basic_shares_are_the_latest_quarters():
+    # Cut from Monster's real companyfacts (2026-10-25): profit and basic weighted-average shares, 10-Q/10-K since 2025.
+    # The June quarter (filed 2026-08-07, before the 2:1 split of 2026-08-11), not the half year to June.
+    row = sec.parse_facts("MNST", load("us_companyfacts_mnst_shares_sample.json"), date(2026, 10, 25))
+    assert (row["period"], row["notice_date"], row["shares_basic"]) == ("2026-06-30", "2026-08-07", 978_662_000)
+
+
 def test_yahoo_fundamentals_for_sec_gaps():
     # Real Yahoo fundamentals-timeseries (2026-10-17), one company per growth path.
     s, day = load("us_yahoo_timeseries_sample.json"), date(2026, 10, 17)

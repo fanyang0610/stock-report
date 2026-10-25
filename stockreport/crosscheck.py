@@ -1,10 +1,11 @@
 """Data cross-checks and drift alarms (PLAN.md Method 13): each figure the valuation rests on against a second source
 (within 1% agree, 1-5% small, above 5% unusable): CN quotes, shares, TTM profit and book with Tencent; US TTM revenue,
-net income, equity and shares with Yahoo's fundamentals; HK book, trailing EPS and shares with Yahoo's statistics. Over
-`drop_gap` (20%; 5-15% gaps are mostly definitions) and unconfirmed by a third source (CN: Eastmoney's P/E, P/B): dropped
-(rule 5). Known structural gaps (share classes, A+H counts, Yahoo's HK EPS at old FX, adjusted vs GAAP consensus) are
-counted only; consensus EPS 20x+ off trailing EPS on a normal margin is a units error and drops the stock. Drift alarms
-(against the newest earlier snapshot) are logged, never dropped. Every run prints the counts; the names go to the log."""
+net income and equity with Yahoo's fundamentals, and shares with SEC's and Yahoo's counts (us_shares); HK book, trailing
+EPS and shares with Yahoo's statistics. Over `drop_gap` (20%; 5-15% gaps are mostly definitions) and unconfirmed by a
+third source (CN: Eastmoney's P/E, P/B; US shares: Yahoo): dropped (rule 5). Known structural gaps (HK A+H and
+dual-class counts, Yahoo's HK EPS at old FX, adjusted vs GAAP consensus) are counted only; consensus EPS 20x+ off
+trailing EPS on a normal margin is a units error and drops the stock. Drift alarms (against the newest earlier
+snapshot) are logged, never dropped. Every run prints the counts; the names go to the log."""
 
 import logging
 from datetime import date
@@ -12,8 +13,9 @@ from datetime import date
 import numpy as np
 import pandas as pd
 
+from stockreport import history
 from stockreport.config import CONFIG, DATA
-from stockreport.fetch import tdx, tencent, yahoo
+from stockreport.fetch import sec, tdx, tencent, yahoo
 
 log = logging.getLogger(__name__)
 CFG = CONFIG["crosscheck"]
@@ -33,6 +35,35 @@ def worse(g: pd.Series, *confirm: pd.Series) -> pd.Series:
     return out
 
 
+def us_shares(df: pd.DataFrame) -> pd.DataFrame:
+    """US share counts, before the universe is cut by market value: Nasdaq's market value ÷ its price (df["shares"])
+    against SEC's two counts, the latest filing's cover page (as of a few weeks after the quarter) and the quarter's
+    basic weighted-average shares (the EPS denominator: the shares the parent's profit and book belong to), each × the
+    splits since, and Yahoo's quarter-end count (restated for splits). Nasdaq's stands when an SEC count is within
+    `large` of it (it is often the cover's, newer than the quarter end: Gartner's buyback, GameStop's new shares). Else,
+    when Yahoo's is within `large` of an SEC count, that count is used (the cover's first): two filings agree and
+    Nasdaq doesn't (Monster's 2:1 split counted 3:1; Martin Marietta 18% high; Up-C units and voting-only classes the
+    parent's profit leaves to minority interests: Carvana, TKO, Symbotic). More than drop_gap off both SEC counts and
+    Yahoo's not within drop_gap of Nasdaq's: dropped (rule 5). Without an SEC count (Berkshire and Ares tag theirs per
+    class only; foreign filers) and for ADRs (Nasdaq counts depositary shares), Nasdaq's stands."""
+    cols = ["shares_cover", "cover_date", "shares_basic", "notice_date"]
+    facts = pd.read_csv(sec.TABLE, dtype={"code": str, "cover_date": str, "notice_date": str})
+    facts = facts.drop_duplicates("code", keep="last").set_index("code").reindex(df.index, columns=cols)
+    splits, codes = history.read("us_splits"), df.index.to_series()
+    adr = df["listing"].str.contains("Depositary", case=False, na=False)
+    count = lambda col, day: (facts[col] * history.splits_after(splits, codes, facts[day].fillna("9999"))).where(~adr)
+    cover, basic = count("shares_cover", "cover_date"), count("shares_basic", "notice_date")
+    y = pd.read_csv(yahoo.GAPS, dtype={"code": str}).drop_duplicates("code", keep="last").set_index("code")["shares"].reindex(df.index)
+    nasdaq, large, drop_gap = df["shares"], CFG["large"], CFG["drop_gap"]
+    within = lambda a, b, limit: gap(a, b) <= limit  # False when either is missing
+    agreed = cover.where(within(cover, y, large)).fillna(basic.where(within(basic, y, large)))
+    fixed = ~(within(cover, nasdaq, large) | within(basic, nasdaq, large)) & agreed.notna()
+    off = (cover.notna() | basic.notna()) & ~within(cover, nasdaq, drop_gap) & ~within(basic, nasdaq, drop_gap)
+    return df.assign(shares=nasdaq.where(~fixed, agreed), shares_nasdaq=nasdaq, shares_fixed=fixed,
+                     shares_gap=pd.concat([gap(cover, nasdaq), gap(basic, nasdaq)], axis=1).min(axis=1),
+                     shares_drop=off & ~fixed & ~within(nasdaq, y, drop_gap))
+
+
 def second_sources(df: pd.DataFrame, market: str) -> list[tuple]:
     """(label, gap to the second source, the stocks it drops or None[, the stocks it keeps as 低信心]) per check."""
     if market == "cn":
@@ -50,7 +81,6 @@ def second_sources(df: pd.DataFrame, market: str) -> list[tuple]:
         y = pd.read_csv(yahoo.GAPS, dtype={"code": str, "period": str, "balance_period": str}).set_index("code").reindex(df.index)
         near = lambda day: (pd.to_datetime(y[day]) - pd.to_datetime(df["period"])).dt.days.abs() <= 20
         y = y.where((df["source"] == "SEC") & (y["yahoo"] == "ok") & (y["currency"] == "USD") & near("period"))
-        adr = df["listing"].str.contains("Depositary", case=False, na=False)  # Yahoo counts the ordinary shares
         checks = [("TTM net income vs Yahoo", gap(df["np_ttm"], y["ni_ttm"])),
                   # Yahoo's latest equity can be a quarter older than its TTM (Amazon, Gartner on 2026-10-19)
                   ("equity vs Yahoo", gap(df["equity"], y["equity"].where(near("balance_period"))))]
@@ -60,7 +90,7 @@ def second_sources(df: pd.DataFrame, market: str) -> list[tuple]:
         revenue, on_sales = gap(df["revenue_ttm"], y["revenue_ttm"]), ~df["financial"] & (df["np_ttm"] <= 0)
         return [("TTM revenue vs Yahoo", revenue, worse(revenue) & on_sales, worse(revenue) & ~on_sales)] + [
             (label, g, worse(g)) for label, g in checks] + [
-            ("shares vs Yahoo (not ADRs)", gap(df["shares"], y["shares"].where(~adr)), None)]
+            ("Nasdaq shares vs SEC", df["shares_gap"], df["shares_drop"])]
     c = pd.read_csv(yahoo.CONSENSUS, dtype={"code": str, "period_y": str}).set_index("code").reindex(df.index)
     c = c.where((pd.to_datetime(c["period_y"]) - pd.to_datetime(df["period"])).dt.days.abs() <= 20)
     book = gap(df["bps"], c["bvps_y"])
@@ -113,6 +143,11 @@ def checks(df: pd.DataFrame, market: str, info: dict) -> dict[str, pd.Series]:
         lines.append(line)
         if large.any():
             log.info("%s %s over %.0f%%: %s", market.upper(), label, 100 * CFG["large"], names(large, 40))
+    if "shares_fixed" in df:
+        fixed = df["shares_fixed"].fillna(False).astype(bool)
+        lines.append(f"  shares set to SEC's count (Yahoo's agrees, Nasdaq's doesn't): {int(fixed.sum())}")
+        if fixed.any():
+            log.info("%s shares set to SEC's count: %s", market.upper(), names(fixed, 40))
     for label, flagged, drop in consensus(df):
         lines.append(f"  {label}: {int(flagged.sum())}" + (" dropped" if drop else " (counted only)"))
         if drop:

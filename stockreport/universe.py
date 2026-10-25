@@ -252,6 +252,7 @@ def build_us(today: date) -> tuple[pd.DataFrame, dict]:
     closes = recent.pivot(index="code", columns="date", values="close").reindex(df.index)
     df["price"] = closes[last]
     df["shares"] = df["mcap"] / df["last"]  # the screener's market value is company-wide; its price can lag a day
+    df = crosscheck.us_shares(df)  # against SEC's and Yahoo's counts: kept, set to SEC's, or dropped below
     df["mcap"] = df["shares"] * df["price"]
     df = top_by_value(df, info)
     df = df.join(price_metrics(prices, list(df.index)))

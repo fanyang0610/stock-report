@@ -9,8 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from stockreport import crosscheck
-from stockreport.fetch import tencent, yahoo
+from stockreport import crosscheck, history
+from stockreport.fetch import sec, tencent, yahoo
 
 SAMPLES = Path(__file__).parent / "data"
 sample = lambda name: pd.read_csv(SAMPLES / name, dtype={"code": str, "trade_date": str, "period": str}).set_index("code")
@@ -72,12 +72,42 @@ def test_us_compares_sec_with_yahoo_for_the_same_period(monkeypatch):
     assert dropped(drops, "equity vs Yahoo >20%") == []
     assert counts(info, "TTM revenue vs Yahoo") == "5: 3 / 0 / 2, drops 0, kept as 低信心 1"
     assert counts(info, "equity vs Yahoo") == "4: 4 / 0 / 0, drops 0"
-    # Berkshire's Yahoo count is in class A shares: a large gap, counted only
-    assert counts(info, "shares vs Yahoo (not ADRs)") == "5: 4 / 0 / 1"
-    assert not any("shares" in label for label in drops)
+    # Nasdaq's counts are SEC's cover-page counts (us_shares, below); Berkshire has none, TSM is a 20-F filer
+    assert counts(info, "Nasdaq shares vs SEC") == "4: 4 / 0 / 0, drops 0"
+    assert "  shares set to SEC's count (Yahoo's agrees, Nasdaq's doesn't): 0" in info["checks"]
     # the same revenue gap on a loss-maker, valued on its sales (P/S), drops it
     loss = df.assign(np_ttm=df["np_ttm"].where(df.index != "SOFI", -1e8))
     assert dropped(crosscheck.checks(loss, "us", {}), "TTM revenue vs Yahoo >20%") == ["SOFI"]
+
+
+def test_us_share_count_is_nasdaqs_unless_two_filings_say_otherwise(monkeypatch, tmp_path):
+    # Real counts on 2026-10-25: Nasdaq's market value ÷ price, SEC's cover-page and basic weighted-average counts of
+    # the latest filing, Yahoo's quarter-end count (restated for splits), and Yahoo's split dates
+    s = pd.read_csv(SAMPLES / "us_shares_sample.csv", dtype={"code": str, "cover_date": str, "notice_date": str}).set_index("code")
+    s.drop(columns=["listing", "shares", "yahoo_shares"]).to_csv(tmp_path / "facts.csv")
+    s[["yahoo_shares"]].rename(columns={"yahoo_shares": "shares"}).to_csv(tmp_path / "yahoo.csv")
+    pd.DataFrame({"code": ["MNST", "MNST", "CVNA"], "date": ["2023-03-28", "2026-08-11", "2026-05-08"],
+                  "ratio": [2.0, 2.0, 5.0]}).to_csv(tmp_path / "us_splits.csv.gz", index=False)
+    monkeypatch.setattr(sec, "TABLE", tmp_path / "facts.csv")
+    monkeypatch.setattr(yahoo, "GAPS", tmp_path / "yahoo.csv")
+    monkeypatch.setattr(history, "HISTORY", tmp_path)
+    df = crosscheck.us_shares(s[["listing", "shares"]])
+    assert sorted(df.index[df["shares_fixed"]]) == ["CVNA", "MLM", "MNST", "TKO"]
+    # Monster: Nasdaq counts the 2:1 split of 2026-08-11 as 3:1; the cover count of 2026-07-31 × 2 agrees with Yahoo
+    assert df.at["MNST", "shares"] == 979_525_882 * 2
+    # Carvana and TKO (Up-C): Nasdaq adds the class B shares, whose LLC units are minority interests in the profit;
+    # Carvana's 10-Q came after its 5:1 split of 2026-05-08 and is in today's units
+    assert df.loc[["CVNA", "TKO"], "shares"].tolist() == [717_691_000, 74_797_769]
+    assert df.at["MLM", "shares"] == 60_065_839  # Nasdaq's 18% too high
+    # GameStop's cover count has the shares issued after the quarter (Yahoo's hasn't); Alphabet's counts all classes;
+    # Berkshire has no SEC count (per class only) and Yahoo's is in class A shares; Yahoo's CME count is in thousands
+    kept = ["GME", "GOOGL", "BRK.B", "CME"]
+    assert (df.loc[kept, "shares"] == s.loc[kept, "shares"]).all() and not df.loc[kept, "shares_drop"].any()
+    # Skydance: Nasdaq's 5.0bn against SEC's 1.1bn and no Yahoo count to back either: dropped (rule 5)
+    assert sorted(df.index[df["shares_drop"]]) == ["SKYD"]
+    # an ADR's Nasdaq count is in depositary shares, SEC's in ordinary shares: not compared
+    adr = crosscheck.us_shares(s.loc[["MNST"], ["shares"]].assign(listing="Monster American Depositary Shares"))
+    assert adr.at["MNST", "shares"] == s.at["MNST", "shares"] and adr["shares_gap"].isna().all()
 
 
 def test_hk_key_statistics_parse_and_book_check(monkeypatch, tmp_path):
