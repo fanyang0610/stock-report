@@ -1,6 +1,7 @@
-"""Manual verdicts, tier 4 of the deep-dive lane (PLAN.md Method 15): `verdict <code> veto|confirm --until D --reason
-"..."` appends to data/verdicts.csv. A veto swaps the pick like an AI flag, a confirm lifts 低信心; never a number. It ends
-at its date or when the stock reports a period newer than the snapshot's it was given on."""
+"""Your verdicts (AGENTS.md rule 3): `verdict <code> veto|confirm --until D --reason "..."` appends to data/verdicts.csv.
+A veto keeps a name out of the buys (lists.build); a confirm keeps a name as the lists have it when the results review
+would remove a buy or sell a holding on a hard red flag or data_suspect (review.apply), and its card says so; never a
+number. It ends at its date or when the stock reports a period newer than the snapshot's it was given on."""
 
 import re
 from datetime import date

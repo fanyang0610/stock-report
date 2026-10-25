@@ -90,4 +90,6 @@ def test_report_dry_run(tmp_path, monkeypatch):
     assert html.count('class="card"') == 60  # 20 buys a market: the next name took the removed one's place
     logged = track.load()
     assert logged.loc[(logged["market"] == "cn") & (logged["bucket"] == "removed"), "ticker"].tolist() == [first]
+    stand_in = logged.loc[(logged["market"] == "cn") & (logged["bucket"] == "replacement"), "ticker"].tolist()
+    assert len(stand_in) == 1 and stand_in[0] in set(logged.loc[logged["bucket"] == "buy", "ticker"])
     assert first not in set(logged.loc[(logged["market"] == "cn") & (logged["bucket"] == "buy"), "ticker"])

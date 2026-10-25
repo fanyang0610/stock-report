@@ -43,6 +43,9 @@ RULES = {
            ("business", r"業務|合約|協議|合作|批准|項目|產品|營運|投資"),
            ("other", r"內幕消息")],
 }
+# Checked before the routine rules (which drop bond, guarantee and auditor titles): a default, overdue debt or an
+# auditor resigning is a risk filing however it is titled
+ALARM = r"违约|違約|逾期|未能按期|无法兑付|無法兌付|(会计师事务所|會計師事務所|核數師|核数师|审计机构).{0,6}(辞任|辭任|辞职|辭職)"
 # HK document types (HKEX's top-level category) that are never news
 HK_ROUTINE = r"翌日披露報表|月報表|交易所買賣基金|債券及結構性產品|委任代表表格|展示文件|槓桿及反向|公司資料報表"
 # US: 8-K items, then forms (an 8-K whose items are all routine, e.g. 7.01 Reg FD or 9.01 exhibits, is routine)
@@ -62,6 +65,8 @@ def classify(market: str, row: dict) -> str:
             kinds = [US_ITEMS[i] for i in str(row.get("items") or "").split(",") if i in US_ITEMS]
             return min(kinds, key=list(KINDS).index) if kinds else "routine"
         return US_FORMS.get(form, "routine")
+    if re.search(ALARM, row["title"]):
+        return "risk"
     if market == "cn":
         return match("cn", row["title"])
     # HK: the title first (A+H issuers' reposts of their A-share filings without the prefix), else HKEX's category

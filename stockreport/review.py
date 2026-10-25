@@ -26,31 +26,45 @@ log = logging.getLogger(__name__)
 CFG = CONFIG["review"]
 CACHE = DATA / "review"
 ROLES = ("buy", "next", "holding", "avoid")  # the review's order: buys first
-# kind -> (words, hard red flag, what a hard flag's quote must name; a hard kind whose quote doesn't is a soft concern)
+# A suspension or delisting of another security of the company (preferred shares, bonds, convertibles) isn't the stock's;
+# nor is a bare SEC delisting or deregistration form, which doesn't say which security (often notes redeemed or matured)
+OTHER_SECURITY = r"优先股|優先股|债券|債券|可转债|可轉債|转债|轉債|票据|票據|preferred|bond|notes due|warrant|25-NSE|15-12[BG]"
+SEC_BARE = re.compile(r"(25-NSE|15-12[BG])\b")  # those forms' titles are left out of the sources
+# kind -> (words, hard red flag, what the quote must name for the kind to stand, what it mustn't). A hard kind whose
+# quote fails is a soft concern ("other"); a management concern that names no chair, CEO or CFO (or an investigation) is
+# dropped: ordinary director and secretary changes are routine. From a headline, a hard flag or a management concern
+# must also name the company (its name or ticker); headlines are often about another company or the whole market.
 KINDS = {
     "investigation": ("监管立案调查或欺诈认定", True,
-                      r"立案|调查|調查|稽查|留置|欺诈|欺詐|造假|虚假记载|investigat|probe|subpoena|Wells notice|fraud"),
+                      r"立案|调查|調查|稽查|留置|欺诈|欺詐|造假|虚假记载|investigat|probe|subpoena|Wells notice|fraud", None),
     "audit": ("非标准审计意见或审计师辞任", True,
-              r"保留意见|保留意見|否定意见|否定意見|无法表示意见|無法表示意見|辞任|辭任|辞职|辭職|qualified opinion|adverse opinion|"
-              r"disclaimer of opinion|resign"),
+              r"保留意见|保留意見|否定意见|否定意見|无法表示意见|無法表示意見|qualified opinion|adverse opinion|disclaimer of opinion|"
+              r"(会计师事务所|會計師事務所|审计机构|審計機構|审计师|審計師|核数师|核數師|auditor|accountant).{0,12}"
+              r"(辞任|辭任|辞职|辭職|resign)", None),
     "going_concern": ("持续经营疑虑或债务违约", True,
-                      r"持续经营|持續經營|重大不确定|违约|違約|逾期|无法兑付|清盘|清盤|破产|破產|重整|going concern|substantial doubt|"
-                      r"default|bankrupt|Chapter 11|receivership|winding.up"),
+                      r"持续经营|持續經營|重大不确定|违约|違約|逾期|未能按期|无法兑付|清盘|清盤|破产|破產|重整|going concern|"
+                      r"substantial doubt|default|bankrupt|Chapter 11|receivership|winding.up", None),
     "delisting": ("退市、ST 或停牌", True,
                   r"退市|终止上市|終止上市|(?-i:(?<![A-Za-z])\*?ST(?![A-Za-z]))|风险警示|停牌|暫停買賣|除牌|delist|suspen|"
-                  r"listing-rule failure"),
+                  r"listing-rule failure", OTHER_SECURITY),
     "takeover": ("以固定价格被收购或私有化", True,
-                 r"要约|要約|私有化|吸收合并|吸收合併|协议安排|協議安排|tender offer|merger proxy|privatization|go(ing)?.private|"
-                 r"to be acquired|scheme of arrangement"),
-    "sanctions": ("制裁或禁令", True, r"制裁|实体清单|實體清單|禁令|sanction|entity list|\bban\b|banned"),
-    "downturn": ("行业下行或产品价格下跌", False, None),
-    "customer": ("失去大客户或订单", False, None),
-    "guidance": ("下调指引或业绩下滑", False, None),
-    "management": ("高管离职或被调查", False, None),
-    "litigation": ("诉讼或仲裁", False, None),
-    "one_off": ("利润来自一次性收益", False, None),
-    "other": ("其他负面事件", False, None),
+                 r"要约|要約|私有化|被吸收合并|被吸收合併|协议安排|協議安排|tender offer|merger proxy|privatization|"
+                 r"go(ing)?.private|to be acquired|scheme of arrangement",
+                 r"持续督导|持續督導|督导意见|完成|结果|結果|过户|過戶|completion|completed"),  # an offer already done
+    "sanctions": ("制裁或禁令", True, r"制裁|实体清单|實體清單|禁令|sanction|entity list|\bban\b|banned", None),
+    "downturn": ("行业下行或产品价格下跌", False, None, None),
+    "customer": ("失去大客户或订单", False, None, None),
+    "guidance": ("下调指引或业绩下滑", False, None, None),
+    "management": ("高管离职或被调查", False,
+                   r"董事长|董事長|总经理|總經理|总裁|總裁|首席执行官|行政总裁|行政總裁|财务总监|財務總監|总会计师|首席财务官|"
+                   r"\bCEO\b|\bCFO\b|chief executive|chief financial|chair|被查|调查|調查|留置|investigat", None),
+    "litigation": ("诉讼或仲裁", False, None, None),
+    "one_off": ("利润来自一次性收益", False, None, None),
+    "other": ("其他负面事件", False, None, None),
 }
+NAMED = {k for k, v in KINDS.items() if v[1]} | {"management"}
+SUFFIX = re.compile(r"(股份有限公司|有限公司|控股|集团|集團|股份|-[A-Z]+|\s+(Inc|Corporation|Corp|Company|Co|Holdings|Group|plc|"
+                    r"PLC|Ltd|Limited|Incorporated|N\.V|S\.A|AG|SE)\b.*|\s*\(The\).*|\s+Common Stock.*|\s+Class [A-C].*)$")
 STATUS = {"pending": "审核进行中", "unavailable": "审核暂不可用", "no_sources": "审核暂不可用（未取到公告和新闻）"}
 
 SYSTEM = """你是上市公司审核员。下面是一只股票的卡片（程序根据公开数据计算）和它近 90 天的非例行公告标题、近 30 天的新闻标题，每条有编号。
@@ -61,7 +75,7 @@ SYSTEM = """你是上市公司审核员。下面是一只股票的卡片（程�
 - going_concern：持续经营存在重大疑虑，债务违约或逾期，破产、重整、清盘；
 - delisting：本公司普通股（A 股、H 股或美股普通股）退市风险、被实施 ST 或 *ST、终止上市或停牌；优先股、债券、可转债的停牌或摘牌不算，
   美股 25-NSE、15-12B 表格标题没说明是普通股的也不算（常是债券到期或赎回）；
-- takeover：本公司作为被收购方，被以固定价格收购、要约收购或私有化（本公司去收购别人不算）；
+- takeover：本公司作为被收购方，正被以固定价格收购、要约收购或私有化（本公司去收购别人、已经完成的收购不算）；
 - sanctions：制裁、实体清单或禁令点名本公司。
 软风险（kind，市场可能在担心的事）：downturn 行业下行或产品价格下跌；customer 失去大客户或订单；guidance 下调指引、业绩预减、预亏或明显下滑、盈利警告；
 management 董事长、总经理（CEO）、财务总监（CFO）离职，或公司高管被调查；litigation 重大诉讼或仲裁；
@@ -74,9 +88,6 @@ one_off 利润主要来自一次性收益（出售资产、公允价值变动、
 4. note：一句中文，不超过 40 个字，用文字说明这只股票为什么在这个名单上、最需要注意什么（参考卡片和 findings）；
    不得出现任何数字，不写价格、目标价或预测。
 只输出 JSON：{"findings": [{"kind": "", "source": 1, "quote": ""}], "note": ""}"""
-# A suspension or delisting of another security of the company (preferred shares, bonds, convertibles) isn't the stock's;
-# nor is a bare SEC delisting or deregistration form, which doesn't say which security (often notes redeemed or matured)
-OTHER_SECURITY = r"优先股|優先股|债券|債券|可转债|可轉債|转债|轉債|票据|票據|preferred|bond|notes due|warrant|25-NSE|15-12[BG]"
 
 
 def gather(market: str, rows: pd.DataFrame, today: date, day: str | None = None) -> dict:
@@ -116,9 +127,10 @@ def load_sources(market: str, day: str) -> dict:
 
 
 def lines_of(src: dict) -> list[dict]:
-    """The numbered source lines DeepSeek reads: the newest filings, then the newest headlines."""
+    """The numbered source lines DeepSeek reads: the newest filings (bare SEC delisting forms left out), then the
+    newest headlines."""
     filed = [{"type": "公告", "date": f["date"], "title": f["title"], "kind": f["kind"]}
-             for f in (src.get("filings") or [])[:CFG["max_filings"]]]
+             for f in (src.get("filings") or []) if not SEC_BARE.match(f["title"])][:CFG["max_filings"]]
     return filed + [{"type": "新闻", "date": h["date"], "title": h["title"]} for h in src.get("headlines") or []]
 
 
@@ -153,9 +165,20 @@ def ask(client: httpx.Client, content: str) -> dict:
     raise RuntimeError(f"review failed: {type(err).__name__}: {err}")
 
 
-def verify(answer: dict, lines: list[dict]) -> tuple[list[dict], int]:
-    """The findings whose quotes are in a source line (the cited one first; a short title quoted whole counts), with
-    their kind's words and whether they are a hard red flag; and how many were rejected (quote not in any source)."""
+def names_of(row: dict) -> list[str]:
+    """How a headline can name the company: its name, the name without its legal suffix, its ticker (3+ characters)."""
+    name, code = str(row.get("name") or ""), str(row["code"])
+    return [n for n in dict.fromkeys([name, SUFFIX.sub("", name).strip()] + ([code] if len(code) >= 3 else [])) if len(n) >= 2]
+
+
+def named(raw: str, names: list[str]) -> bool:
+    return any(re.search(rf"(?<![A-Za-z]){re.escape(n)}(?![A-Za-z])", raw, re.I) for n in names)
+
+
+def verify(answer: dict, lines: list[dict], names: list[str]) -> tuple[list[dict], int]:
+    """The findings whose quotes are in a source line (the cited one first; a short title quoted whole counts), each
+    checked against its kind (KINDS) and, from a headline, for naming the company (`names`); and how many were
+    rejected (quote not in any source)."""
     texts, found, rejected, seen = [quotes.norm(x["title"]) for x in lines], [], 0, set()
     for f in answer.get("findings") or []:
         if not isinstance(f, dict) or not f.get("quote"):
@@ -168,14 +191,16 @@ def verify(answer: dict, lines: list[dict]) -> tuple[list[dict], int]:
             log.info("review: quote not in its source, rejected: %s", f["quote"])
             continue
         kind = f.get("kind") if f.get("kind") in KINDS else "other"
-        raw = " ".join(str(f["quote"]).split())
-        if KINDS[kind][1] and deepdive.DENIAL.search(raw) or kind == "delisting" and re.search(OTHER_SECURITY, raw, re.I):
+        raw, (_, hard, must, mustnt), src = " ".join(str(f["quote"]).split()), KINDS[kind], lines[at]
+        if hard and deepdive.DENIAL.search(raw) or kind == "delisting" and re.search(mustnt, raw, re.I):
             continue  # "不存在立案调查的情形", or another security's suspension: not a finding about the stock
-        if KINDS[kind][1] and not re.search(KINDS[kind][2], raw, re.I):
-            kind = "other"
+        ok = (not must or re.search(must, raw, re.I)) and not (mustnt and re.search(mustnt, raw, re.I)) \
+            and (src["type"] == "公告" or kind not in NAMED or named(raw, names))
+        if not ok and kind == "management":
+            continue
+        kind = kind if ok else "other"
         if (kind, quote) not in seen:
             seen.add((kind, quote))
-            src = lines[at]
             found.append({"kind": kind, "words": KINDS[kind][0], "hard": KINDS[kind][1], "quote": raw,
                           "date": src["date"], "type": src["type"]})
     return found, rejected
@@ -194,7 +219,7 @@ def valid(entry: dict | None, role: str, ids: list[str], today: date) -> bool:
 def review_one(client: httpx.Client, market: str, row: dict, role: str, lines: list[dict], today: date) -> dict:
     """One name's review, saved to its cache file (written whole, so a reader never sees half of one)."""
     answer = ask(client, prompt(row, market, role, lines))
-    findings, rejected = verify(answer, lines)
+    findings, rejected = verify(answer, lines, names_of(row))
     entry = {"date": today.isoformat(), "role": role, "sources": ids_of(lines), "findings": findings,
              "rejected": rejected, "note": notes.words_only(answer.get("note"))}
     path = CACHE / market / f"{row['code']}.json"
@@ -291,20 +316,23 @@ def line(state: dict, found: list[dict]) -> str:
     return STATUS.get(state.get("status"), "审核未见重大风险") if state else ""  # not reviewed: no line
 
 
-def apply(rows: pd.DataFrame, market: str, states: dict | None, deep: dict) -> pd.DataFrame:
-    """The lists after the review (states: code -> state; deep: code -> deep-dive findings). A buy with a hard red
-    flag or data_suspect is removed (list 'removed', with the reason) and the next-ranked name not blocked takes its
-    place; a holding with a hard red flag becomes 卖出, with data_suspect or a soft concern (if it was 继续持有) 复核;
-    avoid names keep their place. Every row gets its review line and AI note. Without states (the build), only the
-    'next' rows are dropped."""
-    rows = rows.assign(review="", note="")
+def apply(rows: pd.DataFrame, market: str, states: dict | None, deep: dict, confirmed: dict | None = None) -> pd.DataFrame:
+    """The lists after the review (states: code -> state; deep: code -> deep-dive findings; confirmed: code -> your
+    confirm verdict in force). A buy with a hard red flag or data_suspect is removed (list 'removed', with the reason)
+    and the next-ranked name not blocked takes its place (its 'replaces' names the removed one); a holding with a hard
+    red flag becomes 卖出, with data_suspect or a soft concern (if it was 继续持有) 复核; avoid names keep their place.
+    Your confirm keeps a name as the lists have it, and its card says so. Every row gets its review line and AI note.
+    Without states (the build), only the 'next' rows are dropped."""
+    rows, confirmed = rows.assign(review="", note="", replaces=None), confirmed or {}
     if states is None:
         return rows[rows["list"] != "next"]
     found = {c: list(states.get(c, {}).get("findings") or []) + list(deep.get(c, [])) for c in rows["code"]}
     for i, r in rows.iterrows():
         rows.at[i, "review"] = line(states.get(r["code"], {}), found[r["code"]])
+        if (v := confirmed.get(r["code"])) and rows.at[i, "review"].startswith(("审核：", "数据存疑")):
+            rows.at[i, "review"] += f"（你已确认，至 {v['until']}：{v['reason']}）"
         rows.at[i, "note"] = states.get(r["code"], {}).get("note") or ""
-    blocked = lambda c: next((f for f in found[c] if f["hard"] or f.get("suspect")), None)
+    blocked = lambda c: None if c in confirmed else next((f for f in found[c] if f["hard"] or f.get("suspect")), None)
     bench = rows[rows["list"] == "next"].sort_values("rank").to_dict("records")
     keep, removed = [], []
     for b in rows[rows["list"] == "buy"].sort_values("rank").to_dict("records"):
@@ -315,11 +343,11 @@ def apply(rows: pd.DataFrame, market: str, states: dict | None, deep: dict) -> p
         bench = bench[bench.index(replace) + 1:] if replace else []
         removed.append(b | {"list": "removed", "reason": ("数据存疑：" + why["words"]) if why.get("suspect") else cite(why),
                             "status": f"由 {replace['code']} {replace['name']} 替换" if replace else "候补已用完"})
-        keep += [replace] if replace else []
+        keep += [replace | {"replaces": b["code"]}] if replace else []
     keep = pd.DataFrame(keep).sort_values("score", ascending=False).assign(list="buy") if keep else pd.DataFrame()
     keep["rank"] = range(1, len(keep) + 1)
     rest = rows[~rows["list"].isin(["buy", "next"])].copy()
-    for i, r in rest[rest["list"] == "holding"].iterrows():
+    for i, r in rest[(rest["list"] == "holding") & ~rest["code"].isin(list(confirmed))].iterrows():
         hard = next((f for f in found[r["code"]] if f["hard"]), None)
         odd = next((f for f in found[r["code"]] if f.get("suspect")), None)
         soft = next((f for f in found[r["code"]] if not f["hard"] and not f.get("suspect")), None)

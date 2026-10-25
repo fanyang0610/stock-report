@@ -11,6 +11,10 @@ from email.utils import parsedate_to_datetime
 from stockreport.fetch import Http
 
 EM_LIST = "https://np-listapi.eastmoney.com/comm/web/getListInfo"
+# Eastmoney's list is ~40% daily data items (margin balances, fund and Stock Connect flows, block trades, market
+# roundups): not news about the company, and new every day, so they'd redo every cached review. Left out.
+DATA_ITEMS = re.compile(r"融资(净偿还|净买入|净卖出|余额)|两融余额|融券余额|主力(资金|动向)|资金流向|资金风向标|特大单|大单净|北向资金|南向资金|"
+                        r"港股通|沪股通|深股通|龙虎榜|大宗交易|成交活跃股|百元股|盘中(涨|跌)幅达|收评|午评|早盘|盘前速递|港股速报")
 YAHOO_RSS = "https://feeds.finance.yahoo.com/rss/2.0/headline"
 
 
@@ -53,7 +57,7 @@ def headlines(http: Http, market: str, code: str, today: date, days: int, limit:
         found = parse_em(resp.json(), since)
     seen, out = set(), []
     for h in found:  # the same story from several outlets counts once
-        if h["title"] not in seen:
+        if h["title"] not in seen and not DATA_ITEMS.search(h["title"]):
             seen.add(h["title"])
             out.append(h)
     return out[:limit]

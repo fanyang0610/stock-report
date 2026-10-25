@@ -15,11 +15,24 @@
   Nasdaq's stands: Ares (an Up-C without an SEC count; avoid list, P/E 63 against ~43 on its class A) and Rio Tinto.
   Waiting for your OK (rule 9) to load the daily job,
   send a test, and turn the keyword reply back on. Stage 3: not started.
-- Stage 2 (the results review, AI notes and deep dives, on request): built 2026-10-25. review.py, fetch/news.py, the
+- Stage 2 (the results review, AI notes and deep dives, on request): built 2026-10-25/26. review.py, fetch/news.py, the
   per-stock filing lists (fetch/filings.recent), notes.py and deepdive.py rewritten for it, the `review` command, the
-  keyword reply and `send` reviewing first ("Results review", "How it is built"). Measured 2026-10-25 on the day's
-  lists (100 names): cold cache 100 reviews in 11 s, the reply without its WeChat send 11.7 s; warm 0.9 s; the send
-  adds ~4 s (past replies: 3 s plus a 1 s gap). The keyword reply is still off (rule 9); nothing was sent.
+  keyword reply and `send` reviewing first ("Results review", "How it is built"). Measured on 2026-10-26's full build
+  (100 names; logs/2026-10-26.log): cold cache 100 reviews in 9 s, the reviewed report built in 9.9 s; warm 0.8 s;
+  WeChat's two sends took 3 s in past replies, so ~13 s cold and ~4 s warm against the 30 s target (the review's budget
+  caps a slow day at ~24 s). The day's review: no hard red flag, 48 soft concerns, no quote rejected. The deep dives'
+  data check compared 9 of the 18 reports read: 8 agree within 0.4% (601225, 601600, 601857, 00293, 00857, 00883,
+  01113 ...), 01919's row was read without its thousands unit (exactly 1,000× off) and isn't counted; the other 9 had
+  no verified profit row (6), are US 10-Qs (2) or a PDF without readable text (00966). The keyword reply is still off
+  (rule 9); nothing was sent.
+  The fresh-context stage review (2026-10-26) found, and these are fixed: a misread could remove a good buy with no
+  override (confirm verdicts weren't read; loose subject checks let a director's resignation pass as an audit flag and
+  a completed tender offer as a takeover; headlines about another company counted; a 10-Q's legal wording counted as an
+  investigation; the data check didn't check its row was the shareholders' profit); bond defaults, overdue debts and
+  auditor resignations were dropped as routine filings; ~40% of CN headlines were daily data items; the scoreboard
+  didn't pair removed names with their replacements; "30th June" wasn't read. Left as follow-ups: the event feed's
+  unused fetch and labels and the old title fetchers ("Kept from the old build"); 中国太平's interim report PDF has no
+  readable text, so the HK #1 (insurer, profit +90% in H1) gets no deep dive.
 - Nothing runs on a schedule (your call, 2026-10-24: a fresh start). The 06:30 job (com.stockreport.daily) is unloaded
   and disabled; the keyword listener (com.stockreport.listen) was already off. launchd/com.stockreport.daily.plist is
   rewritten for `run` (no DeepSeek); the copy in ~/Library/LaunchAgents is still the old one until it's loaded. While
@@ -206,34 +219,51 @@ build makes no DeepSeek calls.
   - Sources, gathered by the build with no DeepSeek (~30 s a market; reports/<date>/<market>_sources.json): each name's
     filings of the last 90 days from a per-stock query (CNINFO, HKEXnews' title search, SEC's filing list), routine ones
     dropped by the event feed's rules (events.classify), the newest 20; and headlines of the last 30 days, the newest 15.
-    Per-stock queries rather than the market-wide event feed, which only holds the days the build ran (10 back).
+    Per-stock queries rather than the market-wide event feed, which only holds the days the build ran (10 back). The
+    feed's routine rules drop bond, guarantee and auditor titles; a default, an overdue debt or an auditor resigning is
+    checked first and kept as a risk filing (events.ALARM; found by the stage review).
   - Headline sources, verified 2026-10-25: CN and HK Eastmoney's per-stock news list (np-listapi getListInfo, biz
     web_stock_news, market 1 / 0 / 116: the 资讯 tab of its quote pages; 0.1-0.5 s a call, at most ~2 a second); US
     Yahoo Finance's RSS feed per ticker (feeds.finance.yahoo.com/rss/2.0/headline; 429 to a full browser User-Agent,
-    fine with "Mozilla/5.0"). Titles only.
+    fine with "Mozilla/5.0"). Titles only. Eastmoney's list is ~40% daily data items (margin balances, fund and Stock
+    Connect flows, block trades, market roundups: 224 of 525 CN headlines on 2026-10-25); they say nothing about the
+    company and are new every day, so they'd redo every cached review, and are left out (news.DATA_ITEMS).
   - One DeepSeek call per name (deepseek-flash, thinking off, temperature 0, JSON): the card's own lines and the numbered
     source lines in, findings (kind, source line, quote) and the note out. A finding counts only if its quote is in a
-    source line (6+ characters, or a short title quoted whole: HKEX's 「盈利警告」). A hard kind also has to name its
-    subject in the quote (an investigation names 立案, 调查 or the like; a takeover 要约, 私有化, a tender offer...) and not
-    deny it (不存在…), else it is a soft concern; a suspension or delisting of another security (preferred shares, bonds,
-    convertibles, or a bare SEC 25-NSE / 15-12B form, which doesn't say which: Comcast's and ONEOK's were their notes)
-    is dropped. The checklist leaves out routine items (ordinary director or board-secretary changes, insider selling
-    plans) and counts management leaving only for the chair, CEO or CFO.
+    source line (6+ characters, or a short title quoted whole: HKEX's 「盈利警告」). Then code checks each kind (KINDS):
+    - a hard kind has to name its subject in the quote: an investigation names 立案, 调查 or the like; an audit flag a
+      non-standard opinion or the auditor resigning (not any director); a takeover 要约, 私有化, a tender offer..., and not
+      an offer already done (a sponsor's 持续督导 report, 完成, 结果) or the company absorbing a subsidiary. Else it is a
+      soft concern;
+    - from a headline, a hard flag must name the company (its name, the name without a legal suffix, or its ticker):
+      headlines are often about another company or the whole market;
+    - a denial (不存在…) is no finding; nor is a suspension or delisting of another security (preferred shares, bonds,
+      convertibles); bare SEC 25-NSE / 15-12B forms, which don't say which security (Comcast's and ONEOK's were their
+      notes), are left out of the sources;
+    - management counts only for the chair, CEO or CFO leaving or an executive under investigation, named in the quote
+      (and from a headline, the company named); an ordinary director or board-secretary change is routine and dropped.
   - The bench is the next 5 names (the same sector cap); the first not blocked takes a removed buy's place and the list is
     renumbered. HK's buy field holds only ~11 sectors, so its bench can be 2-3 names; with none left the list is shorter.
+    The scoreboard logs each removed name (bucket removed) and the name that took its place (bucket replacement), so
+    `track` shows the two side by side.
+  - Your confirm verdict (`verdict CODE confirm --until D --reason "..."`) overrides the review for that name until its
+    date or the next report period: a buy stays, a holding keeps its status, and the card says 你已确认 with your reason.
   - Cached per stock (data/review/<market>/<code>.json); the keyword reply waits `budget` (20 s), then sends what is
     done, and a background `review` finishes the rest and the day's deep dives. `review` runs it all without a limit.
     The AI note is dropped if it has any digit, so every number on a card comes from code.
   - Deep dives (the lane of rule 3): the latest periodic report of the buys, the next 5 and your scored holdings, read once
     per filing, at most 3 new filings per market a day, after the review. The data check compares the report's net
-    profit to shareholders for the card's period (the period end quoted in the report; CN: else its standard title) with
-    the card's figure: CN and HK year to date (HK in the reporting currency), US the year's profit from a 10-K (10-Qs are
-    year to date, the card's figure trailing 12 months, so they aren't compared). Any figure of the quoted row within 20%
-    passes (a row holds the quarter and the year to date, or this year and last); a gap that is a power of ten is a unit
-    misread of the row, not our data (a fault that size fails the second-source cross-checks). The same reading gives the
-    hard flags of a non-standard audit opinion, a going-concern doubt, a regulator's investigation and an offer price, and
-    the soft concern of non-recurring items at 30%+ of the period's profit (a quote naming the profit after deducting
-    them is that profit, and is skipped).
+    profit to shareholders for the card's period (the period end quoted in the report, '30 June' or '30th June'; CN:
+    else its standard title) with the card's figure: CN and HK year to date (HK in the reporting currency), US the year's
+    profit from a 10-K (10-Qs are year to date, the card's figure trailing 12 months, so they aren't compared). It reads
+    only a row that says it is the shareholders' profit (归属于…股东, attributable to, shareholders of...), not a
+    consolidated row, the minorities' or the profit after deducting non-recurring items (扣非). Any figure of that row
+    within 20% passes (a row holds the quarter and the year to date, or this year and last); a gap that is a power of ten
+    is a unit misread of the row, not our data (a fault that size fails the second-source cross-checks). The same
+    reading gives the hard flags of a non-standard audit opinion, a going-concern doubt, an investigation opened (立案, a
+    Wells notice; a 10-Q's legal-proceedings wording is only a soft concern) and an offer price, and the soft concern of
+    non-recurring items at 30%+ of the period's profit (a quote naming the profit after deducting them is that profit,
+    and is skipped).
 
 ## Checks, and what each one decides
 - **pytest** on the score math (percentiles, families, SUE, the sector cap, the holding rule) and the parsers, on small
@@ -284,9 +314,10 @@ build makes no DeepSeek calls.
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
 - The backtest snapshots and the stage-1 harness (index funds, costs, month-end frames).
-- The event feed (its filing rules classify the review's filings; its abnormal-move labels and the old per-stock title
-  fetchers in cninfo.py, hkex.py and sec.py are unused since stage 2); the deep-dive lane with its quote checks; the
-  verdicts (veto or confirm with an expiry).
+- The event feed (its filing rules classify the review's filings). Unused since stage 2, left for a clean-up: the
+  feed's own market-wide fetch (every build reads a day's filings for all three markets; nothing reads the rows now),
+  its abnormal-move labels (events.lines) and the old per-stock title fetchers in cninfo.py, hkex.py and sec.py. The
+  deep-dive lane with its quote checks; the verdicts (veto or confirm with an expiry).
 - The DeepSeek notes (folded into the results review); WeChat and PDF delivery; the scoreboard.
 
 ## Sources for the method

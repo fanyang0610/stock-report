@@ -4,16 +4,20 @@ earlier lists, with their date) -> reports/<date>/report.pdf and summary.txt; th
 On request (fresh()) the results review runs first and build() applies it (review.apply)."""
 
 import json
+import logging
+import time
 from datetime import date
 from pathlib import Path
 
 import pandas as pd
 
-from stockreport import deepdive, deliver, review, track
+from stockreport import deepdive, deliver, review, track, verdicts
 from stockreport.cleanup import size_of
 from stockreport.config import CONFIG, DATA, REPORTS
 from stockreport.render import html_to_pdf, render_html, text_summary
 from stockreport.score import NAMES
+
+log = logging.getLogger(__name__)
 
 MARKETS = {"cn": ("A股 CN", "CNY", "元", "沪深300ETF"), "us": ("美股 US", "USD", "美元", "标普500基金"),
            "hk": ("港股 HK", "HKD", "港元", "盈富基金")}
@@ -116,11 +120,13 @@ def read_lists(path: Path) -> pd.DataFrame:
 def fresh(today: date, budget: float | None) -> tuple[Path, str]:
     """The report on request: each market's newest lists reviewed (within `budget` seconds; None: until done), then
     built with the review applied."""
-    lists, sources = {}, {}
+    started, lists, sources = time.monotonic(), {}, {}
     for market in MARKETS:
         if path := latest_lists(market, today):
             lists[market], sources[market] = read_lists(path), review.load_sources(market, path.parent.name)
-    return build(today, review.run(lists, sources, today, budget))
+    out = build(today, review.run(lists, sources, today, budget))
+    log.info("reviewed report built in %.1fs", time.monotonic() - started)
+    return out
 
 
 def build(today: date, states: dict | None = None) -> tuple[Path, str]:
@@ -136,9 +142,13 @@ def build(today: date, states: dict | None = None) -> tuple[Path, str]:
             continue
         rows = read_lists(path)
         deep = deepdive.results(market, rows) if states is not None else {}
-        rows = review.apply(rows, market, None if states is None else states.get(market, {}), deep)
-        if path.parent.name == today.isoformat():  # the scoreboard follows removed names against the buys
-            logged[market] = rows[rows["list"].isin(["buy", "avoid", "removed"])].rename(columns={"list": "bucket"})
+        period = rows.drop_duplicates("code").set_index("code")["period"] if "period" in rows else pd.Series(dtype=str)
+        confirmed = {c: v for c, v in verdicts.active(market, today, period).items() if v["verdict"] == "confirm"}
+        rows = review.apply(rows, market, None if states is None else states.get(market, {}), deep, confirmed)
+        if path.parent.name == today.isoformat():  # the scoreboard follows removed names against their replacements
+            replacing = rows[(rows["list"] == "buy") & rows["replaces"].notna()].assign(list="replacement")
+            logged[market] = pd.concat([rows[rows["list"].isin(["buy", "avoid", "removed"])], replacing]).rename(
+                columns={"list": "bucket"})
         markets.append(section(market, rows, path.parent.name, today, failed.get(market, [])))
     if not markets:
         raise SystemExit(f"no lists CSV in {REPORTS}; run `run` first")

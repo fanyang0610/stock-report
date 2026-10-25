@@ -20,8 +20,13 @@ SOURCES = json.loads((SAMPLES / "review_sources_sample.json").read_text(encoding
 ANSWERS = json.loads((SAMPLES / "review_answers_sample.json").read_text(encoding="utf-8"))
 
 
+NAMES = {"600576": "祥源文旅", "601009": "南京银行", "688585": "上纬新材", "601225": "陕西煤业", "00728": "中国电信",
+         "02650": "挚达科技"}
+
+
 def verified(market: str, code: str, answer: dict | None = None) -> tuple[list[dict], int]:
-    return review.verify(answer or ANSWERS[code], review.lines_of(SOURCES[market][code]))
+    names = review.names_of({"code": code, "name": NAMES[code]})
+    return review.verify(answer or ANSWERS[code], review.lines_of(SOURCES[market][code]), names)
 
 
 def test_quotes_are_checked_against_their_sources():
@@ -38,19 +43,34 @@ def test_quotes_are_checked_against_their_sources():
 
 
 def test_a_hard_flag_must_name_its_subject():
-    lines = review.lines_of(SOURCES["cn"]["601009"])
+    lines, names = review.lines_of(SOURCES["cn"]["601009"]), ["南京银行"]
+    check = lambda kind, title, lines=lines: review.verify(
+        {"findings": [{"kind": kind, "source": 1, "quote": title}]}, lines, names)[0]
     preferred = next(x["title"] for x in lines if "优先股停牌" in x["title"])
-    found, _ = review.verify({"findings": [{"kind": "delisting", "source": 1, "quote": preferred}]}, lines)
-    assert found == []  # its preferred shares, not the stock
-    resign = next(x["title"] for x in lines if "辞任" in x["title"])
-    found, _ = review.verify({"findings": [{"kind": "investigation", "source": 1, "quote": resign}]}, lines)
-    assert not found[0]["hard"]  # an investigation flag on a resignation title: no investigation named
-    form = [{"type": "公告", "date": "2026-09-14", "title": "25-NSE: Delisting notice"}]  # Comcast's, for its notes
-    found, _ = review.verify({"findings": [{"kind": "delisting", "source": 1, "quote": "25-NSE: Delisting notice"}]}, form)
-    assert found == []  # an SEC delisting form doesn't say which security
-    denial = [{"type": "公告", "date": "2026-10-20", "title": "关于公司不存在被立案调查情形的说明公告"}]
-    found, _ = review.verify({"findings": [{"kind": "investigation", "source": 1, "quote": "不存在被立案调查情形"}]}, denial)
-    assert found == []
+    assert check("delisting", preferred) == []  # its preferred shares, not the stock
+    resign = next(x["title"] for x in lines if "董事辞任" in x["title"])
+    assert not check("investigation", resign)[0]["hard"]  # no investigation named
+    assert not check("audit", resign)[0]["hard"]  # a director resigning isn't the auditor
+    assert check("management", resign) == []  # an ordinary director: routine
+    filed = lambda title: [{"type": "公告", "date": "2026-10-20", "title": title}]
+    assert check("audit", "关于会计师事务所辞任的公告", filed("关于会计师事务所辞任的公告"))[0]["hard"]
+    assert not check("takeover", "关于吸收合并全资子公司的公告", filed("关于吸收合并全资子公司的公告"))[0]["hard"]
+    found, _ = verified("cn", "688585")  # a sponsor's supervision report on 上纬新材's completed tender offer
+    assert [(f["kind"], f["hard"]) for f in found] == [("other", False)]
+    assert check("delisting", "25-NSE: Delisting notice", filed("25-NSE: Delisting notice")) == []  # which security?
+    assert review.lines_of({"filings": [{"date": "2026-09-14", "kind": "risk", "title": "25-NSE: Delisting notice"}],
+                            "headlines": []}) == []  # left out of the sources
+    assert check("investigation", "关于公司不存在被立案调查情形的说明", filed("关于公司不存在被立案调查情形的说明")) == []
+
+
+def test_a_headline_must_name_the_company_for_a_hard_flag():
+    lines, names = review.lines_of(SOURCES["cn"]["600576"]), review.names_of({"code": "600576", "name": "祥源文旅"})
+    check = lambda title: review.verify({"findings": [{"kind": "investigation", "source": 1, "quote": title}]}, lines, names)[0]
+    assert check("70后浙商大佬、祥源文旅实控人两度遭证监会立案")[0]["hard"]
+    assert not check("海昌海洋公园：控股股东俞发祥涉嫌信息披露违法违规被证监会立案调查")[0]["hard"]  # another company
+    assert not check("A股公司密集发布立案或处罚公告：*ST清越被罚1.72亿，俞发祥再遭立案")[0]["hard"]
+    assert review.names_of({"code": "BA", "name": "Boeing Company (The)"}) == ["Boeing Company (The)", "Boeing"]
+    assert review.names_of({"code": "00700", "name": "腾讯控股"}) == ["腾讯控股", "腾讯", "00700"]
 
 
 def row(code: str, lst: str, rank, score: float, **kw) -> dict:
@@ -71,17 +91,23 @@ def test_a_hard_flag_removes_a_buy_sells_a_holding_and_is_noted_on_an_avoid_name
     rows = pd.DataFrame([row("601225", "buy", 1, 0.95), row("600576", "buy", 2, 0.94), row("601009", "buy", 3, 0.93),
                          row("688585", "next", 4, 0.92), row("00728", "next", 5, 0.91),
                          row("600576", "holding", None, 0.94, status="继续持有", reason="未到满年"),
-                         row("688585", "avoid", 1, 0.10)])
-    out = review.apply(rows, "cn", states("601225", "600576", "601009", "688585", "00728"), {})
+                         row("600576", "avoid", 1, 0.10)])
+    st = states("601225", "600576", "601009", "688585", "00728")
+    out = review.apply(rows, "cn", st, {})
     buys = out[out["list"] == "buy"]
-    assert buys["code"].tolist() == ["601225", "601009", "00728"] and buys["rank"].tolist() == [1, 2, 3]
-    removed = out[out["list"] == "removed"].iloc[0]  # 688585 (a takeover target) is skipped, 00728 takes the place
-    assert removed["code"] == "600576" and "立案告知书" in removed["reason"] and removed["status"] == "由 00728 00728 替换"
+    assert buys["code"].tolist() == ["601225", "601009", "688585"] and buys["rank"].tolist() == [1, 2, 3]
+    assert buys.set_index("code").at["688585", "replaces"] == "600576"  # the scoreboard pairs them
+    removed = out[out["list"] == "removed"].iloc[0]
+    assert removed["code"] == "600576" and "立案告知书" in removed["reason"] and removed["status"] == "由 688585 688585 替换"
     held = out[out["list"] == "holding"].iloc[0]
     assert held["status"] == "卖出" and held["reason"].startswith("监管立案调查或欺诈认定")
     avoid = out[out["list"] == "avoid"].iloc[0]
-    assert avoid["review"].startswith("审核：以固定价格被收购或私有化") and len(out[out["list"] == "avoid"]) == 1
+    assert avoid["review"].startswith("审核：监管立案调查或欺诈认定") and len(out[out["list"] == "avoid"]) == 1
     assert "next" not in set(out["list"])
+    mine = review.apply(rows, "cn", st, {}, confirmed={"600576": {"until": "2026-12-31", "reason": "已读公告"}})
+    assert "600576" in set(mine.loc[mine["list"] == "buy", "code"]) and "removed" not in set(mine["list"])
+    kept = mine[mine["list"] == "holding"].iloc[0]
+    assert kept["status"] == "继续持有" and kept["review"].endswith("（你已确认，至 2026-12-31：已读公告）")
 
 
 def test_a_soft_concern_only_annotates():
@@ -142,10 +168,17 @@ def test_source_parsers():
     warning = next(x for x in hk if x["title"] == "盈利警告")
     assert warning["date"] == "2026-08-07" and classify("hk", warning) == "earnings"
     assert classify("hk", next(x for x in hk if x["title"] == "翌日披露報表")) == "routine"  # dropped by filings.recent
+    for market, title in (("cn", "关于公司债券未能按期足额兑付本息的公告"), ("cn", "关于新增债务逾期及担保逾期的公告"),
+                          ("cn", "关于会计师事务所辞任的公告"), ("hk", "有關債券違約之公告")):
+        assert classify(market, {"title": title}) == "risk", title  # not dropped as bond, guarantee or auditor routine
     us = filings.parse_us(json.loads((SAMPLES / "review_sec_eonr_sample.json").read_text(encoding="utf-8")), 1934152)
     restated = next(x for x in us if x["items"] == "4.02")
     assert restated["title"] == "8-K: Non-reliance on previous financial statements" and classify("us", restated) == "risk"
     em = news.parse_em(json.loads((SAMPLES / "news_em_00728_sample.json").read_text(encoding="utf-8")), "2026-10-20")
     assert em[0]["date"] >= "2026-10-20" and all(x["title"] for x in em)
+    data = ["云铝股份：融资净偿还1205.65万元，融资余额20.22亿元", "中国石油大宗交易成交376.80万元", "港股通连续净买入股名单",
+            "南向资金今日净卖出近17亿港元 阿里巴巴遭卖出居前", "云铝股份10月15日盘中跌幅达5%"]  # real 2026-10 headlines
+    assert all(news.DATA_ITEMS.search(t) for t in data)
+    assert not any(news.DATA_ITEMS.search(t) for t in ("中国电信第三季度营收净利润双降", "港股PCB概念股走弱，覆铜板缺货涨价"))
     rss = news.parse_rss((SAMPLES / "news_yahoo_mnst_sample.xml").read_text(encoding="utf-8"), "2026-10-01")
     assert len(rss) == 6 and rss[0]["date"] >= rss[-1]["date"] and "&amp;" not in "".join(x["title"] for x in rss)

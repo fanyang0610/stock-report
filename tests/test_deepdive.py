@@ -64,6 +64,7 @@ def test_data_check_on_a_saved_filing():
     row, found = aia()
     assert deepdive.period_of("for the quarterly period ended September 27, 2026") == "2026-09-27"
     assert deepdive.period_of("截至2026年9月30日止九个月") == "2026-09-30" and deepdive.period_of("no date") is None
+    assert deepdive.period_of("Financial position as at 30th June 2026.") == "2026-06-30"  # Cathay's interim report
     assert deepdive.title_period("中国铝业2026年半年度报告") == "2026-06-30"
     assert deepdive.title_period("2026年第三季度报告") == "2026-09-30" and deepdive.title_period("2025年年度报告") == "2025-12-31"
     assert deepdive.data_gap(row, found, "hk") is None  # the report agrees with the card's figure
@@ -73,6 +74,10 @@ def test_data_check_on_a_saved_filing():
     assert deepdive.data_gap(row | {"np_ytd": 4_294e3}, found, "hk") is None  # a power of ten: a unit misread
     assert deepdive.data_gap(row | {"np_ytd": 6_000e6, "period": "2026-09-30"}, found, "hk") is None  # another period
     assert deepdive.data_gap(row | {"np_ytd": 6_000e6, "report_currency": None}, found, "hk") is None
+    rows_read = lambda quote: found | {"facts": found["facts"] | {"net_profit": found["facts"]["net_profit"] | {"quote": quote}}}
+    for quote in ("Net profit 4,314 2,549", "Non-controlling interests attributable to minority holders 4,314 2,549",
+                  "归属于上市公司股东的扣除非经常性损益的净利润 4,294 2,534"):
+        assert deepdive.data_gap(row | {"np_ytd": 6_000e6}, rows_read(quote), "hk") is None  # not the shareholders' profit
     odd = deepdive.findings(row | {"np_ytd": 6_000e6}, found, "hk")
     assert [(f["kind"], f.get("suspect")) for f in odd] == [("data_suspect", True)] and odd[0]["type"] == "2026 Interim Report"
 
@@ -98,6 +103,8 @@ def test_findings():
     denial = {"quote": "本公司自本报告期末至少 12 个月内不存在影响持续经营能力的重大事项。"}
     assert kinds(going_concern=denial) == []
     assert kinds(investigation={"quote": "公司于2026年7月收到中国证监会《立案告知书》"}) == [("investigation", True)]
+    note = {"quote": "We are subject to various investigations, claims and legal proceedings in the ordinary course."}
+    assert kinds(investigation=note) == [("other", False)]  # a 10-Q's legal note is no investigation opened
     assert kinds(investigation={"quote": "公司收到上海证券交易所监管工作函"}) == [("other", False)]
 
 

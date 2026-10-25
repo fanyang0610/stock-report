@@ -151,10 +151,12 @@ MONTH = "|".join(MONTHS)
 
 
 def period_of(quote: str) -> str | None:
-    """The latest date written in a quote ('2026年9月30日', '30 June 2026', 'September 27, 2026', '2026-06-30')."""
+    """The latest date written in a quote ('2026年9月30日', '30th June 2026', 'September 27, 2026', '2026-06-30')."""
     found = [(int(y), int(m), int(d)) for y, m, d in re.findall(r"(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日", quote)]
-    found += [(int(y), MONTHS[m.lower()], int(d)) for d, m, y in re.findall(rf"(\d{{1,2}})\s+({MONTH}),?\s+(\d{{4}})", quote, re.I)]
-    found += [(int(y), MONTHS[m.lower()], int(d)) for m, d, y in re.findall(rf"({MONTH})\s+(\d{{1,2}}),?\s+(\d{{4}})", quote, re.I)]
+    found += [(int(y), MONTHS[m.lower()], int(d)) for d, m, y in
+              re.findall(rf"(\d{{1,2}})(?:st|nd|rd|th)?\s+({MONTH}),?\s+(\d{{4}})", quote, re.I)]
+    found += [(int(y), MONTHS[m.lower()], int(d)) for m, d, y in
+              re.findall(rf"({MONTH})\s+(\d{{1,2}})(?:st|nd|rd|th)?,?\s+(\d{{4}})", quote, re.I)]
     found += [(int(y), int(m), int(d)) for y, m, d in re.findall(r"(\d{4})-(\d{2})-(\d{2})", quote)]
     try:
         return max(date(*x) for x in found).isoformat() if found else None
@@ -163,7 +165,12 @@ def period_of(quote: str) -> str | None:
 
 
 CN_PERIODS = (("第一季度|一季度", "03-31"), ("半年度", "06-30"), ("第三季度|三季度", "09-30"), ("年度", "12-31"))
-AFTER_DEDUCTING = re.compile(r"扣除非经常性损益后|扣非|after deducting|excluding non-recurring", re.I)
+AFTER_DEDUCTING = re.compile(r"扣除非经常性损益|扣除非經常性損益|扣非|after deducting|excluding non-recurring", re.I)
+# the data check reads only a row that says it is the shareholders' profit: not a consolidated row (minorities
+# included), the minorities' own, or the profit after deducting non-recurring items
+ATTRIBUTABLE = re.compile(r"归属于(上市公司|母公司)?(普通股)?股东|歸屬於.{0,8}股東|归母|擁有人應佔|股東應佔|attributable to|"
+                          r"available to (common|ordinary)|shareholders of|equity holders of|owners of", re.I)
+MINORITY = re.compile(r"少数股东|少數股東|非控股|non-controlling|minority", re.I)
 
 
 def title_period(title: str) -> str | None:
@@ -176,13 +183,14 @@ def title_period(title: str) -> str | None:
 def data_gap(row: dict, found: dict, market: str) -> str | None:
     """The data check: the report's net profit for the card's period (the period end quoted in the report; CN: else its
     title) against the figure behind the card (CN and HK: profit to shareholders year to date; US: the year's profit,
-    from a 10-K). The quoted row's figures are all tried
+    from a 10-K), only from a row that says it is the shareholders' profit. The quoted row's figures are all tried
     (a table row holds the quarter and the year to date); a gap that is a power of ten is a unit misread of the row,
     not our data (a fault that size fails the second-source cross-checks), and isn't counted."""
     f = found["facts"]
     np_, end = f.get("net_profit"), period_of(f.get("period_end", {}).get("quote", ""))
     end = end or (title_period(found["title"]) if market == "cn" else None)
-    if not np_ or end is None or end != str(row.get("period")):
+    if not np_ or end is None or end != str(row.get("period")) or not ATTRIBUTABLE.search(np_["quote"]) \
+            or MINORITY.search(np_["quote"]) or AFTER_DEDUCTING.search(np_["quote"]):
         return None
     if market == "us" and not found["title"].startswith("10-K"):
         return None  # 10-Qs are year to date; the card's figure is the trailing 12 months
@@ -223,9 +231,9 @@ def findings(row: dict, found: dict, market: str) -> list[dict]:
     if re.search(r"重大不确定|重大不確定|重大疑虑|重大疑慮|substantial doubt", doubt, re.I) and not DENIAL.search(doubt):
         add("going_concern", "持续经营存在重大不确定性", True, doubt)
     probe = f.get("investigation", {}).get("quote", "")
-    if re.search(r"立案|Wells|subpoena|investigation|欺诈|虚假记载|fraud", probe, re.I) and not DENIAL.search(probe):
-        add("investigation", "监管立案调查或欺诈认定", True, probe)
-    elif re.search(r"调查|調查|处罚|處罰|警示|监管", probe) and not DENIAL.search(probe):
+    if re.search(r"立案|Wells notice", probe, re.I) and not DENIAL.search(probe):  # an investigation opened, not legal-note wording
+        add("investigation", "监管立案调查", True, probe)
+    elif re.search(r"调查|調查|处罚|處罰|警示|监管|investigation|subpoena", probe, re.I) and not DENIAL.search(probe):
         add("other", "涉及监管调查或处罚", False, probe)
     rate = fx_rate(f.get("offer_price", {}).get("currency"), CURRENCY[market])
     if "offer_price" in f and rate and pd.notna(row.get("price")):
