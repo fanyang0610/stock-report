@@ -6,7 +6,7 @@
   cross-checks, the event feed, the deep-dive lane, the backtest data and the delivery stay as built.
 - Stage 1 (the ranking and the new report): built 2026-10-24. signals.py, score.py, lists.py (`hold`), the new cards
   and report; v1, v3, signal.py and the stage-3 scripts removed; the history run is docs/BACKTEST.md section 21 (20
-  names over the index fund a year: CN +2.5%, US −2.2%, HK +6.3%). Waiting for your OK (rule 9) to load the daily job,
+  names over the index fund a year: CN +2.4%, US −2.4%, HK +6.7%). Waiting for your OK (rule 9) to load the daily job,
   send a test, and turn the keyword reply back on. Stages 2 and 3: not started.
 - Nothing runs on a schedule (your call, 2026-10-24: a fresh start). The 06:30 job (com.stockreport.daily) is unloaded
   and disabled; the keyword listener (com.stockreport.listen) was already off. launchd/com.stockreport.daily.plist is
@@ -51,8 +51,11 @@
   2) a hard red flag. Everything else is left to the score, so a troubled company ranks low rather than vanishing.
 
 ### The score: three families, equal weights
-Each component is a percentile within its market on the date, point-in-time; a family is the mean of its components'
-percentiles (a missing component is skipped; a missing family counts as 50); the score is the mean of the three families.
+Each component is a percentile within its market on the date, point-in-time; a family is the percentile rank of the mean
+of its components' percentiles (a missing component is skipped; a missing family counts as 50); the score is the mean of
+the three families. Ranking each family before combining is Stockopedia's way and makes the weights equal in effect: a
+plain mean of three percentiles spreads much less than one percentile, which let one-component momentum drive the score
+(fixed in stage 1 after the stage review).
 
 | Family | CN | HK | US |
 |---|---|---|---|
@@ -69,7 +72,7 @@ percentiles (a missing component is skipped; a missing family counts as 50); the
 - **Momentum:** the 12-1-month price return in the US and HK. In CN the price trend hasn't paid over 20 years (Jansen,
   Swinkels and Zhou 2021: past-return anomalies weak in A-shares), while earnings surprises are followed by drift
   (A-share studies, 2000-2020). So CN uses SUE: the latest quarter's 扣非 EPS minus the same quarter a year earlier,
-  divided by the standard deviation of that change over the last 8 quarters, from the notice date. Stockopedia's own
+  divided by the standard deviation of that change over the preceding 8 quarters, from the notice date. Stockopedia's own
   momentum rank mixes price and earnings momentum, so this stays within the method. HK's evidence on price momentum is
   mixed rather than negative, so it keeps the standard definition.
 - No weights are fitted and nothing is chosen on our backtest. Sectors: CN 申万 level 1, US the Nasdaq sector, HK
@@ -81,6 +84,17 @@ percentiles (a missing component is skipped; a missing family counts as 50); the
     notice date), because 业绩报表 has 扣非 EPS only in half-year and annual reports. E/P = 扣非 TTM profit ÷ market value
     (reported profit for the ~1% without it). The SUE uses amounts, not per-share figures, so bonus shares (送转) don't
     read as a fall, and needs at least 6 of the last 8 year-on-year changes (the usual minimum in the SUE literature).
+  - The score's financials are banks, insurers, brokers and other lenders, whose balance sheet is the product: CN 申万
+    银行 and 非银金融 (多元金融 is leasing, trusts and financial holdings); HK the bank, insurer and broker sub-industries
+    plus 消费信贷 and 特殊金融服务 (consumer lenders, lessors); US Nasdaq's bank, broker and insurer industries plus SEC SIC
+    6000-6199 (credit institutions: AmEx, Synchrony, SoFi, NU sit in Nasdaq's "Finance: Consumer Services" with Moody's
+    and Equifax) and 6300-6399 (insurance carriers, health insurers and Berkshire included). Exchanges, rating agencies,
+    data firms and asset managers are fee businesses, scored like other companies.
+  - "Debt ÷ assets" is total liabilities ÷ assets (资产负债率) in every market: the free tables have no interest-bearing
+    debt line.
+  - Financials have fewer components (no S/P, cash backing or debt), so their family scores sit nearer the extremes:
+    they fill about half of each market's top 50 and rarely reach the avoid list. The sector cap keeps them to 2 per
+    sector in the buys; no further rule is added (no published basis for one).
   - Cash backing is left out for banks, insurers and brokers (their operating cash flow moves with deposits and loans;
     Sloan's sample excludes financials). CN and HK use the latest report's year to date (CN: operating cash flow per
     share × shares; HK in the reporting currency), the US the trailing 12 months.
@@ -102,6 +116,8 @@ percentiles (a missing component is skipped; a missing family counts as 50); the
     concern;
   - 卖出: a hard red flag at any time, or at the anniversary outside the top fifth (replace it with the best name you
     don't hold).
+  - Every anniversary repeats this: for 30 days after it (the time to act) the top-fifth test applies; after that a new
+    year has started, judged by the in-year rule until the next anniversary.
   - Your holdings live in data/holdings.csv (code, buy date), set with `hold CODE [--date D]` and `hold CODE --sold`.
     Without the file, the check covers the names of the last 12 months' buy portfolios (data/picks.csv) that aren't
     in today's, each from the first day it was listed.
@@ -127,8 +143,9 @@ percentiles (a missing component is skipped; a missing family counts as 50); the
   months with a round trip of costs (0.2% US, 0.3% CN, 0.6% HK), against the index fund with dividends (SPY, 2800.HK,
   510300.SS). Also the 10-name and 5-name versions, to show how much fewer names widen the range.
 - Each family's top fifth against its bottom fifth over the whole sample, per market.
-- The CN frames are point-in-time with delisted names; US and HK hold today's listings, so their numbers are flattered,
-  and the report says so.
+- The CN frames are point-in-time by report date but hold only companies still listed (Eastmoney drops delisted ones),
+  with restated 扣非 figures; US and HK hold today's listings. So every market's numbers are flattered, and the report
+  says so (corrected in stage 1: this line said CN had delisted names).
 
 ### Results review (stage 2; only when you ask for a report)
 The numbers can't see a fraud investigation, a going-concern doubt, a takeover at a fixed price, or a story the market is

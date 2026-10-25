@@ -43,8 +43,12 @@ def expect_lines(market: str) -> list[str]:
              "只买 10 只 / 5 只：最差的 12 个月相对基金 " + " / ".join(
                  f"{e['portfolios'][n]['worst_excess']:+.0%}" for n in ("10", "5")) +
              f"（20 只 {n20['worst_excess']:+.0%}），名单越短结果越分散。"]
-    if market != "cn":
-        lines.append("美股、港股的历史只含今天仍上市的公司，模拟结果偏乐观。")
+    lines.append("历史只含今天仍上市的公司（A 股的财务数字还是后来修订过的版本），模拟结果偏乐观。" if market == "cn" else
+                 "历史只含今天仍上市的公司，模拟结果偏乐观。")
+    backwards = [f"{NAMES[f]}（前五分之一比后五分之一每 12 个月少 {-x:.1%}）"
+                 for f, x in ((f, e.get("families", {}).get(f"f_{f}", 0)) for f in NAMES) if x < 0]
+    if backwards:
+        lines.append(f"这段历史里{'、'.join(backwards)}与已发表研究的方向相反；已发表研究的样本长得多，方法不变。")
     return lines + [EVIDENCE[market]]
 
 

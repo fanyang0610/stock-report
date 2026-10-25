@@ -22,7 +22,7 @@ def universe(n: int = 10, **cols) -> pd.DataFrame:
         "mcap": 100.0, "price": 10.0, "np_ttm": 1 + i, "revenue_ttm": 10 + i, "bps": 1 + i, "roe": 0.05 + i / 100,
         "debt_ratio": 0.9 - i / 20, "ocf_ytd": 2 + i, "np_ytd": np.full(n, 2.0), "revenue_ytd": np.full(n, 10.0),
         "ocf_ttm": 2 + i, "gp_ttm": 1 + i, "assets": np.full(n, 10.0), "mom_12_1": i / 10, "ret_6m": 0.0,
-        "mcap_rank": np.arange(n, 0, -1), "country": "United States", "period": "2026-06-30"},
+        "shares": 10.0, "mcap_rank": np.arange(n, 0, -1), "country": "United States", "period": "2026-06-30"},
         index=[f"C{k}" for k in range(n)])
     return df.assign(**cols)
 
@@ -40,15 +40,18 @@ def test_a_family_skips_missing_components_and_a_missing_family_counts_50():
     df.loc["C1", "bps"] = -1.0                     # negative book: no B/P
     s = score(df, "hk")
     assert np.isnan(s.loc["C0", "p_sp"]) and np.isnan(s.loc["C1", "p_bp"])
-    assert s.loc["C1", "f_value"] == pytest.approx((s.loc["C1", "p_ep"] + s.loc["C1", "p_sp"]) / 2)
-    assert s.loc["C0", "f_quality"] == pytest.approx(s.loc["C0", "p_roe"])  # ROE alone
+    value = s[["p_ep", "p_bp", "p_sp"]].mean(axis=1)  # C1: E/P and S/P only
+    assert value["C1"] == pytest.approx((s.loc["C1", "p_ep"] + s.loc["C1", "p_sp"]) / 2)
+    assert s["f_value"].tolist() == pytest.approx(value.rank(pct=True).tolist())  # each family ranked before combining
+    quality = s[["p_roe", "p_cash", "p_debt"]].mean(axis=1)
+    assert quality["C0"] == pytest.approx(s.loc["C0", "p_roe"])  # the bank: ROE alone
     cn = score(universe(), "cn", pd.DataFrame(index=[]).assign(deduct_ttm=[], sue=[]))  # no SUE anywhere
     assert (cn["f_momentum"] == 0.5).all()
     assert cn["score"].tolist() == pytest.approx(((cn["f_value"] + cn["f_quality"] + 0.5) / 3).tolist())
 
 
 def test_us_financials_profitability_is_roe_among_financials():
-    df = universe(financial=[True, True, True] + [False] * 7, roe=[0.30, 0.10, 0.20] + [0.0] * 7)
+    df = universe(financial=[True, True, True] + [False] * 7, np_ttm=[3.0, 1.0, 2.0] + [1.0] * 7, bps=1.0)  # ROE 30/10/20%
     s = score(df, "us")
     assert s.loc[["C0", "C1", "C2"], "p_gpa"].tolist() == pytest.approx([1.0, 1 / 3, 2 / 3])
     assert s.loc["C9", "p_gpa"] == pytest.approx(1.0)  # the best gross profit ÷ assets among the others
@@ -75,9 +78,9 @@ def test_sue_is_the_quarters_change_over_its_spread():
     single = [10, 11, 12, 13, 12, 12, 15, 14, 13, 16, 15, 18, 20, 15, 17, 25]  # 2022Q1..2025Q4
     ttm, sue = quarters(ytd_table(single))
     change = np.array(single[4:]) - np.array(single[:-4])  # 12 year-on-year changes
-    assert sue.loc["A", "2025-12-31"] == pytest.approx(change[-1] / change[-8:].std(ddof=1))
+    assert sue.loc["A", "2025-12-31"] == pytest.approx(change[-1] / change[-9:-1].std(ddof=1))  # the preceding 8
     assert ttm.loc["A", "2025-12-31"] == pytest.approx(sum(single[-4:]))
-    assert np.isnan(sue.loc["A", "2023-12-31"])  # 4 changes known, 6 needed
+    assert np.isnan(sue.loc["A", "2024-03-31"])  # 4 preceding changes known, 6 needed
 
 
 def test_sue_uses_only_reports_noticed_by_the_day():
@@ -96,8 +99,9 @@ def test_holding_rule(tmp_path, monkeypatch):
     df = universe(100).assign(score=np.linspace(0, 1, 100), mcap_rank=np.arange(1, 101))
     df["score_rank"] = df["score"].rank(ascending=False).astype(int)
     monkeypatch.setattr(lists, "HOLDINGS", tmp_path / "holdings.csv")
-    pd.DataFrame({"market": "cn", "code": ["C95", "C10", "C90", "C60", "X1"], "name": "",
-                  "since": ["2026-07-01", "2026-07-01", "2025-10-01", "2025-10-01", "2026-01-05"]}).to_csv(lists.HOLDINGS, index=False)
+    pd.DataFrame({"market": "cn", "code": ["C95", "C10", "C90", "C60", "C70", "X1"], "name": "",
+                  "since": ["2026-07-01", "2026-07-01", "2025-10-01", "2025-10-01", "2024-06-01", "2026-01-05"]}
+                 ).to_csv(lists.HOLDINGS, index=False)
     buys = df.sort_values("score", ascending=False).head(3)  # C99, C98, C97: none held
     out = lists.check(df, "cn", DAY, buys, {"X1": "missing fundamentals"}).set_index("code")
     assert out.loc["C95", "status"] == "继续持有" and out.loc["C95", "recheck"] == "2027-07-01"
@@ -105,6 +109,8 @@ def test_holding_rule(tmp_path, monkeypatch):
     assert out.loc["C90", "status"] == "继续持有" and out.loc["C90", "recheck"] == "2027-10-01"
     assert out.loc["C60", "status"] == "卖出" and "C99 S99" in out.loc["C60", "reason"]  # outside the top fifth at 12 months
     assert out.loc["X1", "status"] == "复核" and "missing fundamentals" in out.loc["X1", "reason"]
+    # held since 2024-06: its second year started 2025-06 (kept then), so in-year rules apply until 2027-06-01
+    assert out.loc["C70", "status"] == "继续持有" and out.loc["C70", "recheck"] == "2027-06-01"
 
 
 def test_without_holdings_the_check_covers_the_last_years_buy_lists(tmp_path, monkeypatch):

@@ -7,7 +7,9 @@ bottom fifth. It fills the report's 预期 line (data/history/expect.json) and c
 - The largest fall: the Jegadeesh-Titman portfolio, 1/12 of the money in each of the last 12 cohorts, each month's
   return the cohorts' average (cost spread as 1/12 of a round trip a month), against the fund over the same months.
 - Snapshots built before stage 1 carry inputs winsorized at 2/98% (ROE, debt, 12-1 momentum: ties at the extremes) and
-  dropped stocks without growth figures; US gross profit has no Yahoo fill here; US and HK hold today's listings.
+  dropped stocks without growth figures; US gross profit has no Yahoo fill here; all three hold today's listings
+  (Eastmoney drops delisted A-shares), and CN 扣非 figures are Eastmoney's latest (restated) ones under the first notice
+  date. The score's financials are set by today's definitions (stockreport.universe) on each snapshot.
 
   uv run python -m backtest.qvm frame cn|us|hk   # the score on every snapshot: data/backtest/qvm_<market>.pkl
   uv run python -m backtest.qvm run cn|us|hk     # portfolios and families; writes data/history/expect.json
@@ -24,8 +26,9 @@ import pandas as pd
 from backtest import panel, run
 from backtest.funnel import COST, PERIODS
 from backtest.stage1 import ETF
-from stockreport import history, lists, signals
-from stockreport.fetch import eastmoney, swclass
+from stockreport import history, lists, signals, universe
+from stockreport.config import CONFIG
+from stockreport.fetch import eastmoney, sec, swclass
 from stockreport.score import score
 
 SIZES, HOLD = (20, 10, 5), 12
@@ -42,15 +45,18 @@ def prepare(s: pd.DataFrame, market: str, m: str, ytd: pd.DataFrame | None) -> p
     day = run.day_of(market, m)
     if market == "cn":
         s["sector"] = s["industry"].str[2:4].map(swclass.L1).fillna("未分类")
+        s["financial"] = s["sector"].isin(universe.CN_FINANCIAL)
         key = pd.MultiIndex.from_arrays([s.index, s["period"]])
         s["revenue_ytd"], s["np_ytd"] = (ytd[c].reindex(key).to_numpy() for c in ("revenue", "np"))
         s["ocf_ytd"] = s["ocfps"] * s["shares"]
     elif market == "hk":
         s["sector"] = s["industry_type"].fillna("").str.split("-").str[0].replace("", "未分类")
+        s["financial"] = s["industry_type"].fillna("").str.split("-").str[-1].isin(CONFIG["peers"]["financial_industries_hk"])
         s["revenue_ytd"] = ytd["revenue"].reindex(pd.MultiIndex.from_arrays([s.index, s["period"]])).to_numpy()
         s["np_ytd"], s["ocf_ytd"] = s["np"], s["ocf"]  # CNY, as the revenue
     else:
         s["sector"] = s["sector"].replace("", np.nan).fillna("Miscellaneous")
+        s["financial"] = universe.us_financial(s["industry_raw"], sec.load_ciks().reindex(s.index))
         pref = history.us_preferred(s, day)[["pref_share", "pref_div_share"]]
         s = s.join(pref).fillna({"pref_share": 0.0, "pref_div_share": 0.0})
     return s

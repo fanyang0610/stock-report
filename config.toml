@@ -15,16 +15,15 @@ cn = 50_000_000
 hk = 20_000_000
 us = 10_000_000
 
-[peers]
-financial_industries = ["银行", "证券", "保险"]   # substring match on the industry name
-# US: exact Nasdaq industries. "Specialty Insurers" is left out: in the US universe it holds the insurance
-# brokers (Marsh, Aon, Gallagher, WTW, Brown & Brown), fee businesses valued like other companies.
+[peers]                       # the score's financials (CN: 申万 银行 and 非银金融, universe.CN_FINANCIAL)
+# US: exact Nasdaq industries, plus SEC SIC lenders and insurers (universe.us_financial). "Specialty Insurers" is left
+# out: in the US universe it holds the insurance brokers (Marsh, Aon, Gallagher, WTW, Brown & Brown), fee businesses.
 financial_industries_us = ["Major Banks", "Commercial Banks", "Savings Institutions", "Investment Bankers/Brokers/Service",
                            "Property-Casualty Insurers", "Life Insurance", "Accident &Health Insurance"]
-# HK: exact sub-industries (last level of Eastmoney's HK industry type): banks, insurers and brokers.
-# HKEX, asset managers, lessors and consumer lenders are valued like other companies, as in CN and US.
+# HK: exact sub-industries (last level of Eastmoney's HK industry type): banks, insurers, brokers, consumer lenders
+# and lessors. HKEX and asset managers are fee businesses, scored like other companies.
 financial_industries_hk = ["区域性银行", "综合性银行", "人寿与健康保险", "再保险", "多元化保险", "财产与意外伤害保险",
-                           "投资银行业与经纪业", "综合性资本市场"]
+                           "投资银行业与经纪业", "综合性资本市场", "消费信贷", "特殊金融服务"]
 
 [lists]                       # PLAN.md, "Lists"
 buys = 20

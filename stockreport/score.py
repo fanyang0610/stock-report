@@ -1,6 +1,7 @@
-"""The score (PLAN.md, "The score: three families, equal weights"): a family is the mean of its components' percentiles
-(a missing component skipped, a missing family 50), the score the mean of the three families. Grades A-E are fifths
-of each family; a card's why-line names its two strongest components, its key risk a loss, heavy debt, a 30%+ fall in
+"""The score (PLAN.md, "The score: three families, equal weights"): a family is the percentile rank of the mean of its
+components' percentiles (a missing component skipped, a missing family 50), so each family spreads alike, as
+Stockopedia ranks each family before combining them; the score is the mean of the three. Grades A-E are fifths of each
+family; a card's why-line names its two strongest components, its key risk a loss, heavy debt, a 30%+ fall in
 6 months, or else its weakest component."""
 
 import pandas as pd
@@ -35,7 +36,7 @@ def score(df: pd.DataFrame, market: str, cn: pd.DataFrame | None = None, lines: 
     pct = percentiles(comp, df, market)
     out = pd.concat([df, comp.add_prefix("c_"), pct.add_prefix("p_")], axis=1)
     for fam, parts in FAMILIES.items():
-        out[f"f_{fam}"] = pct[parts[market]].mean(axis=1).fillna(0.5)
+        out[f"f_{fam}"] = pct[parts[market]].mean(axis=1).rank(pct=True).fillna(0.5)
         out[f"g_{fam}"] = grade(out[f"f_{fam}"])
     out["score"] = out[[f"f_{fam}" for fam in FAMILIES]].mean(axis=1)
     out["score_rank"] = out["score"].rank(ascending=False, method="first").astype(int)

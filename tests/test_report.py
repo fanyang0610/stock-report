@@ -45,7 +45,8 @@ def test_report_dry_run(tmp_path, monkeypatch):
     assert len(avoid) == 10 and avoid["sector"].value_counts().max() <= 2
     assert top not in set(buys["code"]) and out.loc[out["list"] == "veto", "code"].tolist() == [top]
     held = out[out["list"] == "holding"].iloc[0]
-    assert held["code"] == "600519" and held["status"] in ("继续持有", "卖出") and held["since"] == "2025-06-30"
+    assert held["code"] == "600519" and held["since"] == "2025-06-30" and held["recheck"] in ("2026-10-24", "2027-06-30")
+    assert held["status"] in ("继续持有", "复核")  # its anniversary passed in June: a new year, judged by the in-year rule
     assert (buys["lot_cost"] == buys["price"] * 100).all() and (buys["recheck"] == "2027-10-24").all()
 
     lines = summary.splitlines()

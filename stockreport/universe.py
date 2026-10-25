@@ -12,11 +12,24 @@ import pandas as pd
 
 from stockreport import crosscheck
 from stockreport.config import CONFIG, DATA
-from stockreport.fetch import eastmoney, hkex, nasdaq, sec, swclass, tdx, yahoo
+from stockreport.fetch import eastmoney, frames, hkex, nasdaq, sec, swclass, tdx, yahoo
 
 log = logging.getLogger(__name__)
 A_SHARE = re.compile(r"^(60[0-5]\d{3}|68[89]\d{3}|00[0-3]\d{3}|30[01]\d{3})$")
 NEEDED = ["np_ttm", "revenue_ttm", "bps"]  # a stock without these is dropped (rule 5); growth isn't scored
+CN_FINANCIAL = ["银行", "非银金融"]  # 申万 level 1: banks, brokers, insurers and 多元金融 (leasing, trusts)
+# The score's financials (PLAN.md, "How each ingredient is built"): banks, insurers, brokers and other lenders, whose
+# balance sheet is the product. US: SEC SIC 6000-6199 (credit institutions) and 6300-6399 (insurance carriers) too.
+US_SIC = [(6000, 6199), (6300, 6399)]
+
+
+def us_financial(industry: pd.Series, cik: pd.Series) -> pd.Series:
+    """Nasdaq's bank, broker and insurer industries, or a lender or insurer by its SEC SIC code (Nasdaq puts AmEx,
+    Synchrony and SoFi under "Finance: Consumer Services" with Moody's and Equifax)."""
+    codes = pd.read_csv(frames.SIC, dtype={"code": str}).drop_duplicates("code").set_index("code")["sic"] \
+        if frames.SIC.exists() else pd.Series(dtype=float)
+    sic = codes.reindex(cik.dropna().astype("int64").astype(str)).set_axis(cik.dropna().index).reindex(industry.index)
+    return industry.isin(CONFIG["peers"]["financial_industries_us"]) | sum(sic.between(lo, hi) for lo, hi in US_SIC).astype(bool)
 
 
 def load_results(table: str = "results") -> pd.DataFrame:
@@ -182,9 +195,8 @@ def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
     df["np_growth"] = df["np_yoy"] / 100
     df["gross_margin"] = df["gross_margin"] / 100
     df["cash_conv"] = (df["ocfps"] / df["eps"]).where(df["eps"] > 0)
-    fin = CONFIG["peers"]["financial_industries"]
-    df["financial"] = df["industry"].fillna("").str.contains("|".join(fin))
     df["sector"] = swclass.level1().reindex(df.index).fillna("未分类")
+    df["financial"] = df["sector"].isin(CN_FINANCIAL)
 
     checks = {
         "missing fundamentals": df[NEEDED].isna().any(axis=1),
@@ -259,7 +271,7 @@ def build_us(today: date) -> tuple[pd.DataFrame, dict]:
         "missing price history": df[["mom_12_1", "vol_1y"]].isna().any(axis=1),
         "listing price vs Yahoo closes differ >1%": listed_px > 0.01,
     }
-    df["financial"] = df["industry"].isin(CONFIG["peers"]["financial_industries_us"])
+    df["financial"] = us_financial(df["industry"], df["cik"])
     df["sector"] = df["sector"].replace("", np.nan).fillna("Miscellaneous")
     return finish(df, info, checks | crosscheck.checks(df, "us", info))
 

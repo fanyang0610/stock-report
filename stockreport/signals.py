@@ -11,13 +11,14 @@ FAMILIES = {  # family -> market -> components
     "momentum": {"cn": ["sue"], "hk": ["mom"], "us": ["mom"]},
 }
 LOWER_IS_BETTER = {"debt"}
-SUE_QUARTERS, SUE_MIN = 8, 6  # the change's spread over the last 8 quarters, at least 6 of them known
+SUE_QUARTERS, SUE_MIN = 8, 6  # the change's spread over the preceding 8 quarters, at least 6 of them known
 
 
 def quarters(table: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Code × quarter from year-to-date 扣非 profit (code, period, deduct): the trailing-12-month sum and the SUE, the
-    quarter's profit minus the same quarter a year earlier over the standard deviation of that change in the last 8
-    quarters. Amounts, not per-share figures, so bonus shares (送转) don't read as a fall."""
+    quarter's profit minus the same quarter a year earlier over the standard deviation of that change in the preceding
+    8 quarters (Chan, Jegadeesh and Lakonishok 1996). Amounts, not per-share figures, so bonus shares (送转) don't read
+    as a fall."""
     ytd = table.pivot_table(index="code", columns="period", values="deduct", aggfunc="last")
     span = pd.period_range(ytd.columns.min(), ytd.columns.max(), freq="Q")
     ytd = ytd.reindex(columns=[p.end_time.strftime("%Y-%m-%d") for p in span])
@@ -25,7 +26,7 @@ def quarters(table: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     first = [c.endswith("-03-31") for c in ytd.columns]  # the fiscal year's first quarter is its year to date
     single.loc[:, first] = ytd.loc[:, first]
     change = single - single.shift(4, axis=1)
-    sd = change.T.rolling(SUE_QUARTERS, min_periods=SUE_MIN).std().T
+    sd = change.shift(1, axis=1).T.rolling(SUE_QUARTERS, min_periods=SUE_MIN).std().T
     return single.T.rolling(4, min_periods=4).sum().T, change / sd.where(sd > 0)
 
 
@@ -41,7 +42,7 @@ def cn_deduct(table: pd.DataFrame, day: str) -> pd.DataFrame:
 
 def components(df: pd.DataFrame, market: str, cn: pd.DataFrame | None = None) -> pd.DataFrame:
     """Each component's raw value (NaN where it doesn't apply). E/P on 扣非 TTM in CN (reported profit where 扣非 is
-    missing), and on profit to common shareholders in the US (B/P on common book, history.us_preferred); B/P only on
+    missing), and on profit to common shareholders in the US (B/P and ROE on common book, history.us_preferred); B/P only on
     a positive book; S/P, cash backing and debt not for banks, insurers and brokers."""
     fin = df["financial"].astype(bool)
     pref = df.get("pref_share", 0.0)
@@ -54,7 +55,7 @@ def components(df: pd.DataFrame, market: str, cn: pd.DataFrame | None = None) ->
         "ep": earnings / df["mcap"],
         "bp": (book / df["price"]).where(book > 0),
         "sp": (df["revenue_ttm"] / df["mcap"]).where(~fin & (df["revenue_ttm"] > 0)),
-        "roe": df["roe"],
+        "roe": (earnings / (book * df["shares"])).where(book > 0) if market == "us" else df["roe"],
         "cash": ((df[ocf] - df[npf]) / df[rev]).where(~fin & (df[rev] > 0)),
         "debt": df["debt_ratio"].where(~fin),
         "mom": df["mom_12_1"],

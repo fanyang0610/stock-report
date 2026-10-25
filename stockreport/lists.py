@@ -13,6 +13,7 @@ HOLDINGS = DATA / "holdings.csv"
 HOME = "United States"  # US buys only among home listings
 LOT = {"cn": 100, "us": 1}  # HK: each stock's board lot (HKEX)
 KEEP, REVIEW = 0.8, 0.5  # at the anniversary keep the top fifth; before it, review below the middle
+WINDOW = 30  # days after an anniversary in which a holding is judged at it (the time to sell); then a new year starts
 COLUMNS = ["list", "rank", "code", "name", "sector", "price", "price_date", "lot", "lot_cost", "score", "score_rank",
            "f_value", "f_quality", "f_momentum", "g_value", "g_quality", "g_momentum", "why", "weak", "risk",
            "status", "reason", "since", "recheck"]
@@ -42,6 +43,15 @@ def anniversary(d: date, years: int = 1) -> date:
         return d.replace(year=d.year + years, day=28)
 
 
+def cycle(since: date, today: date) -> tuple[int | None, date]:
+    """The years held if an anniversary passed within WINDOW days (else None), and the next anniversary."""
+    k = 1
+    while anniversary(since, k) <= today:
+        k += 1
+    due, last = anniversary(since, k), anniversary(since, k - 1)
+    return (k - 1 if k > 1 and (today - last).days <= WINDOW else None), due
+
+
 def held(market: str, today: date, buys: pd.Index) -> pd.DataFrame:
     """Code -> buy date and name: your holdings in the market, else the names in a buy portfolio of the last 12 months
     (logged with a score, so the old method's picks don't count) that aren't in today's."""
@@ -65,21 +75,21 @@ def check(df: pd.DataFrame, market: str, today: date, buys: pd.DataFrame, droppe
     swap = next((f"{c} {buys.at[c, 'name']}" for c in buys.index if c not in holdings.index), "")
     rows = []
     for code, h in holdings.iterrows():
-        due = anniversary(date.fromisoformat(h["since"]))
+        years, due = cycle(date.fromisoformat(h["since"]), today)
         row = {"code": code, "name": h["name"], "since": h["since"]}
         if code not in df.index:
             rows.append(row | {"status": "复核", "recheck": today.isoformat(),
                                "reason": f"今日未评分（{dropped.get(code, '不在市值前列或数据不全')}）"})
             continue
         s, rank = df.at[code, "score"], df.at[code, "score_rank"]
-        if today < due and s < review:
-            status, reason, recheck = "复核", f"未满 12 个月，评分跌入后半（第 {rank} 名）", today
-        elif today < due:
-            status, reason, recheck = "继续持有", f"未满 12 个月，评分在前半（第 {rank} 名）", due
+        if years is None and s < review:
+            status, reason, recheck = "复核", f"未到满年（{due}），评分跌入后半（第 {rank} 名）", today
+        elif years is None:
+            status, reason, recheck = "继续持有", f"未到满年（{due}），评分在前半（第 {rank} 名）", due
         elif s >= keep:
-            status, reason, recheck = "继续持有", f"满 12 个月，仍在前五分之一（第 {rank} 名），再持有一年", anniversary(due)
+            status, reason, recheck = "继续持有", f"满 {years} 年，仍在前五分之一（第 {rank} 名），再持有一年", due
         else:
-            status, reason, recheck = "卖出", f"满 12 个月，已不在前五分之一（第 {rank} 名）", today
+            status, reason, recheck = "卖出", f"满 {years} 年，已不在前五分之一（第 {rank} 名）", today
             reason += f"，可换入未持有的最高分 {swap}" if swap else ""
         rows.append(row | df.loc[code].to_dict() | {"status": status, "reason": reason, "recheck": recheck.isoformat()})
     return pd.DataFrame(rows).assign(list="holding")
