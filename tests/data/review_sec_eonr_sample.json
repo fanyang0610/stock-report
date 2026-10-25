@@ -1,0 +1,79 @@
+{
+ "cik": 1842556,
+ "filings": {
+  "recent": {
+   "form": [
+    "10-Q",
+    "10-Q",
+    "10-K/A",
+    "8-K",
+    "10-K",
+    "NT 10-Q",
+    "NT 10-Q",
+    "8-K",
+    "10-K/A",
+    "8-K"
+   ],
+   "filingDate": [
+    "2026-10-22",
+    "2026-10-13",
+    "2026-10-13",
+    "2026-10-13",
+    "2026-09-28",
+    "2026-08-17",
+    "2026-05-18",
+    "2026-04-28",
+    "2026-04-27",
+    "2026-04-22"
+   ],
+   "items": [
+    "",
+    "",
+    "",
+    "4.02",
+    "",
+    "",
+    "",
+    "2.02,7.01,9.01",
+    "",
+    "3.01,7.01,9.01"
+   ],
+   "accessionNumber": [
+    "0001437749-26-033277",
+    "0001437749-26-032510",
+    "0001213900-26-108617",
+    "0001213900-26-108614",
+    "0001213900-26-103762",
+    "0001213900-26-090788",
+    "0001213900-26-058480",
+    "0001213900-26-048483",
+    "0001213900-26-047665",
+    "0001213900-26-046688"
+   ],
+   "primaryDocument": [
+    "eonr20260630_10q.htm",
+    "eonr20260331c_10q.htm",
+    "ea0308031-10ka1_eon.htm",
+    "ea0308292-8k_eonresources.htm",
+    "ea0285266-10k_eon.htm",
+    "ea0302319-nt10q_eonresource.htm",
+    "ea0291343-nt10q_eonresource.htm",
+    "ea0288079-8k_eonresources.htm",
+    "ea0286874-10ka1_eon.htm",
+    "ea0287285-8k_eonresources.htm"
+   ],
+   "primaryDocDescription": [
+    "FORM 10-Q",
+    "FORM 10-Q",
+    "AMENDMENT NO. 1 TO FORM 10-K",
+    "CURRENT REPORT",
+    "ANNUAL REPORT",
+    "NOTIFICATION OF LATE FILING",
+    "NOTIFICATION OF LATE FILING",
+    "CURRENT REPORT",
+    "AMENDMENT NO. 1 TO FORM 10-K",
+    "CURRENT REPORT"
+   ]
+  }
+ }
+}

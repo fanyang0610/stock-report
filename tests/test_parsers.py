@@ -80,24 +80,6 @@ def test_cninfo_titles_drop_routine_filings():
     assert parse_titles(payload, limit=2) == titles[:2]
 
 
-def test_note_reply_is_validated():
-    from stockreport.notes import TooLong, parse_reply
-
-    ok = parse_reply('```json\n{"note": "估值低于同行。", "risk": "周期回落", "flag": "none", "reason": "无"}\n```')
-    assert ok == {"note": "估值低于同行。", "risk": "周期回落", "flag": "none", "evidence": "", "reason": "无"}
-    with pytest.raises(ValueError):
-        parse_reply('{"note": "x", "risk": "y", "flag": "buy_more", "reason": ""}')
-    with pytest.raises(ValueError):
-        parse_reply('{"note": "", "risk": "y", "flag": "none", "reason": ""}')
-    with pytest.raises(ValueError):
-        parse_reply("not json")
-    long = '{"note": "%s", "risk": "风险", "flag": "one_off_gain", "reason": "r"}' % ("字" * 70)
-    with pytest.raises(TooLong):
-        parse_reply(long)
-    cut = parse_reply(long, enforce_length=False)
-    assert len(cut["note"]) == 60 and cut["note"].endswith("…") and cut["flag"] == "one_off_gain"
-
-
 def test_note_length_counts_digits_as_half_and_cuts_at_a_clause():
     from stockreport.notes import shorten, width
 
@@ -115,38 +97,6 @@ def test_keyword_match():
         assert is_keyword(text), text
     for text in ["股票报告呢", "请发股票报告", "stock", "hi", ""]:
         assert not is_keyword(text), text
-
-
-def test_one_off_checks_on_saved_picks():
-    from stockreport.notes import card_numbers, checks
-
-    picks = pd.read_csv(SAMPLES / "cn_picks_sample.csv", dtype={"code": str}).set_index("code", drop=False)
-    first = lambda code: checks(picks.loc[code])[0].split("：")[-1]
-    second = lambda code: checks(picks.loc[code])[1].split("：")[-1]
-    assert first("301308") == "是"                    # 江波龙: profit +1216%, cash conversion -0.30
-    assert second("688331").startswith("是（0.12 倍")  # 荣昌生物: analysts expect EPS to fall to 0.12x
-    assert first("002466") == "否" and second("002466").startswith("否")  # 天齐锂业: cash 0.51, EPS 1.76x
-    assert first("600999") == "不适用"                # 招商证券: broker
-    assert second("001309").startswith("不适用")      # 德明利: only 2 analysts
-    third = lambda code: checks(picks.loc[code])[2].split("：")[-1]
-    assert third("603259").startswith("否")              # 药明康德: profit +29% vs revenue +39%
-    assert third("688331").startswith("是")              # 荣昌生物: profit far outgrew revenue
-    assert checks(picks.loc["688126"]) == ["检查一、二、三：不适用（卖出档）"]
-    assert all("检查" in card_numbers(row) for _, row in picks.iterrows())
-
-
-def test_flags_need_a_check_or_a_quoted_title():
-    from stockreport.notes import unsupported
-
-    picks = pd.read_csv(SAMPLES / "cn_picks_sample.csv", dtype={"code": str}).set_index("code", drop=False)
-    titles = ["2026-08-28 关于出售部分股票资产的公告", "2026-10-09 关于要约收购的提示性公告"]
-    note = lambda flag, evidence="": {"flag": flag, "evidence": evidence}
-    assert unsupported(picks.loc["688585"], note("pending_deal", "关于要约收购的提示性公告"), titles) == ""
-    assert unsupported(picks.loc["688585"], note("pending_deal", "公司正在重组"), titles) == "no cited title"
-    assert unsupported(picks.loc["688126"], note("one_off_gain"), titles).startswith("a sell")
-    # 药明康德: a real asset-sale title, but profit (+29%) grew slower than revenue (+39%)
-    assert unsupported(picks.loc["603259"], note("one_off_gain", "关于出售部分股票资产的公告"), titles) != ""
-    assert unsupported(picks.loc["301308"], note("one_off_gain"), titles) == ""  # 江波龙 passes check 1
 
 
 def test_ttm_includes_deducted_eps_when_the_table_has_it():

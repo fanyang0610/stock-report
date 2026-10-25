@@ -16,7 +16,7 @@ KEEP, REVIEW = 0.8, 0.5  # at the anniversary keep the top fifth; before it, rev
 WINDOW = 30  # days after an anniversary in which a holding is judged at it (the time to sell); then a new year starts
 COLUMNS = ["list", "rank", "code", "name", "sector", "price", "price_date", "lot", "lot_cost", "score", "score_rank",
            "f_value", "f_quality", "f_momentum", "g_value", "g_quality", "g_momentum", "why", "weak", "risk",
-           "status", "reason", "since", "recheck"]
+           "status", "reason", "since", "recheck", "period", "np_ytd", "np_ttm", "report_currency"]
 
 
 def capped(ranked: pd.DataFrame, n: int, cap: int) -> pd.DataFrame:
@@ -68,7 +68,7 @@ def held(market: str, today: date, buys: pd.Index) -> pd.DataFrame:
 
 
 def check(df: pd.DataFrame, market: str, today: date, buys: pd.DataFrame, dropped: dict[str, str]) -> pd.DataFrame:
-    """继续持有 / 复核 / 卖出 per holding (PLAN.md, "Holding rule"); hard red flags come with stage 2's review."""
+    """继续持有 / 复核 / 卖出 per holding (PLAN.md, "Holding rule"); the results review adds its findings (review.apply)."""
     scores = df.loc[buy_field(df, market), "score"]
     keep, review = scores.quantile(KEEP), scores.quantile(REVIEW)
     holdings = held(market, today, buys.index)
@@ -96,16 +96,19 @@ def check(df: pd.DataFrame, market: str, today: date, buys: pd.DataFrame, droppe
 
 
 def build(df: pd.DataFrame, market: str, today: date, dropped: dict[str, str]) -> pd.DataFrame:
-    """The day's buys, avoid names, holdings check and your vetoes, one row each (COLUMNS)."""
+    """The day's buys, the next names (they replace buys the results review removes), avoid names, holdings check
+    and your vetoes, one row each (COLUMNS)."""
     cfg = CONFIG["lists"]
     vetoes = {c: v for c, v in verdicts.active(market, today, df["period"].astype(str)).items() if v["verdict"] == "veto"}
     df = df.assign(lot=df["lot"] if "lot" in df else LOT[market])
     df["lot_cost"] = df["price"] * df["lot"]
     ranked = df.sort_values("score", ascending=False)
     field = buy_field(ranked, market) & ~ranked.index.isin(list(vetoes))
-    buys = capped(ranked[field], cfg["buys"], cfg["per_sector"])
+    picked = capped(ranked[field], cfg["buys"] + cfg["next"], cfg["per_sector"])
+    buys, bench = picked.iloc[:cfg["buys"]], picked.iloc[cfg["buys"]:]  # the next ones replace buys the review removes
     avoid = capped(ranked[ranked["mcap_rank"] <= cfg["avoid_largest"]].iloc[::-1], cfg["avoid"], cfg["per_sector"])
     parts = [buys.assign(list="buy", rank=range(1, len(buys) + 1), recheck=anniversary(today).isoformat()),
+             bench.assign(list="next", rank=range(len(buys) + 1, len(picked) + 1), recheck=anniversary(today).isoformat()),
              avoid.assign(list="avoid", rank=range(1, len(avoid) + 1)),
              check(df, market, today, buys, dropped),
              pd.DataFrame([{"list": "veto", "code": c, "name": df["name"].get(c, ""),

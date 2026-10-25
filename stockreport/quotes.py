@@ -43,7 +43,7 @@ def find(full: str, quote: str) -> int:
 
 
 def check(item: dict, full: str, default_currency: str | None = None, numeric: bool = True) -> dict | None:
-    """The verified fact {quote, value, currency, pct} or None. `full` is norm(filing text). Text-only facts
+    """The verified fact {quote, value, currency, pct, scale} or None. `full` is norm(filing text). Text-only facts
     (numeric=False) need just the quote."""
     quote = norm(item.get("quote"))
     at = find(full, quote)
@@ -68,7 +68,7 @@ def check(item: dict, full: str, default_currency: str | None = None, numeric: b
         if where < 0 or at - where > NEAR:
             return None
     return fact | {"value": value * scale_of(unit), "currency": currency_of(before + unit) or default_currency,
-                   "pct": False}
+                   "pct": False, "scale": scale_of(unit)}
 
 
 def code_in(item: dict) -> str | None:

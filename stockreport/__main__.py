@@ -1,17 +1,20 @@
 """Command line: uv run python -m stockreport <command>."""
 
 import argparse
+import fcntl
 import logging
 import sys
 import time
 from datetime import date
 from pathlib import Path
 
+import httpx
 import pandas as pd
+from dotenv import dotenv_values
 
-from stockreport import crosscheck, deliver, history, lists, report, signals, track, verdicts
+from stockreport import crosscheck, deepdive, deliver, history, lists, report, review, signals, track, verdicts
 from stockreport.cleanup import cleanup
-from stockreport.config import DATA, REPORTS, ROOT, setup_logging
+from stockreport.config import CONFIG, DATA, REPORTS, ROOT, setup_logging
 from stockreport.fetch import eastmoney
 from stockreport.fetch import fetch as fetch_market
 from stockreport.listener import listen
@@ -47,6 +50,10 @@ def build_market(market: str, today: date) -> None:
     df, info = scored(market, today)
     dropped = {code: reason for reason, codes in info["dropped"].items() for code in codes}
     out_lists = lists.build(df, market, today, dropped)
+    try:  # the results review's sources (no DeepSeek: the review runs when you ask for a report)
+        review.gather(market, out_lists, today)
+    except Exception:
+        log.exception("%s review sources failed; the review shows 审核暂不可用 for this market", market.upper())
     try:  # alarms only: a failure is logged and never stops the build
         drift = crosscheck.drift(df, market, today)
     except Exception:
@@ -83,7 +90,7 @@ def build_market(market: str, today: date) -> None:
 
 def run(markets: list[str]) -> int:
     """Build each market, then the report once; a market that fails keeps its newest earlier lists. No DeepSeek
-    calls: the results review comes with stage 2."""
+    calls: the results review runs when you ask for a report (`review`, `send`, the keyword)."""
     started, today, crashed = time.monotonic(), date.today(), []
     for market in markets:
         try:
@@ -97,6 +104,41 @@ def run(markets: list[str]) -> int:
     cleanup()
     print(f"Done in {time.monotonic() - started:.0f}s" + (f"; failed: {', '.join(crashed)}" if crashed else ""))
     return 1 if crashed else 0
+
+
+def review_all(background: bool) -> int:
+    """The results review without a time limit (after a keyword reply, `--background`: what its budget left): sources
+    gathered for any lists without them, every name reviewed, the day's deep dives read; then, unless in the
+    background, the report written and summed up. One at a time (data/review.lock)."""
+    started, today = time.monotonic(), date.today()
+    lock = open(DATA / "review.lock", "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        log.info("another review is running")
+        return 0
+    lists, sources = {}, {}
+    for market in report.MARKETS:
+        if path := report.latest_lists(market, today):
+            rows = report.read_lists(path)
+            lists[market] = rows
+            sources[market] = review.load_sources(market, path.parent.name) or review.gather(market, rows, today, path.parent.name)
+    states = review.run(lists, sources, today, None)
+    key = dotenv_values(ROOT / ".env").get("DEEPSEEK_API_KEY")
+    if key:
+        client = httpx.Client(base_url=CONFIG["notes"]["base_url"], timeout=300, headers={"Authorization": f"Bearer {key}"})
+        for market, rows in lists.items():
+            try:
+                deepdive.run(market, rows, today, client)
+            except Exception:
+                log.exception("%s deep dives failed", market.upper())
+    if background:
+        log.info("background review done in %.0fs", time.monotonic() - started)
+        return 0
+    pdf, summary = report.build(today, states)
+    print(review.stats(states))
+    print(f"\n{summary}\n\nWrote {pdf.relative_to(ROOT)} in {time.monotonic() - started:.0f}s")
+    return 0
 
 
 def build_test(today: date) -> tuple[str, Path]:
@@ -142,12 +184,9 @@ def send(test: bool, assume_yes: bool) -> int:
         today = date.today()
         (summary, pdf), what, title = build_test(today), "TEST", f"股票报告_测试_{today:%Y%m%d}.pdf"
     else:
-        found = report.newest()
-        if not found:
-            print("No report yet: run `run` first.")
-            return 1
-        day, pdf, summary = found
-        what, title = f"the {day}", f"股票报告_{day.replace('-', '')}.pdf"
+        today = date.today()
+        pdf, summary = report.fresh(today, CONFIG["review"]["budget"])
+        what, title = f"the {today} (reviewed)", f"股票报告_{today:%Y%m%d}.pdf"
     if not wait_for_window():
         print("Still no reply window. Text the bot, then run this again.")
         return 1
@@ -175,6 +214,9 @@ def main(argv: list[str] | None = None) -> int:
     run_p = sub.add_parser("run", help="fetch, score, list and write the report (PDF + text summary)")
     run_p.add_argument("--market", choices=["cn", "us", "hk"], help="one market (default: all three)")
     sub.add_parser("track", help="average return of past lists vs each market's index")
+    rev = sub.add_parser("review", help="the results review of the newest lists (DeepSeek, no time limit), the day's "
+                                        "deep dives, then the report")
+    rev.add_argument("--background", action="store_true", help="finish what a keyword reply's budget left; no report")
     hold = sub.add_parser("hold", help="record a stock you hold (not the index fund; no arguments: list them); "
                                        "the next `run` checks it")
     hold.add_argument("code", nargs="?", help="ticker, e.g. 600519, 00700 or AAPL")
@@ -194,6 +236,9 @@ def main(argv: list[str] | None = None) -> int:
         return run([args.market] if args.market else ["cn", "us", "hk"])
     if args.command == "track":
         return track.scorecard()
+    if args.command == "review":
+        setup_logging(console=not args.background)
+        return review_all(args.background)
     if args.command == "hold":
         print(lists.hold(args.code, args.date, args.sold, date.today()))
         return 0

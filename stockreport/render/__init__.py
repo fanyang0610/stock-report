@@ -48,8 +48,8 @@ def fit_bytes(lines: list[str], limit: int) -> str:
 
 
 def text_summary(report: dict, limit: int = 4000) -> str:
-    """Per market: the data date, the 预期 line's first sentence, the top 10 buys with their grades, the holdings that
-    need action, and the avoid names; the PDF has the cards."""
+    """Per market: the data date, the 预期 line's first sentence, the top 10 buys with their grades, what the results
+    review removed or flagged, the holdings that need action, and the avoid names; the PDF has the cards."""
     lines = [f"{'【测试数据】' if report.get('test') else ''}{report['title']} {report['date']}"]
     if report.get("test"):
         lines.append("以下为虚构数据，仅用于测试发送。")
@@ -65,6 +65,14 @@ def text_summary(report: dict, limit: int = 4000) -> str:
         for p in m["buys"][:10]:
             g = p["grades"]
             lines.append(f"{p['rank']}. {p['ticker']} {p['name']} 价{g['价值']}质{g['质量']}动{g['动量']}")
+        if m.get("removed"):
+            lines.append("审核剔除：" + "；".join(f"{p['name'] or p['ticker']}（{p['reason'].split('（')[0]}）" for p in m["removed"]))
+        flagged = [p for k in ("holdings", "avoid") for p in m[k] if (p.get("review") or "").startswith(("审核：", "数据存疑"))]
+        if flagged:
+            lines.append("审核发现：" + "；".join(f"{p['name'] or p['ticker']}（{p['review'].split('（')[0].split('：', 1)[1]}）"
+                                                for p in flagged))
+        if m.get("review"):
+            lines.append(m["review"])
         if m["holdings"]:
             counts = {s: [h["name"] or h["ticker"] for h in m["holdings"] if h["status"] == s] for s in ("继续持有", "复核", "卖出")}
             lines.append("持仓检查：" + "；".join(f"{s} {len(v)}" + (f"（{'、'.join(v)}）" if s != "继续持有" and v else "")

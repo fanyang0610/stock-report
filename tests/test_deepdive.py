@@ -1,6 +1,6 @@
-"""Deep-dive lane (PLAN.md Method 15): quotes checked against saved filings (CN half-year report, HK interim report
-in English, US 10-Q, a CN contract-win PDF), what verified facts mean for a pick, the daily limit and the per-filing
-cache, and manual verdicts."""
+"""Deep-dive lane (AGENTS.md rule 3; PLAN.md, "Results review"): quotes checked against saved filings (CN half-year
+report, HK interim report in English, US 10-Q, a CN contract-win PDF), the data check and what verified facts mean for
+a name, the daily limit and the per-filing cache, and manual verdicts."""
 
 import json
 from datetime import date
@@ -27,8 +27,7 @@ def test_quotes_verified_on_saved_filings():
     assert "不存在" in f["going_concern"]["quote"]  # quoted, but a denial: meaning() must not flag it
     text, answer = saved("hk")  # AIA interim report, "US$m" and "US$ millions" unit lines
     f = deepdive.verify(answer, text, "hk")["facts"]
-    assert f["net_profit"]["value"] == 4_294e6 and f["embedded_value"]["value"] == 80_555e6
-    assert f["embedded_value"]["currency"] == "USD"
+    assert f["net_profit"]["value"] == 4_294e6 and f["net_profit"]["currency"] == "USD" and f["net_profit"]["scale"] == 1e6
     text, answer = saved("us")  # MetLife 10-Q, "(In millions, except per share data)"
     assert deepdive.verify(answer, text, "us")["facts"]["net_profit"]["value"] == 1_845e6
 
@@ -53,58 +52,68 @@ def test_pdf_text_and_inline_units():
     assert not filings.readable("ᅱഅၿྛٺܢႵཋ܄ඳ 2026୍϶୍؇Бۡ čAܢĎ " * 40)  # fonts without a Unicode map
 
 
-def pick(bucket: str = "buy", **kw) -> pd.Series:
-    return pd.Series({"code": "600001", "bucket": bucket, "price": 10.0, "mcap": 1e10, "revenue_ttm": 5e9} | kw)
+def aia(**row) -> tuple[dict, dict]:
+    """AIA's interim report read with its period end, and a card row for the same period (US$, reporting currency)."""
+    text, answer = saved("hk")
+    found = deepdive.verify(answer | {"period_end": {"quote": "Six months ended 30 June 2026"}}, text, "hk")
+    return {"code": "01299", "period": "2026-06-30", "np_ytd": 4_294e6, "report_currency": "USD", "price": 80.0} | row, \
+        found | {"title": "2026 Interim Report", "date": "2026-08-20"}
 
 
-def found(source: str = "periodic", **facts) -> dict:
-    return {"facts": facts, "asked": len(facts), "title": "2026年半年度报告", "date": "2026-08-20", "source": source}
+def test_data_check_on_a_saved_filing():
+    row, found = aia()
+    assert deepdive.period_of("for the quarterly period ended September 27, 2026") == "2026-09-27"
+    assert deepdive.period_of("截至2026年9月30日止九个月") == "2026-09-30" and deepdive.period_of("no date") is None
+    assert deepdive.title_period("中国铝业2026年半年度报告") == "2026-06-30"
+    assert deepdive.title_period("2026年第三季度报告") == "2026-09-30" and deepdive.title_period("2025年年度报告") == "2025-12-31"
+    assert deepdive.data_gap(row, found, "hk") is None  # the report agrees with the card's figure
+    gap = deepdive.data_gap(row | {"np_ytd": 6_000e6}, found, "hk")
+    assert gap == "最新报告的归母净利润 42.94 亿与卡片所用数据 60.00 亿相差 28%"
+    assert deepdive.data_gap(row | {"np_ytd": 2_400e6}, found, "hk") is None  # within 20% of the row's 2025 column
+    assert deepdive.data_gap(row | {"np_ytd": 4_294e3}, found, "hk") is None  # a power of ten: a unit misread
+    assert deepdive.data_gap(row | {"np_ytd": 6_000e6, "period": "2026-09-30"}, found, "hk") is None  # another period
+    assert deepdive.data_gap(row | {"np_ytd": 6_000e6, "report_currency": None}, found, "hk") is None
+    odd = deepdive.findings(row | {"np_ytd": 6_000e6}, found, "hk")
+    assert [(f["kind"], f.get("suspect")) for f in odd] == [("data_suspect", True)] and odd[0]["type"] == "2026 Interim Report"
 
 
-def test_meaning():
-    money = lambda v: {"quote": "x", "value": v, "currency": "CNY", "pct": False}
-    one_off = found(non_recurring=money(4e8), net_profit=money(1e9))
-    assert deepdive.meaning(pick("buy"), one_off, "cn")["action"] == "veto"
-    assert deepdive.meaning(pick("sell"), one_off, "cn")["action"] == "none"  # a one-off only adds to overvaluation
-    small = deepdive.meaning(pick("buy"), found(non_recurring=money(1e8), net_profit=money(1e9)), "cn")
-    assert small["action"] == "none" and "非经常性损益占同期归母净利润 10%" in small["line"]
-    offer = deepdive.meaning(pick("sell"), found(offer_price=money(12.0)), "cn")
-    assert offer["action"] == "veto" and "较现价 +20%" in offer["line"]
-    deal = deepdive.meaning(pick("hold"), found("event", deal_size=money(3.045e9)), "cn")
-    assert "占近 12 个月营收 61%、市值 30%，重大" in deal["line"] and deal["action"] == "none"
-    assert "交易" not in deepdive.meaning(pick("hold"), found(deal_size=money(3.045e9)), "cn")["line"]  # periodic
+def found_with(**facts) -> dict:
+    return {"facts": facts, "asked": len(facts), "title": "2026年半年度报告", "date": "2026-08-20"}
+
+
+def test_findings():
+    money = lambda v: {"quote": "x", "value": v, "currency": "CNY", "pct": False, "scale": 1.0}
+    row = {"code": "600001", "price": 10.0}
+    kinds = lambda **f: [(x["kind"], x["hard"]) for x in deepdive.findings(row, found_with(**f), "cn")]
+    assert kinds(non_recurring=money(4e8), net_profit=money(1e9)) == [("one_off", False)]  # a soft concern only
+    assert kinds(non_recurring=money(1e8), net_profit=money(1e9)) == []
+    after = money(9.99e8) | {"quote": "Net profit after deducting non-recurring profit or loss items attributable to equity "
+                                      "shareholders of the Company 85,733 69,476 23.4"}  # CNOOC's interim report
+    assert kinds(non_recurring=after, net_profit=money(1e9)) == []  # that's the profit, not the one-off items
+    assert kinds(offer_price=money(12.0)) == [("takeover", True)]
+    assert "较现价 +20%" in deepdive.findings(row, found_with(offer_price=money(12.0)), "cn")[0]["words"]
     standard = {"quote": "我们认为，后附的财务报表在所有重大方面按照企业会计准则的规定编制，公允反映了……（标准无保留意见）"}
-    assert "审计意见为无保留意见" in deepdive.meaning(pick(), found(audit_opinion=standard), "cn")["line"]
-    qualified = {"quote": "我们对贵公司财务报表发表了保留意见。"}
-    assert deepdive.meaning(pick(), found(audit_opinion=qualified), "cn")["action"] == "veto"
+    assert kinds(audit_opinion=standard) == []
+    assert kinds(audit_opinion={"quote": "我们对贵公司财务报表发表了保留意见。"}) == [("audit", True)]
     denial = {"quote": "本公司自本报告期末至少 12 个月内不存在影响持续经营能力的重大事项。"}
-    assert deepdive.meaning(pick(), found(going_concern=denial), "cn")["action"] == "none"
-    related = {"quote": "x", "value": 0.42, "currency": None, "pct": True}
-    assert deepdive.meaning(pick(), found(related_party_pct=related), "cn")["action"] == "low"
+    assert kinds(going_concern=denial) == []
+    assert kinds(investigation={"quote": "公司于2026年7月收到中国证监会《立案告知书》"}) == [("investigation", True)]
+    assert kinds(investigation={"quote": "公司收到上海证券交易所监管工作函"}) == [("other", False)]
 
 
 def test_daily_limit_and_cache(tmp_path, monkeypatch):
-    """Five triggered names, three new filings a day; the other two wait, and a cached filing costs nothing."""
-    monkeypatch.setattr(deepdive, "REPORTS", tmp_path / "reports")
+    """Five candidates, three new filings a day; the other two wait, and a cached filing costs nothing."""
     monkeypatch.setattr(deepdive, "CACHE", tmp_path / "cache")
-    monkeypatch.setattr(deepdive, "dotenv_values", lambda p: {"DEEPSEEK_API_KEY": "test"})
     codes = [f"60000{i}" for i in range(1, 6)]
-    rows = {c: pick(code=c, name=f"测试{c[-1]}") for c in codes}
-    monkeypatch.setattr(deepdive, "triggers", lambda m, cands, today: [
-        {"code": c, "name": rows[c]["name"], "row": rows[c], "why": "测试", "filing": None} for c in codes])
-    monkeypatch.setattr(deepdive, "candidates", lambda picks, df: picks)
+    rows = pd.DataFrame({"list": ["buy"] * 5, "code": codes, "name": codes, "rank": range(1, 6), "score": 0.9})
     monkeypatch.setattr(deepdive.filings, "periodic", lambda m, c, today: {
         "url": f"http://static.cninfo.com.cn/finalpage/2026-08-20/{c}.PDF", "title": f"{c} 半年报", "date": "2026-08-20"})
     read = []
-    monkeypatch.setattr(deepdive, "study", lambda client, m, c, n, f: read.append(c) or found())
-    first = deepdive.run("cn", date(2026, 10, 19), pd.DataFrame(), pd.DataFrame(), use_ai=True)
-    assert first["fresh"] == codes[:3] and set(first["results"]) == set(codes[:3])
-    again = deepdive.run("cn", date(2026, 10, 19), pd.DataFrame(), pd.DataFrame(), use_ai=True)
-    assert again["fresh"] == codes[:3] and len(read) == 3  # same day: nothing more
-    nextday = deepdive.run("cn", date(2026, 10, 20), pd.DataFrame(), pd.DataFrame(), use_ai=True)
-    assert nextday["fresh"] == codes[3:] and len(nextday["results"]) == 5 and len(read) == 5
-    off = deepdive.run("cn", date(2026, 10, 21), pd.DataFrame(), pd.DataFrame(), use_ai=False)
-    assert off["fresh"] == [] and len(off["results"]) == 5  # without DeepSeek: cached filings only
+    monkeypatch.setattr(deepdive, "study", lambda client, m, c, n, f: read.append(c) or {"facts": {}, "asked": 0})
+    assert deepdive.run("cn", rows, date(2026, 10, 19), None) == 3 and read == codes[:3]
+    assert deepdive.run("cn", rows, date(2026, 10, 19), None) == 0 and len(read) == 3  # same day: nothing more
+    assert deepdive.run("cn", rows, date(2026, 10, 20), None) == 2 and read == codes
+    assert set(deepdive.results("cn", rows)) == set(codes)  # each name's newest filing read, cached
 
 
 def test_verdicts(tmp_path, monkeypatch):

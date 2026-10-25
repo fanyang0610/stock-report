@@ -1,0 +1,516 @@
+{
+ "cn": {
+  "600576": {
+   "filings": [
+    {
+     "date": "2026-10-10",
+     "kind": "risk",
+     "title": "关于控股股东之一致行动人部分股份解除质押、司法冻结暨司法拍卖完成过户登记的公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-10-10/1225599523.PDF"
+    },
+    {
+     "date": "2026-10-10",
+     "kind": "risk",
+     "title": "关于公司实际控制人收到立案告知书的公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-10-10/1225599517.PDF"
+    },
+    {
+     "date": "2026-08-26",
+     "kind": "earnings",
+     "title": "2026年半年度报告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-26/1225503307.PDF"
+    },
+    {
+     "date": "2026-08-26",
+     "kind": "earnings",
+     "title": "关于召开2026年半年度业绩说明会的公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-26/1225503306.PDF"
+    },
+    {
+     "date": "2026-08-26",
+     "kind": "other",
+     "title": "关于会计政策变更的公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-26/1225503250.PDF"
+    },
+    {
+     "date": "2026-08-01",
+     "kind": "holders",
+     "title": "简式权益变动报告书（安徽祥源）",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-01/1225452449.PDF"
+    },
+    {
+     "date": "2026-08-01",
+     "kind": "holders",
+     "title": "关于控股股东之一致行动人权益拟发生变动暨披露《简式权益变动报告书》的提示性公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-01/1225452448.PDF"
+    },
+    {
+     "date": "2026-08-01",
+     "kind": "holders",
+     "title": "简式权益变动报告书（浙江省旅投集团）",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-01/1225452447.PDF"
+    }
+   ],
+   "headlines": [
+    {
+     "date": "2026-10-15",
+     "title": "A股公司密集发布立案或处罚公告：*ST清越被罚1.72亿，俞发祥再遭立案"
+    },
+    {
+     "date": "2026-10-12",
+     "title": "百亿富豪俞发祥被调查！"
+    },
+    {
+     "date": "2026-10-12",
+     "title": "百亿浙江富豪俞发祥被调查，祥源旅游、地产业务受影响几何？"
+    },
+    {
+     "date": "2026-10-12",
+     "title": "俞发祥，被立案！"
+    },
+    {
+     "date": "2026-10-12",
+     "title": "10月12日投资避雷针：5连板人气股提示风险 公司产品未涉及固态电池"
+    },
+    {
+     "date": "2026-10-11",
+     "title": "海昌海洋公园：控股股东俞发祥涉嫌信息披露违法违规被证监会立案调查"
+    },
+    {
+     "date": "2026-10-11",
+     "title": "俞发祥的至暗时刻：去年身家145亿 今遭证监会立案"
+    },
+    {
+     "date": "2026-10-10",
+     "title": "70后浙商大佬、祥源文旅实控人两度遭证监会立案"
+    }
+   ]
+  },
+  "601009": {
+   "filings": [
+    {
+     "date": "2026-09-22",
+     "kind": "other",
+     "title": "南京银行股份有限公司关于董事辞任的公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-09-22/1225574573.PDF"
+    },
+    {
+     "date": "2026-09-02",
+     "kind": "risk",
+     "title": "南京银行股份有限公司关于优先股停牌的提示性公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-09-02/1225542358.PDF"
+    },
+    {
+     "date": "2026-09-02",
+     "kind": "other",
+     "title": "南京银行股份有限公司关于高级管理人员辞任的公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-09-02/1225542348.PDF"
+    },
+    {
+     "date": "2026-08-28",
+     "kind": "other",
+     "title": "南京银行股份有限公司优先股股息发放实施公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-28/1225521181.PDF"
+    },
+    {
+     "date": "2026-08-19",
+     "kind": "other",
+     "title": "南京银行股份有限公司董事和高级管理人员所持公司股份及其变动规定",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-19/1225480702.PDF"
+    },
+    {
+     "date": "2026-08-19",
+     "kind": "earnings",
+     "title": "南京银行股份有限公司2026年半年度报告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-19/1225480697.PDF"
+    },
+    {
+     "date": "2026-08-13",
+     "kind": "earnings",
+     "title": "南京银行股份有限公司关于召开2026年半年度业绩说明会的公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-13/1225470431.PDF"
+    },
+    {
+     "date": "2026-08-07",
+     "kind": "other",
+     "title": "南京银行股份有限公司关于2026年金融债券（第一期）（债券通）发行完毕的公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-07/1225462446.PDF"
+    }
+   ],
+   "headlines": [
+    {
+     "date": "2026-10-24",
+     "title": "金价大幅回调！市场出现新信号"
+    },
+    {
+     "date": "2026-10-24",
+     "title": "南京银行：融资净买入122.31万元，融资余额6.04亿元"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "事关黄金！中国银行、工商银行、中信银行、南京银行，发布公告→"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "银行扎堆促销积存金了 业内人士：银行贵金属业务结构性转型"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "中信银行登记赎回350亿元优先股 年内5家银行已完成赎回注销"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "超2300亿净流入，资金持续扫货它们！高股息成亮点"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "南京银行：融资净偿还1575.9万元，融资余额6.03亿元"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "35万亿理财资金新动向"
+    }
+   ]
+  },
+  "688585": {
+   "filings": [
+    {
+     "date": "2026-09-19",
+     "kind": "capital",
+     "title": "关于向2026年限制性股票激励计划激励对象首次授予限制性股票的公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-09-19/1225572691.PDF"
+    },
+    {
+     "date": "2026-09-19",
+     "kind": "capital",
+     "title": "2026年限制性股票激励计划首次授予激励对象名单（授予日）",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-09-19/1225572687.PDF"
+    },
+    {
+     "date": "2026-09-19",
+     "kind": "capital",
+     "title": "关于调整2026年限制性股票激励计划首次授予激励对象名单的公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-09-19/1225572686.PDF"
+    },
+    {
+     "date": "2026-09-03",
+     "kind": "other",
+     "title": "关于核心技术人员离职的公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-09-03/1225544726.PDF"
+    },
+    {
+     "date": "2026-09-02",
+     "kind": "capital",
+     "title": "关于公司2026年限制性股票激励计划内幕信息知情人买卖公司股票情况的自查报告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-09-02/1225542481.PDF"
+    },
+    {
+     "date": "2026-08-29",
+     "kind": "deal",
+     "title": "华泰联合证券有限责任公司关于上海智元恒岳科技合伙企业（有限合伙）要约收购上纬新材料科技股份有限公司之2026年半年度持续督导意见",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-29/1225524481.PDF"
+    },
+    {
+     "date": "2026-08-26",
+     "kind": "earnings",
+     "title": "关于召开2026年半年度业绩说明会的公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-26/1225506525.PDF"
+    },
+    {
+     "date": "2026-08-15",
+     "kind": "capital",
+     "title": "2026年限制性股票激励计划授予激励对象名单",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-15/1225475876.PDF"
+    },
+    {
+     "date": "2026-08-15",
+     "kind": "capital",
+     "title": "2026年限制性股票激励计划实施考核管理办法",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-15/1225475872.PDF"
+    },
+    {
+     "date": "2026-08-15",
+     "kind": "other",
+     "title": "关于2026年度“提质增效重回报”行动方案的半年度评估报告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-15/1225475857.PDF"
+    }
+   ],
+   "headlines": [
+    {
+     "date": "2026-10-25",
+     "title": "周末重点速递丨券商称“市场可以修复，规避短期扰动”，关注物理AI、固态电池、创新药等投资机会"
+    },
+    {
+     "date": "2026-10-24",
+     "title": "智元远征A3创下 “最多人形机器人同时跳舞” 吉尼斯世界纪录"
+    },
+    {
+     "date": "2026-10-24",
+     "title": "上纬新材旗下启元机器人发布“物理AI启仔计划”"
+    },
+    {
+     "date": "2026-10-24",
+     "title": "AI早报 | OpenAI据报正洽谈最高300亿美元融资；SpaceX推出超级智能合作伙伴网络"
+    },
+    {
+     "date": "2026-10-24",
+     "title": "上纬新材：融资净买入2972.39万元，融资余额5.47亿元"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "物理AI加快落地，上纬新材收涨15.88%"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "人形机器人板块持续拉升"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "人形机器人板块持续拉升，宇树科技等多股“20cm”涨停"
+    }
+   ]
+  },
+  "601225": {
+   "filings": [
+    {
+     "date": "2026-10-15",
+     "kind": "capital",
+     "title": "陕西煤业股份有限公司2026年半年度权益分派实施公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-10-15/1225604932.PDF"
+    },
+    {
+     "date": "2026-10-09",
+     "kind": "other",
+     "title": "陕西煤业股份有限公司2026年9月主要运营数据公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-10-09/1225596167.PDF"
+    },
+    {
+     "date": "2026-09-29",
+     "kind": "earnings",
+     "title": "陕西煤业股份有限公司关于召开2026年半年度业绩说明会的公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-09-29/1225583984.PDF"
+    },
+    {
+     "date": "2026-09-08",
+     "kind": "other",
+     "title": "陕西煤业股份有限公司2026年8月主要运营数据公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-09-08/1225550492.PDF"
+    },
+    {
+     "date": "2026-08-28",
+     "kind": "other",
+     "title": "陕西煤业化工集团财务有限公司的风险评估报告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-28/1225516391.PDF"
+    },
+    {
+     "date": "2026-08-28",
+     "kind": "earnings",
+     "title": "陕西煤业股份有限公司关于2026年中期利润分配方案的公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-28/1225516365.PDF"
+    },
+    {
+     "date": "2026-08-28",
+     "kind": "earnings",
+     "title": "陕西煤业股份有限公司2026年半年度报告全文",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-28/1225516359.PDF"
+    },
+    {
+     "date": "2026-08-11",
+     "kind": "other",
+     "title": "陕西煤业股份有限公司2026年7月主要运营数据公告",
+     "url": "http://static.cninfo.com.cn/finalpage/2026-08-11/1225465461.PDF"
+    }
+   ],
+   "headlines": [
+    {
+     "date": "2026-10-24",
+     "title": "陕西煤业：融资净买入1473.89万元，融资余额4.44亿元"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "XD陕西煤：融资净偿还33.29万元，融资余额4.29亿元"
+    },
+    {
+     "date": "2026-10-22",
+     "title": "陕西煤业：融资净买入498.83万元，融资余额4.3亿元"
+    },
+    {
+     "date": "2026-10-21",
+     "title": "陕西煤业：融资净买入1899.55万元，融资余额4.25亿元"
+    },
+    {
+     "date": "2026-10-20",
+     "title": "陕西煤业大宗交易成交334.56万元"
+    },
+    {
+     "date": "2026-10-20",
+     "title": "高股息精选概念下跌0.74%，6股主力资金净流出超亿元"
+    },
+    {
+     "date": "2026-10-20",
+     "title": "煤炭概念下跌0.94%，主力资金净流出57股"
+    },
+    {
+     "date": "2026-10-20",
+     "title": "陕西煤业：融资净买入371.43万元，融资余额4.06亿元"
+    }
+   ]
+  }
+ },
+ "hk": {
+  "00728": {
+   "filings": [
+    {
+     "date": "2026-10-22",
+     "kind": "earnings",
+     "title": "海外監管公告 - 中國電信股份有限公司2026年第三季度報告",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1022/2026102201267_c.pdf"
+    },
+    {
+     "date": "2026-10-22",
+     "kind": "earnings",
+     "title": "2026年第三季度主要運營數據",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1022/2026102201256_c.pdf"
+    },
+    {
+     "date": "2026-10-22",
+     "kind": "earnings",
+     "title": "2026年首三季度報告",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1022/2026102201246_c.pdf"
+    },
+    {
+     "date": "2026-09-11",
+     "kind": "earnings",
+     "title": "2026年中期報告",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0911/2026091100555_c.pdf"
+    },
+    {
+     "date": "2026-09-02",
+     "kind": "other",
+     "title": "海外監管公告 - 中國電信股份有限公司2026年半年度A股利潤分配實施公告",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0902/2026090202291_c.pdf"
+    },
+    {
+     "date": "2026-08-20",
+     "kind": "other",
+     "title": "海外監管公告 - 中國電信股份有限公司2026 年中期利潤分配方案公告",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0820/2026082000613_c.pdf"
+    },
+    {
+     "date": "2026-08-20",
+     "kind": "other",
+     "title": "海外監管公告 - 中國電信股份有限公司關於中國電信集團財務有限公司關聯交易2026 年半年度風險持續評估報告",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0820/2026082000599_c.pdf"
+    },
+    {
+     "date": "2026-08-20",
+     "kind": "earnings",
+     "title": "海外監管公告 - 中國電信股份有限公司2026年半年度報告摘要",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0820/2026082000585_c.pdf"
+    },
+    {
+     "date": "2026-08-20",
+     "kind": "earnings",
+     "title": "海外監管公告 - 中國電信股份有限公司2026年半年度報告",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0820/2026082000571_c.pdf"
+    },
+    {
+     "date": "2026-08-20",
+     "kind": "earnings",
+     "title": "2026年第二季度主要運營數據",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0820/2026082000568_c.pdf"
+    }
+   ],
+   "headlines": [
+    {
+     "date": "2026-10-24",
+     "title": "工业AI怎么高效落地？达索系统在大湾区亮答案｜专访"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "中国电信董秘换人"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "《国家信息化“十五五”规划》印发：到2030年，陆海空天立体化网络体系基本形成"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "国家信息化“十五五”规划：到2030年 新一代通信网全面建成 适时启动第六代移动通信（6G）商用"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "一束光如何点亮中小企业新型工业化转型路？"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "中国电信第三季度营收净利润双降"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "中国电信第三季度营收净利润双双下滑，前三季度净利262亿"
+    },
+    {
+     "date": "2026-10-23",
+     "title": "中国电信发布三季报：词元日调用量高速增长 智能收入占比12.86%"
+    }
+   ]
+  },
+  "02650": {
+   "filings": [
+    {
+     "date": "2026-09-25",
+     "kind": "capital",
+     "title": "公告 完成根據一般授權配售新H股",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0925/2026092500370_c.pdf"
+    },
+    {
+     "date": "2026-09-23",
+     "kind": "capital",
+     "title": "公告 根據一般授權配售新H股",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0923/2026092300042_c.pdf"
+    },
+    {
+     "date": "2026-09-03",
+     "kind": "earnings",
+     "title": "截至2025年12月31日止年度的年度報告補充公告",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0903/2026090301323_c.pdf"
+    },
+    {
+     "date": "2026-08-20",
+     "kind": "other",
+     "title": "建議調整獨立非執行董事薪酬及2026年第二次臨時股東會通告",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0820/2026082001250_c.pdf"
+    },
+    {
+     "date": "2026-08-17",
+     "kind": "earnings",
+     "title": "2026 中期報告",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0817/2026081701404_c.pdf"
+    },
+    {
+     "date": "2026-08-17",
+     "kind": "earnings",
+     "title": "截至2026年6月30日止六個月中期業績公告",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0817/2026081701043_c.pdf"
+    },
+    {
+     "date": "2026-08-07",
+     "kind": "earnings",
+     "title": "盈利警告",
+     "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0807/2026080701266_c.pdf"
+    }
+   ],
+   "headlines": [
+    {
+     "date": "2026-10-14",
+     "title": "挚达科技黄志明：锚定全球领军 智启AI能源新程"
+    },
+    {
+     "date": "2026-09-25",
+     "title": "挚达科技：9月25日配售新H股2367.06万股"
+    }
+   ]
+  }
+ }
+}

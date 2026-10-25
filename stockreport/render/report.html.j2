@@ -42,11 +42,13 @@
   .tag { display: inline-block; font-size: 8pt; padding: 0 1.5mm; border-radius: 2px; margin-left: 1mm; }
   .tag.test { background: #fff2e8; color: #d4380d; border: 1px solid #ffbb96; }
   .label { color: #8f959e; }
+  .rv { color: #3c4149; } .rv-hard { color: #c41d1d; font-weight: 600; } .rv-soft { color: #ad6800; }
   .list-title { font-size: 11pt; font-weight: 700; margin: 4mm 0 1mm; }
   footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px solid #c9cdd4; color: #646a73; font-size: 8.5pt; }
 </style>
 </head>
 <body>
+{% macro rv(p) %}{% if p.review %}<span class="{{ 'rv-hard' if p.review.startswith('审核：') or p.review.startswith('数据存疑') else 'rv-soft' if p.review.startswith('市场可能在担心') else 'rv' }}">{{ p.review }}</span>{% endif %}{% endmacro %}
 {% macro grades(p) %}{% for k, g in p.grades.items() %}{{ k[0] }}<span class="grade g{{ g }}">{{ g }}</span> {% endfor %}{% endmacro %}
 {% if r.test %}<div class="watermark">测试数据</div>{% endif %}
 
@@ -59,6 +61,10 @@
     <p><b>怎么读：</b>{{ r.method }}</p>
     <p><b>评级：</b>价、质、动分别是价值、质量、动量的五分位，A 为最好的五分之一，E 为最差的五分之一；价、质在金融股（银行、保险、券商和其他放贷机构）之间和其他股票之间分别排，动在全市场排。
       <b>理由</b>是该股最强的两项指标，<b>风险</b>是亏损、负债率 70% 以上、近 6 个月跌超 30%，否则为最弱的一项。</p>
+    <p><b>审核（你请求报告时进行）：</b>DeepSeek 读每只股票近 90 天的非例行公告和近 30 天的新闻标题，每条结论都引用原文，由程序核对引文确实出自该标题。
+      硬风险（监管立案调查或欺诈认定、非标审计意见或审计师辞任、持续经营疑虑或债务违约、退市/ST/停牌、以固定价格被收购或私有化、制裁）会把买入剔除（由下一名替补，列在「审核剔除」）、
+      把持仓改为卖出；软风险只标注「市场可能在担心」，持仓改为复核。最新定期报告的归母净利润与卡片所用数据相差 20% 以上时标「数据存疑」，同样剔除。
+      AI 点评只用文字，不含任何数字；所有数字都来自程序和公开数据。</p>
     <p><b>持仓检查（每只持有 12 个月）：</b>继续持有 = 未满 12 个月且评分在前半，或满 12 个月仍在前五分之一；复核 = 未满 12 个月但评分跌入后半；
       卖出 = 满 12 个月已不在前五分之一（换入未持有的最高分股票）。记录持仓（只记股票，指数基金不用记）：<code>hold 代码 --date 买入日</code>；没有记录时检查过去 12 个月买入组合里今天不在组合的股票。</p>
     <p><b>预期：</b>{{ r.common }}</p>
@@ -103,11 +109,19 @@
       <tr class="body">
         <td></td>
         <td colspan="4"><span class="label">理由：</span>{{ p.why }}　<span class="label">风险：</span>{{ p.risk }}<br>
-          <span class="label">复查：</span>{{ p.recheck }}（满 12 个月）；若评分跌入后半，提前复查</td>
+          <span class="label">复查：</span>{{ p.recheck }}（满 12 个月）；若评分跌入后半，提前复查
+          {% if p.review %}<br>{{ rv(p) }}{% endif %}{% if p.note %}<br><span class="label">AI 点评：</span>{{ p.note }}{% endif %}</td>
       </tr>
     </tbody>
     {% endfor %}
   </table>
+  {% if m.review %}<p class="warn">{{ m.review }}</p>{% endif %}
+  {% if m.removed %}<div class="list-title">审核剔除（{{ m.removed | length }} 只，由下一名替补）</div>
+  <table class="rows">
+    <thead><tr><th>代码 / 名称</th><th>原因与来源</th><th>替补</th></tr></thead>
+    <tbody>{% for p in m.removed %}<tr><td><span class="ticker">{{ p.ticker }}</span> {{ p.name }} <span class="sub">原第 {{ p.rank }} 名</span></td>
+      <td class="rv-hard">{{ p.reason }}</td><td>{{ p.status }}</td></tr>{% endfor %}</tbody>
+  </table>{% endif %}
   {% if m.vetoes %}<p class="sub">不列入（你的否决）：{% for v in m.vetoes %}{{ v.ticker }} {{ v.name }} {{ v.reason }}{% if not loop.last %}；{% endif %}{% endfor %}</p>{% endif %}
 
   <div class="list-title">持仓检查</div>
@@ -117,7 +131,7 @@
     <tbody>
     {% for h in m.holdings %}
       <tr><td><span class="ticker">{{ h.ticker }}</span> {{ h.name or "" }}</td><td>{{ h.since }}</td>
-        <td class="status s{{ h.status }}">{{ h.status }}</td><td>{{ h.reason }}</td>
+        <td class="status s{{ h.status }}">{{ h.status }}</td><td>{{ h.reason }}{% if h.review and h.review not in h.reason %}<br>{{ rv(h) }}{% endif %}{% if h.note %}<br><span class="sub">AI 点评：{{ h.note }}</span>{% endif %}</td>
         <td>{% if h.grades["价值"] %}{{ grades(h) }}{% endif %}</td><td>{{ h.recheck }}</td></tr>
     {% endfor %}
     </tbody>
@@ -131,7 +145,7 @@
     {% for p in m.avoid %}
       <tr><td><span class="ticker">{{ p.ticker }}</span> {{ p.name }} <span class="sub">{{ p.sector }}</span></td>
         <td class="num">{{ p.price | num }}</td><td>{{ grades(p) }}</td><td>{{ p.weakest }}</td>
-        <td>{{ p.weak }}{% if p.risk and p.risk not in p.weak %}；{{ p.risk }}{% endif %}</td></tr>
+        <td>{{ p.weak }}{% if p.risk and p.risk not in p.weak %}；{{ p.risk }}{% endif %}{% if p.review %}<br>{{ rv(p) }}{% endif %}</td></tr>
     {% endfor %}
     </tbody>
   </table>

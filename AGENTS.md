@@ -9,7 +9,9 @@ docs/PLAN.md has the method, the stages and the current status. The earlier plan
 ## Layout
 stockreport/fetch/ (one module per data source) → universe.py → signals.py (the value, quality and momentum components, percentiles) → score.py (families, score, grades, card lines) → lists.py (buys, holdings, avoid; `hold`) → report.py + render/ (HTML → PDF, text summary) → deliver.py; plus listener.py, track.py and history.py (the multi-year tables).
 crosscheck.py compares each market's key figures with a second source and raises day-over-day drift alarms. The event layer (fetch/events.py market-wide filing feeds → events.py classification and abnormal-move labels) and the deep-dive lane (deepdive.py: triggers, fetch/filings.py, DeepSeek questionnaire, quotes.py verification; verdicts.py for your vetoes and confirms) feed the results review. backtest/ (outside the app) holds the backtest harness and data builders; docs/BACKTEST.md has its results and commands.
-Stage 2 adds review.py (the results review; notes.py and deepdive.py, not called by the stage-1 build, feed it).
+review.py is the results review on request (sources gathered by the build: fetch/filings.recent and fetch/news.py;
+notes.py for the card text and the AI note; deepdive.py's findings and data check); report.fresh() runs it before
+the keyword reply and `send`.
 bridge/wechat.mjs is the WeChat helper (Node). data/ is the daily cache and reports/ the outputs; both are git-ignored.
 
 ## Rules
@@ -28,8 +30,9 @@ bridge/wechat.mjs is the WeChat helper (Node). data/ is the daily cache and repo
 
 ## Commands
 uv run python -m stockreport fetch --market cn|us|hk
-uv run python -m stockreport run [--market cn|us|hk]                # fetch + score + lists + PDF (no DeepSeek)
-uv run python -m stockreport send [--test]                          # text summary + PDF to WeChat
+uv run python -m stockreport run [--market cn|us|hk]                # fetch + score + lists + review sources + PDF (no DeepSeek)
+uv run python -m stockreport review                                 # results review + deep dives (DeepSeek), then the PDF
+uv run python -m stockreport send [--test]                          # text summary + PDF to WeChat (reviewed first)
 uv run python -m stockreport listen                                 # keyword listener (launchd)
 uv run python -m stockreport hold [CODE [--date D] [--sold]]        # your holdings (no args: list)
 uv run python -m stockreport track                                  # performance scorecard

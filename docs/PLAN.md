@@ -12,7 +12,12 @@
   42.5, was ~64; Carvana, TKO, Restaurant Brands...), 2 dropped. Left: Ares (no SEC count), Up-Cs where Yahoo also
   counts every class (Blue Owl, TPG, Viper) and foreign filers' voting-only classes (Ferrari, On, Wise).
   Waiting for your OK (rule 9) to load the daily job,
-  send a test, and turn the keyword reply back on. Stages 2 and 3: not started.
+  send a test, and turn the keyword reply back on. Stage 3: not started.
+- Stage 2 (the results review, AI notes and deep dives, on request): built 2026-10-25. review.py, fetch/news.py, the
+  per-stock filing lists (fetch/filings.recent), notes.py and deepdive.py rewritten for it, the `review` command, the
+  keyword reply and `send` reviewing first ("Results review", "How it is built"). Measured 2026-10-25 on the day's
+  lists (100 names): cold cache 100 reviews in 11 s, the reply without its WeChat send 11.7 s; warm 0.9 s; the send
+  adds ~4 s (past replies: 3 s plus a 1 s gap). The keyword reply is still off (rule 9); nothing was sent.
 - Nothing runs on a schedule (your call, 2026-10-24: a fresh start). The 06:30 job (com.stockreport.daily) is unloaded
   and disabled; the keyword listener (com.stockreport.listen) was already off. launchd/com.stockreport.daily.plist is
   rewritten for `run` (no DeepSeek); the copy in ~/Library/LaunchAgents is still the old one until it's loaded. While
@@ -159,7 +164,8 @@ two components outrank everyone's three-component means, and financials filled h
   share, HK the board lot from HKEX's List of Securities, verified 2026-10-24: Tencent 100, HSBC 400, China Mobile 500,
   AIA 200); the re-check date (the anniversary, or sooner if the rank falls into the bottom half). A ratio is worded by
   its side of the market's median (市盈率低 / 高), cash backing, momentum and the SUE by their sign.
-- From stage 2: the review's line (市场可能在担心 … with its quoted source, or 审核未见重大风险) and the AI note (words only).
+- From stage 2: the review's line (审核：… for a hard red flag, 数据存疑：…, 市场可能在担心 … with its quoted source, or
+  审核未见重大风险 / 审核进行中 / 审核暂不可用) and the AI note (one sentence, words only).
 - Each market section opens with its 预期 line: from the history run, the 20-name portfolio's average 12-month return
   over the index fund, the share of 12-month windows it beat the fund, its worst 12 months and its largest fall against
   the fund's, marked 模拟回测 (simulated, after costs), plus one line on the published evidence.
@@ -194,6 +200,38 @@ build makes no DeepSeek calls.
   one takes its place (rule 5).
 - The review can't be backtested (an LLM reading old news knows what happened next), so its powers stay this narrow; the
   scoreboard follows each removed name against the name that replaced it.
+- **How it is built** (stage 2; review.py, deepdive.py):
+  - Sources, gathered by the build with no DeepSeek (~30 s a market; reports/<date>/<market>_sources.json): each name's
+    filings of the last 90 days from a per-stock query (CNINFO, HKEXnews' title search, SEC's filing list), routine ones
+    dropped by the event feed's rules (events.classify), the newest 20; and headlines of the last 30 days, the newest 15.
+    Per-stock queries rather than the market-wide event feed, which only holds the days the build ran (10 back).
+  - Headline sources, verified 2026-10-25: CN and HK Eastmoney's per-stock news list (np-listapi getListInfo, biz
+    web_stock_news, market 1 / 0 / 116: the 资讯 tab of its quote pages; 0.1-0.5 s a call, at most ~2 a second); US
+    Yahoo Finance's RSS feed per ticker (feeds.finance.yahoo.com/rss/2.0/headline; 429 to a full browser User-Agent,
+    fine with "Mozilla/5.0"). Titles only.
+  - One DeepSeek call per name (deepseek-flash, thinking off, temperature 0, JSON): the card's own lines and the numbered
+    source lines in, findings (kind, source line, quote) and the note out. A finding counts only if its quote is in a
+    source line (6+ characters, or a short title quoted whole: HKEX's 「盈利警告」). A hard kind also has to name its
+    subject in the quote (an investigation names 立案, 调查 or the like; a takeover 要约, 私有化, a tender offer...) and not
+    deny it (不存在…), else it is a soft concern; a suspension or delisting of another security (preferred shares, bonds,
+    convertibles, or a bare SEC 25-NSE / 15-12B form, which doesn't say which: Comcast's and ONEOK's were their notes)
+    is dropped. The checklist leaves out routine items (ordinary director or board-secretary changes, insider selling
+    plans) and counts management leaving only for the chair, CEO or CFO.
+  - The bench is the next 5 names (the same sector cap); the first not blocked takes a removed buy's place and the list is
+    renumbered. HK's buy field holds only ~11 sectors, so its bench can be 2-3 names; with none left the list is shorter.
+  - Cached per stock (data/review/<market>/<code>.json); the keyword reply waits `budget` (20 s), then sends what is
+    done, and a background `review` finishes the rest and the day's deep dives. `review` runs it all without a limit.
+    The AI note is dropped if it has any digit, so every number on a card comes from code.
+  - Deep dives (the lane of rule 3): the latest periodic report of the buys, the next 5 and your scored holdings, read once
+    per filing, at most 3 new filings per market a day, after the review. The data check compares the report's net
+    profit to shareholders for the card's period (the period end quoted in the report; CN: else its standard title) with
+    the card's figure: CN and HK year to date (HK in the reporting currency), US the year's profit from a 10-K (10-Qs are
+    year to date, the card's figure trailing 12 months, so they aren't compared). Any figure of the quoted row within 20%
+    passes (a row holds the quarter and the year to date, or this year and last); a gap that is a power of ten is a unit
+    misread of the row, not our data (a fault that size fails the second-source cross-checks). The same reading gives the
+    hard flags of a non-standard audit opinion, a going-concern doubt, a regulator's investigation and an offer price, and
+    the soft concern of non-recurring items at 30%+ of the period's profit (a quote naming the profit after deducting
+    them is that profit, and is skipped).
 
 ## Checks, and what each one decides
 - **pytest** on the score math (percentiles, families, SUE, the sector cap, the holding rule) and the parsers, on small
@@ -233,7 +271,8 @@ build makes no DeepSeek calls.
 2. **The results review, AI notes and deep dives, on request** (above): a free news source per market verified, the
    quote checks, 审核剔除 and the card's review line. Done when its tests pass on saved filings and headlines (a quote not
    in the source is rejected; a hard flag removes a buy; a soft concern only annotates) and the keyword reply takes
-   under 30 s on a warm cache and on a cold one.
+   under 30 s on a warm cache and on a cold one. Built 2026-10-25 (tests/test_review.py, tests/test_deepdive.py; the
+   timings are in Status).
 3. **Analyst revisions and short labels** (once 26 weekly consensus snapshots exist: one was collected, on 2026-10-19,
    and collection resumes when stage 1's daily job runs): the 3-month revision of next year's EPS joins each market's momentum family, as in Stockopedia's
    momentum rank (no free history exists to backtest it, so it's adopted on the published evidence); 可做空 on avoid
@@ -243,7 +282,9 @@ build makes no DeepSeek calls.
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
 - The backtest snapshots and the stage-1 harness (index funds, costs, month-end frames).
-- The event feed; the deep-dive lane with its quote checks; the verdicts (veto or confirm with an expiry).
+- The event feed (its filing rules classify the review's filings; its abnormal-move labels and the old per-stock title
+  fetchers in cninfo.py, hkex.py and sec.py are unused since stage 2); the deep-dive lane with its quote checks; the
+  verdicts (veto or confirm with an expiry).
 - The DeepSeek notes (folded into the results review); WeChat and PDF delivery; the scoreboard.
 
 ## Sources for the method

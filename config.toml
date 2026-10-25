@@ -27,6 +27,7 @@ financial_industries_hk = ["区域性银行", "综合性银行", "人寿与健�
 
 [lists]                       # PLAN.md, "Lists"
 buys = 20
+next = 5                      # the next-ranked names after the buys (same sector cap): they replace buys the review removes
 avoid = 10
 per_sector = 2
 buy_largest = { cn = 300, us = 300, hk = 200 }  # buys from the largest by market value (US: home listings among them)
@@ -50,18 +51,21 @@ logs = 30
 [storage]
 warn_gb = 2.0
 
-[notes]                       # DeepSeek notes (PLAN.md Method section 8)
+[notes]                       # DeepSeek (PLAN.md, "Results review")
 base_url = "https://api.deepseek.com"
-model = "deepseek-flash"      # from GET /models on 2026-10-17 (deepseek-flash, deepseek-v4-pro)
-temperature = 0.0
-spike_growth = 1.0            # one_off_gain check 1: net profit growth above this ...
-spike_cash_conv = 0.5         # ... with operating cash flow / net profit below this (non-financials)
-eps_fall = 0.6                # check 2: next year's consensus EPS below this share of trailing EPS
-min_analysts = 3              # ... from at least this many analysts
-title_gap = 0.3               # check 3: profit growth minus revenue growth, needed before a one-off in the titles counts
-title_days = 60
-max_titles = 10
-workers = 4
+model = "deepseek-flash"      # from GET /models on 2026-10-25 (deepseek-flash = DeepSeek-V4.1-Flash, deepseek-v4-pro)
+
+[review]                      # results review, on request (PLAN.md, "Results review"; review.py)
+budget = 20                   # seconds the keyword reply waits for reviews; the rest finish in the background
+workers = 10                  # DeepSeek calls at a time
+timeout = 30                  # seconds per call
+max_tokens = 600
+keep_days = 7                 # a cached review is redone after this, or for a new filing or headline or a new list
+filing_days = 90              # non-routine filings read ...
+max_filings = 20              # ... at most this many, newest first
+headline_days = 30            # headlines read ...
+max_headlines = 15            # ... at most this many, newest first
+filing_workers = 4            # per-stock filing searches at a time while the build gathers sources
 
 [crosscheck]                  # data cross-checks and drift alarms (PLAN.md Method 13)
 cn_tencent = 1200             # CN: the largest A-shares Tencent's quotes are fetched for (the universe reached rank 842)
@@ -82,17 +86,11 @@ max_lines = 3                 # ... at most this many on a card
 move_days = 5                 # abnormal move: the 1-5-day return over the market index ...
 move_z = 2.5                  # ... at least this many sd of the stock's daily excess returns over the past year
 
-[deepdive]                    # deep-dive lane, tier 3 (PLAN.md Method 15; docs/REVIEW.md A3)
+[deepdive]                    # deep-dive lane (AGENTS.md rule 3; deepdive.py), after the results review
 per_day = 3                   # new filings read per market a day (cached filings are reused at no cost)
-runners_up = 2                # the first runners-up per bucket can be triggered too (they may replace a swapped pick)
-value_ratio = 2.0             # trigger: v1 fair value ≥ 2× or ≤ ½ the price without v2's 高
-strong_upside = 0.3           # trigger: v2's quality screen fails on a buy/hold with at least this upside
-share_change = 0.4            # trigger: 5-year share-count change (v2_dilution, US) above this
-archetypes = { insurer = ["保险", "Insur"], property = ["地产", "Real Estate"], holdco = ["综合", "Conglomer"] }
 max_chars = 80000             # filing text sent to DeepSeek: all of it if shorter, else windows around keywords
 window = [1500, 2500]         # characters before / after each keyword
 workers = 3
-one_off_share = 0.3           # buy/hold vetoed when non-recurring items are this share of the period's profit
-related_party = 0.3           # 低信心 when sales to related parties are this share of revenue
-material = 0.1                # a deal or contract this share of revenue or market value is 重大
+one_off_share = 0.3           # non-recurring items this share of the period's profit: a soft concern (one-off gain)
+data_gap = 0.2                # the report's net profit this far off the card's figure: data_suspect (PLAN.md)
 keep_days = 400               # cached filings older than this are deleted

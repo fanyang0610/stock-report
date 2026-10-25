@@ -1,6 +1,7 @@
 """The report (PLAN.md, "Goal" and "Cards"): per market (CN → US → HK) the 预期 line, the 20-name buy portfolio, the
 holdings check and the 10 avoid names, from each market's lists CSV (a market without one for the day shows its newest
-earlier lists, with their date) -> reports/<date>/report.pdf and summary.txt; the day's lists go to data/picks.csv."""
+earlier lists, with their date) -> reports/<date>/report.pdf and summary.txt; the day's lists go to data/picks.csv.
+On request (fresh()) the results review runs first and build() applies it (review.apply)."""
 
 import json
 from datetime import date
@@ -8,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from stockreport import deliver, track
+from stockreport import deepdive, deliver, review, track
 from stockreport.cleanup import size_of
 from stockreport.config import CONFIG, DATA, REPORTS
 from stockreport.render import html_to_pdf, render_html, text_summary
@@ -85,7 +86,8 @@ def latest_lists(market: str, today: date) -> Path | None:
 def section(market: str, rows: pd.DataFrame, day: str, today: date, failed: list[str]) -> dict:
     name, currency, unit, _ = MARKETS[market]
     rows = rows.astype(object).where(rows.notna(), None)
-    cards = {k: [card(r, unit) for r in rows[rows["list"] == k].to_dict("records")] for k in ("buy", "holding", "avoid", "veto")}
+    cards = {k: [card(r, unit) for r in rows[rows["list"] == k].to_dict("records")]
+             for k in ("buy", "holding", "avoid", "veto", "removed")}
     share = CONFIG["lists"]["index_core"].get(market)
     fund, note = CORE.get(market, ("", ""))
     core = (f"建议配置：{share:.0%} 的资金买{fund}（{note}）；其余 {1 - share:.0%} 等额买下面 20 只（每只约 {(1 - share) / 20:.1%}），"
@@ -96,11 +98,34 @@ def section(market: str, rows: pd.DataFrame, day: str, today: date, failed: list
             "data_date": max((c["price_date"] for c in cards["buy"] if c["price_date"]), default=day),
             "stale": (f"今日未能更新，沿用 {day} 的名单" if day != today.isoformat() else
                       f"今日部分数据获取失败（{'、'.join(failed)}），沿用上次的缓存数据" if failed else ""),
-            "buys": cards["buy"], "holdings": cards["holding"], "avoid": cards["avoid"], "vetoes": cards["veto"]}
+            "buys": cards["buy"], "holdings": cards["holding"], "avoid": cards["avoid"], "vetoes": cards["veto"],
+            "removed": cards["removed"], "review": review_status(cards)}
 
 
-def build(today: date) -> tuple[Path, str]:
-    """Write report.html/.pdf and summary.txt for the day; returns the PDF path and the summary."""
+def review_status(cards: dict) -> str:
+    """The section's line on the review when not every name was reviewed (empty when all were, or no review ran)."""
+    lines = [c["review"] for k in ("buy", "holding", "avoid") for c in cards[k] if c.get("review")]
+    counts = {s: sum(x.startswith(s) for x in lines) for s in ("审核进行中", "审核暂不可用")}
+    return "；".join(f"{s} {n} 只" for s, n in counts.items() if n) + ("（完成后下次请求即可看到）" if counts["审核进行中"] else "")
+
+
+def read_lists(path: Path) -> pd.DataFrame:
+    return pd.read_csv(path, dtype={"code": str, "price_date": str, "since": str, "recheck": str, "period": str})
+
+
+def fresh(today: date, budget: float | None) -> tuple[Path, str]:
+    """The report on request: each market's newest lists reviewed (within `budget` seconds; None: until done), then
+    built with the review applied."""
+    lists, sources = {}, {}
+    for market in MARKETS:
+        if path := latest_lists(market, today):
+            lists[market], sources[market] = read_lists(path), review.load_sources(market, path.parent.name)
+    return build(today, review.run(lists, sources, today, budget))
+
+
+def build(today: date, states: dict | None = None) -> tuple[Path, str]:
+    """Write report.html/.pdf and summary.txt for the day, with the results review applied when given (states: market
+    -> code -> review state); returns the PDF path and the summary."""
     out = REPORTS / today.isoformat()
     status = out / "fetch_failed.json"
     failed = json.loads(status.read_text(encoding="utf-8")) if status.exists() else {}
@@ -109,9 +134,11 @@ def build(today: date) -> tuple[Path, str]:
         path = latest_lists(market, today)
         if not path:
             continue
-        rows = pd.read_csv(path, dtype={"code": str, "price_date": str, "since": str, "recheck": str})
-        if path.parent.name == today.isoformat():
-            logged[market] = rows[rows["list"].isin(["buy", "avoid"])].rename(columns={"list": "bucket"})
+        rows = read_lists(path)
+        deep = deepdive.results(market, rows) if states is not None else {}
+        rows = review.apply(rows, market, None if states is None else states.get(market, {}), deep)
+        if path.parent.name == today.isoformat():  # the scoreboard follows removed names against the buys
+            logged[market] = rows[rows["list"].isin(["buy", "avoid", "removed"])].rename(columns={"list": "bucket"})
         markets.append(section(market, rows, path.parent.name, today, failed.get(market, [])))
     if not markets:
         raise SystemExit(f"no lists CSV in {REPORTS}; run `run` first")

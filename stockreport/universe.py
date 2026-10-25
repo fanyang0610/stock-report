@@ -310,6 +310,7 @@ def build_hk(today: date) -> tuple[pd.DataFrame, dict]:
     df["gross_margin"], df["debt_ratio"] = df["gross_margin"] / 100, df["debt_ratio"] / 100
     df["cash_conv"] = (df["ocf"] / df["np"]).where(df["np"] > 0)
     df["revenue_ytd"], df["np_ytd"], df["ocf_ytd"] = df["revenue"], df["np"], df["ocf"]  # reporting currency
+    df["report_currency"] = cons["report_currency"].reindex(df.index)  # the deep dive's data check compares np_ytd
     df["rev_growth"], df["np_growth"] = df["rev_yoy"] / 100, df["np_yoy"] / 100  # year to date, reporting currency
     df["dps_ttm"] = dividends(Path(str(yahoo.DIVIDENDS).format("hk")), today).reindex(df.index).fillna(0)
     est, fx = ["eps_e0", "eps_e1", "eps_e2"], yahoo.load_fx()

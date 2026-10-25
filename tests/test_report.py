@@ -1,6 +1,7 @@
 """End-to-end dry run: a saved CN universe (the 400 largest, 2026-10-24) -> score -> lists -> lists CSV -> PDF + text
 summary + data/picks.csv, with one recorded holding, one of your vetoes, HK's lists only from the day before, and the
-same lists as US's to check its index-fund core line."""
+same lists as US's to check its index-fund core line; then the same day built again with a results review that
+found a hard red flag on the top buy and a soft concern on the holding."""
 
 import json
 import re
@@ -9,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from stockreport import lists, report, track, verdicts
+from stockreport import deepdive, lists, report, track, verdicts
 from stockreport.score import score
 
 SAMPLES = Path(__file__).parent / "data"
@@ -19,7 +20,7 @@ DAY = date(2026, 10, 24)
 def test_report_dry_run(tmp_path, monkeypatch):
     for module, attr, path in ((lists, "HOLDINGS", "holdings.csv"), (verdicts, "PATH", "verdicts.csv"),
                                (track, "PICKS_LOG", "picks.csv"), (report, "REPORTS", "reports"),
-                               (report, "EXPECT", "expect.json")):
+                               (report, "EXPECT", "expect.json"), (deepdive, "CACHE", "deepdive")):
         monkeypatch.setattr(module, attr, tmp_path / path)
     monkeypatch.setattr(verdicts, "periods", lambda m: pd.Series(dtype=str))
     df = pd.read_csv(SAMPLES / "cn_universe_sample.csv", dtype={"code": str, "period": str}).set_index("code")
@@ -72,3 +73,21 @@ def test_report_dry_run(tmp_path, monkeypatch):
     logged = track.load()
     assert len(logged) == 60 and set(logged["market"]) == {"cn", "us"}  # today's lists only (HK's are from the day before)
     assert set(logged["bucket"]) == {"buy", "avoid"} and logged["score"].notna().all()
+
+    first, holding = buys.iloc[0]["code"], held["code"]
+    hard = {"kind": "investigation", "words": "监管立案调查或欺诈认定", "hard": True, "quote": "关于公司收到立案告知书的公告",
+            "date": "2026-10-20", "type": "公告"}
+    soft = hard | {"kind": "downturn", "words": "行业下行或产品价格下跌", "hard": False, "quote": "白酒批价下跌", "type": "新闻"}
+    states = {"cn": {first: {"status": "done", "findings": [hard], "note": "测试点评"},
+                     holding: {"status": "done", "findings": [soft], "note": ""}},
+              "us": {first: {"status": "pending"}}}
+    pdf, summary = report.build(DAY, states)
+    cn = summary.split("【A股 CN】")[1].split("【美股 US】")[0]
+    assert "审核剔除：" in cn and "（监管立案调查或欺诈认定）" in cn and "持仓检查：复核 1" in cn
+    assert "审核进行中 1 只" in summary.split("【美股 US】")[1].split("【港股 HK】")[0]
+    html = (folder / "report.html").read_text(encoding="utf-8")
+    assert "审核剔除（1 只，由下一名替补）" in html and "关于公司收到立案告知书的公告" in html and "AI 点评：测试点评" not in html
+    assert html.count('class="card"') == 60  # 20 buys a market: the next name took the removed one's place
+    logged = track.load()
+    assert logged.loc[(logged["market"] == "cn") & (logged["bucket"] == "removed"), "ticker"].tolist() == [first]
+    assert first not in set(logged.loc[(logged["market"] == "cn") & (logged["bucket"] == "buy"), "ticker"])

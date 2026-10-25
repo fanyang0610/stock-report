@@ -1,13 +1,14 @@
-"""Filings for the deep-dive lane (PLAN.md Method 15): a stock's latest periodic report (CN: CNINFO annual,
-half-year and quarterly reports; HK: HKEXnews annual, interim and quarterly reports in English; US: the newest 10-K, 10-Q,
-20-F or 40-F in SEC's filing list) and the text of any filing. Documents are read in memory and never stored."""
+"""Filings for the results review and the deep-dive lane: a stock's non-routine filings of the last 90 days (CNINFO,
+HKEXnews, SEC's filing list), its latest periodic report (CN: CNINFO annual, half-year and quarterly reports; HK:
+HKEXnews annual, interim and quarterly reports in English; US: the newest 10-K, 10-Q, 20-F or 40-F) and the text of
+any filing. Documents are read in memory and never stored."""
 
 import html
 import io
 import json
 import logging
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from functools import cache
 
 from stockreport.fetch import Http, cninfo, hkex, sec
@@ -65,6 +66,66 @@ def periodic(market: str, code: str, today: date) -> dict | None:
             return {"id": f"us-{acc}", "date": day, "title": f"{form} {day}",
                     "url": f"https://www.sec.gov/Archives/edgar/data/{int(sid)}/{acc.replace('-', '')}/{doc}"}
     return None
+
+
+def parse_cn(payload: dict) -> list[dict]:
+    return [{"date": datetime.fromtimestamp(a["announcementTime"] / 1000, cninfo.BEIJING).date().isoformat(),
+             "title": re.sub(r"<[^>]+>", "", a["announcementTitle"] or "").strip(),
+             "url": "http://static.cninfo.com.cn/" + a["adjunctUrl"]} for a in payload.get("announcements") or []]
+
+
+def parse_hk(items: list[dict]) -> list[dict]:
+    return [{"date": datetime.strptime(a["DATE_TIME"], "%d/%m/%Y %H:%M").date().isoformat(),
+             "title": " ".join(html.unescape(a.get("TITLE") or "").split()),
+             "category": re.sub(r"<[^>]+>.*", "", html.unescape(a.get("LONG_TEXT") or "")).strip(),
+             "url": "https://www1.hkexnews.hk" + a["FILE_LINK"]} for a in items]
+
+
+def parse_us(payload: dict, cik: int) -> list[dict]:
+    from stockreport.fetch.events import us_title
+    r = payload["filings"]["recent"]
+    return [{"date": day, "form": form, "items": items, "title": us_title({"form": form, "items": items.split(",") if items else [],
+                                                                          "file_description": desc}),
+             "url": f"https://www.sec.gov/Archives/edgar/data/{cik}/{acc.replace('-', '')}/{doc}"}
+            for form, day, items, acc, doc, desc in zip(r["form"], r["filingDate"], r["items"], r["accessionNumber"],
+                                                        r["primaryDocument"], r["primaryDocDescription"])]
+
+
+def recent(market: str, code: str, today: date, days: int) -> list[dict]:
+    """A stock's non-routine filings of the last `days` days, newest first: {date, kind, title, url}, classified like
+    the event feed (events.classify). None when the stock has no filing id."""
+    from stockreport.events import classify
+    sid, start, http = ids(market).get(code), today - timedelta(days=days), client(market)
+    if sid is None:
+        return None
+    if market == "cn":
+        rows, page = [], 1
+        while page <= 5:  # 30 a page; large issuers file ~100 a quarter, most of them routine
+            payload = http.post(cninfo.QUERY_URL, data={
+                "stock": f"{code},{sid}", "tabName": "fulltext", "pageSize": 30, "pageNum": page,
+                "column": "sse" if code.startswith("6") else "szse", "category": "", "plate": "",
+                "seDate": f"{start}~{today}", "searchkey": "", "secid": "", "trade": "", "sortName": "", "sortType": "",
+                "isHLtitle": "false"}).json()
+            rows += parse_cn(payload)
+            if not payload.get("hasMore"):
+                break
+            page += 1
+    elif market == "hk":
+        payload = http.get(hkex.SEARCH_URL, params={
+            "sortDir": "0", "sortByOptions": "DateTime", "category": "0", "market": "SEHK", "stockId": sid,
+            "documentType": "-1", "fromDate": f"{start:%Y%m%d}", "toDate": f"{today:%Y%m%d}", "title": "",
+            "searchType": "0", "t1code": "-2", "t2Gcode": "-2", "t2code": "-2", "rowRange": "300", "lang": "zh"}).json()
+        rows = parse_hk(json.loads(payload["result"] or "[]"))
+    else:
+        rows = [r for r in parse_us(http.get(sec.SUBMISSIONS.format(cik=int(sid))).json(), int(sid))
+                if r["date"] >= start.isoformat()]
+    out, seen = [], set()
+    for r in rows:
+        kind = classify(market, r)
+        if kind != "routine" and (r["date"], r["title"]) not in seen:
+            seen.add((r["date"], r["title"]))
+            out.append({"date": r["date"], "kind": kind, "title": r["title"], "url": r["url"]})
+    return sorted(out, key=lambda r: r["date"], reverse=True)
 
 
 def html_text(markup: str) -> str:

@@ -1,18 +1,20 @@
 """Keyword listener (PLAN.md Method section 9). launchd starts `listen` 10 s after the previous run ends;
-each run long-polls the bot for about 55 s and answers the keyword with the newest report: the text
-summary, then the PDF."""
+each run long-polls the bot for about 55 s and answers the keyword with today's report from the newest lists, after
+the results review has had its budget (PLAN.md, "Results review"): the text summary, then the PDF. What the budget
+left is finished by a background `review`."""
 
 import fcntl
 import json
 import logging
 import re
+import subprocess
+import sys
 import time
 from datetime import date, datetime, timezone
 
-from stockreport import deliver
-from stockreport.config import DATA
+from stockreport import deliver, report
+from stockreport.config import CONFIG, DATA, ROOT
 from stockreport.render import fit_bytes
-from stockreport.report import newest
 
 log = logging.getLogger(__name__)
 KEYWORDS = {"股票报告", "股票简报", "stock report", "stock brief"}
@@ -46,19 +48,27 @@ def send_with_retry(what: str, send) -> bool:
 
 
 def reply(today: date) -> None:
-    found = newest()
-    if not found:
-        send_with_retry("text", lambda: deliver.send_text("还没有生成过报告，请稍后再试。"))
-        return
-    day, pdf, summary = found
-    if day != today.isoformat():
-        summary = fit_bytes([f"（今天的报告还没生成，以下是 {day} 的报告）", *summary.splitlines()],
-                            deliver.MAX_TEXT_BYTES)
     started = time.monotonic()
+    try:
+        pdf, summary = report.fresh(today, CONFIG["review"]["budget"])
+        day = today.isoformat()
+    except (Exception, SystemExit) as e:  # SystemExit: no lists at all
+        log.error("the reviewed report failed (%s); sending the newest built one", e)
+        found = report.newest()
+        if not found:
+            send_with_retry("text", lambda: deliver.send_text("还没有生成过报告，请稍后再试。"))
+            return
+        day, pdf, summary = found
+        if day != today.isoformat():
+            summary = fit_bytes([f"（今天的报告还没生成，以下是 {day} 的报告）", *summary.splitlines()],
+                                deliver.MAX_TEXT_BYTES)
+    built = time.monotonic() - started
     send_with_retry("text", lambda: deliver.send_text(summary))
     time.sleep(1)
     send_with_retry("PDF", lambda: deliver.send_file(pdf, title=f"股票报告_{day.replace('-', '')}.pdf"))
-    log.info("replied with the %s report in %.0fs", day, time.monotonic() - started)
+    log.info("replied with the %s report in %.0fs (review and build %.0fs)", day, time.monotonic() - started, built)
+    subprocess.Popen([sys.executable, "-m", "stockreport", "review", "--background"], cwd=ROOT, start_new_session=True,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def listen(seconds: int = 40) -> int:
