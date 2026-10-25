@@ -1,6 +1,8 @@
 """The score (PLAN.md, "The score: three families, equal weights"): a family is the percentile rank of the mean of its
 components' percentiles (a missing component skipped, a missing family 50), so each family spreads alike, as
-Stockopedia ranks each family before combining them; the score is the mean of the three. Grades A-E are fifths of each
+Stockopedia ranks each family before combining them; value and quality, whose components differ for financials, are
+ranked among financials and among the rest, so a one-component mean doesn't outrank three-component ones. The score
+is the mean of the three. Grades A-E are fifths of each
 family; a card's why-line names its two strongest components, its key risk a loss, heavy debt, a 30%+ fall in
 6 months, or else its weakest component."""
 
@@ -10,6 +12,7 @@ from stockreport.config import CONFIG
 from stockreport.signals import FAMILIES, components, percentiles
 
 NAMES = {"value": "价值", "quality": "质量", "momentum": "动量"}
+BY_GROUP = {"value", "quality"}  # ranked among financials and among the rest (fewer components spread wider)
 SIGNED = {"cash", "mom", "sue"}  # worded by the figure's sign; the others by their side of the market's median
 WORDS = {  # component -> (good, bad, the figure shown)
     "ep": ("市盈率低", "市盈率高", lambda x: f"PE {1 / x:.1f}" if x > 0 else "亏损"),
@@ -36,7 +39,9 @@ def score(df: pd.DataFrame, market: str, cn: pd.DataFrame | None = None, lines: 
     pct = percentiles(comp, df, market)
     out = pd.concat([df, comp.add_prefix("c_"), pct.add_prefix("p_")], axis=1)
     for fam, parts in FAMILIES.items():
-        out[f"f_{fam}"] = pct[parts[market]].mean(axis=1).rank(pct=True).fillna(0.5)
+        mean = pct[parts[market]].mean(axis=1)
+        ranked = mean.groupby(df["financial"].astype(bool)).rank(pct=True) if fam in BY_GROUP else mean.rank(pct=True)
+        out[f"f_{fam}"] = ranked.fillna(0.5)
         out[f"g_{fam}"] = grade(out[f"f_{fam}"])
     out["score"] = out[[f"f_{fam}" for fam in FAMILIES]].mean(axis=1)
     out["score_rank"] = out["score"].rank(ascending=False, method="first").astype(int)

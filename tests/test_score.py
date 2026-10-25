@@ -8,6 +8,8 @@ import pandas as pd
 import pytest
 
 from stockreport import lists, track
+from stockreport import universe as uni
+from stockreport.fetch import frames
 from stockreport.score import grade, score
 from stockreport.signals import cn_deduct, quarters
 
@@ -42,7 +44,8 @@ def test_a_family_skips_missing_components_and_a_missing_family_counts_50():
     assert np.isnan(s.loc["C0", "p_sp"]) and np.isnan(s.loc["C1", "p_bp"])
     value = s[["p_ep", "p_bp", "p_sp"]].mean(axis=1)  # C1: E/P and S/P only
     assert value["C1"] == pytest.approx((s.loc["C1", "p_ep"] + s.loc["C1", "p_sp"]) / 2)
-    assert s["f_value"].tolist() == pytest.approx(value.rank(pct=True).tolist())  # each family ranked before combining
+    ranked = value.groupby(s["financial"]).rank(pct=True)  # ranked among financials and among the rest
+    assert s["f_value"].tolist() == pytest.approx(ranked.tolist()) and s.loc["C0", "f_value"] == 1.0
     quality = s[["p_roe", "p_cash", "p_debt"]].mean(axis=1)
     assert quality["C0"] == pytest.approx(s.loc["C0", "p_roe"])  # the bank: ROE alone
     cn = score(universe(), "cn", pd.DataFrame(index=[]).assign(deduct_ttm=[], sue=[]))  # no SUE anywhere
@@ -56,6 +59,15 @@ def test_us_financials_profitability_is_roe_among_financials():
     assert s.loc[["C0", "C1", "C2"], "p_gpa"].tolist() == pytest.approx([1.0, 1 / 3, 2 / 3])
     assert s.loc["C9", "p_gpa"] == pytest.approx(1.0)  # the best gross profit ÷ assets among the others
     assert "ROE 高（30%）" in s.loc["C0", "why"]  # the card words it as ROE, not gross profit
+
+
+def test_us_financials_are_banks_insurers_brokers_and_lenders(tmp_path, monkeypatch):
+    monkeypatch.setattr(frames, "SIC", tmp_path / "sic.csv.gz")
+    pd.DataFrame({"code": ["1", "2", "3", "4"], "sic": [6199.0, 7320.0, 6324.0, 6282.0]}).to_csv(frames.SIC, index=False)
+    industry = pd.Series(["Finance: Consumer Services", "Finance: Consumer Services", "Medical Specialities",
+                          "Investment Managers", "Major Banks"], index=["AXP", "MCO", "UNH", "BX", "JPM"])
+    cik = pd.Series([1, 2, 3, 4, None], index=industry.index)
+    assert uni.us_financial(industry, cik).tolist() == [True, False, True, False, True]  # lender, ratings, insurer
 
 
 def test_grades_are_fifths():
