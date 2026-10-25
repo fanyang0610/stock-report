@@ -1,0 +1,28 @@
+{
+ "quoteResponse": {
+  "result": [
+   {
+    "symbol": "ARES",
+    "regularMarketPrice": 122.08,
+    "marketCap": 40503205888,
+    "sharesOutstanding": 223957742,
+    "impliedSharesOutstanding": 331775947
+   },
+   {
+    "symbol": "BRK-B",
+    "regularMarketPrice": 542.19,
+    "marketCap": 1160671395840,
+    "sharesOutstanding": 1408035161,
+    "impliedSharesOutstanding": 2140709794
+   },
+   {
+    "symbol": "TSM",
+    "regularMarketPrice": 418.51,
+    "marketCap": 2170591248384,
+    "sharesOutstanding": 5186474013,
+    "impliedSharesOutstanding": 5186474013
+   }
+  ],
+  "error": null
+ }
+}

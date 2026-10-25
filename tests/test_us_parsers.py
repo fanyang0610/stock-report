@@ -141,6 +141,14 @@ def test_basic_shares_are_the_latest_quarters():
     assert (row["period"], row["notice_date"], row["shares_basic"]) == ("2026-06-30", "2026-08-07", 978_662_000)
 
 
+def test_yahoo_quote_share_counts_in_the_listed_units():
+    # Real quote reply (2026-10-25), cut to the fields used: Ares' class A and every class (its LLC units included),
+    # Berkshire's B shares and every class in B shares, TSM's depositary shares
+    df = yahoo.parse_quotes(load("us_quote_shares_sample.json")).set_index("code")
+    assert df.loc["BRK.B"].tolist() == [1_408_035_161, 2_140_709_794]
+    assert df.loc["ARES"].tolist() == [223_957_742, 331_775_947] and df.at["TSM", "shares_all"] == 5_186_474_013
+
+
 def test_yahoo_fundamentals_for_sec_gaps():
     # Real Yahoo fundamentals-timeseries (2026-10-17), one company per growth path.
     s, day = load("us_yahoo_timeseries_sample.json"), date(2026, 10, 17)

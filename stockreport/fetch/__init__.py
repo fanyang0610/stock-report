@@ -181,6 +181,7 @@ def steps(market: str, today: date) -> list:
     if market == "us":
         from stockreport.fetch import frames, fred, nasdaq, sec, yahoo
         return [("listing", nasdaq.update_list),
+                ("Yahoo share counts", lambda: yahoo.update_share_counts(nasdaq.candidates())),
                 ("prices", lambda: yahoo.update_prices(today, tracked("us", today, nasdaq.candidates()))),
                 ("SEC fundamentals", lambda: sec.update_facts(today, nasdaq.candidates())),
                 ("Yahoo fundamentals", lambda: yahoo.update_gaps(today, us_yahoo_codes(sec, nasdaq))),

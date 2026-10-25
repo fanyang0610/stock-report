@@ -2,7 +2,8 @@
 dividends (incremental; returns from each response's adjusted close, stored as close and an implied prev_close);
 fundamentals timeseries (trailing 12 months, reporting currency, weekly) for companies SEC companyfacts can't cover;
 '<CUR>=X' FX and daily '<CUR>CNY=X' history (to undo Eastmoney's CNY conversion of HK figures); quoteSummary HK
-consensus EPS and reporting currency (cookie + crumb); on Sundays annual results where SEC has none (4-5 years) and
+consensus EPS and reporting currency (cookie + crumb); the v7 quote's US share counts (daily, 100 symbols a call, for
+the share check); on Sundays annual results where SEC has none (4-5 years) and
 ~11 years of month-end closes, returns and splits for US/HK stocks, their index and the FX own-history P/B needs."""
 
 import logging
@@ -19,9 +20,11 @@ log = logging.getLogger(__name__)
 URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 TIMESERIES = "https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/{symbol}"
 SUMMARY = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}"
+QUOTE = "https://query1.finance.yahoo.com/v7/finance/quote"
 PRICES, DIVIDENDS = DATA / "prices" / "{}.csv.gz", DATA / "fundamentals" / "{}_dividends.csv.gz"
 GAPS, FX, CONSENSUS = DATA / "fundamentals" / "us_yahoo.csv.gz", DATA / "fx.csv", DATA / "fundamentals" / "hk_consensus.csv.gz"
 FX_CNY = DATA / "fx_cny.csv.gz"
+SHARES = DATA / "quotes" / "us_yahoo_shares.csv.gz"  # the share counts of Yahoo's quotes, for crosscheck.us_shares
 MONTHLY, SPLITS = HISTORY / "{}_monthly.csv.gz", HISTORY / "{}_splits.csv.gz"
 HISTORY_YEARS = 11
 # annual history columns as in sec.TAXONOMIES; capex and dividends paid are negative in Yahoo, stored positive
@@ -192,6 +195,23 @@ def crumb_http() -> Http:
     http.client.get("https://fc.yahoo.com")
     http.crumb = http.get("https://query1.finance.yahoo.com/v1/test/getcrumb").text
     return http
+
+
+def parse_quotes(payload: dict) -> pd.DataFrame:
+    """Each listed symbol's share counts in its own units (an ADR's in depositary shares): the listed class's
+    (sharesOutstanding) and every class's (impliedSharesOutstanding, Yahoo's market value ÷ price)."""
+    rows = [{"code": q["symbol"].replace("-", "."), "shares_class": q.get("sharesOutstanding"),
+             "shares_all": q.get("impliedSharesOutstanding")} for q in payload["quoteResponse"]["result"]]
+    return pd.DataFrame(rows, columns=["code", "shares_class", "shares_all"])
+
+
+def update_share_counts(codes: list[str]) -> None:
+    """Daily, 100 symbols a call (11 calls for the US candidates)."""
+    http, symbol = crumb_http(), MARKETS["us"][2]
+    parts = [parse_quotes(http.get(QUOTE, params={"symbols": ",".join(symbol(c) for c in codes[i:i + 100]),
+                                                  "crumb": http.crumb}).json()) for i in range(0, len(codes), 100)]
+    write(pd.concat(parts), SHARES)
+    log.info("yahoo share counts: %d of %d", len(pd.concat(parts)), len(codes))
 
 
 def parse_trend(code: str, payload: dict) -> dict:
