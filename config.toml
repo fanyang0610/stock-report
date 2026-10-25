@@ -31,6 +31,7 @@ avoid = 10
 per_sector = 2
 buy_largest = { cn = 300, us = 300, hk = 200 }  # buys from the largest by market value (US: home listings among them)
 avoid_largest = 400
+index_core = { us = 0.5 }     # share of the market's money in its index fund, the rest in the 20 names (PLAN.md, "Lists")
 
 [cards]
 heavy_debt = 0.7              # debt ÷ assets at or above this is a key risk (not financials): SASAC's 70% warning line

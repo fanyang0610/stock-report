@@ -70,7 +70,7 @@
     {% for m in r.markets %}
       <tr>
         <td><b>{{ m.name }}</b><br><span class="sub">数据 {{ m.data_date }}</span>{% if m.stale %}<br><span class="warn">{{ m.stale }}</span>{% endif %}</td>
-        <td>{% for p in m.buys[:10] %}{{ p.ticker }} {{ p.name }}{% if not loop.last %}、{% endif %}{% endfor %}</td>
+        <td>{% if m.core %}<b>{{ m.core_short }}</b>；{% endif %}{% for p in m.buys[:10] %}{{ p.ticker }} {{ p.name }}{% if not loop.last %}、{% endif %}{% endfor %}</td>
         <td>{% for s in ["继续持有", "复核", "卖出"] %}{% set n = m.holdings | selectattr("status", "equalto", s) | list | length %}{% if n %}<span class="status s{{ s }}">{{ s }} {{ n }}</span> {% endif %}{% endfor %}{% if not m.holdings %}—{% endif %}</td>
         <td>{% for p in m.avoid %}{{ p.name }}{% if not loop.last %}、{% endif %}{% endfor %}</td>
       </tr>
@@ -84,9 +84,10 @@
   <h2>{{ m.name }}{% if r.test %} <span class="tag test">测试数据</span>{% endif %}</h2>
   <div class="sub">数据日期 {{ m.data_date }} · 计价 {{ m.currency }}</div>
   {% if m.stale %}<div class="warn">{{ m.stale }}</div>{% endif %}
+  {% if m.core %}<div class="expect"><b>{{ m.core }}</b></div>{% endif %}
   <div class="expect"><b>预期</b>{% for line in m.expect %}<p>{{ line }}</p>{% endfor %}</div>
 
-  <div class="list-title">买入组合（{{ m.buys | length }} 只，等额买入，持有 12 个月）</div>
+  <div class="list-title">买入组合（{{ m.buys | length }} 只，等额买入，持有 12 个月{% if m.core %}；配合上面的指数基金{% endif %}）</div>
   <table class="cards">
     <colgroup><col style="width:6%"><col style="width:36%"><col style="width:14%"><col style="width:24%"><col style="width:20%"></colgroup>
     <thead><tr><th>#</th><th>代码 / 名称 / 行业</th><th class="num">现价</th><th>评级</th><th class="num">一手</th></tr></thead>

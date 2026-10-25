@@ -1,7 +1,7 @@
 # stock-report: rules for coding agents
 
 ## Goal
-On a WeChat keyword (股票报告 / 股票简报 / stock report / stock brief), reply within 30 s with exactly two messages: a text summary and a PDF report. Per market (US, HK, CN): a 20-name buy portfolio (买入组合), a check of the names you hold (持仓检查: 继续持有 / 复核 / 卖出), 10 names to avoid (回避), and what to expect from the method's history. Each card shows the price, the value, quality and momentum grades, why the name is there, the key risk, the cost of one board lot, the review's finding, an AI note and a re-check date. The aim is moderate: beat the index fund over the year you hold the names, at about the market's level of risk.
+On a WeChat keyword (股票报告 / 股票简报 / stock report / stock brief), reply within 30 s with exactly two messages: a text summary and a PDF report. Per market (US, HK, CN): a 20-name buy portfolio (买入组合; in the US next to an S&P 500 index fund holding half the money), a check of the names you hold (持仓检查: 继续持有 / 复核 / 卖出), 10 names to avoid (回避), and what to expect from the method's history. Each card shows the price, the value, quality and momentum grades, why the name is there, the key risk, the cost of one board lot, the review's finding, an AI note and a re-check date. The aim is moderate: beat the index fund over the year you hold the names, at about the market's level of risk.
 
 ## Read first
 docs/PLAN.md has the method, the stages and the current status. The earlier plans (v1-v3 with Phases 1-13, and the 2026-10-22 plan) are in docs/archive/ as reference only, not as paths to follow. Do only the stage you were asked to do.

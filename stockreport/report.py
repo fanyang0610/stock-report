@@ -14,9 +14,10 @@ from stockreport.config import CONFIG, DATA, REPORTS
 from stockreport.render import html_to_pdf, render_html, text_summary
 from stockreport.score import NAMES
 
-MARKETS = {"cn": ("A股 CN", "CNY", "元", "沪深300ETF"), "us": ("美股 US", "USD", "美元", "SPY"),
+MARKETS = {"cn": ("A股 CN", "CNY", "元", "沪深300ETF"), "us": ("美股 US", "USD", "美元", "标普500基金"),
            "hk": ("港股 HK", "HKD", "港元", "盈富基金")}
 EXPECT = DATA / "history" / "expect.json"  # written by the history run (backtest/qvm.py)
+CORE = {"us": ("标普500指数基金", "如 SPY、VOO，英伟达、微软、苹果等最大的公司都在里面")}  # the index-core markets' fund
 EVIDENCE = {
     "cn": "已发表研究：A 股的价值（尤其 E/P）和业绩超预期后的漂移长期有效；价格动量在 A 股 20 年不赚钱，所以 A 股的动量用业绩意外。",
     "us": "已发表研究：价值、质量、动量在美国有几十年记录，但公开后超额收益平均缩水过半（McLean-Pontiff 2016）。",
@@ -37,10 +38,14 @@ def expect_lines(market: str) -> list[str]:
     if market not in runs:
         return ["历史模拟尚未运行。", EVIDENCE[market]]
     e, n20 = runs[market], runs[market]["portfolios"]["20"]
-    lines = [f"模拟回测（{e['first']} 至 {e['last']} 每月建仓的 {e['windows']} 个 12 个月，扣交易成本）：20 只组合平均每 12 个月比{fund}"
-             f"{'多' if n20['excess'] >= 0 else '少'}赚 {abs(n20['excess']):.1%}，{n20['beat']:.0%} 的 12 个月跑赢；最差 12 个月 "
-             f"{n20['worst']:+.0%}（同期{fund} {n20['worst_fund']:+.0%}）；最大回撤 {n20['drawdown']:.0%}（{fund} {e['fund_drawdown']:.0%}）。",
-             "只买 10 只 / 5 只：最差的 12 个月相对基金 " + " / ".join(
+    period = f"模拟回测（{e['first']} 至 {e['last']} 每月建仓的 {e['windows']} 个 12 个月，扣交易成本）："
+    say = lambda r: (f"平均每 12 个月比{fund}{'多' if r['excess'] >= 0 else '少'}赚 {abs(r['excess']):.1%}，{r['beat']:.0%} 的 12 个月"
+                     f"跑赢；最差 12 个月 {r['worst']:+.0%}（同期{fund} {r['worst_fund']:+.0%}）；最大回撤 {r['drawdown']:.0%}（{fund} "
+                     f"{e['fund_drawdown']:.0%}）。")
+    lines = [period + "20 只组合" + say(n20)]
+    if "core" in e:  # the recommended split first, then the 20 names alone
+        lines = [f"{period}按建议配置（{e['core']['share']:.0%} 指数基金、其余等额买 20 只）" + say(e["core"]), "只买 20 只：" + say(n20)]
+    lines += ["只买 10 只 / 5 只：最差的 12 个月相对基金 " + " / ".join(
                  f"{e['portfolios'][n]['worst_excess']:+.0%}" for n in ("10", "5")) +
              f"（20 只 {n20['worst_excess']:+.0%}），名单越短结果越分散。"]
     lines.append("历史只含今天仍上市的公司（A 股的财务数字还是后来修订过的版本），模拟结果偏乐观。" if market == "cn" else
@@ -81,7 +86,12 @@ def section(market: str, rows: pd.DataFrame, day: str, today: date, failed: list
     name, currency, unit, _ = MARKETS[market]
     rows = rows.astype(object).where(rows.notna(), None)
     cards = {k: [card(r, unit) for r in rows[rows["list"] == k].to_dict("records")] for k in ("buy", "holding", "avoid", "veto")}
-    return {"code": market.upper(), "name": name, "currency": currency, "expect": expect_lines(market),
+    share = CONFIG["lists"]["index_core"].get(market)
+    fund, note = CORE.get(market, ("", ""))
+    core = (f"建议配置：{share:.0%} 的资金买{fund}（{note}）；其余 {1 - share:.0%} 等额买下面 20 只（每只约 {(1 - share) / 20:.1%}），"
+            "作为指数之外的价值、质量、动量押注。") if share else ""
+    return {"code": market.upper(), "name": name, "currency": currency, "expect": expect_lines(market), "core": core,
+            "core_short": f"{share:.0%} {fund}" if share else "",
             "data_date": max((c["price_date"] for c in cards["buy"] if c["price_date"]), default=day),
             "stale": (f"今日未能更新，沿用 {day} 的名单" if day != today.isoformat() else
                       f"今日部分数据获取失败（{'、'.join(failed)}），沿用上次的缓存数据" if failed else ""),

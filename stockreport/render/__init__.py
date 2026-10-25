@@ -57,6 +57,8 @@ def text_summary(report: dict, limit: int = 4000) -> str:
         lines += ["", f"【{m['name']}】数据 {m['data_date']}，{m['currency']}"]
         if m.get("stale"):
             lines.append(f"注意：{m['stale']}")
+        if m.get("core"):
+            lines.append(m["core"])
         if m.get("expect"):
             lines.append("预期：" + m["expect"][0])
         lines.append(f"买入组合前 10（共 {len(m['buys'])} 只，等额，持有 12 个月）：")

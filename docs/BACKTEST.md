@@ -1263,6 +1263,13 @@ date-family checks), every number above to the decimal, and that financials are 
 (CN / US / HK) against 10% / 14% / 11% of each universe; it found the grade legend still describing market-wide
 fifths (fixed) and an older US share-count fault (Monster Beverage), left for a follow-up.
 
+**The US index core** (added 2026-10-25, PLAN.md "Lists"; the same run's US numbers, recomputed with the split): half
+in SPY and half in the 20 names, each cohort split at the start, would have been 1.5 points a year behind SPY (the 20
+names alone: 2.9), ahead in the same 24% of windows, with a worst 12 months against SPY of −10.1% (alone −20.1%), a
+worst 12 months of −11.5% (SPY −15.5%, from 2021-09) and a largest fall of −21.7% (SPY −23.9%). The fund pays no cost
+here, and the overlapping portfolio mixes the two monthly (a monthly rebalance), a simplification. CN and HK are
+unchanged by it (`uv run python -m backtest.qvm run us` left their numbers and the US list's identical).
+
 Rerun: `uv run python -m backtest.qvm frame cn|us|hk` (the score on each snapshot of `backtest.run build`;
 data/backtest/qvm_<market>.pkl), then `uv run python -m backtest.qvm run cn|us|hk` (prints the tables, writes
 data/history/expect.json).

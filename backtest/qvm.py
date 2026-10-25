@@ -175,6 +175,21 @@ def families(f: pd.DataFrame) -> pd.DataFrame:
     return t
 
 
+def blend(w: pd.DataFrame, monthly: pd.Series, fund: pd.Series, share: float | None) -> dict | None:
+    """The 20 names with `share` of the money in the index fund: each cohort split at the start (the fund pays no
+    cost here), and for the largest fall the overlapping portfolio's months mixed the same way."""
+    if not share:
+        return None
+    b = share * w["fund"] + (1 - share) * w["ret"]
+    ex, worst = b - w["fund"], b.idxmin()
+    out = {"share": share, "excess": ex.mean(), "beat": (ex > 0).mean(), "worst": b[worst], "worst_fund": w.at[worst, "fund"],
+           "worst_excess": ex.min(), "drawdown": drawdown(share * fund + (1 - share) * monthly)}
+    print(f"-- {share:.0%} in the fund, the rest in the 20 names: excess {out['excess']:+.1%}, beat {out['beat']:.0%}, worst excess "
+          f"{out['worst_excess']:+.1%}; worst 12 months {out['worst']:+.1%} (fund {out['worst_fund']:+.1%}, {worst}); largest fall "
+          f"{out['drawdown']:.1%}")
+    return out
+
+
 def run_market(market: str) -> None:
     warnings.simplefilter("ignore")
     f = pd.read_pickle(panel.BT / f"qvm_{market}.pkl")
@@ -201,12 +216,13 @@ def run_market(market: str) -> None:
               "by sub-period " + ", ".join(f"{k} {v:+.1%}" for k, v in r["periods"].items()))
         if n == 20:
             first, last, fund_dd, n_windows = w.index[0][:7], w.index[-1][:7], drawdown(fund), len(w)
+            core = blend(w, monthly, fund, CONFIG["lists"]["index_core"].get(market))
     last_picks = portfolios(f[f["date"] == dates[-1]], market, 20)[dates[-1]]
     print(f"-- {dates[-1]} portfolio: " + ", ".join(f"{c} {f.loc[(f['date'] == dates[-1]) & (f['code'] == c), 'name'].iloc[0]}"
                                                for c in last_picks))
     runs = json.loads(EXPECT.read_text(encoding="utf-8")) if EXPECT.exists() else {}
     runs[market] = {"first": first, "last": last, "windows": n_windows, "fund_drawdown": fund_dd, "portfolios": result,
-                    "families": {k: v["all"] for k, v in t.T.to_dict().items()}}
+                    "families": {k: v["all"] for k, v in t.T.to_dict().items()}} | ({"core": core} if core else {})
     EXPECT.write_text(json.dumps(runs, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
 
 

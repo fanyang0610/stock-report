@@ -6,7 +6,8 @@
   cross-checks, the event feed, the deep-dive lane, the backtest data and the delivery stay as built.
 - Stage 1 (the ranking and the new report): built 2026-10-24. signals.py, score.py, lists.py (`hold`), the new cards
   and report; v1, v3, signal.py and the stage-3 scripts removed; the history run is docs/BACKTEST.md section 21 (20
-  names over the index fund a year: CN +2.9%, US −2.9%, HK +6.3%). Three fresh-context stage reviews; their fixes are in. Open fault, outside the stage: a
+  names over the index fund a year: CN +2.9%, US −2.9%, HK +6.3%). Three fresh-context stage reviews; their fixes are in. US index core added 2026-10-25 (with your OK, before
+  stage 2; "Lists"). Open fault, outside the stage: a
   US share count from Nasdaq's market value ÷ price can be wrong while the shares cross-check only logs it (Monster
   Beverage: 2.94bn against Yahoo's 1.96bn, so its card's P/E is about 50% too high).
   Waiting for your OK (rule 9) to load the daily job,
@@ -133,6 +134,18 @@ two components outrank everyone's three-component means, and financials filled h
     has shrunk out of it is still judged on the same scale. A holding the build couldn't score (dropped on facts, or no
     longer among the 800 largest) gets 复核 with the reason.
 - **Avoid:** the 10 lowest scores among the 400 largest, at most 2 per sector, each with its weakest family named.
+- **US index core** (added 2026-10-25, with your OK, before stage 2): in the US the report recommends half the money in
+  an S&P 500 index fund and the other half in equal amounts across the 20 names (config `index_core`). Why: the method
+  buys a name only when it is good on value, quality and momentum at once, so it never holds the expensive leaders that
+  make up much of the S&P 500 (on 2026-10-25 NVIDIA, Microsoft and Apple rank 327, 441 and 522 of 791: quality A, value
+  E); judging value within sectors doesn't change that (NVIDIA would rank 242). In 2018-2026 the 20 names alone trailed
+  SPY by 2.9 points a year, ahead in 24% of 12-month windows, and the US is where beating the index is hardest (most
+  active US large-cap funds trail the S&P 500 over 10-15 years: S&P's SPIVA scorecards). Half in the fund keeps the
+  leaders, halves the gap to the index in every year and keeps the list's long-run edge from the published evidence;
+  half is the moderate midpoint (my choice). The 预期 line shows the combination first (2018-2026: 1.5 points a year
+  behind SPY, the same 24% of windows ahead, worst 12 months −12% against SPY's −16%, largest fall −22% against −24%),
+  then the 20 names alone. The ranking and the lists don't change. CN and HK stay list-only: there the 20 names beat
+  the fund on their own (CN +2.9, HK +6.3 points a year).
 
 ### Cards
 - The price; the rank; the three grades A-E (fifths of each family); one line on why it's there (its two strongest
@@ -151,6 +164,7 @@ two components outrank everyone's three-component means, and financials filled h
   months with a round trip of costs (0.2% US, 0.3% CN, 0.6% HK), against the index fund with dividends (SPY, 2800.HK,
   510300.SS). Also the 10-name and 5-name versions, to show how much fewer names widen the range.
 - Each family's top fifth against its bottom fifth over the whole sample, per market.
+- In the US, also the recommended split: half in the index fund, half in the 20 names.
 - The CN frames are point-in-time by report date but hold only companies still listed (Eastmoney drops delisted ones),
   with restated 扣非 figures; US and HK hold today's listings. So every market's numbers are flattered, and the report
   says so (corrected in stage 1: this line said CN had delisted names).
