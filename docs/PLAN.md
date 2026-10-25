@@ -34,8 +34,8 @@
   mentioning completion had become soft; the company-name check failed both ways (Micron's headlines say "Micron";
   中国太平 sits inside 中国太平洋); a denial in English made a false concern on 00857; notes named concerns code had
   dropped. All are fixed as "How it is built" describes: hard red flags now come only from filings, so no name check is
-  needed. Left as follow-ups: the event feed's unused fetch and labels and the old title fetchers ("Kept from the old
-  build"); 00966's unreadable report; the bench can't refill a removed buy's sector.
+  needed. Left as follow-ups: 00966's unreadable report; the bench can't refill a removed buy's sector. The event
+  feed's unused fetch and labels and the old title fetchers were removed on 2026-10-26 ("Kept from the old build").
 - Nothing runs on a schedule (your call, 2026-10-24: a fresh start). The 06:30 job (com.stockreport.daily) is unloaded
   and disabled; the keyword listener (com.stockreport.listen) was already off. launchd/com.stockreport.daily.plist is
   rewritten for `run` (no DeepSeek); the copy in ~/Library/LaunchAgents is still the old one until it's loaded. While
@@ -221,10 +221,10 @@ build makes no DeepSeek calls.
 - **How it is built** (stage 2; review.py, deepdive.py):
   - Sources, gathered by the build with no DeepSeek (~30 s a market; reports/<date>/<market>_sources.json): each name's
     filings of the last 90 days from a per-stock query (CNINFO, HKEXnews' title search, SEC's filing list), routine ones
-    dropped by the event feed's rules (events.classify), the newest 20; and headlines of the last 30 days, the newest 15.
-    Per-stock queries rather than the market-wide event feed, which only holds the days the build ran (10 back). The
-    feed's routine rules drop bond, guarantee and auditor titles; a default, an overdue debt or an auditor resigning is
-    checked first and kept as a risk filing (events.ALARM; found by the stage review).
+    dropped by the filing rules (events.classify), the newest 20; and headlines of the last 30 days, the newest 15.
+    Per-stock queries rather than the old market-wide event feed, which only held the days the build ran (10 back;
+    removed 2026-10-26). The routine rules drop bond, guarantee and auditor titles; a default, an overdue debt or an
+    auditor resigning is checked first and kept as a risk filing (events.ALARM; found by the stage review).
   - Headline sources, verified 2026-10-25: CN and HK Eastmoney's per-stock news list (np-listapi getListInfo, biz
     web_stock_news, market 1 / 0 / 116: the 资讯 tab of its quote pages; 0.1-0.5 s a call, at most ~2 a second); US
     Yahoo Finance's RSS feed per ticker (feeds.finance.yahoo.com/rss/2.0/headline; 429 to a full browser User-Agent,
@@ -327,10 +327,10 @@ build makes no DeepSeek calls.
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
 - The backtest snapshots and the stage-1 harness (index funds, costs, month-end frames).
-- The event feed (its filing rules classify the review's filings). Unused since stage 2, left for a clean-up: the
-  feed's own market-wide fetch (every build reads a day's filings for all three markets; nothing reads the rows now),
-  its abnormal-move labels (events.lines) and the old per-stock title fetchers in cninfo.py, hkex.py and sec.py. The
-  deep-dive lane with its quote checks; the verdicts (veto or confirm with an expiry).
+- The event feed's filing rules (events.py), which classify the review's filings. Removed on 2026-10-26, unused since
+  stage 2: the feed's market-wide fetch (every build read the latest days' filings of all three markets into
+  data/events/, and nothing read the rows), its abnormal-move labels and the old per-stock title fetchers in cninfo.py,
+  hkex.py and sec.py. The deep-dive lane with its quote checks; the verdicts (veto or confirm with an expiry).
 - The DeepSeek notes (folded into the results review); WeChat and PDF delivery; the scoreboard.
 
 ## Sources for the method
@@ -370,7 +370,7 @@ beta strategies work in the Hong Kong market".
 - After each run, log the total size of data/ + reports/. If it exceeds 2 GB, add a warning line to the report footer.
 - Cleanup only ever deletes inside this project's data/, reports/ and logs/ folders.
 - Phase 6 estimate (2026-10-17): price files ~33 MB (rolling 385 days), snapshots ~1 MB a day × 400 = ~400 MB, reports ~1.7 MB a day × 90 = ~150 MB, raw ~3 MB a day × 7 = ~20 MB; steady state ~0.6 GB of the 2 GB limit.
-- Phase 11: data/events/<market>.csv.gz keeps 120 days of classified filings (the update drops older rows; ~0.2 MB for the first 10 days, so ~2-3 MB at steady state); data/deepdive/<market>/ keeps the verified facts per filing read (a few KB each, at most 9 a day, deleted after 400 days); filing documents are read in memory and never stored; data/verdicts.csv is tiny.
+- Phase 11: data/deepdive/<market>/ keeps the verified facts per filing read (a few KB each, at most 9 a day, deleted after 400 days); filing documents are read in memory and never stored; data/verdicts.csv is tiny.
 - History tables (Phase 7, data/history/, kept; cleanup doesn't touch them), for valuations v2/v3 and the backtest:
   - Phase 13: us_frames (SEC frames, every filer's revenue, net income and equity per calendar year 2009-2025, 2.1 MB; new years once, the last two again every 30 days), us_sic (SEC SIC code per filer with $100m+ revenue and per candidate, from the submissions files, once each), cn_sw (申万 classification change history, weekly), cn_annual back to 2009 (was 2015). Backtest only: data/backtest/us_quarterly.csv.gz (every US 10-Q/10-K period by filing date, 878 companies, 1.3 MB; companyfacts read once each and not stored); us_annual also carries R&D from that read (not refreshed).
   - us_annual: one row per company and fiscal year since 2015: revenue, gross and operating profit, net income (also to common and from continuing operations), operating cash flow, capex, dividends paid, diluted shares, equity, preferred, assets, liabilities, shares, in the reporting currency, with the first filing date. From the companyfacts files the weekly SEC fetch reads anyway; Yahoo for the companies SEC has none for (Sundays, every 90 days).
@@ -415,7 +415,7 @@ beta strategies work in the Hong Kong market".
   - FX for gap companies reporting in another currency: Yahoo "<CUR>=X" (21 currencies on 2026-10-17; ECB rates via frankfurter have no TWD, CLP, COP, PEN or KZT).
   - Headlines: the SEC filing list (data.sec.gov/submissions), see Method 8.
   - Base-rate panel (Phase 13, verified 2026-10-19): SEC frames data.sec.gov/api/xbrl/frames/us-gaap/<concept>/USD/CY<year>[Q4I].json, one concept's figure for one calendar year from every filer, dead companies included (CY2016 net income: 6,779 filers); ~1 MB each, 9 concepts a year (revenue concepts, NetIncomeLoss / ProfitLoss, StockholdersEquity at the year end, which 10-Q balance sheets fill for other fiscal years). SIC codes from data.sec.gov/submissions (0.1-1 MB each, read once per filer). Foreign filers report in IFRS and aren't in the us-gaap frames; their SIC code still comes from submissions.
-  - Market-wide filings (Phase 11): SEC full-text search efts.sec.gov/LATEST/search-index?forms=...&startdt=&enddt=&from= (100 a page, `items` per 8-K, the document path in `_id`); filing documents at www.sec.gov/Archives/edgar/data/<cik>/<accession>/<document>.
+  - Market-wide filings (Phase 11; unused since the market-wide feed was removed on 2026-10-26): SEC full-text search efts.sec.gov/LATEST/search-index?forms=...&startdt=&enddt=&from= (100 a page, `items` per 8-K, the document path in `_id`); filing documents at www.sec.gov/Archives/edgar/data/<cik>/<accession>/<document>.
 - HK (verified in Phase 5, 2026-10-17):
   - Company list: Eastmoney datacenter RPT_HKF10_INFO_ORGPROFILE (every HK profile: name, ORG_CODE, industry, GICS-style industry type, organisation type, listing date; ~7,000 rows incl. delisted names, weekly). The Eastmoney list (push2 clist, fs = m:128+t:3,m:128+t:4,m:128+t:1) is blocked, as for CN and US.
   - Results: Eastmoney datacenter RPT_HKF10_FN_MAININDICATOR, one market-wide table filtered by report date (periods ending in the last ~2.2 years, ~12,500 rows; weekly, daily in March, April and August): year-to-date revenue and profit, growth (in the reporting currency, like Eastmoney's CN 业绩报表), BPS, gross margin, operating cash flow, debt/assets, issued shares, and Eastmoney's market value, PE-TTM and PB for the candidate list and the consistency checks. The 1,200 largest ordinary shares by that market value are kept up to date (config `hk_candidates`). TTM = year-to-date + last fiscal year - same period a year earlier, on each company's own fiscal year (the row's start date: March, June... year ends).

@@ -72,13 +72,6 @@ def test_companyfacts_gaps():
     assert stale["gap"]  # last 10-Q period more than 200 days old
 
 
-def test_filing_titles_skip_routine_forms():
-    payload = load("us_submissions_pfe_sample.json")  # real PFE list: Form 4s, 13G, 13F, N-PX, a 10-Q and an 8-K
-    assert sec.parse_titles(payload, date(2026, 10, 17), 60, 10) == []
-    assert sec.parse_titles(payload, date(2026, 10, 17), 90, 10) == [
-        "2026-08-04 10-Q: Quarterly report", "2026-08-04 8-K: Results of operations"]
-
-
 def test_bank_revenue_is_net_interest_plus_noninterest_income():
     # BNY (real facts, 2026-10-17) tags no revenue total.
     row = sec.parse_facts("BNY", load("us_companyfacts_bny_sample.json"), date(2026, 10, 17))

@@ -1,22 +1,12 @@
-"""Event layer (PLAN.md Method 14, docs/REVIEW.md A2.8): announcements from the market-wide daily feeds
-(stockreport/fetch/events.py), classified by rules, and abnormal price moves on the picks labelled with or
-without a matching event. Events only label the cards; numbers from a filing come from the deep-dive lane."""
+"""Filing rules (PLAN.md, "Results review"): each filing classified by kind from its title (CN, HK: and HKEX's
+category) or its form and 8-K items (US); routine ones are dropped from the review's sources (fetch/filings.recent)."""
 
 import re
-from datetime import date, timedelta
-
-import numpy as np
-import pandas as pd
-
-from stockreport.config import CONFIG, DATA
-from stockreport.fetch.events import load
-from stockreport.track import INDEX
 
 KINDS = {"earnings": "业绩", "deal": "交易", "risk": "风险", "capital": "股本", "holders": "增减持", "business": "经营",
          "other": "其他"}
-INDEX_NAMES = {"cn": "沪深300", "hk": "恒指", "us": "标普500"}
 # Title (CN; HK: title and HKEX's headline category) patterns, tried in this order after the routine ones.
-# The exchange-mandated 股票交易异常波动 notice says nothing new, so it never "explains" a move.
+# The exchange-mandated 股票交易异常波动 notice says nothing new about the company: routine.
 RULES = {
     "cn": [("routine", r"法律意见|核查意见|股东会决议|股东大会决议|召开.*股东|股东.*通知|董事会.*决议|监事会|独立董事|工作细则|"
                        r"制度|章程|鉴证报告|保荐|路演|翌日披露|异常波动|专门委员会|职工代表|选举|聘任|授信|担保|套期保值|"
@@ -83,64 +73,3 @@ def match(market: str, text: str) -> str:
             return kind
     return "other"
 
-
-def daily(prices: pd.DataFrame, codes: set[str], end: str, days: int) -> pd.DataFrame:
-    """Log returns by trading day (rows: the index's calendar up to `end`, the last `days`) and code."""
-    p = prices[prices["code"].isin(codes) & (prices["date"] <= end)]
-    r = np.log(p["close"] / p["prev_close"]).groupby([p["date"], p["code"]]).last().unstack()
-    return r.tail(days)
-
-
-def move(excess: pd.Series, k_max: int, z_min: float) -> dict | None:
-    """The 1..k_max-day excess return ending on the last day with the largest |z|, against the sd of daily
-    excess returns over the year before it; None unless |z| ≥ z_min."""
-    hist = excess.iloc[:-k_max].dropna()
-    sd = hist.std()
-    if len(hist) < 60 or not sd > 0:
-        return None
-    best = max(((k, excess.iloc[-k:].sum()) for k in range(1, k_max + 1)), key=lambda x: abs(x[1]) / np.sqrt(x[0]))
-    k, total = best
-    z = total / (sd * np.sqrt(k))
-    if abs(z) < z_min or np.isnan(z):
-        return None
-    return {"start": excess.index[-k], "end": excess.index[-1], "days": k, "ret": np.expm1(total), "z": z,
-            "before": excess.index[-k - 1]}
-
-
-def short(title: str, n: int = 28) -> str:
-    title = re.sub(r"^(.{2,40}?(股份)?有限公司|.{2,8}：)", "", title).strip("：: ")
-    return title if len(title) <= n else title[:n] + "…"
-
-
-def lines(market: str, picks: pd.DataFrame, today: date) -> dict[str, dict]:
-    """Per pick: up to 3 recent non-routine filings (近期事件) and its abnormal move against the index, labelled
-    with the filing that matches it (from the trading day before the move to its last day) or as probable noise."""
-    cfg, ev = CONFIG["events"], load(market)
-    ev = ev[ev["code"].isin(picks["code"])].sort_values("date", ascending=False)
-    since = (today - timedelta(days=cfg["recent_days"])).isoformat()
-    path = DATA / "prices" / f"{market}.csv.gz"
-    prices = pd.read_csv(path, dtype={"code": str, "date": str}) if path.exists() else \
-        pd.DataFrame(columns=["date", "code", "close", "prev_close"])
-    index, out = INDEX[market], {}
-    for end, part in picks.groupby(picks["price_date"].astype(str)):
-        r = daily(prices, set(part["code"]) | {index}, end, 260)
-        for code in part["code"]:
-            mine = ev[ev["code"] == code]
-            recent = mine[mine["date"] >= since]  # classified filings before unclassified ones, newest first
-            recent = recent.iloc[(recent["kind"] == "other").argsort(kind="stable")].head(cfg["max_lines"])
-            found = move(r[code] - r[index], cfg["move_days"], cfg["move_z"]) if code in r and index in r else None
-            text = "；".join(f"{d[5:]} {KINDS[k]}：{short(t)}" for d, k, t in
-                            recent[["date", "kind", "title"]].itertuples(index=False))
-            item = {"events": text or f"近 {cfg['recent_days']} 日无重要公告", "move": "", "matched": None}
-            if found:
-                match = mine[(mine["date"] >= found["before"]) & (mine["date"] <= found["end"])]
-                span = f"{found['days']} 日" if found["days"] > 1 else "单日"
-                head = f"{found['end'][5:]} 前{span}相对{INDEX_NAMES[market]} {found['ret']:+.1%}（{found['z']:+.1f}σ）"
-                item["matched"] = bool(len(match))
-                if len(match):
-                    d, k, t = match.iloc[0][["date", "kind", "title"]]
-                    item["move"] = f"异动：{head}，对应 {d[5:]} {KINDS[k]}公告：{short(t)}"
-                else:
-                    item["move"] = f"异动：{head}，未见对应公告，按噪音处理（估值不变）"
-            out[code] = item
-    return out

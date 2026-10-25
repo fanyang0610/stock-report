@@ -68,18 +68,6 @@ def test_ttm_is_missing_without_last_years_same_period():
     assert pd.isna(ttm(results).loc["A", "revenue_ttm"])
 
 
-def test_cninfo_titles_drop_routine_filings():
-    # Cut from the real 2026-10-17 CNINFO query for 301308 (14 announcements, newest first).
-    from stockreport.fetch.cninfo import parse_titles
-
-    payload = json.loads((SAMPLES / "cninfo_sample.json").read_text(encoding="utf-8"))
-    titles = parse_titles(payload, limit=10)
-    assert titles[0] == "2026-10-15 2026年前三季度业绩预告"  # times are converted to Beijing dates
-    assert not any("翌日披露报表" in t or "董事会会议召开日期" in t for t in titles)
-    assert len(titles) == len(set(titles)) <= 10
-    assert parse_titles(payload, limit=2) == titles[:2]
-
-
 def test_note_length_counts_digits_as_half_and_cuts_at_a_clause():
     from stockreport.notes import shorten, width
 

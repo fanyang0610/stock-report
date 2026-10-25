@@ -43,14 +43,6 @@ def test_board_lots_from_hkex_list_of_securities():
     assert lots.to_dict() == {"00001": 500, "00002": 500, "00003": 1000, "00005": 400, "00700": 100}
 
 
-def test_hkex_titles_skip_routine_filings():
-    # Ping An, real rows 2026-10-17: board lists, dividend forms and reposted A-share governance rules go.
-    lines = hkex.parse_titles(load("hkex_titles_sample.json"), 10)
-    assert lines[0] == "2026-10-15 非執行董事辭任"
-    assert "2026-09-07 公告 選舉職工董事" in lines  # line breaks in a title collapse to a space
-    assert not any(k in x for x in lines for k in ("表格", "制度", "海外監管公告 -", "&ldquo;"))
-
-
 def test_hkgb_benchmark_10_year_yield():
     df = hkgb.parse_closings((SAMPLES / "hkgb_closings_sample.xls").read_bytes())  # real workbook 2026-10-16
     assert df.iloc[-1].to_dict() == {"date": "2026-10-16", "market": "hk", "y10": 3.994}

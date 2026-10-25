@@ -1,6 +1,6 @@
 """SEC EDGAR (data.sec.gov): trailing-12-month US fundamentals from companyfacts (XBRL, us-gaap, USD),
 annual history from the same files (10-K, 20-F and 40-F, us-gaap or ifrs-full, in the reporting
-currency), and recent filing titles from the submissions list for the AI notes. At most 10 requests/s,
+currency), and the names of filing forms and 8-K items for the review's filing titles. At most 10 requests/s,
 with the User-Agent SEC_USER_AGENT from .env. companyfacts files are several MB each: they are parsed
 in memory and never written to disk; only the extracted rows per company are kept (refreshed weekly)."""
 
@@ -80,8 +80,8 @@ TAXONOMIES = {
 CHECKS = {"us-gaap": [(["GrossProfit"], DURATION["cost"]), (["OperatingIncomeLoss"], ["CostsAndExpenses"])],
           "ifrs-full": [(["GrossProfit"], ["CostOfSales"])]}  # revenue = the sum of each pair (revenue())
 SHARE_UNITS = ("dil_shares", "shares")
-# Filing titles for the AI notes: the forms that say something about the business, and 8-K items
-# (the filing list only has item numbers, not headlines).
+# Filing titles for the results review (filings.us_title): the forms that say something about the business, and
+# 8-K items (the filing list only has item numbers, not headlines).
 FORMS = {"10-Q": "Quarterly report", "10-K": "Annual report", "20-F": "Annual report", "40-F": "Annual report",
          "6-K": "Report of foreign issuer", "SC 13D": "5%+ stake with intent to influence (13D)",
          "SC 13D/A": "13D stake amended", "SCHEDULE 13D": "5%+ stake with intent to influence (13D)",
@@ -375,32 +375,3 @@ def org_ids() -> dict[str, int]:
     """Ticker -> CIK, the id the filing list is keyed by (same role as CNINFO's orgId)."""
     return load_ciks().to_dict()
 
-
-def parse_titles(payload: dict, today: date, days: int, limit: int) -> list[str]:
-    """Newest-first 'YYYY-MM-DD form: description' lines from the last `days` days; routine forms
-    (insider trades, prospectuses, ...) are skipped and repeats dropped."""
-    recent, start = payload["filings"]["recent"], (today - timedelta(days=days)).isoformat()
-    out, seen = [], set()
-    for form, day, items in zip(recent["form"], recent["filingDate"], recent["items"]):
-        if day < start:
-            break
-        if form in ("8-K", "8-K/A"):
-            text = "; ".join(ITEMS[i] for i in items.split(",") if i in ITEMS)
-        else:
-            text = FORMS.get(form, "")
-        if not text or f"{form} {text}" in seen:
-            continue
-        seen.add(f"{form} {text}")
-        out.append(f"{day} {form}: {text}")
-        if len(out) >= limit:
-            break
-    return out
-
-
-_titles_http = None
-
-
-def titles(code: str, cik: int, today: date, days: int = 60, limit: int = 10) -> list[str]:
-    global _titles_http
-    _titles_http = _titles_http or make_http()
-    return parse_titles(_titles_http.get(SUBMISSIONS.format(cik=int(cik))).json(), today, days, limit)

@@ -78,14 +78,6 @@ units_ratio = 20              # consensus EPS this many times off the trailing E
 basis_ratio = 2               # this year's consensus this far from the trailing EPS: adjusted vs GAAP (counted only)
 drift = { value = 0.05, profit = 0.05, book = 0.05, consensus = 0.2 }  # day-over-day alarms
 
-[events]                      # event layer (PLAN.md Method 14)
-backfill_days = 10            # the first fetch reads this many days back (CN ~30 s a day); later the days since the last
-keep_days = 120               # rows older than this are dropped from data/events/<market>.csv.gz
-recent_days = 30              # 近期事件: non-routine filings of the last 30 days, newest first ...
-max_lines = 3                 # ... at most this many on a card
-move_days = 5                 # abnormal move: the 1-5-day return over the market index ...
-move_z = 2.5                  # ... at least this many sd of the stock's daily excess returns over the past year
-
 [deepdive]                    # deep-dive lane (AGENTS.md rule 3; deepdive.py), after the results review
 per_day = 3                   # new filings read per market a day (cached filings are reused at no cost)
 max_chars = 80000             # filing text sent to DeepSeek: all of it if shorter, else windows around keywords

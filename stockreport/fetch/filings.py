@@ -81,19 +81,26 @@ def parse_hk(items: list[dict]) -> list[dict]:
              "url": "https://www1.hkexnews.hk" + a["FILE_LINK"]} for a in items]
 
 
+def us_title(form: str, items: str, description: str) -> str:
+    """'form: description': an 8-K's item names, else the form's name, else the filing's own description."""
+    if form.startswith("8-K"):
+        text = "; ".join(sec.ITEMS.get(i, f"Item {i}") for i in items.split(",") if i)
+    else:
+        text = sec.FORMS.get(form, description or "")
+    return f"{form}: {text}" if text else form
+
+
 def parse_us(payload: dict, cik: int) -> list[dict]:
-    from stockreport.fetch.events import us_title
     r = payload["filings"]["recent"]
-    return [{"date": day, "form": form, "items": items, "title": us_title({"form": form, "items": items.split(",") if items else [],
-                                                                          "file_description": desc}),
+    return [{"date": day, "form": form, "items": items, "title": us_title(form, items, desc),
              "url": f"https://www.sec.gov/Archives/edgar/data/{cik}/{acc.replace('-', '')}/{doc}"}
             for form, day, items, acc, doc, desc in zip(r["form"], r["filingDate"], r["items"], r["accessionNumber"],
                                                         r["primaryDocument"], r["primaryDocDescription"])]
 
 
 def recent(market: str, code: str, today: date, days: int) -> list[dict]:
-    """A stock's non-routine filings of the last `days` days, newest first: {date, kind, title, url}, classified like
-    the event feed (events.classify). None when the stock has no filing id."""
+    """A stock's non-routine filings of the last `days` days, newest first: {date, kind, title, url}, classified by
+    the filing rules (events.classify). None when the stock has no filing id."""
     from stockreport.events import classify
     sid, start, http = ids(market).get(code), today - timedelta(days=days), client(market)
     if sid is None:
