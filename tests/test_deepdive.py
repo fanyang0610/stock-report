@@ -40,6 +40,7 @@ def test_unverifiable_answers_are_dropped():
     assert quotes.check(row | {"number": "516,880,421.86"}, full) is None  # only part of a number
     assert quotes.check(row | {"unit_quote": "单位：万元"}, full) is None  # unit line not in the filing
     assert quotes.check(row | {"unit_quote": ""}, full) is None  # a table row needs its unit line
+    assert quotes.check(row | {"unit_quote": "币种：人民币"}, full) is None  # a currency without the scale or 元
     assert quotes.check({"quote": "合计", "number": ""}, full) is None  # too short to locate
 
 
@@ -75,6 +76,7 @@ def test_data_check_on_a_saved_filing():
     assert deepdive.data_gap(row | {"np_ytd": 6_000e6, "period": "2026-09-30"}, found, "hk") is None  # another period
     assert deepdive.data_gap(row | {"np_ytd": 6_000e6, "report_currency": None}, found, "hk") is None
     rows_read = lambda quote: found | {"facts": found["facts"] | {"net_profit": found["facts"]["net_profit"] | {"quote": quote}}}
+    assert deepdive.data_gap(row | {"np_ytd": 6_000e6}, rows_read("归属于母公司所有者的净利润 4,294 2,534"), "hk")  # read
     for quote in ("Net profit 4,314 2,549", "Non-controlling interests attributable to minority holders 4,314 2,549",
                   "归属于上市公司股东的扣除非经常性损益的净利润 4,294 2,534"):
         assert deepdive.data_gap(row | {"np_ytd": 6_000e6}, rows_read(quote), "hk") is None  # not the shareholders' profit
@@ -105,6 +107,11 @@ def test_findings():
     assert kinds(investigation={"quote": "公司于2026年7月收到中国证监会《立案告知书》"}) == [("investigation", True)]
     note = {"quote": "We are subject to various investigations, claims and legal proceedings in the ordinary course."}
     assert kinds(investigation=note) == [("other", False)]  # a 10-Q's legal note is no investigation opened
+    assert kinds(investigation={"quote": "公司因年报虚假记载收到中国证监会《行政处罚决定书》"}) == [("investigation", True)]
+    assert kinds(investigation={"quote": "In May 2026 we received a subpoena from the SEC Division of Enforcement."}) \
+        == [("investigation", True)]
+    denial = {"quote": "During the period none of the Company or its current Directors was subject to any investigation."}
+    assert kinds(investigation=denial) == []  # PetroChina's interim report
     assert kinds(investigation={"quote": "公司收到上海证券交易所监管工作函"}) == [("other", False)]
 
 

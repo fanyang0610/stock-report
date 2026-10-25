@@ -44,7 +44,11 @@ def shorten(text: str, limit: int) -> str:
     return head[:stop] + "。"
 
 
+FIGURE = re.compile(r"[0-9０-９]|[零〇一二两三四五六七八九十百千万]+(成|倍|个百分点|亿|万元|元|美元|港元)|百分之")
+
+
 def words_only(text) -> str:
-    """The AI note as shown: '' when it has a digit (it may only use words), else at most NOTE_MAX wide."""
+    """The AI note as shown: '' when it has a figure (a digit, or one written in characters like 三成: it may only use
+    words), else at most NOTE_MAX wide."""
     text = " ".join(str(text or "").split())
-    return "" if re.search(r"[0-9０-９]", text) else shorten(text, NOTE_MAX)
+    return "" if FIGURE.search(text) else shorten(text, NOTE_MAX)

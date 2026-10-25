@@ -143,8 +143,10 @@ def fx_rate(src: str | None, dst: str) -> float | None:
 NON_STANDARD = re.compile(r"(?<![无無非])保留意[见見]|否定意[见見]|无法表示意见|無法表示意見|不發表意見|"
                           r"(?<!un)qualified opinion|adverse opinion|disclaimer of opinion", re.I)
 STANDARD = re.compile(r"标准无保留|標準無保留|无保留意见|無保留意見|unqualified opinion|present fairly", re.I)
-DENIAL = re.compile(r"不存在|未发现|未發現|没有|沒有|并无|並無|no substantial doubt|not (been )?subject|no (material )?"
-                    r"(investigation|proceeding)", re.I)
+DENIAL = re.compile(r"不存在|未发现|未發現|没有|沒有|并无|並無|无任何|無任何|no substantial doubt|not (been )?subject|"
+                    r"no (material )?(investigation|proceeding)|\bnone of\b|subject to any", re.I)
+# legal-proceedings boilerplate in a periodic report: no investigation opened
+BOILERPLATE = re.compile(r"ordinary course|from time to time|various (investigations|claims|legal)|日常经营|日常業務", re.I)
 MONTHS = {m: i for i, m in enumerate(["january", "february", "march", "april", "may", "june", "july", "august",
                                       "september", "october", "november", "december"], 1)}
 MONTH = "|".join(MONTHS)
@@ -168,8 +170,9 @@ CN_PERIODS = (("第一季度|一季度", "03-31"), ("半年度", "06-30"), ("第
 AFTER_DEDUCTING = re.compile(r"扣除非经常性损益|扣除非經常性損益|扣非|after deducting|excluding non-recurring", re.I)
 # the data check reads only a row that says it is the shareholders' profit: not a consolidated row (minorities
 # included), the minorities' own, or the profit after deducting non-recurring items
-ATTRIBUTABLE = re.compile(r"归属于(上市公司|母公司)?(普通股)?股东|歸屬於.{0,8}股東|归母|擁有人應佔|股東應佔|attributable to|"
-                          r"available to (common|ordinary)|shareholders of|equity holders of|owners of", re.I)
+ATTRIBUTABLE = re.compile(r"归属于.{0,10}(股东|所有者)|歸屬於.{0,10}(股東|所有者)|归母|(擁有人|權益持有人|股東)應佔|"
+                          r"(拥有人|权益持有人|股东)应占|attributable to|available to (common|ordinary)|"
+                          r"(share|stock)holders of|equity holders of|owners of", re.I)
 MINORITY = re.compile(r"少数股东|少數股東|非控股|non-controlling|minority", re.I)
 
 
@@ -231,9 +234,10 @@ def findings(row: dict, found: dict, market: str) -> list[dict]:
     if re.search(r"重大不确定|重大不確定|重大疑虑|重大疑慮|substantial doubt", doubt, re.I) and not DENIAL.search(doubt):
         add("going_concern", "持续经营存在重大不确定性", True, doubt)
     probe = f.get("investigation", {}).get("quote", "")
-    if re.search(r"立案|Wells notice", probe, re.I) and not DENIAL.search(probe):  # an investigation opened, not legal-note wording
-        add("investigation", "监管立案调查", True, probe)
-    elif re.search(r"调查|調查|处罚|處罰|警示|监管|investigation|subpoena", probe, re.I) and not DENIAL.search(probe):
+    hard = r"立案|Wells notice|subpoena|Division of Enforcement|欺诈|欺詐|虚假记载|虛假記載|造假|fraud"
+    if re.search(hard, probe, re.I) and not DENIAL.search(probe) and not BOILERPLATE.search(probe):
+        add("investigation", "监管立案调查或欺诈认定", True, probe)
+    elif re.search(rf"调查|調查|处罚|處罰|警示|监管|investigation|{hard}", probe, re.I) and not DENIAL.search(probe):
         add("other", "涉及监管调查或处罚", False, probe)
     rate = fx_rate(f.get("offer_price", {}).get("currency"), CURRENCY[market])
     if "offer_price" in f and rate and pd.notna(row.get("price")):

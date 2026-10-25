@@ -62,10 +62,10 @@ def check(item: dict, full: str, default_currency: str | None = None, numeric: b
     if num.endswith("%") or after.startswith("%"):
         return fact | {"value": value / 100, "currency": None, "pct": True}
     unit = INLINE.match(after).group(0)  # "12.5亿元", "1,234万股", "1.5billion", "每股12.50港元"
-    if not unit:  # a table row: the unit line must be in the filing, at most NEAR characters before the quoted row
-        unit = norm(item.get("unit_quote"))
+    if not unit:  # a table row: the unit line must be in the filing, at most NEAR characters before the quoted row,
+        unit = norm(item.get("unit_quote"))  # and say the scale or the base unit ('RMB' alone could be RMB'000)
         where = full.rfind(unit, 0, at + len(quote)) if len(unit) >= 2 else -1
-        if where < 0 or at - where > NEAR:
+        if where < 0 or at - where > NEAR or (scale_of(unit) == 1 and not re.search(r"元|圓|yuan|dollars?\b", unit, re.I)):
             return None
     return fact | {"value": value * scale_of(unit), "currency": currency_of(before + unit) or default_currency,
                    "pct": False, "scale": scale_of(unit)}

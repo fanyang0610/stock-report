@@ -20,57 +20,48 @@ SOURCES = json.loads((SAMPLES / "review_sources_sample.json").read_text(encoding
 ANSWERS = json.loads((SAMPLES / "review_answers_sample.json").read_text(encoding="utf-8"))
 
 
-NAMES = {"600576": "祥源文旅", "601009": "南京银行", "688585": "上纬新材", "601225": "陕西煤业", "00728": "中国电信",
-         "02650": "挚达科技"}
-
-
-def verified(market: str, code: str, answer: dict | None = None) -> tuple[list[dict], int]:
-    names = review.names_of({"code": code, "name": NAMES[code]})
-    return review.verify(answer or ANSWERS[code], review.lines_of(SOURCES[market][code]), names)
+def verified(market: str, code: str, answer: dict | None = None) -> tuple[list[dict], int, int]:
+    return review.verify(answer or ANSWERS[code], review.lines_of(SOURCES[market][code]))
 
 
 def test_quotes_are_checked_against_their_sources():
-    found, rejected = verified("cn", "600576")  # 祥源文旅: its actual controller is under a CSRC investigation
-    assert rejected == 0 and [f["kind"] for f in found if f["hard"]] == ["investigation", "investigation"]
-    assert found[0]["quote"] == "关于公司实际控制人收到立案告知书的公告" and found[0]["type"] == "公告"
+    found, rejected, _ = verified("cn", "600576")  # 祥源文旅: its actual controller is under a CSRC investigation
+    assert rejected == 0 and [(f["kind"], f["hard"], f["type"]) for f in found] == [
+        ("investigation", True, "公告"), ("investigation", False, "新闻")]  # a headline alone is a soft concern
+    assert found[0]["quote"] == "关于公司实际控制人收到立案告知书的公告"
     made_up = {"findings": [{"kind": "investigation", "source": 1, "quote": "关于公司收到中国证监会立案告知书的公告"},
                             {"kind": "audit", "source": 2, "quote": "南京银行2025年度财务报告被出具保留意见"}]}
-    assert verified("cn", "601009", made_up) == ([], 2)  # neither is in 南京银行's sources: both rejected
+    assert verified("cn", "601009", made_up)[:2] == ([], 2)  # neither is in 南京银行's sources: both rejected
     edited = {"findings": [{"kind": "guidance", "source": 1, "quote": "中国电信第三季度营收净利润大降"}]}
-    assert verified("hk", "00728", edited) == ([], 1)  # one changed character is enough
-    found, rejected = verified("hk", "02650")  # the whole four-character title 「盈利警告」 counts as a quote
+    assert verified("hk", "00728", edited)[:2] == ([], 1)  # one changed character is enough
+    found, rejected, _ = verified("hk", "02650")  # the whole four-character title 「盈利警告」 counts as a quote
     assert rejected == 0 and found[0]["kind"] == "guidance" and found[0]["quote"] == "盈利警告"
 
 
 def test_a_hard_flag_must_name_its_subject():
-    lines, names = review.lines_of(SOURCES["cn"]["601009"]), ["南京银行"]
-    check = lambda kind, title, lines=lines: review.verify(
-        {"findings": [{"kind": kind, "source": 1, "quote": title}]}, lines, names)[0]
+    lines = review.lines_of(SOURCES["cn"]["601009"])
+    check = lambda kind, title, lines=lines: review.verify({"findings": [{"kind": kind, "source": 1, "quote": title}]}, lines)[0]
+    filed = lambda title: [{"type": "公告", "date": "2026-10-20", "title": title}]
+    heard = lambda title: [{"type": "新闻", "date": "2026-10-20", "title": title}]
+    one = lambda kind, title, where=filed: check(kind, title, where(title))
     preferred = next(x["title"] for x in lines if "优先股停牌" in x["title"])
     assert check("delisting", preferred) == []  # its preferred shares, not the stock
     resign = next(x["title"] for x in lines if "董事辞任" in x["title"])
-    assert not check("investigation", resign)[0]["hard"]  # no investigation named
-    assert not check("audit", resign)[0]["hard"]  # a director resigning isn't the auditor
+    assert not check("investigation", resign)[0]["hard"] and not check("audit", resign)[0]["hard"]  # no subject named
     assert check("management", resign) == []  # an ordinary director: routine
-    filed = lambda title: [{"type": "公告", "date": "2026-10-20", "title": title}]
-    assert check("audit", "关于会计师事务所辞任的公告", filed("关于会计师事务所辞任的公告"))[0]["hard"]
-    assert not check("takeover", "关于吸收合并全资子公司的公告", filed("关于吸收合并全资子公司的公告"))[0]["hard"]
-    found, _ = verified("cn", "688585")  # a sponsor's supervision report on 上纬新材's completed tender offer
-    assert [(f["kind"], f["hard"]) for f in found] == [("other", False)]
-    assert check("delisting", "25-NSE: Delisting notice", filed("25-NSE: Delisting notice")) == []  # which security?
+    assert one("audit", "关于会计师事务所辞任的公告")[0]["hard"]
+    assert not one("takeover", "关于吸收合并全资子公司的公告")[0]["hard"]  # the company absorbing its own subsidiary
+    assert one("takeover", "关于收到私有化要约暨预计于年底前完成的提示性公告")[0]["hard"]  # a live offer
+    assert verified("cn", "688585")[0] == []  # a sponsor's supervision report on 上纬新材's completed tender offer
+    assert one("delisting", "25-NSE: Delisting notice") == []  # which security?
     assert review.lines_of({"filings": [{"date": "2026-09-14", "kind": "risk", "title": "25-NSE: Delisting notice"}],
                             "headlines": []}) == []  # left out of the sources
-    assert check("investigation", "关于公司不存在被立案调查情形的说明", filed("关于公司不存在被立案调查情形的说明")) == []
-
-
-def test_a_headline_must_name_the_company_for_a_hard_flag():
-    lines, names = review.lines_of(SOURCES["cn"]["600576"]), review.names_of({"code": "600576", "name": "祥源文旅"})
-    check = lambda title: review.verify({"findings": [{"kind": "investigation", "source": 1, "quote": title}]}, lines, names)[0]
-    assert check("70后浙商大佬、祥源文旅实控人两度遭证监会立案")[0]["hard"]
-    assert not check("海昌海洋公园：控股股东俞发祥涉嫌信息披露违法违规被证监会立案调查")[0]["hard"]  # another company
-    assert not check("A股公司密集发布立案或处罚公告：*ST清越被罚1.72亿，俞发祥再遭立案")[0]["hard"]
-    assert review.names_of({"code": "BA", "name": "Boeing Company (The)"}) == ["Boeing Company (The)", "Boeing"]
-    assert review.names_of({"code": "00700", "name": "腾讯控股"}) == ["腾讯控股", "腾讯", "00700"]
+    assert one("investigation", "关于公司不存在被立案调查情形的说明") == []
+    for routine in ("8-K: Director or officer change", "关于副总经理辞职的公告", "公司全资子公司总经理辞职",
+                    "中国石油天然气销售分公司原总经理、党委副书记钱治家接受审查调查", "Vice Chair to retire"):
+        assert one("management", routine) == [], routine
+    assert one("management", "公司总会计师离任暨总经理代行总会计师职责的公告")[0]["kind"] == "management"
+    assert not one("investigation", "70后浙商大佬、祥源文旅实控人两度遭证监会立案", heard)[0]["hard"]  # a headline: soft
 
 
 def row(code: str, lst: str, rank, score: float, **kw) -> dict:
@@ -82,7 +73,7 @@ def states(*codes: str) -> dict:
     out = {}
     for code in codes:
         market = "hk" if code.startswith("0") and len(code) == 5 else "cn"
-        found, rejected = verified(market, code)
+        found, rejected, _ = verified(market, code)
         out[code] = {"status": "done", "findings": found, "rejected": rejected, "note": ANSWERS[code]["note"]}
     return out
 
@@ -141,6 +132,16 @@ def test_cache_is_redone_for_a_new_source_a_new_list_or_after_seven_days():
     assert not review.valid(entry, "buy", ids + ["2026-10-24 c"], DAY)  # a new headline or filing
     assert not review.valid(entry, "holding", ids, DAY)  # new to its list
     assert not review.valid(entry, "buy", ids, date(2026, 10, 28))  # over 7 days old
+
+
+def test_the_note_goes_when_code_changes_a_finding(tmp_path, monkeypatch):
+    monkeypatch.setattr(review, "CACHE", tmp_path)
+    monkeypatch.setattr(review, "ask", lambda client, content: ANSWERS["688585"])  # its takeover finding is dropped
+    lines = review.lines_of(SOURCES["cn"]["688585"])
+    assert review.review_one(None, "cn", row("688585", "avoid", 1, 0.1), "avoid", lines, DAY)["note"] == ""
+    monkeypatch.setattr(review, "ask", lambda client, content: ANSWERS["00728"])  # kept as it was
+    entry = review.review_one(None, "hk", row("00728", "buy", 1, 0.9), "buy", review.lines_of(SOURCES["hk"]["00728"]), DAY)
+    assert entry["note"] == ANSWERS["00728"]["note"]
 
 
 def test_budget_leaves_slow_reviews_pending(tmp_path, monkeypatch):

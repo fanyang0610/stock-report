@@ -88,6 +88,9 @@ def test_note_length_counts_digits_as_half_and_cuts_at_a_clause():
     long = "估值低于同行且盈利质量高，" * 3 + "但股价波动较大需要控制仓位并关注下季利润变化情况。"
     assert shorten(long, 60) == "估值低于同行且盈利质量高，" * 2 + "估值低于同行且盈利质量高。"
     assert shorten("估值合理。", 60) == "估值合理。"
+    from stockreport.notes import words_only
+    assert words_only("利润下滑三成，需留意") == "" and words_only("近期PE 8") == ""  # figures, in characters or digits
+    assert words_only("近十二个月亏损、三季度承压") == "近十二个月亏损、三季度承压"  # periods are words
 
 
 def test_keyword_match():

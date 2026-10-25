@@ -30,10 +30,11 @@ ROLES = ("buy", "next", "holding", "avoid")  # the review's order: buys first
 # nor is a bare SEC delisting or deregistration form, which doesn't say which security (often notes redeemed or matured)
 OTHER_SECURITY = r"优先股|優先股|债券|債券|可转债|可轉債|转债|轉債|票据|票據|preferred|bond|notes due|warrant|25-NSE|15-12[BG]"
 SEC_BARE = re.compile(r"(25-NSE|15-12[BG])\b")  # those forms' titles are left out of the sources
-# kind -> (words, hard red flag, what the quote must name for the kind to stand, what it mustn't). A hard kind whose
-# quote fails is a soft concern ("other"); a management concern that names no chair, CEO or CFO (or an investigation) is
-# dropped: ordinary director and secretary changes are routine. From a headline, a hard flag or a management concern
-# must also name the company (its name or ticker); headlines are often about another company or the whole market.
+# kind -> (words, hard red flag, what the quote must name for the kind to stand, what it mustn't). A finding whose quote
+# names what it mustn't is dropped (another security's suspension, an offer already done, a subsidiary's executive); a
+# hard kind whose quote doesn't name its subject is a soft concern ("other"); a management concern that names no chair,
+# CEO or CFO (or an investigation) is dropped: ordinary director and secretary changes are routine. Hard red flags come
+# only from the company's own filings: from a headline the same finding is a soft concern (verify()).
 KINDS = {
     "investigation": ("监管立案调查或欺诈认定", True,
                       r"立案|调查|調查|稽查|留置|欺诈|欺詐|造假|虚假记载|investigat|probe|subpoena|Wells notice|fraud", None),
@@ -50,21 +51,20 @@ KINDS = {
     "takeover": ("以固定价格被收购或私有化", True,
                  r"要约|要約|私有化|被吸收合并|被吸收合併|协议安排|協議安排|tender offer|merger proxy|privatization|"
                  r"go(ing)?.private|to be acquired|scheme of arrangement",
-                 r"持续督导|持續督導|督导意见|完成|结果|結果|过户|過戶|completion|completed"),  # an offer already done
+                 r"持续督导|持續督導|督导意见|督導意見|过户|過戶|收[购購]结果|收[购購]結果|已完成|已經完成|"
+                 r"(has|have|was|were) (been )?completed"),  # reports on an offer already done
     "sanctions": ("制裁或禁令", True, r"制裁|实体清单|實體清單|禁令|sanction|entity list|\bban\b|banned", None),
     "downturn": ("行业下行或产品价格下跌", False, None, None),
     "customer": ("失去大客户或订单", False, None, None),
     "guidance": ("下调指引或业绩下滑", False, None, None),
     "management": ("高管离职或被调查", False,
-                   r"董事长|董事長|总经理|總經理|总裁|總裁|首席执行官|行政总裁|行政總裁|财务总监|財務總監|总会计师|首席财务官|"
-                   r"\bCEO\b|\bCFO\b|chief executive|chief financial|chair|被查|调查|調查|留置|investigat", None),
+                   r"(?<!副)(董事长|董事長|总经理|總經理|总裁|總裁)|首席执行官|行政总裁|行政總裁|财务总监|財務總監|总会计师|首席财务官|"
+                   r"\bCEO\b|\bCFO\b|chief executive|chief financial|(?<!vice )(?<!vice-)\bchair|被查|留置|investigat",
+                   r"分公司|子公司|附属|附屬|分行|subsidiary|branch"),
     "litigation": ("诉讼或仲裁", False, None, None),
     "one_off": ("利润来自一次性收益", False, None, None),
     "other": ("其他负面事件", False, None, None),
 }
-NAMED = {k for k, v in KINDS.items() if v[1]} | {"management"}
-SUFFIX = re.compile(r"(股份有限公司|有限公司|控股|集团|集團|股份|-[A-Z]+|\s+(Inc|Corporation|Corp|Company|Co|Holdings|Group|plc|"
-                    r"PLC|Ltd|Limited|Incorporated|N\.V|S\.A|AG|SE)\b.*|\s*\(The\).*|\s+Common Stock.*|\s+Class [A-C].*)$")
 STATUS = {"pending": "审核进行中", "unavailable": "审核暂不可用", "no_sources": "审核暂不可用（未取到公告和新闻）"}
 
 SYSTEM = """你是上市公司审核员。下面是一只股票的卡片（程序根据公开数据计算）和它近 90 天的非例行公告标题、近 30 天的新闻标题，每条有编号。
@@ -165,21 +165,11 @@ def ask(client: httpx.Client, content: str) -> dict:
     raise RuntimeError(f"review failed: {type(err).__name__}: {err}")
 
 
-def names_of(row: dict) -> list[str]:
-    """How a headline can name the company: its name, the name without its legal suffix, its ticker (3+ characters)."""
-    name, code = str(row.get("name") or ""), str(row["code"])
-    return [n for n in dict.fromkeys([name, SUFFIX.sub("", name).strip()] + ([code] if len(code) >= 3 else [])) if len(n) >= 2]
-
-
-def named(raw: str, names: list[str]) -> bool:
-    return any(re.search(rf"(?<![A-Za-z]){re.escape(n)}(?![A-Za-z])", raw, re.I) for n in names)
-
-
-def verify(answer: dict, lines: list[dict], names: list[str]) -> tuple[list[dict], int]:
+def verify(answer: dict, lines: list[dict]) -> tuple[list[dict], int, int]:
     """The findings whose quotes are in a source line (the cited one first; a short title quoted whole counts), each
-    checked against its kind (KINDS) and, from a headline, for naming the company (`names`); and how many were
-    rejected (quote not in any source)."""
-    texts, found, rejected, seen = [quotes.norm(x["title"]) for x in lines], [], 0, set()
+    checked against its kind (KINDS), hard only from a filing; how many were rejected (quote not in any source); and how
+    many code dropped or changed (the note, written alongside them, is then not shown)."""
+    texts, found, rejected, altered, seen = [quotes.norm(x["title"]) for x in lines], [], 0, 0, set()
     for f in answer.get("findings") or []:
         if not isinstance(f, dict) or not f.get("quote"):
             continue
@@ -192,18 +182,17 @@ def verify(answer: dict, lines: list[dict], names: list[str]) -> tuple[list[dict
             continue
         kind = f.get("kind") if f.get("kind") in KINDS else "other"
         raw, (_, hard, must, mustnt), src = " ".join(str(f["quote"]).split()), KINDS[kind], lines[at]
-        if hard and deepdive.DENIAL.search(raw) or kind == "delisting" and re.search(mustnt, raw, re.I):
-            continue  # "不存在立案调查的情形", or another security's suspension: not a finding about the stock
-        ok = (not must or re.search(must, raw, re.I)) and not (mustnt and re.search(mustnt, raw, re.I)) \
-            and (src["type"] == "公告" or kind not in NAMED or named(raw, names))
-        if not ok and kind == "management":
+        if hard and deepdive.DENIAL.search(raw) or mustnt and re.search(mustnt, raw, re.I) \
+                or kind == "management" and not re.search(must, raw, re.I):
+            altered += 1  # a denial, another security, an offer done, a routine change: no finding about the stock
             continue
-        kind = kind if ok else "other"
+        if must and not re.search(must, raw, re.I):
+            kind, altered = "other", altered + 1
         if (kind, quote) not in seen:
             seen.add((kind, quote))
-            found.append({"kind": kind, "words": KINDS[kind][0], "hard": KINDS[kind][1], "quote": raw,
-                          "date": src["date"], "type": src["type"]})
-    return found, rejected
+            found.append({"kind": kind, "words": KINDS[kind][0], "hard": KINDS[kind][1] and src["type"] == "公告",
+                          "quote": raw, "date": src["date"], "type": src["type"]})
+    return found, rejected, altered
 
 
 def cached(market: str, code: str) -> dict | None:
@@ -219,9 +208,9 @@ def valid(entry: dict | None, role: str, ids: list[str], today: date) -> bool:
 def review_one(client: httpx.Client, market: str, row: dict, role: str, lines: list[dict], today: date) -> dict:
     """One name's review, saved to its cache file (written whole, so a reader never sees half of one)."""
     answer = ask(client, prompt(row, market, role, lines))
-    findings, rejected = verify(answer, lines, names_of(row))
+    findings, rejected, altered = verify(answer, lines)
     entry = {"date": today.isoformat(), "role": role, "sources": ids_of(lines), "findings": findings,
-             "rejected": rejected, "note": notes.words_only(answer.get("note"))}
+             "rejected": rejected, "note": "" if rejected or altered else notes.words_only(answer.get("note"))}
     path = CACHE / market / f"{row['code']}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(f".{time.monotonic_ns()}.tmp")
