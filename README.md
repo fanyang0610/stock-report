@@ -2,7 +2,8 @@
 
 Text the WeChat bot "股票报告" / "股票简报" / "stock report" / "stock brief" and get back a short
 text summary plus a PDF: per market (CN, US, HK) a 20-name buy portfolio, a check of the names you hold and 10 names
-to avoid, ranked on value, quality and momentum (Stockopedia-style, equal weights). Free data only. Method, phases and status: [docs/PLAN.md](docs/PLAN.md).
+to avoid, ranked on value, quality and momentum (Stockopedia-style, equal family weights, each stock against its
+sector), the buys chosen from the market's index sector by sector and sized like it (S&P DJI's QVM index). Free data only. Method, phases and status: [docs/PLAN.md](docs/PLAN.md).
 Rules for coding agents: [AGENTS.md](AGENTS.md).
 
 ## Setup

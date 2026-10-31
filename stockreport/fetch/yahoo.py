@@ -2,8 +2,9 @@
 dividends (incremental; returns from each response's adjusted close, stored as close and an implied prev_close);
 fundamentals timeseries (trailing 12 months, reporting currency, weekly) for companies SEC companyfacts can't cover;
 '<CUR>=X' FX and daily '<CUR>CNY=X' history (to undo Eastmoney's CNY conversion of HK figures); quoteSummary HK
-consensus EPS and reporting currency (cookie + crumb); the v7 quote's US share counts (daily, 100 symbols a call, for
-the share check); on Sundays annual results where SEC has none (4-5 years) and
+consensus EPS and reporting currency, and for US and HK next year's estimate now and 90 days ago (cookie + crumb); the
+v7 quote's share counts (daily, 100 symbols a call: the US share check, HK's listed shares); on Sundays annual results
+where SEC has none (4-5 years) and
 ~11 years of month-end closes, returns and splits for US/HK stocks, their index and the FX own-history P/B needs."""
 
 import logging
@@ -25,6 +26,8 @@ PRICES, DIVIDENDS = DATA / "prices" / "{}.csv.gz", DATA / "fundamentals" / "{}_d
 GAPS, FX, CONSENSUS = DATA / "fundamentals" / "us_yahoo.csv.gz", DATA / "fx.csv", DATA / "fundamentals" / "hk_consensus.csv.gz"
 FX_CNY = DATA / "fx_cny.csv.gz"
 SHARES = DATA / "quotes" / "us_yahoo_shares.csv.gz"  # the share counts of Yahoo's quotes, for crosscheck.us_shares
+HK_SHARES = DATA / "quotes" / "hk_yahoo_shares.csv.gz"  # HK-listed shares (H shares of A+H issuers): the HK parent
+US_TREND = DATA / "fundamentals" / "us_trend.csv.gz"  # next year's US consensus EPS now and 90 days ago (revisions)
 MONTHLY, SPLITS = HISTORY / "{}_monthly.csv.gz", HISTORY / "{}_splits.csv.gz"
 HISTORY_YEARS = 11
 # annual history columns as in sec.TAXONOMIES; capex and dividends paid are negative in Yahoo, stored positive
@@ -199,29 +202,33 @@ def crumb_http() -> Http:
 
 def parse_quotes(payload: dict) -> pd.DataFrame:
     """Each listed symbol's share counts in its own units (an ADR's in depositary shares): the listed class's
-    (sharesOutstanding) and every class's (impliedSharesOutstanding, Yahoo's market value ÷ price)."""
-    rows = [{"code": q["symbol"].replace("-", "."), "shares_class": q.get("sharesOutstanding"),
+    (sharesOutstanding: an A+H issuer's H shares) and every class's (impliedSharesOutstanding, Yahoo's market value ÷
+    price)."""
+    code = lambda s: s[:-3].zfill(5) if s.endswith(".HK") else s.replace("-", ".")
+    rows = [{"code": code(q["symbol"]), "shares_class": q.get("sharesOutstanding"),
              "shares_all": q.get("impliedSharesOutstanding")} for q in payload["quoteResponse"]["result"]]
     return pd.DataFrame(rows, columns=["code", "shares_class", "shares_all"])
 
 
-def update_share_counts(codes: list[str]) -> None:
-    """Daily, 100 symbols a call (11 calls for the US candidates)."""
-    http, symbol = crumb_http(), MARKETS["us"][2]
+def update_share_counts(codes: list[str], market: str = "us") -> None:
+    """Daily, 100 symbols a call (11 calls for the US candidates, 12 for HK's)."""
+    http, symbol = crumb_http(), MARKETS[market][2]
     parts = [parse_quotes(http.get(QUOTE, params={"symbols": ",".join(symbol(c) for c in codes[i:i + 100]),
                                                   "crumb": http.crumb}).json()) for i in range(0, len(codes), 100)]
-    write(pd.concat(parts), SHARES)
-    log.info("yahoo share counts: %d of %d", len(pd.concat(parts)), len(codes))
+    write(pd.concat(parts), SHARES if market == "us" else HK_SHARES)
+    log.info("yahoo %s share counts: %d of %d", market, len(pd.concat(parts)), len(codes))
 
 
 def parse_trend(code: str, payload: dict) -> dict:
     """The reporting currency, and consensus EPS for the current fiscal year (0y) and the next (+1y)
     with last year's actual EPS (0y's yearAgoEps), in the estimate currency; analysts = estimates
-    behind next year's EPS. Key statistics for the cross-checks: book value and trailing EPS per share in
+    behind next year's EPS; eps_e2_90 = next year's consensus 90 days ago (epsTrend, the same fiscal year), for the
+    revisions. Key statistics for the cross-checks: book value and trailing EPS per share in
     HKD (the quote currency), the shares Yahoo's market value counts, and the latest reported period."""
     result = (payload.get("quoteSummary") or {}).get("result") or [{}]
     trend = {t["period"]: t for t in (result[0].get("earningsTrend") or {}).get("trend", [])}
     est = lambda period, key: ((trend.get(period, {}).get("earningsEstimate") or {}).get(key) or {}).get("raw")
+    ago = ((trend.get("+1y", {}).get("epsTrend") or {}).get("90daysAgo") or {}).get("raw") or None  # 0: no figure
     stats, detail = result[0].get("defaultKeyStatistics") or {}, result[0].get("summaryDetail") or {}
     hkd = detail.get("currency") == "HKD"
     stat = lambda d, key: (d.get(key) or {}).get("raw") if hkd and isinstance(d.get(key), dict) else None
@@ -234,7 +241,7 @@ def parse_trend(code: str, payload: dict) -> dict:
         return row
     return row | {"analysts": est("+1y", "numberOfAnalysts") or 0, "e1_year": trend["0y"]["endDate"][:7],
                   "eps_e0": est("0y", "yearAgoEps"), "eps_e1": est("0y", "avg"), "eps_e2": est("+1y", "avg"),
-                  "currency": trend["0y"]["earningsEstimate"].get("earningsCurrency")}
+                  "eps_e2_90": ago, "currency": trend["0y"]["earningsEstimate"].get("earningsCurrency")}
 
 
 def trend(client: Http, code: str) -> dict:
@@ -246,11 +253,23 @@ def trend(client: Http, code: str) -> dict:
 
 def update_consensus(today: date, codes: list[str]) -> None:
     """HK consensus EPS, reporting currency and key statistics, weekly per stock; no estimates: analysts = 0.
-    A table fetched before the key statistics were added (Phase 12) is fetched again for every stock."""
+    A table fetched before next year's 90-day-old estimate was added (stage 3) is fetched again for every stock."""
     todo = stale(CONSENSUS, codes, today)
-    if CONSENSUS.exists() and "bvps_y" not in pd.read_csv(CONSENSUS, nrows=0).columns:
+    if CONSENSUS.exists() and "eps_e2_90" not in pd.read_csv(CONSENSUS, nrows=0).columns:
         todo = list(codes)
     upsert_each(CONSENSUS, crumb_http, trend, todo, today, 2, "hk consensus")
+
+
+def us_trend(client: Http, code: str) -> dict:
+    payload = client.get(SUMMARY.format(symbol=MARKETS["us"][2](code)), ok=(200, 404),
+                         params={"modules": "earningsTrend", "crumb": client.crumb}).json()
+    row = parse_trend(code, payload)
+    return {k: row.get(k) for k in ("code", "analysts", "e1_year", "eps_e2", "eps_e2_90", "currency")}
+
+
+def update_us_trend(today: date, codes: list[str]) -> None:
+    """US next-year consensus EPS now and 90 days ago, weekly per stock (Nasdaq's consensus has no history)."""
+    upsert_each(US_TREND, crumb_http, us_trend, stale(US_TREND, codes, today), today, 2, "us estimate trend")
 
 
 def update_cny_rates(currencies: set[str], days: int = 900) -> None:

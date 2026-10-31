@@ -12,7 +12,7 @@ import pandas as pd
 
 from stockreport import crosscheck
 from stockreport.config import CONFIG, DATA
-from stockreport.fetch import eastmoney, frames, hkex, nasdaq, sec, swclass, tdx, yahoo
+from stockreport.fetch import eastmoney, frames, hkex, index, nasdaq, sec, swclass, tdx, yahoo
 
 log = logging.getLogger(__name__)
 A_SHARE = re.compile(r"^(60[0-5]\d{3}|68[89]\d{3}|00[0-3]\d{3}|30[01]\d{3})$")
@@ -57,6 +57,26 @@ def ttm(results: pd.DataFrame) -> pd.DataFrame:
     for c in cols:
         latest[f"{c}_ttm"] = np.where(annual, latest[c], latest[c] + latest[f"{c}_fy"] - latest[f"{c}_prior"])
     return latest.set_index("code")
+
+
+def index_weights(df: pd.DataFrame, market: str) -> pd.Series:
+    """Each stock's share of its index fund's index (fetch/index.py; NaN outside it): the CSI 300's as published, the
+    S&P 500's summed over the issuer's share classes (Alphabet's two, by SEC CIK), as the universe keeps one."""
+    w = index.load(market)
+    if market != "us" or w.empty:
+        return w.reindex(df.index)
+    issuer = lambda codes, cik: cik.reindex(codes).map(lambda c: f"{c:.0f}", na_action="ignore").fillna(pd.Series(codes, codes))
+    by_issuer = w.groupby(issuer(w.index, sec.load_ciks()).to_numpy()).sum()
+    return issuer(df.index, df["cik"]).map(by_issuer)
+
+
+def estimates(df: pd.DataFrame, table: pd.DataFrame, per_unit: pd.Series) -> pd.DataFrame:
+    """Next year's consensus EPS now and 90 days ago (est_now, est_90; Yahoo's +1y) in the quote currency
+    (`per_unit`: quote-currency units per estimate-currency unit, per stock) and its analyst count (est_n). Yahoo shows
+    0 where it has no 90-day-old figure (yahoo.parse_trend): missing, also in tables saved before that was known."""
+    t = table.reindex(df.index)
+    return df.assign(est_now=t["eps_e2"] * per_unit, est_90=t["eps_e2_90"].replace(0, np.nan) * per_unit,
+                     est_n=t["analysts"].fillna(0))
 
 
 def trading_days(prices: pd.DataFrame) -> np.ndarray:
@@ -197,6 +217,7 @@ def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
     df["cash_conv"] = (df["ocfps"] / df["eps"]).where(df["eps"] > 0)
     df["sector"] = swclass.level1().reindex(df.index).fillna("未分类")
     df["financial"] = df["sector"].isin(CN_FINANCIAL)
+    df["index_weight"] = index_weights(df, "cn")
 
     checks = {
         "missing fundamentals": df[NEEDED].isna().any(axis=1),
@@ -264,6 +285,10 @@ def build_us(today: date) -> tuple[pd.DataFrame, dict]:
     df["rev_growth"], df["np_growth"] = df["rev_yoy"], df["np_yoy"]
     df["dps_ttm"] = dividends(Path(str(yahoo.DIVIDENDS).format("us")), today).reindex(df.index).fillna(0)
     df = ratios(join_consensus(df, nasdaq.CONSENSUS, ["analysts", "e1_year", "eps_e1", "eps_e2", "eps_e3"]))
+    trend = pd.read_csv(yahoo.US_TREND, dtype={"code": str}).set_index("code") if yahoo.US_TREND.exists() else \
+        pd.DataFrame(columns=["eps_e2", "eps_e2_90", "analysts", "currency"])
+    df = estimates(df, trend, 1 / trend["currency"].map(yahoo.load_fx()).reindex(df.index))
+    df["index_weight"] = index_weights(df, "us")
 
     listed_px = (closes.loc[df.index].div(df["last"], axis=0) - 1).abs().min(axis=1)
     checks = {
@@ -301,7 +326,7 @@ def build_hk(today: date) -> tuple[pd.DataFrame, dict]:
     info["stages"][f"ordinary shares (largest {len(codes)})"] = len(df)
     df = screen(df, prices, today, "hk", info)
     cons = join_consensus(df[[]], yahoo.CONSENSUS, ["analysts", "e1_year", "currency", "report_currency",
-                                                    "eps_e0", "eps_e1", "eps_e2"])
+                                                    "eps_e0", "eps_e1", "eps_e2", "eps_e2_90"])
     df = df.join(hk_fundamentals(cons["report_currency"].dropna()).drop(columns="currency"))
     df["price"] = prices[prices["date"] == last].set_index("code")["close"].reindex(df.index)
     df["mcap"] = df["price"] * df["shares"]  # all issued shares (H + A + unlisted) at the HK price
@@ -313,9 +338,14 @@ def build_hk(today: date) -> tuple[pd.DataFrame, dict]:
     df["report_currency"] = cons["report_currency"].reindex(df.index)  # the deep dive's data check compares np_ytd
     df["rev_growth"], df["np_growth"] = df["rev_yoy"] / 100, df["np_yoy"] / 100  # year to date, reporting currency
     df["dps_ttm"] = dividends(Path(str(yahoo.DIVIDENDS).format("hk")), today).reindex(df.index).fillna(0)
-    est, fx = ["eps_e0", "eps_e1", "eps_e2"], yahoo.load_fx()
+    est, fx = ["eps_e0", "eps_e1", "eps_e2", "eps_e2_90"], yahoo.load_fx()
     cons[est] = cons[est].mul(cons["currency"].map(fx["HKD"] / fx), axis=0)
     df = ratios(df.join(cons[["analysts", "e1_year"] + est]).assign(eps_e3=np.nan, notice_date=None))  # no filing dates
+    df = estimates(df, cons, 1.0)  # already in HKD
+    listed = pd.read_csv(yahoo.HK_SHARES, dtype={"code": str}).drop_duplicates("code").set_index("code")["shares_class"] \
+        if yahoo.HK_SHARES.exists() else pd.Series(dtype=float)
+    listed = listed.reindex(df.index)  # HK-listed shares only (an A+H issuer's H shares); never more than all shares
+    df["listed_value"] = listed.where(listed <= df["shares"], df["shares"]) * df["price"]
     # Yahoo has two estimate years, so the 2-year expected EPS growth runs from last year's actual to next year
     df["fwd_growth"] = (df["eps_e2"] / df["eps_e0"]).where((df["eps_e0"] > 0) & (df["eps_e2"] > 0)) ** 0.5 - 1
     df["financial"] = df["industry_type"].fillna("").str.split("-").str[-1].isin(CONFIG["peers"]["financial_industries_hk"])

@@ -163,7 +163,7 @@ def snapshot(src: Path, market: str, today: date, days: int = 7) -> None:
 def steps(market: str, today: date) -> list:
     from stockreport.track import tracked
     if market == "cn":
-        from stockreport.fetch import eastmoney, swclass, tdx, tencent
+        from stockreport.fetch import eastmoney, index, swclass, tdx, tencent
         return [("prices", lambda: tdx.update_prices(today)),
                 ("quotes", lambda: eastmoney.update_quotes()),
                 ("Tencent quotes", lambda: tencent.update_quotes(eastmoney.cn_largest())),
@@ -175,9 +175,11 @@ def steps(market: str, today: date) -> list:
                 ("扣非 history", lambda: eastmoney.update_cn_deduct(today)),
                 ("pre-announcements", lambda: eastmoney.update_forecasts(today)),
                 ("申万 industries", lambda: swclass.update(today)),
+                ("research reports", lambda: eastmoney.update_reports(today)),
+                ("CSI 300 weights", lambda: index.update("cn")),
                 ("consensus snapshot", lambda: snapshot(DATA / "fundamentals" / "cn_consensus.csv.gz", "cn", today))]
     if market == "us":
-        from stockreport.fetch import frames, fred, nasdaq, sec, yahoo
+        from stockreport.fetch import frames, fred, index, nasdaq, sec, yahoo
         return [("listing", nasdaq.update_list),
                 ("Yahoo share counts", lambda: yahoo.update_share_counts(nasdaq.candidates())),
                 ("prices", lambda: yahoo.update_prices(today, tracked("us", today, nasdaq.candidates()))),
@@ -185,6 +187,8 @@ def steps(market: str, today: date) -> list:
                 ("Yahoo fundamentals", lambda: yahoo.update_gaps(today, us_yahoo_codes(sec, nasdaq))),
                 ("FX", lambda: yahoo.update_fx(set(pd.read_csv(yahoo.GAPS)["currency"].dropna()))),
                 ("consensus", lambda: nasdaq.update_consensus(today, nasdaq.candidates())),
+                ("estimate trend", lambda: yahoo.update_us_trend(today, nasdaq.candidates())),
+                ("S&P 500 weights", lambda: index.update("us")),
                 ("10y yield", fred.update_yield),
                 ("Yahoo annual history", lambda: yahoo.update_annual(today, sec.annual_gaps(nasdaq.candidates()), sec.ANNUAL)),
                 ("monthly prices", lambda: yahoo.update_monthly(
@@ -198,6 +202,7 @@ def steps(market: str, today: date) -> list:
                 ("fundamentals", lambda: eastmoney.update_hk_fundamentals(today)),
                 ("prices", lambda: yahoo.update_prices(today, tracked("hk", today, eastmoney.hk_candidates()), "hk")),
                 ("consensus and reporting currency", lambda: yahoo.update_consensus(today, eastmoney.hk_candidates())),
+                ("HK-listed shares", lambda: yahoo.update_share_counts(eastmoney.hk_candidates(), "hk")),
                 ("FX", lambda: hk_fx(yahoo)),
                 ("US issuer ids", lambda: eastmoney.update_us_orgs(today)),
                 ("10y yield", hkgb.update_yield),

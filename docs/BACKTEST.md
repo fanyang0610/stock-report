@@ -1276,3 +1276,66 @@ months instead of the monthly mix moves the largest fall from −21.68% to −21
 Rerun: `uv run python -m backtest.qvm frame cn|us|hk` (the score on each snapshot of `backtest.run build`;
 data/backtest/qvm_<market>.pkl), then `uv run python -m backtest.qvm run cn|us|hk` (prints the tables, writes
 data/history/expect.json).
+
+## 22. Stage 3: the list built like its index (2026-10-26; backtest/qvm.py)
+
+The same history run as section 21 with stage 3's method: value, quality and momentum ranked within sectors, and the 20
+names built like S&P DJI's QVM index, sector-neutral (docs/PLAN.md, "Lists": each sector's places and money by its
+index weight, its top fifth by score qualifying, the largest index weight × score taken, UCITS 5/10/40). No free index
+history exists, so the parent is a stand-in: each stock's market value at the month end × today's float factor (its
+index weight today ÷ its share of market value: the CSI 300 and SPY files; HK its HK-listed shares ÷ all its shares),
+the largest 300 (CN), 500 (US: home listings and today's S&P 500 names) and 200 (HK). The portfolio is held at the
+list's weights; "10" and "5" are its 10 and 5 largest positions, scaled to the whole. The snapshots have no consensus
+estimates (CN's only from 2026-01, after the last 12-month window starts), so this score has no forward E/P and no
+revisions. These numbers fill the report's 预期 line; they decided nothing (the construction was chosen from the
+published designs before this run; docs/PLAN.md "Lists").
+
+| 12 months from each month end, after costs | CN (510300) | US (SPY) | HK (2800) |
+|---|---|---|---|
+| windows | 81 (2019-01..2025-09) | 93 (2018-01..2025-09) | 108 (2016-10..2025-09) |
+| 20 names: mean return / the fund's | +13.8% / +6.6% | +14.5% / +15.9% | +8.8% / +5.5% |
+| over the fund (windows ahead) | **+7.2% (67%)** | **−1.3% (32%)** | **+3.3% (58%)** |
+| section 21's 20 names (equal amounts, 2 a sector) | +2.9% (59%) | −2.9% (24%) | +6.3% (68%) |
+| 10th / 90th percentile over the fund | −4.4% / +28.6% | −10.0% / +10.9% | −6.7% / +15.0% |
+| worst 12 months (the fund's; start) | −28.0% (−27.3%; 2021-10) | −19.7% (−11.2%; 2021-08) | −28.2% (−27.3%; 2021-09) |
+| largest fall, overlapping portfolio (the fund's) | −36.9% (−36.5%) | −24.5% (−23.9%) | −38.2% (−47.2%) |
+| section 21's largest fall | −24.9% | −23.9% | −30.3% |
+| over the fund by sub-period: 2019-20 / 2021-22 / 2023 / 2024-26 | +3.7 / +1.2 / −0.3 / +22.4 | −1.0 / −2.9 / −7.4 / +5.8 | +5.0 / +6.5 / +7.2 / +1.0 |
+| 10 largest positions: over the fund, ahead, 10th / 90th pct, worst | +6.7%, 58%, −9.2 / +25.8, −17.9% | −0.0%, 40%, −13.0 / +15.4, −21.6% | +2.5%, 52%, −7.9 / +17.3, −26.4% |
+| 5 largest: the same | +6.0%, 60%, −9.9 / +22.8, −28.7% | +2.4%, 52%, −13.1 / +16.4, −30.1% | +0.4%, 49%, −14.6 / +16.1, −39.9% |
+| the index's 10 largest held, per list (their share of the money) | 1.6 (13%) | 2.3 (21%) | 3.9 (30%) |
+
+**The family check** (top fifth minus bottom fifth, now ranked within sectors; sub-periods positive of 4): CN value
++0.3% (2), quality +0.9% (2), momentum (SUE) +2.2% (2), the score +2.3% (2); US value +2.6% (3), quality −1.5% (1),
+momentum −1.7% (2), the score +1.5% (4); HK value 0.0% (3), quality +3.1% (3), momentum +7.9% (4), the score +6.9%
+(3). Within sectors CN value turns from −1.3% (section 21) to +0.3% and US value from +1.3% to +2.6%: much of the
+market-wide value spread was a bet on cheap sectors (banks, property and steel against IT and pharma in CN). US
+quality and momentum still run against their published direction here (short sample, survivors); the report names them.
+
+**What it says.** The lists now move with their index: in CN and HK the worst 12 months are within a point of the
+fund's (in section 21 they were 2 and 11 points worse, while CN's largest fall was 12 points smaller), and the largest
+fall matches the CSI 300's and SPY's; HK's stays well below the Hang Seng's (−38% against −47%). In the US the gap to
+SPY is about halved (−2.9 → −1.3 points a year, ahead in 32% of windows instead of 24%): the rest is the score
+itself in these years (quality and momentum backwards) and the history's missing analyst data. Without forward E/P
+and revisions the history's US lists rarely hold the expensive leaders (2026-09: none of NVIDIA, Amazon, Meta), while
+the live list on 2026-10-26 holds all three at 10% each (docs/PLAN.md Status), so the history understates how close
+the live list stays to the index. CN's +7.2 points come mostly from 2024-26 (+22.4), and that mostly from one name:
+中际旭创, the CSI 300's AI optical-module leader, held at up to 10% while its price multiplied (about 14 of the 22
+points; next 洛阳钼业 3, 澜起科技 and 药明康德 2 each), so CN's average leans on one stock's run; HK's edge is smaller than section 21's
+because the list now holds the index's large financials and telecoms instead of two names a sector. Fewer names widen
+the range: the worst 12 months against the fund go from −14% (20 names) to −18% (10) and −29% (5) in CN, from −19% to
+−22% and −30% in the US, from −15% to −26% and −40% in HK.
+
+**Limits.** All of section 21's (today's listings only; CN's restated 扣非 figures under the first notice date), plus:
+the float factors are today's, applied to every month (state and founder holdings change slowly, but this looks
+ahead); the stand-in index is the largest by float-adjusted value, not the index's actual members then; the HK frames
+have no turnover floor (no daily volumes), so a few thinly traded secondary listings that the live build's floor keeps
+out count at their whole company's value: Fast Retailing's depositary receipts (06288) were held in 5 of 120 months at
+10%, and Manulife and Prudential are in the frames too. The US stand-in admits names the S&P 500 can't hold (the MLP
+Enterprise Products is 3.2% of the 2026-09 list), and CN's 2026 frames carry forward E/P on about 3% of rows (the
+archive window), after the last 12-month window starts.
+
+The US index core (section 21's last paragraph) was removed in stage 3: docs/PLAN.md "Lists" says why.
+
+Rerun: as section 21 (`uv run python -m backtest.qvm frame cn|us|hk`, then `run`); the float factors come from the
+newest live snapshot and the index files, so run the daily build first.

@@ -119,21 +119,24 @@ def update_fundamentals(today: date) -> None:
             log.info("cn balance %s: %d rows", p, len(df))
 
 
+DIVIDENDS = DATA / "fundamentals" / "cn_dividends.csv.gz"
+
+
 def update_dividends(today: date) -> None:
-    """Cash dividends with ex-dates in the last ~13 months."""
-    path = DATA / "fundamentals" / "cn_dividends.csv.gz"
-    if not needs_refresh(path, today):
+    """Cash dividends and bonus shares (送转, which the revisions undo in older estimates) with ex-dates in the last ~13
+    months. A table from before the bonus shares were kept is fetched again."""
+    if not needs_refresh(DIVIDENDS, today) and "bonus" in pd.read_csv(DIVIDENDS, nrows=0).columns:
         return
     start = (today - timedelta(days=400)).isoformat()
     rows = datacenter("RPT_SHAREBONUS_DET",
                       f"(EX_DIVIDEND_DATE>='{start}')(EX_DIVIDEND_DATE<='{today.isoformat()}')",
-                      "SECURITY_CODE,EX_DIVIDEND_DATE,PRETAX_BONUS_RMB", sort="EX_DIVIDEND_DATE,SECURITY_CODE", sort_type="1,1",
-                      raw="cn_dividends")
-    df = pd.DataFrame(rows, columns=["SECURITY_CODE", "EX_DIVIDEND_DATE", "PRETAX_BONUS_RMB"])
-    df.columns = ["code", "ex_date", "dps"]
+                      "SECURITY_CODE,EX_DIVIDEND_DATE,PRETAX_BONUS_RMB,BONUS_IT_RATIO", sort="EX_DIVIDEND_DATE,SECURITY_CODE",
+                      sort_type="1,1", raw="cn_dividends")
+    df = pd.DataFrame(rows, columns=["SECURITY_CODE", "EX_DIVIDEND_DATE", "PRETAX_BONUS_RMB", "BONUS_IT_RATIO"])
+    df.columns = ["code", "ex_date", "dps", "bonus"]
     df["ex_date"] = df["ex_date"].str[:10]
-    df["dps"] = df["dps"] / 10  # source is per 10 shares
-    write(df, path)
+    df[["dps", "bonus"]] = df[["dps", "bonus"]] / 10  # source is per 10 shares
+    write(df, DIVIDENDS)
     log.info("cn dividends: %d rows since %s", len(df), start)
 
 
@@ -163,6 +166,43 @@ def update_consensus(today: date) -> None:
     df = consensus_table(rows)
     write(df, path)
     log.info("cn consensus: %d stocks with three estimate years", len(df))
+
+
+CN_REPORTS = HISTORY / "cn_reports.csv.gz"  # broker EPS estimates, one row per report and fiscal year
+REPORT_FIELDS = ("predictThisYearEps", "predictNextYearEps", "predictNextTwoYearEps")
+
+
+def report_rows(payload: dict, year: int) -> list[dict]:
+    """One row per company report and estimate year. The archive labels its estimates by the year it is read in
+    (predictThisYearEps is that calendar year's; older reports' passed years are blank), so the years are fixed
+    when the page is read (`year`)."""
+    return [{"code": r["stockCode"], "publish": r["publishDate"][:10], "org": r["orgSName"], "year": year + k,
+             "eps": float(r[f])} for r in payload.get("data") or [] for k, f in enumerate(REPORT_FIELDS)
+            if r.get(f) not in (None, "")]
+
+
+def update_reports(today: date, days: int = 300) -> None:
+    """Company research reports (Eastmoney's archive, reportapi report/list) since the newest one kept (3 days again,
+    as late ones appear), else (or while the table doesn't reach back) the last `days`; kept `days` (the revisions
+    need 91 + 180)."""
+    old = pd.read_csv(CN_REPORTS, dtype={"code": str, "publish": str}) if CN_REPORTS.exists() else pd.DataFrame()
+    start = today - timedelta(days=days)
+    if len(old) and old["publish"].min() <= (start + timedelta(days=10)).isoformat():
+        start = date.fromisoformat(old["publish"].max()) - timedelta(days=3)
+    client, rows, page = Http(min_interval=2.0, headers={"Referer": "https://data.eastmoney.com/"}), [], 1
+    while True:
+        payload = client.get("https://reportapi.eastmoney.com/report/list", params={
+            "industryCode": "*", "pageSize": "100", "industry": "*", "rating": "*", "ratingChange": "*",
+            "beginTime": start.isoformat(), "endTime": today.isoformat(), "pageNo": str(page), "fields": "",
+            "qType": "0", "orgCode": "", "code": "", "rcode": ""}).json()
+        rows += report_rows(payload, today.year)
+        if page >= (payload.get("TotalPage") or 1):
+            break
+        page += 1
+    df = pd.concat([old, pd.DataFrame(rows, columns=["code", "publish", "org", "year", "eps"])])
+    df = df.drop_duplicates(["code", "publish", "org", "year"], keep="last")
+    write(df[df["publish"] >= (today - timedelta(days=days)).isoformat()].sort_values(["publish", "code"]), CN_REPORTS)
+    log.info("cn research reports: %d estimates since %s (%d pages)", len(rows), start, page)
 
 
 def update_yield() -> None:

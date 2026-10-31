@@ -166,3 +166,31 @@ def test_timeseries_net_income_and_shares_for_the_cross_checks():
     row = yahoo.parse_timeseries("SOFI", load("us_yahoo_timeseries_sofi_sample.json"), date(2026, 10, 19))  # real reply
     assert row["revenue_ttm"] == pytest.approx(4305695000) and row["ni_ttm"] == pytest.approx(636264000)
     assert row["shares"] == pytest.approx(1290312404) and row["period"] == "2026-06-30"
+
+
+def test_spy_holdings_give_the_sp500_weights():
+    from stockreport.fetch import index
+    df = index.parse_spy((SAMPLES / "spy_holdings_sample.xlsx").read_bytes())  # State Street's real file, 2026-10-23
+    w = df.set_index("code")["weight"]
+    assert len(df) == 503 and set(df["date"]) == {"2026-10-23"} and "-" not in w.index  # cash lines left out
+    assert w["NVDA"] == pytest.approx(0.07770484) and {"GOOGL", "GOOG", "BRK.B"} <= set(w.index)
+    assert w.sum() == pytest.approx(0.9962, abs=0.004)  # the rest is cash
+
+
+def test_index_weights_sum_an_issuers_share_classes(tmp_path, monkeypatch):
+    import pandas as pd
+    from stockreport import universe
+    from stockreport.fetch import index
+    monkeypatch.setattr(index, "load", lambda m: pd.Series({"GOOGL": 0.035, "GOOG": 0.028, "NVDA": 0.078}))
+    monkeypatch.setattr(sec, "load_ciks", lambda: pd.Series({"GOOGL": 1652044.0, "GOOG": 1652044.0, "NVDA": 1045810.0}))
+    df = pd.DataFrame({"cik": [1652044.0, 1045810.0, None]}, index=["GOOG", "NVDA", "TSM"])  # the universe keeps one class
+    w = universe.index_weights(df, "us")
+    assert w["GOOG"] == pytest.approx(0.063) and w["NVDA"] == pytest.approx(0.078) and pd.isna(w["TSM"])
+
+
+def test_us_trend_takes_next_years_estimate_now_and_90_days_ago():
+    payload = load("us_trend_nvda_sample.json")  # NVIDIA, real reply 2026-10-26
+    client = type("C", (), {"crumb": "x", "get": lambda self, url, ok=None, params=None:
+                            type("R", (), {"json": lambda r: payload})()})()
+    assert yahoo.us_trend(client, "NVDA") == {"code": "NVDA", "analysts": 52, "e1_year": "2027-01", "eps_e2": 15.9146,
+                                              "eps_e2_90": 12.81483, "currency": "USD"}  # FY to January 2028

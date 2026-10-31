@@ -1,7 +1,8 @@
-"""End-to-end dry run: a saved CN universe (the 400 largest, 2026-10-24) -> score -> lists -> lists CSV -> PDF + text
-summary + data/picks.csv, with one recorded holding, one of your vetoes, HK's lists only from the day before, and the
-same lists as US's to check its index-fund core line; then the same day built again with a results review that
-found a hard red flag on the top buy and a soft concern on the holding."""
+"""End-to-end dry run: a saved CN universe (the 400 largest, 2026-10-24, without the CSI 300 file: its parent is the
+largest 300 by market value) -> score -> lists -> lists CSV -> PDF + text summary + data/picks.csv, with one recorded
+holding, one of your vetoes, HK's lists only from the day before, and the same lists as US's (no index-core advice
+anywhere); then the same day built again with a results review that found a hard red flag on the top buy and a soft
+concern on the holding."""
 
 import json
 import re
@@ -9,6 +10,7 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from stockreport import deepdive, lists, report, track, verdicts
 from stockreport.score import score
@@ -31,9 +33,7 @@ def test_report_dry_run(tmp_path, monkeypatch):
     run = {"first": "2019-01", "last": "2025-09", "windows": 81, "fund_drawdown": -0.365, "portfolios": {
         n: {"excess": 0.025, "beat": 0.63, "worst": -0.18, "worst_fund": -0.20, "worst_excess": -0.28, "drawdown": -0.23}
         for n in ("20", "10", "5")}}
-    core = {"share": 0.5, "excess": -0.015, "beat": 0.24, "worst": -0.115, "worst_fund": -0.155, "worst_excess": -0.10,
-            "drawdown": -0.217}
-    (tmp_path / "expect.json").write_text(json.dumps({"cn": run, "us": run | {"core": core}}), encoding="utf-8")
+    (tmp_path / "expect.json").write_text(json.dumps({"cn": run, "us": run}), encoding="utf-8")
 
     out = lists.build(scored, "cn", DAY, {})
     folder = tmp_path / "reports" / DAY.isoformat()
@@ -46,7 +46,11 @@ def test_report_dry_run(tmp_path, monkeypatch):
     pdf, summary = report.build(DAY)
 
     buys, avoid = out[out["list"] == "buy"], out[out["list"] == "avoid"]
-    assert len(buys) == 20 and buys["sector"].value_counts().max() <= 2 and (buys["score_rank"] < 300).all()
+    field = scored[scored["mcap_rank"] <= 300]
+    places = lists.slots(field.groupby("sector")["mcap"].sum(), 20, field["sector"].value_counts())
+    assert len(buys) == 20 and buys["sector"].value_counts().to_dict() == places[places > 0].to_dict()  # the index's mix
+    assert buys["weight"].sum() == pytest.approx(1) and buys["weight"].max() <= 0.1 + 1e-9
+    assert (buys["weight"] > 0.05 + 1e-9).sum() <= 4 and buys["weight"].is_monotonic_decreasing  # UCITS 5/10/40
     assert len(avoid) == 10 and avoid["sector"].value_counts().max() <= 2
     assert top not in set(buys["code"]) and out.loc[out["list"] == "veto", "code"].tolist() == [top]
     held = out[out["list"] == "holding"].iloc[0]
@@ -65,10 +69,9 @@ def test_report_dry_run(tmp_path, monkeypatch):
     html = (folder / "report.html").read_text(encoding="utf-8")
     assert "你的否决（至 2026-12-31）：测试否决" in html and html.count('class="card"') == 60  # CN, US and HK buys
     us = summary.split("【美股 US】")[1].split("【港股 HK】")[0]
-    assert "建议配置：50% 的资金买标普500指数基金" in us and "其余 50% 等额买下面 20 只（每只约 2.5%）" in us
-    assert "预期：模拟回测（2019-01 至 2025-09 每月建仓的 81 个 12 个月，扣交易成本）：50% 指数基金" in us and "少赚 1.5%" in us
-    assert "这样配置也跑输了基金" in us
-    assert "建议配置" not in cn and "只买 20 只：" in html
+    assert "预期：模拟回测（2019-01 至 2025-09 每月建仓的 81 个 12 个月，扣交易成本）：20 只组合" in us
+    assert "从标普500里选，按比例买入" in us and f"1. {buys.iloc[0]['code']} " in us and f"{buys.iloc[0]['weight']:.1%}" in us
+    assert not any(w in summary + html for w in ("建议配置", "指数基金", "标普500指数基金", "只买 20 只"))
     assert pdf.stat().st_size > 10_000 and report.newest() == ("2026-10-24", pdf, summary)
     logged = track.load()
     assert len(logged) == 60 and set(logged["market"]) == {"cn", "us"}  # today's lists only (HK's are from the day before)

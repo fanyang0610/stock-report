@@ -32,7 +32,7 @@ def test_trend_takes_this_and_next_fiscal_year():
     row = yahoo.parse_trend("00939", load("hk_trend_sample.json"))  # CCB, real reply 2026-10-17 (no key statistics)
     no_stats = dict.fromkeys(["bvps_y", "eps_ttm_y", "shares_y", "period_y"])
     assert row == {"code": "00939", "analysts": 12, "report_currency": "CNY", "e1_year": "2026-12", "eps_e0": 1.3,
-                   "eps_e1": 1.32888, "eps_e2": 1.39175, "currency": "CNY"} | no_stats
+                   "eps_e1": 1.32888, "eps_e2": 1.39175, "eps_e2_90": 1.38125, "currency": "CNY"} | no_stats  # +1y 90 days ago
     assert yahoo.parse_trend("X", {"quoteSummary": {"result": None}}) == {"code": "X", "analysts": 0,
                                                                          "report_currency": None} | no_stats
 
@@ -56,3 +56,18 @@ def test_trading_days_ignore_a_stray_row_and_a_lagging_index():
     # The 2026-10-21 06:30 table: only 02945 had a 10-20 row, which made "the last day" one stock's and emptied HK.
     stray = prices[(prices["date"] < "2026-10-20") | (prices["code"] == "02945")]
     assert universe.trading_days(stray)[-1] == "2026-10-16"
+
+
+def test_quotes_give_the_hk_listed_shares():
+    # Real v7 quote reply (2026-10-26), cut to its share fields: ABC's and ICBC's H shares are a tenth and a quarter of all
+    df = yahoo.parse_quotes(load("hk_quote_shares_sample.json")).set_index("code")
+    assert df.loc["01288", "shares_class"] == 30738823096 and df.loc["01288", "shares_all"] == 349983033873
+    assert df.loc["00700", "shares_class"] == df.loc["00700", "shares_all"]  # Tencent: one class
+
+
+def test_a_zero_90_day_estimate_is_missing():
+    payload = load("hk_trend_sample.json")  # Yahoo shows 0 where it has no 90-day-old figure (ASMPT, 2026-10-26)
+    for t in payload["quoteSummary"]["result"][0]["earningsTrend"]["trend"]:
+        if t["period"] == "+1y":
+            t["epsTrend"]["90daysAgo"] = {"raw": 0, "fmt": "0.00"}
+    assert yahoo.parse_trend("00939", payload)["eps_e2_90"] is None

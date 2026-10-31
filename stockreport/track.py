@@ -1,7 +1,8 @@
 """Tracking (PLAN.md, the live scoreboard): every report's buys and avoid names go to data/picks.csv (bucket buy / avoid
-with the score; the old method's buy / hold / sell rows stay as they were); `track` prints their average return by
-market and bucket against the index at 1 week, 1 and 3 months, from the close each pick was priced at, chained from
-close / prev_close (dividends and splits included; the indexes are price indexes)."""
+with the score and, from stage 3, a buy's share of the money; the old method's buy / hold / sell rows stay as they were);
+`track` prints their average return by market and bucket against the index at 1 week, 1 and 3 months, buys weighted
+by their share (rows without one count as 1/20), from the close each pick was priced at, chained from close /
+prev_close (dividends and splits included; the indexes are price indexes)."""
 
 from datetime import date, timedelta
 
@@ -10,7 +11,7 @@ import pandas as pd
 from stockreport.config import DATA
 
 PICKS_LOG = DATA / "picks.csv"
-COLUMNS = ["date", "market", "bucket", "ticker", "name", "price", "price_date", "score", "rank"]
+COLUMNS = ["date", "market", "bucket", "ticker", "name", "price", "price_date", "score", "rank", "weight"]
 INDEX = {"us": "SPX", "hk": "HSI", "cn": "CSI300"}
 HORIZONS = {"1w": 7, "1m": 30, "3m": 91}  # calendar days after the price date
 
@@ -23,6 +24,7 @@ def load() -> pd.DataFrame:
 def log_picks(today: date, final: dict[str, pd.DataFrame]) -> None:
     """Upsert the day's lists per market (frames with code, bucket, name, price, price_date, score and rank)."""
     new = pd.concat([f.assign(date=today.isoformat(), market=m, ticker=f["code"]) for m, f in final.items()])
+    new = new.reindex(columns=list(dict.fromkeys([*new.columns, *COLUMNS])))
     old = load()
     old = old[(old["date"] != today.isoformat()) | ~old["market"].isin(final)]
     pd.concat([old, new[COLUMNS]]).to_csv(PICKS_LOG, index=False, float_format="%.6g")
@@ -68,10 +70,13 @@ def table(picks: pd.DataFrame, loaders: dict) -> pd.DataFrame:
             continue
         r = returns(part, loaders[market](), INDEX[market]).reset_index(level=1)
         r["market"], r["bucket"] = market.upper(), part.loc[r.index, "bucket"].values
+        r["w"] = part["weight"].reindex(r.index).fillna(1 / 20).values if "weight" in part else 1 / 20
         parts.append(r)
     r = pd.concat(parts)
-    stats = r.groupby(["market", "bucket", "horizon"], sort=False)[["avg", "vs index"]].agg(["count", "mean"])
-    out = pd.DataFrame({"n": stats[("avg", "count")], "avg": stats[("avg", "mean")], "vs index": stats[("vs index", "mean")]})
+    keys = ["market", "bucket", "horizon"]
+    mean = lambda col: (r[col] * r["w"]).groupby([r[k] for k in keys], sort=False).sum() / \
+        r["w"].where(r[col].notna()).groupby([r[k] for k in keys], sort=False).sum()
+    out = pd.DataFrame({"n": r.groupby(keys, sort=False)["avg"].count(), "avg": mean("avg"), "vs index": mean("vs index")})
     return out.unstack("horizon").swaplevel(axis=1)[["to date", *HORIZONS]]
 
 

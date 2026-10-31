@@ -1,9 +1,14 @@
-"""Stage 1's history run (docs/PLAN.md, "The history run"): the app's own score (stockreport.score, stockreport.lists)
-on every month-end snapshot (backtest/run.py), each month's 20-, 10- and 5-name portfolio held 12 months after a round
-trip of costs against the index fund with dividends (SPY, 2800.HK, 510300.SS), and each family's top fifth against its
-bottom fifth. It fills the report's 预期 line (data/history/expect.json) and catches bugs; it decides nothing else.
-- Portfolios: the app's buy rule each month (the largest 300 / 200, US home listings, at most 2 per sector), equal
-  amounts, held 12 months; a cohort's 12 months run month end to month end (CN: month-end trading days).
+"""The history run (docs/PLAN.md, "The history run"; stage 1, again in stage 3): the app's own score and list
+(stockreport.score, stockreport.lists) on every month-end snapshot (backtest/run.py), each month's 20-name portfolio and
+its 10 and 5 largest positions held 12 months after a round trip of costs against the index fund with dividends (SPY,
+2800.HK, 510300.SS), and each family's top fifth against its bottom fifth. It fills the report's 预期 line
+(data/history/expect.json) and catches bugs; it decides nothing else.
+- Portfolios: the app's buy rule each month (lists.positions and lists.weigh) on a stand-in for the index: no free
+  index history exists, so each stock's market value then × today's float factor (its index weight today over its share
+  of market value; HK: HK-listed ÷ all shares; float_factors), the largest 300 (CN), 500 (US: home listings and today's
+  S&P 500 names) and 200 (HK). Held 12 months at the list's weights (the 10 and 5 largest scaled to the whole); a
+  cohort's 12 months run month end to month end (CN: month-end trading days). The snapshots have no consensus
+  estimates (CN's only from 2026), so the score has no forward E/P or revisions here.
 - The largest fall: the Jegadeesh-Titman portfolio, 1/12 of the money in each of the last 12 cohorts, each month's
   return the cohorts' average (cost spread as 1/12 of a round trip a month), against the fund over the same months.
 - Snapshots built before stage 1 carry inputs winsorized at 2/98% (ROE, debt, 12-1 momentum: ties at the extremes) and
@@ -27,13 +32,37 @@ from backtest import panel, run
 from backtest.funnel import COST, PERIODS
 from backtest.stage1 import ETF
 from stockreport import history, lists, signals, universe
-from stockreport.config import CONFIG
-from stockreport.fetch import eastmoney, sec, swclass
+from stockreport.config import CONFIG, DATA
+from stockreport.fetch import eastmoney, sec, swclass, yahoo
 from stockreport.score import score
 
 SIZES, HOLD = (20, 10, 5), 12
-KEEP = ["name", "sector", "financial", "country", "mcap_rank", "price", "score", "f_value", "f_quality", "f_momentum"]
+FIELD = {"cn": 300, "us": 500, "hk": 200}  # the stand-in index: the largest by float-adjusted value
+KEEP = ["name", "sector", "financial", "country", "mcap_rank", "mcap", "index_weight", "price", "score", "f_value",
+        "f_quality", "f_momentum"]
 EXPECT = history.HISTORY / "expect.json"
+
+
+def float_factors(market: str) -> pd.Series:
+    """Today's float factor per stock: its index weight over its share of market value (CN, US: the index files), HK
+    its HK-listed shares over all its shares (Yahoo's quote, the newest snapshot's shares)."""
+    snap = pd.read_csv(sorted((DATA / "snapshots").glob(f"*/{market}.csv.gz"))[-1], dtype={"code": str}).set_index("code")
+    if market == "hk":
+        listed = pd.read_csv(yahoo.HK_SHARES, dtype={"code": str}).drop_duplicates("code").set_index("code")["shares_class"]
+        return (listed / snap["shares"]).dropna().clip(upper=1)
+    w = universe.index_weights(snap, market).dropna()
+    value = snap["mcap"].reindex(w.index)
+    return w / w.sum() / (value / value.sum())
+
+
+def stand_in(s: pd.DataFrame, market: str, factor: pd.Series) -> pd.Series:
+    """The index's weights on a past snapshot: market value × today's float factor (the median where unknown), the
+    largest FIELD names (US: home listings and today's S&P 500 names)."""
+    value = s["mcap"] * factor.reindex(s.index).fillna(factor.median())
+    if market == "us":
+        value = value[(s["country"].fillna(lists.HOME) == lists.HOME) | s.index.isin(factor.index)]
+    top = value.nlargest(FIELD[market])
+    return (top / top.sum()).reindex(s.index)
 
 
 # ---------------------------------------------------------------- the score on each snapshot
@@ -65,7 +94,7 @@ def prepare(s: pd.DataFrame, market: str, m: str, ytd: pd.DataFrame | None) -> p
 def frame(market: str) -> pd.DataFrame:
     warnings.simplefilter("ignore")
     panel.setup_history(market)
-    snaps, rows, ytd, deduct = run.load(market), [], None, None
+    snaps, rows, ytd, deduct, factor = run.load(market), [], None, None, float_factors(market)
     if market == "cn":
         ytd = panel.cn_results().drop_duplicates(["code", "period"]).set_index(["code", "period"])
         deduct = pd.read_csv(eastmoney.CN_DEDUCT, dtype={"code": str, "period": str, "notice_date": str})
@@ -75,6 +104,7 @@ def frame(market: str) -> pd.DataFrame:
         if m < run.START.get(market, ""):
             continue
         s = prepare(d["snap"], market, m, ytd)
+        s["index_weight"] = stand_in(s, market, factor)
         day = run.day_of(market, m)
         cn = signals.cn_deduct(deduct, (day - timedelta(days=1)).isoformat()) if market == "cn" else None  # public before
         sc = score(s, market, cn, lines=False)
@@ -110,28 +140,35 @@ class Paths:
         i = self.fund.index.searchsorted(day, side="right") - 1
         return self.fund.iloc[i] if i >= 0 and day <= self.fund.index[-1] else np.nan
 
-    def growth(self, d: str, codes: list[str]) -> tuple[list[str], np.ndarray, np.ndarray]:
-        """(month keys, the equal-weight portfolio's growth since d, the fund's) at each month end after d."""
+    def growth(self, d: str, weights: pd.Series) -> tuple[list[str], np.ndarray, np.ndarray]:
+        """(month keys, the portfolio's growth since d at its weights, the fund's) at each month end after d."""
         ends = self.ends[d]
         if self.market == "cn":
-            cols = [self.px.col[c] for c in codes if c in self.px.col]
+            held = [c for c in weights.index if c in self.px.col]
+            cols, w = [self.px.col[c] for c in held], weights[held].to_numpy()
             t = self.px.at(d)
             lv = self.px.level[[self.px.at(e) for e in ends]][:, cols] / self.px.level[t, cols]
-            port = lv.mean(axis=1)
+            port = lv @ (w / w.sum())
         else:
-            r = self.mon.ret.loc[ends].reindex(columns=codes).fillna(0)
-            port = (1 + r).cumprod().mean(axis=1).to_numpy()
+            r = self.mon.ret.loc[ends].reindex(columns=weights.index).fillna(0)
+            port = (1 + r).cumprod().to_numpy() @ (weights / weights.sum()).to_numpy()
         fund = np.array([self.fund_level(e) for e in ends]) / self.fund_level(d)
         return [e[:7] for e in ends], np.asarray(port, float), fund
 
 
-def portfolios(f: pd.DataFrame, market: str, n: int) -> dict[str, list[str]]:
+def portfolios(f: pd.DataFrame, market: str) -> dict[str, pd.Series]:
+    """Each month's 20-name list: code -> weight (lists.positions on the stand-in index)."""
     out = {}
     for d, g in f.groupby("date"):
-        g = g.set_index("code")
-        field = g[lists.buy_field(g, market)].sort_values("score", ascending=False)
-        out[d] = list(lists.capped(field, n, 2).index)
+        g = g.set_index("code").sort_values("score", ascending=False)
+        buys, _ = lists.positions(g, lists.parent(g, market), CONFIG["lists"]["buys"])
+        out[d] = buys["weight"]
     return out
+
+
+def largest(picks: dict[str, pd.Series], n: int) -> dict[str, pd.Series]:
+    """The n largest positions of each list (scaled to the whole in Paths.growth)."""
+    return {d: w.nlargest(n) for d, w in picks.items()}
 
 
 def drawdown(monthly: pd.Series) -> float:
@@ -139,11 +176,11 @@ def drawdown(monthly: pd.Series) -> float:
     return float((curve / curve.cummax() - 1).min())
 
 
-def evaluate(paths: Paths, picks: dict[str, list[str]], cost: float) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
+def evaluate(paths: Paths, picks: dict[str, pd.Series], cost: float) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
     """Per cohort with 12 months: its return and the fund's; the overlapping portfolio's monthly returns and the fund's."""
     windows, cohort_ret, fund_ret = [], {}, {}
-    for d, codes in picks.items():
-        keys, port, fund = paths.growth(d, codes)
+    for d, weights in picks.items():
+        keys, port, fund = paths.growth(d, weights)
         if not keys:
             continue
         port = port * (1 - cost)
@@ -175,21 +212,6 @@ def families(f: pd.DataFrame) -> pd.DataFrame:
     return t
 
 
-def blend(w: pd.DataFrame, monthly: pd.Series, fund: pd.Series, share: float | None) -> dict | None:
-    """The 20 names with `share` of the money in the index fund: each cohort split at the start (the fund pays no
-    cost here), and for the largest fall the overlapping portfolio's months mixed the same way."""
-    if not share:
-        return None
-    b = share * w["fund"] + (1 - share) * w["ret"]
-    ex, worst = b - w["fund"], b.idxmin()
-    out = {"share": share, "excess": ex.mean(), "beat": (ex > 0).mean(), "worst": b[worst], "worst_fund": w.at[worst, "fund"],
-           "worst_excess": ex.min(), "drawdown": drawdown(share * fund + (1 - share) * monthly)}
-    print(f"-- {share:.0%} in the fund, the rest in the 20 names: excess {out['excess']:+.1%}, beat {out['beat']:.0%}, worst excess "
-          f"{out['worst_excess']:+.1%}; worst 12 months {out['worst']:+.1%} (fund {out['worst_fund']:+.1%}, {worst}); largest fall "
-          f"{out['drawdown']:.1%}")
-    return out
-
-
 def run_market(market: str) -> None:
     warnings.simplefilter("ignore")
     f = pd.read_pickle(panel.BT / f"qvm_{market}.pkl")
@@ -198,9 +220,9 @@ def run_market(market: str) -> None:
     print(f"\n==== {market.upper()}: {len(dates)} month ends {dates[0]}..{dates[-1]}, fund {ETF[market]}, round trip {cost:.1%}")
     t = families(f)
     print("-- top fifth − bottom fifth, mean 12-month return\n" + t.round(3).to_string())
+    lists20 = portfolios(f, market)
     for n in SIZES:
-        picks = portfolios(f, market, n)
-        w, monthly, fund = evaluate(paths, picks, cost)
+        w, monthly, fund = evaluate(paths, largest(lists20, n), cost)
         ex = w["ret"] - w["fund"]
         worst = w["ret"].idxmin()
         r = {"excess": ex.mean(), "beat": (ex > 0).mean(), "worst": w.at[worst, "ret"], "worst_fund": w.at[worst, "fund"],
@@ -215,14 +237,17 @@ def run_market(market: str) -> None:
               f"{worst}); largest fall {r['drawdown']:.1%} (fund {drawdown(fund):.1%}, {monthly.index[0]}..{monthly.index[-1]}); "
               "by sub-period " + ", ".join(f"{k} {v:+.1%}" for k, v in r["periods"].items()))
         if n == 20:
-            first, last, fund_dd, n_windows = w.index[0][:7], w.index[-1][:7], drawdown(fund), len(w)
-            core = blend(w, monthly, fund, CONFIG["lists"]["index_core"].get(market))
-    last_picks = portfolios(f[f["date"] == dates[-1]], market, 20)[dates[-1]]
-    print(f"-- {dates[-1]} portfolio: " + ", ".join(f"{c} {f.loc[(f['date'] == dates[-1]) & (f['code'] == c), 'name'].iloc[0]}"
-                                               for c in last_picks))
+            first, last_month, fund_dd, n_windows = w.index[0][:7], w.index[-1][:7], drawdown(fund), len(w)
+    last = lists20[dates[-1]]
+    names = f[f["date"] == dates[-1]].set_index("code")["name"]
+    print(f"-- {dates[-1]} portfolio: " + ", ".join(f"{c} {names[c]} {x:.1%}" for c, x in last.items()))
+    held = {d: x.index for d, x in lists20.items()}
+    top = {d: f.loc[f["date"] == d].nsmallest(10, "mcap_rank")["code"] for d in dates}
+    print(f"-- the 10 largest companies held, average per list: {np.mean([len(set(held[d]) & set(top[d])) for d in dates]):.1f}; "
+          f"weight in them {np.mean([lists20[d][lists20[d].index.isin(top[d])].sum() for d in dates]):.0%}")
     runs = json.loads(EXPECT.read_text(encoding="utf-8")) if EXPECT.exists() else {}
-    runs[market] = {"first": first, "last": last, "windows": n_windows, "fund_drawdown": fund_dd, "portfolios": result,
-                    "families": {k: v["all"] for k, v in t.T.to_dict().items()}} | ({"core": core} if core else {})
+    runs[market] = {"first": first, "last": last_month, "windows": n_windows, "fund_drawdown": fund_dd, "portfolios": result,
+                    "families": {k: v["all"] for k, v in t.T.to_dict().items()}}
     EXPECT.write_text(json.dumps(runs, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
 
 

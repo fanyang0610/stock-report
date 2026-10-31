@@ -11,7 +11,7 @@ def _card(code: str, i: int, data_date: str, unit: str, grades: str) -> dict:
             "price_date": data_date, "score_rank": i + 1, "grades": dict(zip(["价值", "质量", "动量"], grades)),
             "lot_text": f"一手 100 股约 {10_000 + 100 * i:,} {unit}", "why": "测试数据：市盈率低（PE 8.0）；ROE 高（18%）",
             "weak": "测试数据：近一年股价走弱（-20%）", "risk": "测试数据：负债率 72%", "recheck": "2099-01-01",
-            "weakest": "动量 E"}
+            "weakest": "动量 E", "share": "5.0%", "index_share": "1.00%"}
 
 
 def test_report(today: date | None = None) -> dict:

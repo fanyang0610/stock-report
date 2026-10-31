@@ -43,3 +43,10 @@ def test_table_counts_and_averages():
     assert t.loc[("US", "buy"), ("1w", "avg")] == pytest.approx((1.01 ** 5 - 1) / 2)
     assert t.loc[("US", "sell"), ("1m", "vs index")] == pytest.approx(-(1.005 ** 20 - 1))
     assert t.loc[("US", "sell"), ("3m", "n")] == 0
+
+
+def test_buys_count_by_their_share_of_the_money():
+    picks = pd.DataFrame({"market": ["us"] * 2, "bucket": ["buy"] * 2, "ticker": ["AAA", "BBB"],
+                          "price_date": ["2026-10-02"] * 2, "weight": [0.75, 0.25]})
+    t = track.table(picks, {"us": prices})
+    assert t.loc[("US", "buy"), ("1w", "avg")] == pytest.approx(0.75 * (1.01 ** 5 - 1))  # BBB is flat

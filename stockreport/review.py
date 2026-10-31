@@ -2,8 +2,8 @@
 sources without DeepSeek (gather(): non-routine filings of the last 90 days, fetch/filings.recent, and headlines of
 the last 30, fetch/news). On request DeepSeek reads them at temperature 0 against a fixed checklist, JSON out; every
 finding quotes one of those lines and code checks the quote (quotes.py), and a hard red flag must also name its
-subject in the quote (KINDS) without denying it (deepdive.DENIAL). The 20 buys, the next 5, your holdings and the 10
-avoid names are reviewed, buys first, `workers` calls at a time within `budget` seconds; each review is cached per
+subject in the quote (KINDS) without denying it (deepdive.DENIAL). The 20 buys, the bench (the next name of each sector
+held), your holdings and the 10 avoid names are reviewed, buys first, `workers` calls at a time within `budget` seconds; each review is cached per
 stock (data/review/<market>/<code>.json) and redone only for a name new to its list, a new filing or headline, or a
 review over `keep_days` old. apply() turns the findings (and the deep-dive lane's, deepdive.py) into the lists."""
 
@@ -18,7 +18,7 @@ import httpx
 import pandas as pd
 from dotenv import dotenv_values
 
-from stockreport import deepdive, notes, quotes
+from stockreport import deepdive, lists, notes, quotes
 from stockreport.config import CONFIG, DATA, REPORTS, ROOT
 from stockreport.fetch import filings, news
 
@@ -308,7 +308,8 @@ def line(state: dict, found: list[dict]) -> str:
 def apply(rows: pd.DataFrame, market: str, states: dict | None, deep: dict, confirmed: dict | None = None) -> pd.DataFrame:
     """The lists after the review (states: code -> state; deep: code -> deep-dive findings; confirmed: code -> your
     confirm verdict in force). A buy with a hard red flag or data_suspect is removed (list 'removed', with the reason)
-    and the next-ranked name not blocked takes its place (its 'replaces' names the removed one); a holding with a hard
+    and the next name of its sector not blocked takes its place (else the best other one; its 'replaces' names the
+    removed one), the money split again (lists.weigh); a holding with a hard
     red flag becomes 卖出, with data_suspect or a soft concern (if it was 继续持有) 复核; avoid names keep their place.
     Your confirm keeps a name as the lists have it, and its card says so. Every row gets its review line and AI note.
     Without states (the build), only the 'next' rows are dropped."""
@@ -328,12 +329,16 @@ def apply(rows: pd.DataFrame, market: str, states: dict | None, deep: dict, conf
         if not (why := blocked(b["code"])):
             keep.append(b)
             continue
-        replace = next((n for n in bench if not blocked(n["code"])), None)
-        bench = bench[bench.index(replace) + 1:] if replace else []
+        free = [n for n in bench if not blocked(n["code"])]
+        replace = next((n for n in free if n["sector"] == b["sector"]), free[0] if free else None)
+        bench = [n for n in bench if n is not replace]
         removed.append(b | {"list": "removed", "reason": ("数据存疑：" + why["words"]) if why.get("suspect") else cite(why),
                             "status": f"由 {replace['code']} {replace['name']} 替换" if replace else "候补已用完"})
         keep += [replace | {"replaces": b["code"]}] if replace else []
-    keep = pd.DataFrame(keep).sort_values("score", ascending=False).assign(list="buy") if keep else pd.DataFrame()
+    keep = pd.DataFrame(keep).assign(list="buy") if keep else pd.DataFrame()
+    if removed and len(keep):
+        keep["weight"] = lists.weigh(keep.set_index("code")).to_numpy()
+    keep = keep.sort_values("weight", ascending=False) if len(keep) else keep
     keep["rank"] = range(1, len(keep) + 1)
     rest = rows[~rows["list"].isin(["buy", "next"])].copy()
     for i, r in rest[(rest["list"] == "holding") & ~rest["code"].isin(list(confirmed))].iterrows():

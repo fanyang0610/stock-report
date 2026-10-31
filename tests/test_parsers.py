@@ -128,3 +128,21 @@ def test_forecast_table_one_row_per_indicator():
     profit = df[df["item"] == "归属于上市公司股东的净利润"].iloc[0]
     assert (profit["type"], profit["amount_low"], profit["amount_high"]) == ("略减", 160000000, 180000000)
     assert (profit["yoy_low"], profit["yoy_high"], profit["notice_date"]) == (-47.44, -40.87, "2026-10-10")
+
+
+def test_research_report_estimates_get_the_years_they_were_read_in():
+    # Real archive page (reportapi report/list, 2026-10-26): predictThisYearEps is the reading year's (2026)
+    from stockreport.fetch.eastmoney import report_rows
+    rows = pd.DataFrame(report_rows(json.loads((SAMPLES / "cn_reports_sample.json").read_text(encoding="utf-8")), 2026))
+    goldwind = rows[rows["code"] == "002202"].set_index("year")
+    assert goldwind["eps"].to_dict() == {2026: 0.89, 2027: 1.16, 2028: 1.37}
+    assert set(goldwind["org"]) == {"东吴证券"} and set(goldwind["publish"]) == {"2026-10-26"}
+    assert len(rows) == 3 * 4  # four reports, three estimate years each (the blank last year is skipped)
+
+
+def test_csi300_weights_file():
+    from stockreport.fetch import index
+    df = index.parse_csi((SAMPLES / "csi300_closeweight_sample.xls").read_bytes())  # CSI's real file, 2026-09-30
+    assert len(df) == 300 and df["weight"].sum() == pytest.approx(1, abs=1e-3) and set(df["date"]) == {"2026-09-30"}
+    w = df.set_index("code")["weight"]
+    assert w["000001"] == pytest.approx(0.00453) and w["300308"] == pytest.approx(0.03642)  # 中际旭创, the largest

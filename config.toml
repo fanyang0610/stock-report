@@ -26,13 +26,13 @@ financial_industries_hk = ["区域性银行", "综合性银行", "人寿与健�
                            "投资银行业与经纪业", "综合性资本市场", "消费信贷", "特殊金融服务"]
 
 [lists]                       # PLAN.md, "Lists"
-buys = 20
-next = 5                      # the next-ranked names after the buys (same sector cap): they replace buys the review removes
+buys = 20                     # from the index fund's index, places per sector by its index weight (lists.positions)
+top_share = 0.2               # in each sector the top fifth by score qualify (S&P's QVM index: the top 20%)
+caps = [0.10, 0.05, 4]        # UCITS 5/10/40: the 4 largest positions up to 10% each, the others up to 5%
 avoid = 10
-per_sector = 2
-buy_largest = { cn = 300, us = 300, hk = 200 }  # buys from the largest by market value (US: home listings among them)
+per_sector = 2                # avoid names per sector
+buy_largest = { cn = 300, us = 300, hk = 200 }  # HK's parent (and a missing index file's): the largest by listed value
 avoid_largest = 400
-index_core = { us = 0.5 }     # share of the market's money in its index fund, the rest in the 20 names (PLAN.md, "Lists")
 
 [cards]
 heavy_debt = 0.7              # debt ÷ assets at or above this is a key risk (not financials): SASAC's 70% warning line

@@ -59,14 +59,15 @@
   {% if r.test %}<div class="test-banner">测试数据：本报告所有公司、价格和评分均为虚构，仅用于测试微信发送与手机打开效果。</div>{% endif %}
   <div class="legend">
     <p><b>怎么读：</b>{{ r.method }}</p>
-    <p><b>评级：</b>价、质、动分别是价值、质量、动量的五分位，A 为最好的五分之一，E 为最差的五分之一；价、质在金融股（银行、保险、券商和其他放贷机构）之间和其他股票之间分别排，动在全市场排。
+    <p><b>评级：</b>价、质、动分别是价值、质量、动量在同行业里的五分位（金融股即银行、保险、券商和其他放贷机构另算；同行不足 10 只的在全市场排），A 为最好的五分之一，E 为最差的五分之一。
+      <b>比例</b>是建议投入这 20 只的资金里该股占的份额（按行业在指数里的权重和「指数权重 × 评分」分），<b>指数权重</b>是它在指数里的份额。
       <b>理由</b>是该股最强的两项指标，<b>风险</b>是亏损、负债率 70% 以上、近 6 个月跌超 30%，否则为最弱的一项。</p>
     <p><b>审核（你请求报告时进行）：</b>DeepSeek 读每只股票近 90 天的非例行公告和近 30 天的新闻标题，每条结论都引用原文，由程序核对引文确实出自该标题。
       硬风险（监管立案调查或欺诈认定、非标审计意见或审计师辞任、持续经营疑虑或债务违约、退市/ST/停牌、以固定价格被收购或私有化、制裁）会把买入剔除（由下一名替补，列在「审核剔除」）、
       把持仓改为卖出；软风险只标注「市场可能在担心」，持仓改为复核。最新定期报告的归母净利润与卡片所用数据相差 20% 以上时标「数据存疑」，同样剔除。
       AI 点评只用文字，不含任何数字；所有数字都来自程序和公开数据。</p>
-    <p><b>持仓检查（每只持有 12 个月）：</b>继续持有 = 未满 12 个月且评分在前半，或满 12 个月仍在前五分之一；复核 = 未满 12 个月但评分跌入后半；
-      卖出 = 满 12 个月已不在前五分之一（换入未持有的最高分股票）。记录持仓（只记股票，指数基金不用记）：<code>hold 代码 --date 买入日</code>；没有记录时检查过去 12 个月买入组合里今天不在组合的股票。</p>
+    <p><b>持仓检查（每只持有 12 个月，和买入一样按同行业里的排名）：</b>继续持有 = 未满 12 个月且评分在同行业前半，或满 12 个月仍在同行业前五分之一；复核 = 未满 12 个月但跌入同行业后半；
+      卖出 = 满 12 个月已不在同行业前五分之一（换入未持有的组合里比例最大的股票）。记录持仓：<code>hold 代码 --date 买入日</code>；没有记录时检查过去 12 个月买入组合里今天不在组合的股票。</p>
     <p><b>预期：</b>{{ r.common }}</p>
   </div>
   <table class="rows">
@@ -76,7 +77,7 @@
     {% for m in r.markets %}
       <tr>
         <td><b>{{ m.name }}</b><br><span class="sub">数据 {{ m.data_date }}</span>{% if m.stale %}<br><span class="warn">{{ m.stale }}</span>{% endif %}</td>
-        <td>{% if m.core %}<b>{{ m.core_short }}</b>；{% endif %}{% for p in m.buys[:10] %}{{ p.ticker }} {{ p.name }}{% if not loop.last %}、{% endif %}{% endfor %}</td>
+        <td>{% for p in m.buys[:10] %}{{ p.ticker }} {{ p.name }} {{ p.share }}{% if not loop.last %}、{% endif %}{% endfor %}</td>
         <td>{% for s in ["继续持有", "复核", "卖出"] %}{% set n = m.holdings | selectattr("status", "equalto", s) | list | length %}{% if n %}<span class="status s{{ s }}">{{ s }} {{ n }}</span> {% endif %}{% endfor %}{% if not m.holdings %}—{% endif %}</td>
         <td>{% for p in m.avoid %}{{ p.name }}{% if not loop.last %}、{% endif %}{% endfor %}</td>
       </tr>
@@ -90,25 +91,25 @@
   <h2>{{ m.name }}{% if r.test %} <span class="tag test">测试数据</span>{% endif %}</h2>
   <div class="sub">数据日期 {{ m.data_date }} · 计价 {{ m.currency }}</div>
   {% if m.stale %}<div class="warn">{{ m.stale }}</div>{% endif %}
-  {% if m.core %}<div class="expect"><b>{{ m.core }}</b></div>{% endif %}
   <div class="expect"><b>预期</b>{% for line in m.expect %}<p>{{ line }}</p>{% endfor %}</div>
 
-  <div class="list-title">买入组合（{{ m.buys | length }} 只，等额买入，持有 12 个月{% if m.core %}；配合上面的指数基金{% endif %}）</div>
+  <div class="list-title">买入组合（{{ m.buys | length }} 只，从{{ m.index }}里选，按比例买入，持有 12 个月）</div>
   <table class="cards">
-    <colgroup><col style="width:6%"><col style="width:36%"><col style="width:14%"><col style="width:24%"><col style="width:20%"></colgroup>
-    <thead><tr><th>#</th><th>代码 / 名称 / 行业</th><th class="num">现价</th><th>评级</th><th class="num">一手</th></tr></thead>
+    <colgroup><col style="width:6%"><col style="width:32%"><col style="width:12%"><col style="width:12%"><col style="width:20%"><col style="width:18%"></colgroup>
+    <thead><tr><th>#</th><th>代码 / 名称 / 行业</th><th class="num">比例</th><th class="num">现价</th><th>评级</th><th class="num">一手</th></tr></thead>
     {% for p in m.buys %}
     <tbody class="card">
       <tr class="head">
         <td><b>{{ p.rank }}</b></td>
         <td><span class="ticker">{{ p.ticker }}</span> {{ p.name }} <span class="sub">{{ p.sector }}</span></td>
+        <td class="num"><b>{{ p.share }}</b><br><span class="sub">指数 {{ p.index_share }}</span></td>
         <td class="num">{{ p.price | num }}<br><span class="sub">{{ p.price_date }}</span></td>
         <td>{{ grades(p) }}<br><span class="sub">市场第 {{ p.score_rank }} 名</span></td>
         <td class="num">{{ p.lot_text }}</td>
       </tr>
       <tr class="body">
         <td></td>
-        <td colspan="4"><span class="label">理由：</span>{{ p.why }}　<span class="label">风险：</span>{{ p.risk }}<br>
+        <td colspan="5"><span class="label">理由：</span>{{ p.why }}　<span class="label">风险：</span>{{ p.risk }}<br>
           <span class="label">复查：</span>{{ p.recheck }}（满 12 个月）；若评分跌入后半，提前复查
           {% if p.review %}<br>{{ rv(p) }}{% endif %}{% if p.note %}<br><span class="label">AI 点评：</span>{{ p.note }}{% endif %}</td>
       </tr>

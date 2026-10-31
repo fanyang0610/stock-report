@@ -1,0 +1,28 @@
+{
+"quoteResponse": {
+"result": [
+{
+"symbol": "1288.HK",
+"sharesOutstanding": 30738823096,
+"impliedSharesOutstanding": 349983033873,
+"marketCap": 2341386584064,
+"currency": "HKD"
+},
+{
+"symbol": "0700.HK",
+"sharesOutstanding": 9004607601,
+"impliedSharesOutstanding": 9004607601,
+"marketCap": 3479380164608,
+"currency": "HKD"
+},
+{
+"symbol": "1398.HK",
+"sharesOutstanding": 86794044550,
+"impliedSharesOutstanding": 356406257089,
+"marketCap": 2651662581760,
+"currency": "HKD"
+}
+],
+"error": null
+}
+}

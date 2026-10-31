@@ -9,6 +9,7 @@ from datetime import date
 from pathlib import Path
 
 import httpx
+import numpy as np
 import pandas as pd
 from dotenv import dotenv_values
 
@@ -24,12 +25,12 @@ from stockreport.score import score
 from stockreport.universe import build_cn, build_hk, build_us
 
 log = logging.getLogger("stockreport")
-SHOW = ["rank", "code", "name", "sector", "price", "g_value", "g_quality", "g_momentum", "score", "why"]
+SHOW = ["rank", "code", "name", "sector", "weight", "price", "g_value", "g_quality", "g_momentum", "score", "why"]
 
 
 def scored(market: str, today: date) -> tuple[pd.DataFrame, dict]:
-    """The market's universe with the score (CN: 扣非 TTM and SUE from the reports noticed by today; US: profit and
-    book to common shareholders)."""
+    """The market's universe with the score (CN: 扣非 TTM and SUE from the reports noticed by today, next year's
+    consensus now and 91 days ago from the research reports; US: profit and book to common shareholders)."""
     universe, info = {"cn": build_cn, "us": build_us, "hk": build_hk}[market](today)
     universe["price_date"] = info["quote_date"]
     cn = None
@@ -37,6 +38,12 @@ def scored(market: str, today: date) -> tuple[pd.DataFrame, dict]:
         table = pd.read_csv(eastmoney.CN_DEDUCT, dtype={"code": str, "period": str, "notice_date": str})
         cn = signals.cn_deduct(table, today.isoformat())
         universe = universe.join(cn)
+        if eastmoney.CN_REPORTS.exists():  # next year: after the first fiscal year without an annual report
+            reports = pd.read_csv(eastmoney.CN_REPORTS, dtype={"code": str, "publish": str})
+            bonus = pd.read_csv(eastmoney.DIVIDENDS, dtype={"code": str, "ex_date": str}).reindex(
+                columns=["code", "ex_date", "bonus"])
+            year = universe["period"].str[:4].astype(int) + np.where(universe["period"].str.endswith("12-31"), 2, 1)
+            universe = universe.join(signals.cn_revisions(reports, bonus, year, today.isoformat()))
     if market == "us":
         pref = history.us_preferred(universe, today)[["pref_share", "pref_div_share"]]
         universe = universe.join(pref).fillna({"pref_share": 0.0, "pref_div_share": 0.0})
@@ -78,7 +85,7 @@ def build_market(market: str, today: date) -> None:
     have = {c[2:]: f"{df[c].notna().mean():.0%}" for c in df.columns if c.startswith("p_")}
     print(f"Scored {len(df)}; components present: {have}")
     print("\n".join(drift))
-    show = out_lists.assign(score=out_lists["score"].round(3))
+    show = out_lists.assign(score=out_lists["score"].round(3), weight=out_lists["weight"].map("{:.1%}".format))
     for name, words in (("buy", "why"), ("avoid", "weak")):
         part = show.loc[show["list"] == name, SHOW[:-1] + [words, "risk"]]
         print(f"\n== {name} ({len(part)})\n" + part.to_string(index=False))

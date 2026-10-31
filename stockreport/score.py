@@ -1,21 +1,20 @@
-"""The score (PLAN.md, "The score: three families, equal weights"): a family is the percentile rank of the mean of its
-components' percentiles (a missing component skipped, a missing family 50), so each family spreads alike, as
-Stockopedia ranks each family before combining them; value and quality, whose components differ for financials, are
-ranked among financials and among the rest, so a one-component mean doesn't outrank three-component ones. The score
-is the mean of the three. Grades A-E are fifths of each
-family; a card's why-line names its two strongest components, its key risk a loss, heavy debt, a 30%+ fall in
-6 months, or else its weakest component."""
+"""The score (PLAN.md, "The score: three families, equal weights"): a family is the percentile rank among the stock's
+peers (its sector, financials apart; signals.peers) of the mean of its components' percentiles (a missing component
+skipped, a missing family 50), so each family spreads alike, as Stockopedia ranks each family before combining them,
+and a stock is judged against its own sector, as MSCI's multi-factor indexes judge value and quality. The score is the
+mean of the three. Grades A-E are fifths of each family among the peers; a card's why-line names its two strongest
+components, its key risk a loss, heavy debt, a 30%+ fall in 6 months, or else its weakest component."""
 
 import pandas as pd
 
 from stockreport.config import CONFIG
-from stockreport.signals import FAMILIES, components, percentiles
+from stockreport.signals import FAMILIES, components, peer_rank, peers, percentiles
 
 NAMES = {"value": "价值", "quality": "质量", "momentum": "动量"}
-BY_GROUP = {"value", "quality"}  # ranked among financials and among the rest (fewer components spread wider)
-SIGNED = {"cash", "mom", "sue"}  # worded by the figure's sign; the others by their side of the market's median
+SIGNED = {"cash", "mom", "sue", "rev"}  # worded by the figure's sign; the others by their side of the peers' median
 WORDS = {  # component -> (good, bad, the figure shown)
     "ep": ("市盈率低", "市盈率高", lambda x: f"PE {1 / x:.1f}" if x > 0 else "亏损"),
+    "fep": ("预期市盈率低", "预期市盈率高", lambda x: f"明年 PE {1 / x:.1f}" if x > 0 else "明年预期亏损"),
     "bp": ("市净率低", "市净率高", lambda x: f"PB {1 / x:.2f}"),
     "sp": ("市销率低", "市销率高", lambda x: f"PS {1 / x:.2f}"),
     "roe": ("ROE 高", "ROE 低", lambda x: f"{x:.0%}"),
@@ -24,24 +23,23 @@ WORDS = {  # component -> (good, bad, the figure shown)
     "debt": ("负债率低", "负债率高", lambda x: f"{x:.0%}"),
     "mom": ("近一年股价走强", "近一年股价走弱", lambda x: f"{x:+.0%}"),
     "sue": ("最新季度扣非利润好于往年同期", "最新季度扣非利润差于往年同期", lambda x: f"SUE {x:+.1f}"),
+    "rev": ("分析师 3 个月上调明年盈利预测", "分析师 3 个月下调明年盈利预测", lambda x: f"相当于股价的 {x:+.1%}"),
 }
 
 
-def grade(x: pd.Series) -> pd.Series:
-    """A for the top fifth of the family's ranks (value and quality: among financials or among the rest), E for the bottom."""
-    return pd.cut(x.rank(pct=True), [0, 0.2, 0.4, 0.6, 0.8, 1], labels=list("EDCBA")).astype(str)
+def grade(pct: pd.Series) -> pd.Series:
+    """A for the top fifth of a family's percentile ranks among the peers, E for the bottom."""
+    return pd.cut(pct, [0, 0.2, 0.4, 0.6, 0.8, 1], labels=list("EDCBA"), include_lowest=True).astype(str)
 
 
 def score(df: pd.DataFrame, market: str, cn: pd.DataFrame | None = None, lines: bool = True) -> pd.DataFrame:
     """The universe plus each component (c_), its percentile (p_), the families (f_), grades (g_), the score, its
     rank in the market, and (`lines`) the card's lines."""
     comp = components(df, market, cn)
-    pct = percentiles(comp, df, market)
-    out = pd.concat([df, comp.add_prefix("c_"), pct.add_prefix("p_")], axis=1)
+    pct, group = percentiles(comp, df, market), peers(df)
+    out = pd.concat([df, comp.add_prefix("c_"), pct.add_prefix("p_")], axis=1).assign(peers=group)
     for fam, parts in FAMILIES.items():
-        mean = pct[parts[market]].mean(axis=1)
-        ranked = mean.groupby(df["financial"].astype(bool)).rank(pct=True) if fam in BY_GROUP else mean.rank(pct=True)
-        out[f"f_{fam}"] = ranked.fillna(0.5)
+        out[f"f_{fam}"] = peer_rank(pct[parts[market]].mean(axis=1), group).fillna(0.5)
         out[f"g_{fam}"] = grade(out[f"f_{fam}"])
     out["score"] = out[[f"f_{fam}" for fam in FAMILIES]].mean(axis=1)
     out["score_rank"] = out["score"].rank(ascending=False, method="first").astype(int)
@@ -51,19 +49,32 @@ def score(df: pd.DataFrame, market: str, cn: pd.DataFrame | None = None, lines: 
     return out
 
 
+def reads_well(row: pd.Series, c: str, market: str) -> bool:
+    """A component's words are the good ones: a positive figure, else above the peers' median."""
+    key = "roe" if c == "gpa" and market == "us" and row["financial"] else c
+    return bool(row[f"c_{key}"] > 0) if key in SIGNED else bool(row[f"p_{c}"] >= 0.5)
+
+
 def phrase(row: pd.Series, c: str, market: str) -> str:
+    """A component in words: by its sign, else by its side of the peers' median (同行 when the peers are a sector)."""
     key = "roe" if c == "gpa" and market == "us" and row["financial"] else c  # US financials' profitability is ROE
     good, bad, fmt = WORDS[key]
     x = row[f"c_{key}"]
-    text = f"{good if (x > 0 if key in SIGNED else row[f'p_{c}'] >= 0.5) else bad}（{fmt(x)}）"
+    change = row["est_now"] / row["est_90"] - 1 if key == "rev" and row.get("est_90", 0) > 0 else None
+    figure = fmt(x) if change is None else f"{change:+.1%}" if abs(change) < 0.1 else f"{change:+.0%}"
+    words = good if reads_well(row, c, market) else bad
+    text = f"{'' if key in SIGNED or str(row.get('peers', '')).startswith('全市场') else '同行中'}{words}（{figure}）"
     return text.replace("市盈率", "扣非市盈率") if market == "cn" and c == "ep" else text
 
 
 def card_lines(row: pd.Series, used: list[str], market: str) -> tuple[str, str, str]:
-    """The two strongest components, the two weakest, and the key risk."""
+    """The two strongest components that read well (else the strongest), the two weakest that read badly (else the
+    weakest), and the key risk: a loss, heavy debt, a big fall, else the weakest that reads badly, else 无明显短板."""
     have = sorted((c for c in used if pd.notna(row[f"p_{c}"])), key=lambda c: row[f"p_{c}"])
-    why = "；".join(phrase(row, c, market) for c in reversed(have[-2:]))
-    weak = "；".join(phrase(row, c, market) for c in have[:2])
+    bad = [c for c in have if not reads_well(row, c, market)]
+    good = [c for c in reversed(have) if reads_well(row, c, market)]
+    why = "；".join(phrase(row, c, market) for c in (good or have[::-1])[:2])
+    weak = "；".join(phrase(row, c, market) for c in (bad or have)[:2])
     cfg, facts = CONFIG["cards"], []
     if row["np_ttm"] <= 0:
         facts.append("近 12 个月亏损")
@@ -71,6 +82,5 @@ def card_lines(row: pd.Series, used: list[str], market: str) -> tuple[str, str, 
         facts.append(f"负债率 {row['debt_ratio']:.0%}")
     if row.get("ret_6m", 0) <= cfg["big_fall"]:
         facts.append(f"近 6 个月下跌 {-row['ret_6m']:.0%}")
-    weakest = f"{'最弱一项' if have and row[f'p_{have[0]}'] < 0.5 else '无明显短板，最弱一项'}：" + (phrase(row, have[0], market) if have else "")
-    risk = "；".join(facts) or (weakest if have else "")
+    risk = "；".join(facts) or (f"最弱一项：{phrase(row, bad[0], market)}" if bad else "无明显短板" if have else "")
     return why, weak, risk

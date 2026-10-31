@@ -48,7 +48,7 @@ def fit_bytes(lines: list[str], limit: int) -> str:
 
 
 def text_summary(report: dict, limit: int = 4000) -> str:
-    """Per market: the data date, the 预期 line's first sentence, the top 10 buys with their grades, what the results
+    """Per market: the data date, the 预期 line's first sentence, the top 10 buys with their share and grades, what the results
     review removed or flagged, the holdings that need action, and the avoid names; the PDF has the cards."""
     lines = [f"{'【测试数据】' if report.get('test') else ''}{report['title']} {report['date']}"]
     if report.get("test"):
@@ -57,14 +57,12 @@ def text_summary(report: dict, limit: int = 4000) -> str:
         lines += ["", f"【{m['name']}】数据 {m['data_date']}，{m['currency']}"]
         if m.get("stale"):
             lines.append(f"注意：{m['stale']}")
-        if m.get("core"):
-            lines.append(m["core"])
         if m.get("expect"):
             lines.append("预期：" + m["expect"][0])
-        lines.append(f"买入组合前 10（共 {len(m['buys'])} 只，等额，持有 12 个月）：")
+        lines.append(f"买入组合前 10（共 {len(m['buys'])} 只，从{m.get('index', '指数')}里选，按比例买入，持有 12 个月）：")
         for p in m["buys"][:10]:
             g = p["grades"]
-            lines.append(f"{p['rank']}. {p['ticker']} {p['name']} 价{g['价值']}质{g['质量']}动{g['动量']}")
+            lines.append(f"{p['rank']}. {p['ticker']} {p['name']} {p.get('share', '')} 价{g['价值']}质{g['质量']}动{g['动量']}")
         if m.get("removed"):
             lines.append("审核剔除：" + "；".join(f"{p['name'] or p['ticker']}（{p['reason'].split('（')[0]}）" for p in m["removed"]))
         flagged = [p for k in ("holdings", "avoid") for p in m[k] if (p.get("review") or "").startswith(("审核：", "数据存疑"))]

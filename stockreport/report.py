@@ -22,17 +22,25 @@ log = logging.getLogger(__name__)
 MARKETS = {"cn": ("A股 CN", "CNY", "元", "沪深300ETF"), "us": ("美股 US", "USD", "美元", "标普500基金"),
            "hk": ("港股 HK", "HKD", "港元", "盈富基金")}
 EXPECT = DATA / "history" / "expect.json"  # written by the history run (backtest/qvm.py)
-CORE = {"us": ("标普500指数基金", "如 SPY、VOO，市值最大的公司都在里面")}  # the index-core markets' fund
 EVIDENCE = {
-    "cn": "已发表研究：A 股的价值（尤其 E/P）和业绩超预期后的漂移长期有效；价格动量在 A 股 20 年不赚钱，所以 A 股的动量用业绩意外。",
-    "us": "已发表研究：价值、质量、动量在美国有几十年记录，但公开后超额收益平均缩水过半（McLean-Pontiff 2016）。",
-    "hk": "已发表研究：港股价值和质量的证据较多，价格动量的证据不一。",
+    "cn": "已发表研究：A 股的价值（尤其 E/P）和业绩超预期后的漂移长期有效；价格动量在 A 股 20 年不赚钱，所以 A 股的动量用业绩意外和"
+          "分析师预测调整（含 A 股、港股的亚洲 7 个市场里，多数市场股价随预测调整同向：S&P DJI 2017）。",
+    "us": "已发表研究：价值、质量、动量和分析师预测调整在美国有几十年记录（预测调整：Chan、Jegadeesh、Lakonishok 1996），"
+          "但公开后超额收益平均缩水过半（McLean-Pontiff 2016）。",
+    "hk": "已发表研究：港股价值和质量的证据较多，价格动量的证据不一；含港股的亚洲 7 个市场里，多数市场股价随分析师预测调整同向（S&P DJI 2017）。",
 }
+INDEX = {"cn": "沪深300", "us": "标普500", "hk": "港股市值最大的 200 只（按在港上市股份）"}  # the buy lists' parent
 COMMON = ("公开的因子组合平均每年跑赢指数几个百分点，但约 4 成年份跑输（AAII 实盘组合 55% 的滚动年份跑赢）；"
           "证据针对整个组合，只买其中几只结果更分散。任何名单都不保证收益。")
-METHOD = ("每个市场按价值（E/P、B/P、S/P）、质量（盈利能力、利润的现金支撑、负债率）和动量（美股、港股：过去 12 个月除最近 1 个月的"
-          "涨幅；A 股：最新季度扣非利润相对往年同期的意外 SUE）三类打分，各占三分之一，每项取市场内百分位，A-E 为各类的五分位（价值、质量在金融股之间和其他股票之间分别排）。"
-          "买入组合：市值前 300（港股前 200，美股只含美国本土公司）里评分最高的 20 只，每个行业最多 2 只，等额买入，持有 12 个月。"
+METHOD = ("每个市场按价值（E/P、明年预期 E/P、B/P、S/P）、质量（盈利能力、利润的现金支撑、负债率）和动量（美股、港股：过去 12 个月除最近"
+          " 1 个月的涨幅；A 股：最新季度扣非利润相对往年同期的意外 SUE；三个市场都加上分析师 3 个月内对明年每股收益预测的调整）三类打分，"
+          "各占三分之一，每项和同行业（金融股另算）比，A-E 为各类在同行中的五分位。"
+          "买入组合从预期里比较的基金所跟踪的指数里选（A 股沪深300、美股标普500；港股没有免费的恒指权重文件，用按在港上市股份市值最大的 200 只），仿照标普道琼斯的质量价值动量多因子指数："
+          "每个行业按它在指数里的权重分到名额，行业内评分前五分之一的股票里取「指数权重 × 评分」最大的；资金也按行业在指数里的权重分，"
+          "行业内按「指数权重 × 评分」分，单只最多 10%（最大的 4 只）或 5%（其余），持有 12 个月。"
+          "所以组合各行业的比例接近指数（各行业相差约 4 个百分点），大公司评分好就会入选并占较大比例；但只有 20 只，"
+          "个股比例和指数差别很大（和指数重合的资金约两成），收益会明显偏离指数，好坏都可能。"
+          "持仓检查也按同行业排名：未满 12 个月跌入同行业后半就复核，满 12 个月不在同行业前五分之一就卖出。"
           "回避：市值前 400 里评分最低的 10 只。数字全部来自程序和公开数据。")
 
 
@@ -48,13 +56,12 @@ def expect_lines(market: str) -> list[str]:
                      f"跑赢；最差 12 个月 {r['worst']:+.0%}（同期{fund} {r['worst_fund']:+.0%}）；最大回撤 {r['drawdown']:.0%}（{fund} "
                      f"{e['fund_drawdown']:.0%}）。")
     lines = [period + "20 只组合" + say(n20)]
-    if "core" in e:  # the recommended split first, then the 20 names alone
-        lines = [f"{period}{e['core']['share']:.0%} 指数基金、其余等额买 20 只：" + say(e["core"]), "只买 20 只：" + say(n20)]
     lines += ["只买 10 只 / 5 只：最差的 12 个月相对基金 " + " / ".join(
                  f"{e['portfolios'][n]['worst_excess']:+.0%}" for n in ("10", "5")) +
              f"（20 只 {n20['worst_excess']:+.0%}），名单越短结果越分散。"]
-    lines.append("历史只含今天仍上市的公司（A 股的财务数字还是后来修订过的版本），模拟结果偏乐观。" if market == "cn" else
-                 "历史只含今天仍上市的公司，模拟结果偏乐观。")
+    lines.append(("历史只含今天仍上市的公司（A 股的财务数字还是后来修订过的版本），模拟结果偏乐观" if market == "cn" else
+                  "历史只含今天仍上市的公司，模拟结果偏乐观") + "；模拟的 12 个月里没有分析师预测数据，评分不含明年预期 E/P 和"
+                 "预测调整，指数权重用今天的流通比例近似。")
     backwards = [f"{NAMES[f]}（前五分之一比后五分之一每 12 个月少 {-x:.1%}）"
                  for f, x in ((f, e.get("families", {}).get(f"f_{f}", 0)) for f in NAMES) if x < 0]
     if backwards:
@@ -70,7 +77,9 @@ def card(r: dict, unit: str) -> dict:
     weakest = min((f for f in fams if pd.notna(fams[f])), key=fams.get, default=None)
     ranks = {k: int(r[k]) for k in ("rank", "score_rank") if r.get(k) is not None}  # floats after the CSV
     return r | ranks | {"ticker": r["code"], "lot_text": lot_text, "grades": {NAMES[f]: r.get(f"g_{f}") for f in NAMES},
-                "weakest": f"{NAMES[weakest]} {r[f'g_{weakest}']}" if weakest else ""}
+                "weakest": f"{NAMES[weakest]} {r[f'g_{weakest}']}" if weakest else "",
+                "share": f"{r['weight']:.1%}" if r.get("weight") is not None else "",
+                "index_share": f"{r['index_weight']:.2%}" if r.get("index_weight") is not None else ""}
 
 
 def save_failed(today: date, market: str, failed: list[str]) -> None:
@@ -92,14 +101,8 @@ def section(market: str, rows: pd.DataFrame, day: str, today: date, failed: list
     rows = rows.astype(object).where(rows.notna(), None)
     cards = {k: [card(r, unit) for r in rows[rows["list"] == k].to_dict("records")]
              for k in ("buy", "holding", "avoid", "veto", "removed")}
-    share = CONFIG["lists"]["index_core"].get(market)
-    fund, note = CORE.get(market, ("", ""))
-    core = (f"建议配置：{share:.0%} 的资金买{fund}（{note}）；其余 {1 - share:.0%} 等额买下面 20 只（每只约 {(1 - share) / 20:.1%}），"
-            "在指数之上加重价值、质量、动量都好的公司。美股大盘最难跑赢指数，下面的模拟里这样配置也跑输了基金；"
-            "保留这 20 只依据的是几十年的已发表研究，不保证跑赢。") if share else ""
-    return {"code": market.upper(), "name": name, "currency": currency, "expect": expect_lines(market), "core": core,
-            "core_short": f"{share:.0%} {fund}" if share else "",
-            "data_date": max((c["price_date"] for c in cards["buy"] if c["price_date"]), default=day),
+    return {"code": market.upper(), "name": name, "currency": currency, "expect": expect_lines(market),
+            "index": INDEX[market], "data_date": max((c["price_date"] for c in cards["buy"] if c["price_date"]), default=day),
             "stale": (f"今日未能更新，沿用 {day} 的名单" if day != today.isoformat() else
                       f"今日部分数据获取失败（{'、'.join(failed)}），沿用上次的缓存数据" if failed else ""),
             "buys": cards["buy"], "holdings": cards["holding"], "avoid": cards["avoid"], "vetoes": cards["veto"],

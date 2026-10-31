@@ -1,5 +1,6 @@
-"""The score's math (PLAN.md, "The score" and "Lists"): percentiles, families, grades, the SUE, the sector cap, the
-holding rule and the card's key risk, on small made-up frames."""
+"""The score's math (PLAN.md, "The score" and "Lists"): percentiles among sector peers, families, grades, the SUE, the
+revisions and forward E/P, the list's places, picks and weights, the avoid list's sector cap, the holding rule and the
+card's key risk, on small made-up frames."""
 
 from datetime import date
 
@@ -10,8 +11,9 @@ import pytest
 from stockreport import lists, track
 from stockreport import universe as uni
 from stockreport.fetch import frames
-from stockreport.score import grade, score
-from stockreport.signals import cn_deduct, quarters
+from stockreport.config import CONFIG
+from stockreport.score import grade, phrase, score
+from stockreport.signals import cn_deduct, cn_revisions, quarters
 
 DAY = date(2026, 10, 24)
 
@@ -71,7 +73,7 @@ def test_us_financials_are_banks_insurers_brokers_and_lenders(tmp_path, monkeypa
 
 
 def test_grades_are_fifths():
-    assert grade(pd.Series(range(10))).tolist() == list("EEDDCCBBAA")
+    assert grade(pd.Series(range(1, 11)) / 10).tolist() == list("EEDDCCBBAA")  # percentiles among the peers
 
 
 def ytd_table(single: list[float], start: int = 2022, code: str = "A") -> pd.DataFrame:
@@ -102,9 +104,68 @@ def test_sue_uses_only_reports_noticed_by_the_day():
     assert after.loc["A", "deduct_ttm"] == pytest.approx(15 + 17 + 25 + 30)
 
 
-def test_buys_keep_at_most_two_per_sector():
+def test_avoid_names_keep_at_most_two_per_sector():
     ranked = pd.DataFrame({"sector": list("aaabbbcd")}, index=list("12345678"))
     assert list(lists.capped(ranked, 5, 2).index) == ["1", "2", "4", "5", "7"]
+
+
+def test_peers_are_the_sector_and_a_small_sector_ranks_with_the_market():
+    s = score(universe(30, sector=["a"] * 12 + ["b"] * 12 + ["c"] * 6), "hk")
+    assert s.loc["C11", "p_ep"] == 1.0 and s.loc["C12", "p_ep"] == pytest.approx(1 / 12)  # the best of a, the worst of b
+    assert s.loc["C24", "peers"] == "全市场" and s.loc["C24", "p_ep"] == pytest.approx(25 / 30)  # 6 in c: all 30
+    assert s.loc["C11", "g_value"] == "A" and s.loc["C12", "g_value"] == "E"
+    assert s.loc["C11", "why"].startswith("同行中")  # worded against its sector
+
+
+def test_forward_ep_and_revisions_need_three_estimates():
+    s = score(universe(eps_e2=2.0, analysts=[2] + [5] * 9, est_now=1.2, est_90=1.0, est_n=[5, 2] + [3] * 8), "hk")
+    assert np.isnan(s.loc["C0", "c_fep"]) and s.loc["C1", "c_fep"] == pytest.approx(0.2)  # 2.0 ÷ the price 10
+    assert np.isnan(s.loc["C1", "c_rev"]) and s.loc["C0", "c_rev"] == pytest.approx(0.02)  # (1.2 − 1.0) ÷ 10
+    assert phrase(s.loc["C0"], "rev", "hk") == "分析师 3 个月上调明年盈利预测（+20%）"
+
+
+def test_cn_revisions_take_each_brokers_latest_estimate_and_undo_bonus_shares():
+    rows = [("A", "2026-03-01", "x", 1.00), ("A", "2026-09-01", "x", 1.30), ("A", "2026-05-01", "y", 1.10),
+            ("A", "2026-06-01", "z", 1.20), ("A", "2026-10-01", "z", 1.50), ("A", "2025-12-01", "w", 0.50),
+            ("B", "2026-05-01", "p", 2.0), ("B", "2026-05-01", "q", 2.2), ("B", "2026-05-01", "r", 2.4),
+            ("B", "2026-09-01", "p", 1.2), ("B", "2026-09-01", "q", 1.1), ("B", "2026-09-01", "r", 1.3),
+            ("C", "2026-05-01", "p", 1.0), ("C", "2026-09-01", "p", 1.1), ("C", "2026-09-01", "q", 1.2)]
+    rep = pd.DataFrame(rows, columns=["code", "publish", "org", "eps"]).assign(year=2027)
+    rep = pd.concat([rep, pd.DataFrame([{"code": "A", "publish": "2026-09-01", "org": "x", "year": 2028, "eps": 9.0}])])
+    bonus = pd.DataFrame({"code": ["B"], "ex_date": ["2026-06-15"], "bonus": [1.0]})  # 10 送 10 between the dates
+    est = cn_revisions(rep, bonus, pd.Series(2027, index=["A", "B", "C"]), "2026-10-26")
+    # A 91 days ago (to 07-27): x 1.00, y 1.10, z 1.20; today: x 1.30, y 1.10 (still within 180 days), z 1.50
+    assert est.loc["A"].tolist() == pytest.approx([1.30, 1.10, 3])
+    assert est.loc["B"].tolist() == pytest.approx([1.2, 1.1, 3])  # the older 2.0 / 2.2 / 2.4 per share before the bonus
+    assert est.loc["C", "est_n"] == 1  # one broker 91 days ago: too few for the score (MIN_ANALYSTS)
+
+
+def test_places_follow_the_index_weights_within_each_sectors_room():
+    w = pd.Series({"a": 0.47, "b": 0.33, "c": 0.20})
+    assert lists.slots(w, 10, pd.Series({"a": 9, "b": 9, "c": 9})).to_dict() == {"a": 5, "b": 3, "c": 2}
+    assert lists.slots(w, 10, pd.Series({"c": 9, "a": 3, "b": 9})).to_dict() == {"a": 3, "b": 4, "c": 3}  # a full
+
+
+def test_picks_are_the_largest_positions_of_the_sectors_top_fifth(monkeypatch):
+    monkeypatch.setitem(CONFIG["lists"], "caps", [1, 1, 4])  # four names can't hold 100% under UCITS 5/10/40
+    a = pd.DataFrame({"sector": "a", "score": np.linspace(0.9, 0.1, 20), "index_weight": 0.001}, index=[f"A{k}" for k in range(20)])
+    a.loc[["A0", "A1", "A2", "A3", "A5"], "index_weight"] = [0.01, 0.02, 0.05, 0.3, 0.4]  # A5 is big but not top fifth
+    b = pd.DataFrame({"sector": "b", "score": [0.8, 0.7, 0.6, 0.5, 0.4], "index_weight": 0.05}, index=[f"B{k}" for k in range(5)])
+    df = pd.concat([a, b])
+    buys, bench = lists.positions(df, df["index_weight"] / df["index_weight"].sum(), 4)
+    assert set(buys.index) == {"A3", "A2", "A1", "B0"} and set(bench.index) == {"A0", "B1"}  # 3 places in a, 1 in b
+    assert buys["weight"].sum() == pytest.approx(1) and buys["weight"].is_monotonic_decreasing
+
+
+def test_money_follows_the_sectors_index_weight_within_the_caps(monkeypatch):
+    buys = pd.DataFrame({"sector": list("aaabbb"), "score": 1.0, "index_weight": [0.9, 0.1, 0.1, 0.2, 0.05, 0.05],
+                         "sector_weight": [0.7] * 3 + [0.3] * 3}, index=["A1", "A2", "A3", "B1", "B2", "B3"])
+    monkeypatch.setitem(CONFIG["lists"], "caps", [0.5, 0.3, 1])
+    w = lists.weigh(buys)  # A1 would be 0.9/1.1 of 70%: capped at 50%, the rest to its sector
+    assert w.tolist() == pytest.approx([0.5, 0.1, 0.1, 0.2, 0.05, 0.05])
+    monkeypatch.setitem(CONFIG["lists"], "caps", [0.4, 0.12, 1])
+    w = lists.weigh(buys)  # a full sector's excess goes to the others
+    assert w.tolist() == pytest.approx([0.4, 0.12, 0.12, 0.12, 0.12, 0.12]) and w.sum() == pytest.approx(1)
 
 
 def test_holding_rule(tmp_path, monkeypatch):
@@ -117,7 +178,8 @@ def test_holding_rule(tmp_path, monkeypatch):
     buys = df.sort_values("score", ascending=False).head(3)  # C99, C98, C97: none held
     out = lists.check(df, "cn", DAY, buys, {"X1": "missing fundamentals"}).set_index("code")
     assert out.loc["C95", "status"] == "继续持有" and out.loc["C95", "recheck"] == "2027-07-01"
-    assert out.loc["C10", "status"] == "复核"                      # before the anniversary, in the bottom half
+    assert out.loc["C10", "status"] == "复核"                      # before the anniversary, in its sector's bottom half
+    assert "同行业 50 只中第 45 名" in out.loc["C10", "reason"]  # judged within its sector, as buys are picked
     assert out.loc["C90", "status"] == "继续持有" and out.loc["C90", "recheck"] == "2027-10-01"
     assert out.loc["C60", "status"] == "卖出" and "C99 S99" in out.loc["C60", "reason"]  # outside the top fifth at 12 months
     assert out.loc["X1", "status"] == "复核" and "missing fundamentals" in out.loc["X1", "reason"]
@@ -139,7 +201,13 @@ def test_key_risk_names_a_loss_heavy_debt_or_a_big_fall_first():
     s = score(df, "hk")
     assert s.loc["C0", "risk"] == "近 12 个月亏损"
     assert s.loc["C1", "risk"] == "近 6 个月下跌 40%" and s.loc["C2", "risk"] == "负债率 75%"
-    assert s.loc["C9", "risk"].startswith("无明显短板，最弱一项：") and s.loc["C3", "risk"].startswith("最弱一项：")
+    assert s.loc["C9", "risk"] == "无明显短板" and s.loc["C3", "risk"].startswith("最弱一项：")
+
+
+def test_a_reason_reads_well_and_a_weakness_reads_badly():
+    s = score(universe(mom_12_1=np.linspace(-0.5, -0.05, 10)), "hk")  # C9 is best on everything but still fell 5%
+    assert "走弱" not in s.loc["C9", "why"]  # its best percentile, but not a reason to buy
+    assert s.loc["C9", "risk"] == "最弱一项：近一年股价走弱（-5%）"  # the one figure that reads badly
 
 
 def test_words_follow_the_figure_not_the_rank():
