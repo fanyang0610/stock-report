@@ -5,14 +5,15 @@ anywhere); then the same day built again with a results review that found a hard
 concern on the holding."""
 
 import json
-import re
 from datetime import date
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from stockreport import deepdive, lists, report, track, verdicts
+from stockreport import deepdive, deliver, lists, report, track, verdicts
+from stockreport.render import text_summary
+from stockreport.render.testdata import test_report as fake_report
 from stockreport.score import score
 
 SAMPLES = Path(__file__).parent / "data"
@@ -60,18 +61,20 @@ def test_report_dry_run(tmp_path, monkeypatch):
     assert (buys["lot_cost"] == buys["price"] * 100).all() and (buys["recheck"] == "2027-10-24").all()
 
     lines = summary.splitlines()
-    assert lines[0] == "股票报告 2026-10-24" and len(summary.encode("utf-8")) <= 4000
-    cn = summary.split("【A股 CN】")[1].split("【美股 US】")[0]
-    assert "预期：模拟回测（2019-01 至 2025-09 每月建仓的 81 个 12 个月" in cn and "多赚 2.5%" in cn
-    assert "注意：今日部分数据获取失败（prices）" in cn and "持仓检查：" in cn and "回避：" in cn
-    assert len([x for x in cn.splitlines() if re.match(r"\d+\. ", x)]) == 10  # the top 10 buys
-    assert "注意：今日未能更新，沿用 2026-10-23 的名单" in summary.split("【港股 HK】")[1]
-    assert "历史模拟尚未运行。" in summary.split("【港股 HK】")[1]
+    assert lines[0] == "股票报告 2026-10-24" and len(summary.encode("utf-8")) <= 4000 and "已截断" not in summary
+    assert lines[2] == "今天要做的：" and lines[3].startswith("· 卖出：")  # the actions first
+    cn = summary.split("【A股】")[1].split("【美股】")[0]
+    assert "预期：历史模拟（简化版）平均每年比沪深300ETF多赚 2.5%" in cn and "买入 20 只，每只等额，持有到 2027-10-24" in cn
+    assert "注意：今日部分数据获取失败（prices）" in cn and "回避：" in cn
+    assert cn.splitlines()[2].count("、") == 19  # the 20 buys by name
+    assert "注意：今日未能更新，沿用 2026-10-23 的名单" in summary.split("【港股】")[1]
+    assert "历史模拟尚未运行。" in summary.split("【港股】")[1]
     html = (folder / "report.html").read_text(encoding="utf-8")
-    assert "你的否决（至 2026-12-31）：测试否决" in html and html.count('class="card"') == 60  # CN, US and HK buys
-    us = summary.split("【美股 US】")[1].split("【港股 HK】")[0]
-    assert "预期：模拟回测（2019-01 至 2025-09 每月建仓的 81 个 12 个月，扣交易成本）：20 只组合" in us
-    assert "从美股市值前 800 只里选，每只等额" in us and f"1. {buys.iloc[0]['code']} " in us and "价" in us and "成" in us
+    assert "你的否决（至 2026-12-31）：测试否决" in html and html.count('class="card buy"') == 60  # CN, US and HK buys
+    assert html.index("今天要做什么") < html.index('class="card buy"') < html.index("附：方法、依据和审核规则")
+    us = summary.split("【美股】")[1].split("【港股】")[0]
+    assert "预期：历史模拟（简化版）平均每年比标普500基金多赚 2.5%" in us and f"{buys.iloc[0]['code']} " in us
+    assert "从美股市值前 800 只里选" in html
     assert not any(w in summary + html for w in ("建议配置", "指数基金", "标普500指数基金", "只买 20 只", "指数权重", "从标普500"))
     assert pdf.stat().st_size > 10_000 and report.newest() == ("2026-10-24", pdf, summary)
     logged = track.load()
@@ -86,14 +89,32 @@ def test_report_dry_run(tmp_path, monkeypatch):
                      holding: {"status": "done", "findings": [soft], "note": ""}},
               "us": {first: {"status": "pending"}}}
     pdf, summary = report.build(DAY, states)
-    cn = summary.split("【A股 CN】")[1].split("【美股 US】")[0]
-    assert "审核剔除：" in cn and "（监管立案调查或欺诈认定）" in cn and "持仓检查：复核 1" in cn
-    assert "审核进行中 1 只" in summary.split("【美股 US】")[1].split("【港股 HK】")[0]
+    cn = summary.split("【A股】")[1].split("【美股】")[0]
+    assert "· 审核剔除：A股 " in summary and "（监管立案调查或欺诈认定）→ " in summary and "复核 1 只：贵州茅台" in cn
+    assert "审核进行中 1 只" in summary.split("【美股】")[1].split("【港股】")[0]
     html = (folder / "report.html").read_text(encoding="utf-8")
-    assert "审核剔除（1 只，由下一名替补）" in html and "关于公司收到立案告知书的公告" in html and "AI 点评：测试点评" not in html
-    assert html.count('class="card"') == 60  # 20 buys a market: the next name took the removed one's place
+    assert "1 只，由同行业下一名替补" in html and "关于公司收到立案告知书的公告" in html and "AI 点评：测试点评" not in html
+    assert html.count('class="card buy"') == 60  # 20 buys a market: the next name took the removed one's place
     logged = track.load()
     assert logged.loc[(logged["market"] == "cn") & (logged["bucket"] == "removed"), "ticker"].tolist() == [first]
     stand_in = logged.loc[(logged["market"] == "cn") & (logged["bucket"] == "replacement"), "ticker"].tolist()
     assert len(stand_in) == 1 and stand_in[0] in set(logged.loc[logged["bucket"] == "buy", "ticker"])
+    assert f"由 {logged.loc[logged['ticker'] == stand_in[0], 'name'].iloc[0]} 替补" in html  # named as its card names it
     assert first not in set(logged.loc[(logged["market"] == "cn") & (logged["bucket"] == "buy"), "ticker"])
+
+
+def test_summary_fits():
+    """A full three-market summary (20 buys, 10 avoid names, holdings to sell and re-check, a removed buy; every US name
+    long and in English, the worst case) fits under WeChat's 4,000 bytes without cutting a line, with every market's
+    buys, avoid names and 预期 line; so does an anniversary day with 12 holdings to sell in each market."""
+    calm = fake_report(DAY)
+    busy = fake_report(DAY)
+    for m in busy["markets"]:
+        m["sell"] = [h | {"status": "卖出"} for h in m["holdings"][:12]]
+    for report_ in (calm, busy):
+        summary = text_summary(report_, deliver.MAX_TEXT_BYTES)
+        assert len(summary.encode("utf-8")) <= deliver.MAX_TEXT_BYTES and "已截断" not in summary
+        for market in ("【A股】", "【美股】", "【港股】"):
+            part = summary.split(market)[1].split("\n\n")[0]
+            assert part.splitlines()[1].count("、") == 19 and "回避：" in part and "预期：" in part
+        assert summary.splitlines()[-1].startswith("每家公司做什么") and "· 卖出：A股 " in summary

@@ -86,7 +86,7 @@ one_off 利润主要来自一次性收益（出售资产、公允价值变动、
 3. 不算风险的例行事项：董事会决议、股东大会、权益分派、回购和增持、业绩说明会，普通董事、监事、独立董事、董秘、证券代表的变动
    （美股 8-K 的 Director or officer change 没说明是董事长、CEO、CFO 的也算例行），股东或高管的减持计划，以及利好消息。
 4. note：一句中文，不超过 40 个字，用文字说明这只股票为什么在这个名单上、最需要注意什么（参考卡片和 findings）；
-   不得出现任何数字，不写价格、目标价或预测。
+   不得出现任何数字，不写价格、目标价或预测，也不写买入、卖出或继续持有之类的建议（结论由程序给出）。
 只输出 JSON：{"findings": [{"kind": "", "source": 1, "quote": ""}], "note": ""}"""
 
 
@@ -289,7 +289,7 @@ def stats(states: dict) -> str:
 
 def cite(f: dict) -> str:
     quote = f["quote"] if len(f["quote"]) <= 60 else f["quote"][:60] + "…"
-    return f"{f['words']}（{f['date']} {f['type']}：「{quote}」）"
+    return f"{f['words']}（{f['date']} {f['type'].replace(f['date'], '').strip()}：「{quote}」）"  # a deep dive's type has the date
 
 
 def line(state: dict, found: list[dict]) -> str:
@@ -300,8 +300,8 @@ def line(state: dict, found: list[dict]) -> str:
         return "审核：" + "；".join(cite(f) for f in hard[:2])
     if odd:
         return f"数据存疑：{odd[0]['words']}（{odd[0]['date']} {odd[0]['type']}）"
-    if soft:
-        return "市场可能在担心：" + "；".join(cite(f) for f in soft[:2])
+    if soft:  # the first one: a card has room for one
+        return "市场可能在担心：" + cite(soft[0]) + (f"等 {len(soft)} 条" if len(soft) > 1 else "")
     return STATUS.get(state.get("status"), "审核未见重大风险") if state else ""  # not reviewed: no line
 
 
@@ -321,7 +321,8 @@ def apply(rows: pd.DataFrame, market: str, states: dict | None, deep: dict, conf
         rows.at[i, "review"] = line(states.get(r["code"], {}), found[r["code"]])
         if (v := confirmed.get(r["code"])) and rows.at[i, "review"].startswith(("审核：", "数据存疑")):
             rows.at[i, "review"] += f"（你已确认，至 {v['until']}：{v['reason']}）"
-        rows.at[i, "note"] = states.get(r["code"], {}).get("note") or ""
+        # the note was written without the deep dive's findings, so it isn't shown beside them (it could deny one)
+        rows.at[i, "note"] = "" if deep.get(r["code"]) else states.get(r["code"], {}).get("note") or ""
     blocked = lambda c: None if c in confirmed else next((f for f in found[c] if f["hard"] or f.get("suspect")), None)
     bench = rows[rows["list"] == "next"].sort_values("rank").to_dict("records")
     keep, removed = [], []

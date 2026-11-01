@@ -48,34 +48,50 @@ def fit_bytes(lines: list[str], limit: int) -> str:
 
 
 def text_summary(report: dict, limit: int = 4000) -> str:
-    """Per market: the data date, the 预期 line's first sentence, the top 10 buys with their share and grades, what the results
-    review removed or flagged, the holdings that need action, and the avoid names; the PDF has the cards."""
+    """The WeChat message: what to do today (holdings to sell or re-check, buys the review removed), then per market the
+    buys by name (新 marks a name new since the last report), the holdings to re-check, the avoid names and the 预期
+    line, and a pointer to the PDF for the cards. Without recorded holdings it says the holdings checked are past lists'
+    names. Over 90% of `limit` the names gone from the list become a count, then the 新 marks go (the count of new names
+    stays), then the holdings to re-check, then those to sell become counts; fit_bytes is the last guard."""
+    for level in (0, 1, 2, 3, 4):
+        text = "\n".join(summary_lines(report, level))
+        if len(text.encode("utf-8")) <= limit * 0.9:
+            break
+    return fit_bytes(text.splitlines(), limit)
+
+
+def summary_lines(report: dict, level: int = 0) -> list[str]:
+    join = lambda items: "、".join(p["short"] for p in items)
+    markets = report["markets"]
     lines = [f"{'【测试数据】' if report.get('test') else ''}{report['title']} {report['date']}"]
     if report.get("test"):
         lines.append("以下为虚构数据，仅用于测试发送。")
-    for m in report["markets"]:
-        lines += ["", f"【{m['name']}】数据 {m['data_date']}，{m['currency']}"]
+    sells = [f"{m['short']} " + (join(m["sell"]) if level < 4 else f"{len(m['sell'])} 只") for m in markets if m["sell"]]
+    checks = [f"{m['short']} {len(m['check'])} 只" for m in markets if m["check"]]
+    removed = [f"{m['short']} {p['short']}（{p['reason'].split('（')[0].split('：')[0]}）→ "
+               f"{p.get('replaced_by') or p['status'].removeprefix('由 ').removesuffix(' 替换')}" for m in markets for p in m["removed"]]
+    past = not report.get("recorded", True) and any(m["holdings"] for m in markets)
+    lines += ["", "今天要做的：", *(["（你还没有用 hold 命令记录持仓：下面的卖出、复核查的是过去 12 个月名单里、今天已不在名单中的股票）"]
+                                  if past else []), "· 卖出：" + ("；".join(sells) if sells else "无"),
+              "· 复核：" + ("、".join(checks) + "（评分下滑或有负面消息，看原因再决定）" if checks else "无")]
+    lines += ["· 审核剔除：" + "；".join(removed)] if removed else []
+    for m in markets:
+        new = {p["ticker"] for p in (m.get("changes") or {}).get("new", [])}
+        lines += ["", f"【{m['short']}】数据 {m['data_date'][5:]}，买入 {len(m['buys'])} 只，每只等额，持有到 {m.get('recheck') or '满 12 个月'}："]
         if m.get("stale"):
             lines.append(f"注意：{m['stale']}")
-        if m.get("expect"):
-            lines.append("预期：" + m["expect"][0])
-        lines.append(f"买入组合前 10（共 {len(m['buys'])} 只，从{m.get('field', '全市场')}里选，每只等额，持有 12 个月）：")
-        for p in m["buys"][:10]:
-            g = "".join(f"{k[0]}{v}" for k, v in p["grades"].items())
-            lines.append(f"{p['rank']}. {p['ticker']} {p['name']} {g}")
-        if m.get("removed"):
-            lines.append("审核剔除：" + "；".join(f"{p['name'] or p['ticker']}（{p['reason'].split('（')[0]}）" for p in m["removed"]))
-        flagged = [p for k in ("holdings", "avoid") for p in m[k] if (p.get("review") or "").startswith(("审核：", "数据存疑"))]
+        lines.append("、".join(p["short"] + ("（新）" if p["ticker"] in new and level < 2 else "") for p in m["buys"]))
+        if ch := m.get("changes"):
+            gone = ("移出 " + "、".join(ch["gone"]) if level < 1 else f"移出 {len(ch['gone'])} 只") if ch["gone"] else "没有移出"
+            lines.append(f"与 {ch['since'][5:]} 相比：新进 {len(new)} 只，{gone}")
+        flagged = [p for k in ("holdings", "avoid") for p in m[k] if p.get("review_kind") == "hard"]
         if flagged:
-            lines.append("审核发现：" + "；".join(f"{p['name'] or p['ticker']}（{p['review'].split('（')[0].split('：', 1)[1]}）"
-                                                for p in flagged))
+            lines.append("审核发现：" + "；".join(f"{p['short']}（{p['review'].split('（')[0].split('：', 1)[1]}）" for p in flagged))
         if m.get("review"):
             lines.append(m["review"])
-        if m["holdings"]:
-            counts = {s: [h["name"] or h["ticker"] for h in m["holdings"] if h["status"] == s] for s in ("继续持有", "复核", "卖出")}
-            lines.append("持仓检查：" + "；".join(f"{s} {len(v)}" + (f"（{'、'.join(v)}）" if s != "继续持有" and v else "")
-                                            for s, v in counts.items() if v))
+        if m["check"]:
+            lines.append(f"复核 {len(m['check'])} 只" + ("，名单见 PDF" if level > 2 else "：" + join(m["check"])))
         if m["avoid"]:
-            lines.append("回避：" + "、".join(p["name"] for p in m["avoid"]))
-    lines += ["", "详见 PDF。非投资建议。"]
-    return fit_bytes(lines, limit)
+            lines.append("回避：" + join(m["avoid"]))
+        lines.append("预期：" + m["expect"]["short"])
+    return lines + ["", "每家公司做什么、为什么选、风险、一手多少钱和审核结果见 PDF。历史模拟不代表未来，不构成投资建议。"]

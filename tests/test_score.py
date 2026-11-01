@@ -221,7 +221,7 @@ def test_holding_rule(tmp_path, monkeypatch):
     assert "同行业 50 只中第 45 名" in out.loc["C10", "reason"]  # judged within its sector, as buys are picked
     assert out.loc["C90", "status"] == "继续持有" and out.loc["C90", "recheck"] == "2027-10-01"
     assert out.loc["C60", "status"] == "卖出" and "C99 S99" in out.loc["C60", "reason"]  # outside the top fifth at 12 months
-    assert out.loc["X1", "status"] == "复核" and "missing fundamentals" in out.loc["X1", "reason"]
+    assert out.loc["X1", "status"] == "复核" and "数据缺失或与第二来源对不上" in out.loc["X1", "reason"]
     # held since 2024-06: its second year started 2025-06 (kept then), so in-year rules apply until 2027-06-01
     assert out.loc["C70", "status"] == "继续持有" and out.loc["C70", "recheck"] == "2027-06-01"
 

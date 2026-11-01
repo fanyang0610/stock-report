@@ -13,10 +13,10 @@ import numpy as np
 import pandas as pd
 from dotenv import dotenv_values
 
-from stockreport import crosscheck, deepdive, deliver, history, lists, report, review, signals, track, verdicts
+from stockreport import crosscheck, deepdive, deliver, history, lists, notes, report, review, signals, track, verdicts
 from stockreport.cleanup import cleanup
 from stockreport.config import CONFIG, DATA, REPORTS, ROOT, setup_logging
-from stockreport.fetch import eastmoney
+from stockreport.fetch import eastmoney, profiles
 from stockreport.fetch import fetch as fetch_market
 from stockreport.listener import listen
 from stockreport.render import html_to_pdf, render_html, text_summary
@@ -63,6 +63,10 @@ def build_market(market: str, today: date) -> None:
         review.gather(market, out_lists, today)
     except Exception:
         log.exception("%s review sources failed; the review shows 审核暂不可用 for this market", market.upper())
+    try:  # what each company does, for the cards (a failure leaves the line out)
+        profiles.update(market, out_lists["code"].tolist(), today)
+    except Exception:
+        log.exception("%s company profiles failed", market.upper())
     try:  # alarms only: a failure is logged and never stops the build
         drift = crosscheck.drift(df, market, today)
     except Exception:
@@ -132,10 +136,15 @@ def review_all(background: bool) -> int:
             rows = report.read_lists(path)
             lists[market] = rows
             sources[market] = review.load_sources(market, path.parent.name) or review.gather(market, rows, today, path.parent.name)
+            try:
+                profiles.update(market, rows["code"].tolist(), today)
+            except Exception:
+                log.exception("%s company profiles failed", market.upper())
     states = review.run(lists, sources, today, None)
     key = dotenv_values(ROOT / ".env").get("DEEPSEEK_API_KEY")
     if key:
         client = httpx.Client(base_url=CONFIG["notes"]["base_url"], timeout=300, headers={"Authorization": f"Bearer {key}"})
+        notes.lines(client)
         for market, rows in lists.items():
             try:
                 deepdive.run(market, rows, today, client)

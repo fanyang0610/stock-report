@@ -127,7 +127,8 @@ def check(df: pd.DataFrame, market: str, today: date, buys: pd.DataFrame, droppe
         row = {"code": code, "name": h["name"], "since": h["since"]}
         if code not in df.index:
             rows.append(row | {"status": "复核", "recheck": today.isoformat(),
-                               "reason": f"今日未评分（{dropped.get(code, '不在市值前列或数据不全')}）"})
+                               "reason": "今日未评分：" + ("数据缺失或与第二来源对不上" if code in dropped else "不在市值前列或数据不全") +
+                                         "，看不到它在同行业的排名"})
             continue
         others = df.loc[(df["sector"] == df.at[code, "sector"]) & (df.index != code), "score"]
         others = others if len(others) else df.loc[df.index != code, "score"]

@@ -14,7 +14,7 @@
   dropped (On, Aegon, JBS, Santander Brasil). The first version judged with Yahoo's statement count and set Martin
   Marietta, Public Storage and Somnigroup back to their July counts, before the shares they issued since. Not settled,
   Nasdaq's stands: Ares (an Up-C without an SEC count; avoid list, P/E 63 against ~43 on its class A) and Rio Tinto.
-  Waiting for your OK (rule 9) to load the daily job, send a test, and turn the keyword reply back on.
+  Your OK came 2026-11-01 (stage 4 switches it on).
 - Stage 2 (the results review, AI notes and deep dives, on request): done 2026-10-26. review.py, fetch/news.py, the
   per-stock filing lists (fetch/filings.recent), notes.py and deepdive.py rewritten for it, the `review` command, the
   keyword reply and `send` reviewing first ("Results review", "How it is built"). Measured on 2026-10-26's full build
@@ -89,10 +89,27 @@
   on investment gains, from Eastmoney (its own P/E agrees); its report PDF is still unreadable to the deep dive
   (stage 2's follow-up); Yahoo puts Visa's accruals at 14% of assets while its profit equals its cash flow, a source
   quirk that changes no buy.
-- Nothing runs on a schedule (your call, 2026-10-24: a fresh start). The 06:30 job (com.stockreport.daily) is unloaded
-  and disabled; the keyword listener (com.stockreport.listen) was already off. launchd/com.stockreport.daily.plist is
-  rewritten for `run` (no DeepSeek); the copy in ~/Library/LaunchAgents is still the old one until it's loaded. While
-  it's off, no daily snapshots or weekly consensus snapshots are collected.
+- Stage 4 (an easy report, the company line, a summary that fits, switching on): built 2026-11-02. The PDF leads with
+  今天要做什么 on one page (holdings to sell or re-check, the review's removals, the 20 buys, the changes, avoid names,
+  预期 in one sentence, a five-line guide); market pages have one card per buy with the business line, 为什么买 and
+  风险 / 短板; holdings to keep are one table; the method, evidence and review rules are on the back pages (21 pages on
+  2026-11-02, 24 before). Company lines for all 200 names (fetch/profiles.py; DeepSeek lines for 66 US and 20 long
+  CN/HK texts, notes.lines). The summary is a message with the actions first: 3,244 bytes on 2026-11-02, every case
+  of the test data under 3,700 (tests/test_report.py::test_summary_fits). The keyword path (report.fresh: review +
+  build, nothing sent) took 11.4 s on 2026-11-01 with some reviews redone. 104 tests pass; app Python 5,654 lines.
+  The fresh-context stage review confirmed the score, the lists and the review rules unchanged (two list changes
+  that day came from data: 1,911 new broker estimates moved 招商证券 above 广发证券; HK's 长飞光纤光缆 and 联想集团 tie at
+  0.744186 and row order picked one) and rule 2 kept. Its findings, fixed: past lists' names shown as your holdings
+  without saying so; 风险 printed for a mere weakest component (now 短板); the 50-character cut misled on 10 of 25 long
+  CN/HK business lines (now a DeepSeek line from the whole text); vague US lines from one sentence (now three);
+  avoid cards repeating the debt figure; the AI note denying a deep dive's finding it hadn't seen (CF) or advising
+  hold on a 复核 name (new reviews); 预期 implying the full method ran in the history (now 简化版); the summary could cut
+  all of HK on a day of many sells (sells become counts last). Answered: review_kind read from the review line's
+  prefix is kept (one place, review.line's own words); exact score ties and Skydance's 退市 flag (an 8-K title that
+  may concern a retired share class) are outside this stage (follow-ups).
+- Switched on with your OK of 2026-11-01 (rule 9): the 06:30 `run` job (com.stockreport.daily) loaded 2026-11-02
+  from this checkout. The test send and the keyword listener wait for the bot's reply window: your last message to
+  the bot was ~14 days ago, and it can only reply after a recent one.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -334,14 +351,63 @@ momentum drive the score (fixed in stage 1 after the stage review).
   components in words, with the figure); the key risk (a loss, heavy debt (70%+ of assets, the SASAC warning line; not
   financials) or a 30%+ fall in 6 months, else its weakest component); the cost of one board lot (CN 100 shares, US 1
   share, HK the board lot from HKEX's List of Securities, verified 2026-10-24: Tencent 100, HSBC 400, China Mobile 500,
-  AIA 200); the re-check date (the anniversary, or sooner if the rank falls into the bottom half); a buy's share of the
-  money (5%). A ratio is worded by its side of the peers' median (同行中市盈率低 / 高), cash backing, momentum, the SUE,
+  AIA 200); the re-check date (the anniversary, or sooner if the rank falls into the bottom half); what the company
+  does in one line (stage 4, "Report"). A buy's share of the money (5%, the same for every buy) is in the list's
+  heading. A ratio is worded by its side of the peers' median (同行中市盈率低 / 高), cash backing, momentum, the SUE,
   the revisions and the growth figures by their sign (the revisions as the estimate's 3-month change).
 - From stage 2: the review's line (审核：… for a hard red flag, 数据存疑：…, 市场可能在担心 … with its quoted source, or
-  审核未见重大风险 / 审核进行中 / 审核暂不可用) and the AI note (one sentence, words only).
+  审核未见重大风险 / 审核进行中 / 审核暂不可用) and the AI note (one sentence, words only). Stage 4: a soft concern shows the
+  first one found, with 等 N 条 when there are more (a card has room for one; the rule and the findings are unchanged).
 - Each market section opens with its 预期 line: from the history run, the 20-name portfolio's average 12-month return
   over the index fund, the share of 12-month windows it beat the fund, its worst 12 months and its largest fall against
-  the fund's, marked 模拟回测 (simulated, after costs), plus one line on the published evidence.
+  the fund's, marked as simulated; the details and the published evidence are on the back pages (stage 4).
+
+### Report (stage 4)
+- The reader isn't an investment expert, so the decision comes first and the method last.
+- Page 1, 今天要做什么, per market: the holdings to sell or re-check by name, what the review removed and the name that
+  took its place, the 20 buys by name with the amount and the date they are held to, what changed since the market's
+  last earlier report in data/picks.csv (counts, and the names gone when 8 or fewer), the avoid names, the 预期 line in
+  one sentence; then a five-line guide (the lists, the grades in words, the holding statuses, avoid and the review, no
+  guarantee). Without data/holdings.csv it says the holdings checked are past lists' names.
+- Market pages: the 预期 line in plain words, then each buy's card (rank, name, ticker, sector, price, one-lot cost,
+  re-check date; the business line; the grades; 为什么买; 风险; the review's finding, "审核：未见重大风险" on the risk line;
+  the AI note), 新 on a name new since the last report; 审核剔除 and your vetoes; the holdings: 卖出 and 复核 as cards with
+  the reason, 继续持有 one table (buy date, grades, re-check date, AI note); the avoid names as cards with 为什么回避.
+  US cards are named by Eastmoney's Chinese short name (美光科技), with the English name beside it.
+- Back pages: how the score and the lists are built, the holding rule, the review rules, where the words come from,
+  the 预期 details (the 10 and 5 name ranges, the history's limits, families running against the research) and the
+  published evidence.
+- The business line (verified 2026-11-01; all 200 names of the day found, CN 72, HK 62, US 66):
+  - CN: Eastmoney's F10 company table RPT_F10_BASIC_ORGINFO, MAIN_BUSINESS (主营业务, often a short list of products:
+    卫星化学 "(聚)丙烯、丙烯酸及酯、乙二醇…的生产和销售"); HK: RPT_HKF10_INFO_ORGPROFILE, MAIN_BUSINESS ("主要从事保险业务");
+    the profile where either is blank. One call per market for the lists' names (codes `in (...)`, ~1 s). A first
+    sentence up to 50 characters wide is shown as written (56 of 72 CN, 58 of 62 HK on 2026-11-02).
+  - US: Eastmoney's US profiles (RPT_USF10_INFO_ORGPROFILE) often open with the state and year of incorporation
+    (Allstate, Bristol-Myers Squibb, ASML) or are out of date (Sandisk's is about its spin-off), while Yahoo's
+    quoteSummary assetProfile longBusinessSummary opens with what the company does ("Sandisk Corporation develops,
+    manufactures, and sells data storage devices..."): its first sentences, up to 400 characters (one call a name, with
+    the crumb). Eastmoney's US table gives the Chinese short names.
+  - One Chinese line for a US text or a longer CN/HK one, by DeepSeek in the `review` step (notes.lines): temperature 0,
+    only the text in, ~25 characters asked, kept only when it is Chinese and has no figure (notes.FIGURE), cached per
+    company. Why not cut the long CN/HK text: the stage review found a cut at 50 characters misled on 10 of 25 lines
+    (通威股份 read as a feed maker, its polysilicon and solar cells cut off; 中国国航 "主要由航空客运。"). Until the
+    review has run, or without DeepSeek, a card shows the source's first sentence (cut with … past 50 characters; US in
+    English, past 150).
+  - Rule 2: the facts come from these sources. DeepSeek only translates and shortens a text code gives it, can't add a
+    number (a line with one is dropped), and the source stays in the table beside its line. 2026-11-02: 66 of 66 US
+    lines and 20 of 20 long CN/HK ones kept. data/fundamentals/<market>_profiles.csv.gz, fetched again after 180 days.
+- The card's risk line says 风险 for a loss, debt of 70%+ or a 30%+ fall in 6 months, else 短板 (the weakest component,
+  which isn't a risk by itself; the page 1 guide says so). An avoid card's reasons leave out a fact its weak line
+  already shows (负债率高（88%） and 负债率 88%).
+- Without data/holdings.csv the 持仓 lines are past lists' names, not yours: page 1 and the summary say so first.
+- The WeChat summary: the actions first (卖出 by name, 复核 counts, 审核剔除 with the replacement), then per market the
+  data date, the 20 buys by name (US: the ticker and the Chinese short name, else the English name without Inc, Corp…;
+  （新） on a new name), the change counts with the names gone, the review's hard findings on holdings and avoid names,
+  the holdings to re-check by name, the avoid names and the 预期 line in one sentence, and a last line pointing to the
+  PDF. Over 3,600 bytes (90% of WeChat's 4,000), first the gone names become a count, then the 新 marks go, then the
+  re-check names, then the sells become counts; cutting whole lines from the end (fit_bytes) stays the last guard.
+  2026-11-02 (11-01's lists, marked not updated): 3,244 bytes, the re-check names as counts; the test data (every US
+  name long and in English) 3,617 bytes, and 3,620 with 12 sells in each market (tests/test_report.py).
 
 ### The history run (stage 1, once)
 - On the existing month-end frames (CN 2019-01.., US 2018-01.., HK 2016-10..): each month's 20-name portfolio in equal
@@ -422,7 +488,9 @@ build makes no DeepSeek calls.
     done, and a background `review` finishes the rest and the day's deep dives. `review` runs it all without a limit.
     The AI note is dropped if it holds a figure (a digit, or one in characters like 三成), so every number on a card
     comes from code, and when code rejected, dropped or changed any finding the note was written with, so it never
-    names a concern the card doesn't show.
+    names a concern the card doesn't show. Stage 4: nor is it shown beside a deep dive's findings, which it was written
+    without (CF's note said no negative event next to the FTC investigation its 10-Q names), and it gives no buy, sell
+    or hold advice (a status is code's).
   - Deep dives (the lane of rule 3): the latest periodic report of the buys, the bench and your scored holdings, read once
     per filing, at most 3 new filings per market a day, after the review. The data check compares the report's net
     profit to shareholders for the card's period (the period end quoted in the report, '30 June' or '30th June'; CN:
@@ -518,6 +586,29 @@ build makes no DeepSeek calls.
      full `run` renders all three markets; the history numbers are in BACKTEST.md section 23 and the 预期 lines; the
      fresh-context stage review has run and its findings are fixed or answered; this plan's status is updated and the
      work is committed on main.
+4. **A report that is easy to read, a line on what each company does, a summary that fits, and switching it on**
+   (your words, 2026-11-01: "Shorten the text summary so it fits, not simply shorten long US names, but overall should
+   make sense; Turning the report on by loading the 06:30 daily build, sending one test report to WeChat and switching
+   the keyword reply back on; also re-write the full pdf report to make it more easy reading, more user friendly, more
+   concise and sharper ... somewhere too much information while somewhere is unclear about the key message; also maybe
+   add a short intro of each company to tell what they do").
+   - The PDF, for a reader who isn't an investment expert ("Report"): the first page says what to do and what changed
+     (each market's buys, the holdings to sell or re-check, what the review removed, the names new to or gone from the
+     list since the last report) and what to expect, in plain words; each card gives the company's business in one
+     line, why it is there and its one key risk, with the price, the four grades, the one-lot cost, the review's
+     finding, the AI note and the re-check date; holdings to sell or re-check get full rows, those kept one compact
+     table; the method, the evidence and the review rules move to the back. Nothing the Goal requires leaves a card.
+   - The company line ("Report"): from free sources, verified live; DeepSeek only translates a sentence code gives it,
+     with no figures (rule 2).
+   - The WeChat summary as a message: the actions first, then per market the buys by name, the avoid names and the
+     预期 line, and a pointer to the PDF; all three markets fit under 4,000 bytes with room to spare.
+   - Switching on, with your OK of 2026-11-01 (rule 9): the 06:30 `run` job loaded, one `send --test`, the keyword
+     listener loaded.
+   - Not changed: the score, the lists, the review rules.
+   - Done when: pytest passes, with a test that a full three-market summary from the test data fits; a full `review`
+     renders the new PDF and a summary that fits; I've read the PDF's pages and fixed what reads badly; both jobs run
+     from this checkout and the one test send went out; the fresh-context stage review has run and its findings are
+     fixed or answered; this plan's status is updated and the work is committed on main.
 
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
@@ -597,6 +688,8 @@ and van Vliet, "The volatility effect in China" (JAR 2021); Jegadeesh and Livnat
     quotes/hk_yahoo_shares (HK-listed shares, daily); stage 3's redo: fundamentals/cn_yahoo and hk_yahoo (Yahoo's
     trailing EBIT, debt, cash, minorities and liabilities, weekly, ~0.2 MB each);
     a few tens of KB each.
+  - Stage 4: fundamentals/<market>_profiles (each listed name's Chinese short name and business line; US also Yahoo's
+    English sentence and its Chinese line), fetched again after 180 days, a few tens of KB each.
   - Backtest tables (Phase 9, data/backtest, ~0.73 GB, not touched by cleanup and rebuildable with the commands in docs/BACKTEST.md): CN daily returns, closes and turnover 2018-01..2026-10 (one compressed matrix), Eastmoney valuation rows, 业绩报表 since 2009, balance sheets, 业绩预告 since 2017-10, 申万 history, report-archive EPS since 2025-06, the per-market month-end snapshots and v2 inputs, results. The ~2.8 GB of 通达信 packages were parsed in memory and never stored.
   - Measured 2026-10-18: 13.8 MB in all (hk_results 4.8, cn_annual 3.4, cn_valuation 2.6, us_monthly 1.2, hk_monthly 0.9, us_annual 0.6, cn_forecasts 0.4, consensus snapshots 0.06), plus 0.3 MB for 扣非 EPS and ROE in the weekly results tables; growth ~6 MB a year, mostly consensus snapshots and monthly prices. The first build with Phase 7 backfills them once (CN ~10 min; US ~13 min, SEC companyfacts read again for every company plus 1,100 monthly series; HK ~11 min). After that a weekday build adds under 1 s (业绩预告) and a Sunday ~15 s (new months, and re-asking Yahoo for the ~40 HK symbols it has no data for).
 
