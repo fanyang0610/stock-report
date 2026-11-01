@@ -1,6 +1,6 @@
 """The score's math (PLAN.md, "The score" and "Lists"): percentiles among sector peers, families, grades, the SUE, the
-revisions and forward E/P, the list's places, picks and weights, the avoid list's sector cap, the holding rule and the
-card's key risk, on small made-up frames."""
+revisions and forward E/P, the long-run components, the distress logit, the list's places, picks, screen and equal
+amounts, the avoid list's sector cap, the holding rule and the card's key risk, on small made-up frames."""
 
 from datetime import date
 
@@ -13,7 +13,7 @@ from stockreport import universe as uni
 from stockreport.fetch import frames
 from stockreport.config import CONFIG
 from stockreport.score import grade, phrase, score
-from stockreport.signals import cn_deduct, cn_revisions, quarters
+from stockreport.signals import CHS, cn_deduct, cn_revisions, distress, long_run, quarters
 
 DAY = date(2026, 10, 24)
 
@@ -26,7 +26,8 @@ def universe(n: int = 10, **cols) -> pd.DataFrame:
         "mcap": 100.0, "price": 10.0, "np_ttm": 1 + i, "revenue_ttm": 10 + i, "bps": 1 + i, "roe": 0.05 + i / 100,
         "debt_ratio": 0.9 - i / 20, "ocf_ytd": 2 + i, "np_ytd": np.full(n, 2.0), "revenue_ytd": np.full(n, 10.0),
         "ocf_ttm": 2 + i, "gp_ttm": 1 + i, "assets": np.full(n, 10.0), "mom_12_1": i / 10, "ret_6m": 0.0,
-        "shares": 10.0, "mcap_rank": np.arange(n, 0, -1), "country": "United States", "period": "2026-06-30"},
+        "shares": 10.0, "mcap_rank": np.arange(n, 0, -1), "country": "United States", "period": "2026-06-30",
+        "div_yield": i / 100, "vol_1y": 0.5 - i / 50, "rev_growth": i / 10, "np_growth": i / 10},
         index=[f"C{k}" for k in range(n)])
     return df.assign(**cols)
 
@@ -43,16 +44,17 @@ def test_a_family_skips_missing_components_and_a_missing_family_counts_50():
     df = universe(financial=[True] + [False] * 9)  # a bank: no S/P, cash backing or debt
     df.loc["C1", "bps"] = -1.0                     # negative book: no B/P
     s = score(df, "hk")
-    assert np.isnan(s.loc["C0", "p_sp"]) and np.isnan(s.loc["C1", "p_bp"])
-    value = s[["p_ep", "p_bp", "p_sp"]].mean(axis=1)  # C1: E/P and S/P only
-    assert value["C1"] == pytest.approx((s.loc["C1", "p_ep"] + s.loc["C1", "p_sp"]) / 2)
+    assert np.isnan(s.loc["C0", "p_sp"]) and np.isnan(s.loc["C1", "p_bp"]) and np.isnan(s.loc["C0", "p_ev"])
+    value = s[["p_ep", "p_bp", "p_sp", "p_dy"]].mean(axis=1)  # C1: E/P, S/P and the dividend yield; no EBIT/EV here
+    assert value["C1"] == pytest.approx((s.loc["C1", "p_ep"] + s.loc["C1", "p_sp"] + s.loc["C1", "p_dy"]) / 3)
     ranked = value.groupby(s["financial"]).rank(pct=True)  # ranked among financials and among the rest
     assert s["f_value"].tolist() == pytest.approx(ranked.tolist()) and s.loc["C0", "f_value"] == 1.0
-    quality = s[["p_roe", "p_cash", "p_debt"]].mean(axis=1)
-    assert quality["C0"] == pytest.approx(s.loc["C0", "p_roe"])  # the bank: ROE alone
+    quality = s[["p_roe", "p_cash", "p_debt", "p_vol"]].mean(axis=1)
+    assert quality["C0"] == pytest.approx((s.loc["C0", "p_roe"] + s.loc["C0", "p_vol"]) / 2)  # the bank: no cash, debt
     cn = score(universe(), "cn", pd.DataFrame(index=[]).assign(deduct_ttm=[], sue=[]))  # no SUE anywhere
     assert (cn["f_momentum"] == 0.5).all()
-    assert cn["score"].tolist() == pytest.approx(((cn["f_value"] + cn["f_quality"] + 0.5) / 3).tolist())
+    four = (cn["f_value"] + cn["f_quality"] + cn["f_growth"] + 0.5) / 4
+    assert cn["score"].tolist() == pytest.approx(four.tolist())
 
 
 def test_us_financials_profitability_is_roe_among_financials():
@@ -140,32 +142,69 @@ def test_cn_revisions_take_each_brokers_latest_estimate_and_undo_bonus_shares():
     assert est.loc["C", "est_n"] == 1  # one broker 91 days ago: too few for the score (MIN_ANALYSTS)
 
 
-def test_places_follow_the_index_weights_within_each_sectors_room():
+def test_places_follow_the_market_share_within_each_sectors_room():
     w = pd.Series({"a": 0.47, "b": 0.33, "c": 0.20})
     assert lists.slots(w, 10, pd.Series({"a": 9, "b": 9, "c": 9})).to_dict() == {"a": 5, "b": 3, "c": 2}
     assert lists.slots(w, 10, pd.Series({"c": 9, "a": 3, "b": 9})).to_dict() == {"a": 3, "b": 4, "c": 3}  # a full
 
 
-def test_picks_are_the_largest_positions_of_the_sectors_top_fifth(monkeypatch):
-    monkeypatch.setitem(CONFIG["lists"], "caps", [1, 1, 4])  # four names can't hold 100% under UCITS 5/10/40
-    a = pd.DataFrame({"sector": "a", "score": np.linspace(0.9, 0.1, 20), "index_weight": 0.001}, index=[f"A{k}" for k in range(20)])
-    a.loc[["A0", "A1", "A2", "A3", "A5"], "index_weight"] = [0.01, 0.02, 0.05, 0.3, 0.4]  # A5 is big but not top fifth
-    b = pd.DataFrame({"sector": "b", "score": [0.8, 0.7, 0.6, 0.5, 0.4], "index_weight": 0.05}, index=[f"B{k}" for k in range(5)])
+def picks_field() -> pd.DataFrame:
+    a = pd.DataFrame({"sector": "a", "score": np.linspace(0.9, 0.1, 20), "float_value": 1.0}, index=[f"A{k}" for k in range(20)])
+    a.loc["A19", "float_value"] = 40.0  # the sector's largest company, with the worst score
+    b = pd.DataFrame({"sector": "b", "score": [0.8, 0.7, 0.6, 0.5, 0.4], "float_value": 6.0}, index=[f"B{k}" for k in range(5)])
     df = pd.concat([a, b])
-    buys, bench = lists.positions(df, df["index_weight"] / df["index_weight"].sum(), 4)
-    assert set(buys.index) == {"A3", "A2", "A1", "B0"} and set(bench.index) == {"A0", "B1"}  # 3 places in a, 1 in b
-    assert buys["weight"].sum() == pytest.approx(1) and buys["weight"].is_monotonic_decreasing
+    return df.assign(financial=False, distress=0.0, sta=0.0, name=df.index)
 
 
-def test_money_follows_the_sectors_index_weight_within_the_caps(monkeypatch):
-    buys = pd.DataFrame({"sector": list("aaabbb"), "score": 1.0, "index_weight": [0.9, 0.1, 0.1, 0.2, 0.05, 0.05],
-                         "sector_weight": [0.7] * 3 + [0.3] * 3}, index=["A1", "A2", "A3", "B1", "B2", "B3"])
-    monkeypatch.setitem(CONFIG["lists"], "caps", [0.5, 0.3, 1])
-    w = lists.weigh(buys)  # A1 would be 0.9/1.1 of 70%: capped at 50%, the rest to its sector
-    assert w.tolist() == pytest.approx([0.5, 0.1, 0.1, 0.2, 0.05, 0.05])
-    monkeypatch.setitem(CONFIG["lists"], "caps", [0.4, 0.12, 1])
-    w = lists.weigh(buys)  # a full sector's excess goes to the others
-    assert w.tolist() == pytest.approx([0.4, 0.12, 0.12, 0.12, 0.12, 0.12]) and w.sum() == pytest.approx(1)
+def test_picks_are_each_sectors_best_scores_in_equal_amounts():
+    buys, bench = lists.positions(picks_field(), 4, "us")  # a holds 60 of 90 by free float: 3 places, b 1
+    assert buys.index.tolist() == ["A0", "A1", "A2", "B0"] and set(bench.index) == {"A3", "B1"}  # by score, not size
+    assert buys["weight"].tolist() == pytest.approx([0.25] * 4)
+
+
+def test_the_most_distressed_and_the_largest_accruals_are_not_bought(monkeypatch):
+    monkeypatch.setitem(CONFIG["lists"], "screen", 0.05)
+    df = picks_field()
+    df.loc["A0", "distress"], df.loc["A1", "sta"] = 5.0, 0.3  # the worst of 25 on each: the top 5% (1.25 names)
+    buys, _ = lists.positions(df, 4, "us")
+    assert "A0" not in buys.index and "A1" not in buys.index and buys.index.tolist() == ["A2", "B0", "A3", "A4"]
+    df.loc["A0", "financial"] = True  # a bank isn't judged on it
+    assert lists.screened(df).sum() == 1
+
+
+def test_hk_small_caps_and_partnerships_cant_be_bought(monkeypatch):
+    monkeypatch.setitem(CONFIG["lists"], "small_share", {"hk": 0.05})
+    df = picks_field()  # 89 of free-float value: A19 40, B 30, the other 19 A names 1 each
+    hk = lists.buyable(df, "hk")  # the names that start past 95% of the value (84.55 of 89): A15 to A18
+    assert lists.buyable(df, "us").all() and hk.sum() == 21 and not hk[["A15", "A16", "A17", "A18"]].any() and hk["A14"]
+    df.loc["B0", "name"] = "Western Midstream Partners LP"
+    buys, _ = lists.positions(df, 4, "us")
+    assert "B0" not in buys.index and "B1" in buys.index
+
+
+def test_distress_logit_weighs_campbell_hilscher_szilagyi_with_winsorized_inputs():
+    k = np.arange(21.0)
+    df = pd.DataFrame({"mcap": 100.0, "liabilities": 100.0 + 10 * k, "np_ttm": 8.0 - k, "bps": 5.0, "shares": 10.0,
+                       "ret_12m": 0.2 - k / 50, "vol_3m": 0.2 + k / 50, "cash": 20.0 - k / 2, "financial": False},
+                      index=[f"S{i}" for i in range(21)])
+    x = distress(df)
+    mta = 300.0  # S10, the median on every input, isn't clipped: market value 100 + liabilities 200
+    want = (CHS["nimta"] * (-2 / 4) / mta + CHS["tlmta"] * 200 / mta + CHS["exret"] * 0 + CHS["sigma"] * 0.4
+            + CHS["rsize"] * np.log(100) + CHS["cashmta"] * 15 / mta + CHS["mb"] * 100 / (50 + 0.1 * 50))
+    assert x["S10"] == pytest.approx(want) and x["S20"] > x["S10"] > x["S0"]
+    df.loc["S0", "bps"], df.loc["S1", "bps"] = -30.0, -2000.0  # negative books: the highest market-to-book, capped
+    y = distress(df)
+    assert np.isfinite(y["S1"]) and y["S1"] - x["S1"] == pytest.approx(y["S0"] - x["S0"])  # both at the 95th percentile
+
+
+def test_long_run_takes_the_years_public_by_the_day():
+    years = pd.DataFrame({"code": "A", "year": range(2015, 2026), "roe": [0.1] * 10 + [0.3], "core": range(10, 21),
+                          "book": 100.0, "gm": [0.4, 0.5] * 5 + [0.45], "avail": [f"{y + 1}-03-31" for y in range(2015, 2026)]})
+    lr = long_run(years, "2026-03-30").loc["A"]  # FY2025 not yet public: 2017-2024
+    assert lr["prof8"] == pytest.approx(0.1) and lr["gm8"] == pytest.approx(0.45 / pd.Series([0.4, 0.5] * 4).std())
+    assert lr["roe5"] == pytest.approx((19 - 14) / 100)  # FY2024 against FY2019, over FY2019's book
+    assert long_run(years, "2026-03-31").loc["A", "prof8"] == pytest.approx((0.1 * 7 + 0.3) / 8)
+    assert long_run(years[years["year"] >= 2022], "2026-03-31").isna().all(axis=None)  # 4 years: too few
 
 
 def test_holding_rule(tmp_path, monkeypatch):

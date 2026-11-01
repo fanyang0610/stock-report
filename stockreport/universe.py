@@ -59,15 +59,34 @@ def ttm(results: pd.DataFrame) -> pd.DataFrame:
     return latest.set_index("code")
 
 
-def index_weights(df: pd.DataFrame, market: str) -> pd.Series:
-    """Each stock's share of its index fund's index (fetch/index.py; NaN outside it): the CSI 300's as published, the
-    S&P 500's summed over the issuer's share classes (Alphabet's two, by SEC CIK), as the universe keeps one."""
-    w = index.load(market)
-    if market != "us" or w.empty:
-        return w.reindex(df.index)
-    issuer = lambda codes, cik: cik.reindex(codes).map(lambda c: f"{c:.0f}", na_action="ignore").fillna(pd.Series(codes, codes))
-    by_issuer = w.groupby(issuer(w.index, sec.load_ciks()).to_numpy()).sum()
-    return issuer(df.index, df["cik"]).map(by_issuer)
+def cn_float(mcap: pd.Series, weights: pd.Series) -> pd.Series:
+    """CN free-float value: market value × the CSI 300's float factor (a member's index weight over its share of the
+    members' market value; the median factor outside the index), as total value counts state holdings that never
+    trade (PLAN.md, "Lists"). Market value where the file is missing."""
+    w = weights.reindex(mcap.index).dropna()
+    if w.empty:
+        return mcap
+    factor = (w / w.sum()) / (mcap[w.index] / mcap[w.index].sum())
+    return mcap * factor.reindex(mcap.index).fillna(factor.median())
+
+
+def yahoo_balance(df: pd.DataFrame, market: str, quote: str) -> pd.DataFrame:
+    """Yahoo's trailing EBIT and latest debt, cash (with short-term investments), minorities and liabilities in the
+    quote currency (fetch/yahoo.py), EV = market value + debt + minorities − cash, and the latest fiscal year's scaled
+    total accruals (sta, the buys' screen); a balance item Yahoo doesn't list counts as 0, a missing EBIT leaves EBIT/EV
+    out (rule 5)."""
+    path = yahoo.gaps_path(market)
+    y = pd.read_csv(path, dtype={"code": str}).drop_duplicates("code", keep="last").set_index("code") \
+        if path.exists() else pd.DataFrame(columns=["yahoo", "currency"])
+    y = y[y["yahoo"] == "ok"].reindex(df.index).reindex(columns=["currency", "ebit_ttm", "debt", "cash", "minority",
+                                                                  "liabilities", "sta"])
+    fx = yahoo.load_fx()
+    rate = (fx.get(quote, np.nan) / y["currency"].map(fx)).where(y["currency"] != quote, 1.0)
+    items = y[["debt", "cash", "minority", "liabilities"]].mul(rate, axis=0)
+    have = y["ebit_ttm"].notna()
+    ev = df["mcap"] + (items["debt"].fillna(0) + items["minority"].fillna(0) - items["cash"].fillna(0)).where(have)
+    return df.assign(ebit=y["ebit_ttm"] * rate, ev=ev, cash=items["cash"].where(have), liab_y=items["liabilities"],
+                     sta=y["sta"])
 
 
 def estimates(df: pd.DataFrame, table: pd.DataFrame, per_unit: pd.Series) -> pd.DataFrame:
@@ -88,8 +107,8 @@ def trading_days(prices: pd.DataFrame) -> np.ndarray:
 
 
 def price_metrics(prices: pd.DataFrame, codes: list[str]) -> pd.DataFrame:
-    """12-1 month momentum, the 6-month return (a card's key risk) and 1-year volatility from returns chained as
-    close / prev-close (ex-rights adjusted), on the market's trading days."""
+    """12-1 month momentum, the 12- and 6-month returns (the distress probability; a card's key risk) and 1-year and
+    3-month volatility from returns chained as close / prev-close (ex-rights adjusted), on the market's trading days."""
     dates = trading_days(prices)
     px = prices[prices["code"].isin(codes)]
     traded = px["volume"] > 0
@@ -105,11 +124,14 @@ def price_metrics(prices: pd.DataFrame, codes: list[str]) -> pd.DataFrame:
     out = pd.DataFrame(index=codes)
     if len(t0):
         out["mom_12_1"] = (level.loc[t1] / level.loc[t0[-1]] - 1).where(first <= t0[-1])
+    if len(t0):
+        out["ret_12m"] = (level.iloc[-1] / level.loc[t0[-1]] - 1).where(first <= t0[-1])
     if len(t6):
         out["ret_6m"] = (level.iloc[-1] / level.loc[t6[-1]] - 1).where(first <= t6[-1])
-    year = wide[wide.index > (last - timedelta(days=365)).isoformat()]
+    year, quarter = wide[wide.index > (last - timedelta(days=365)).isoformat()], wide.iloc[-63:]
     out["vol_1y"] = year.std() * np.sqrt(252)
     out.loc[year.count() < 120, "vol_1y"] = np.nan
+    out["vol_3m"] = (quarter.std() * np.sqrt(252)).where(quarter.count() >= 40)  # the distress model's SIGMA
     return out
 
 
@@ -217,7 +239,8 @@ def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
     df["cash_conv"] = (df["ocfps"] / df["eps"]).where(df["eps"] > 0)
     df["sector"] = swclass.level1().reindex(df.index).fillna("未分类")
     df["financial"] = df["sector"].isin(CN_FINANCIAL)
-    df["index_weight"] = index_weights(df, "cn")
+    df["float_value"] = cn_float(df["mcap"], index.load())
+    df = yahoo_balance(df, "cn", "CNY")
 
     checks = {
         "missing fundamentals": df[NEEDED].isna().any(axis=1),
@@ -288,7 +311,7 @@ def build_us(today: date) -> tuple[pd.DataFrame, dict]:
     trend = pd.read_csv(yahoo.US_TREND, dtype={"code": str}).set_index("code") if yahoo.US_TREND.exists() else \
         pd.DataFrame(columns=["eps_e2", "eps_e2_90", "analysts", "currency"])
     df = estimates(df, trend, 1 / trend["currency"].map(yahoo.load_fx()).reindex(df.index))
-    df["index_weight"] = index_weights(df, "us")
+    df = yahoo_balance(df, "us", "USD").assign(float_value=df["mcap"])  # US float ≈ total value by sector (PLAN.md, "Lists")
 
     listed_px = (closes.loc[df.index].div(df["last"], axis=0) - 1).abs().min(axis=1)
     checks = {
@@ -346,6 +369,8 @@ def build_hk(today: date) -> tuple[pd.DataFrame, dict]:
         if yahoo.HK_SHARES.exists() else pd.Series(dtype=float)
     listed = listed.reindex(df.index)  # HK-listed shares only (an A+H issuer's H shares); never more than all shares
     df["listed_value"] = listed.where(listed <= df["shares"], df["shares"]) * df["price"]
+    df["float_value"] = df["listed_value"].fillna(df["mcap"])  # what can be bought in HK (PLAN.md, "Lists")
+    df = yahoo_balance(df, "hk", "HKD")
     # Yahoo has two estimate years, so the 2-year expected EPS growth runs from last year's actual to next year
     df["fwd_growth"] = (df["eps_e2"] / df["eps_e0"]).where((df["eps_e0"] > 0) & (df["eps_e2"] > 0)) ** 0.5 - 1
     df["financial"] = df["industry_type"].fillna("").str.split("-").str[-1].isin(CONFIG["peers"]["financial_industries_hk"])

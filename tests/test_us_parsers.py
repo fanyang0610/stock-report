@@ -168,24 +168,41 @@ def test_timeseries_net_income_and_shares_for_the_cross_checks():
     assert row["shares"] == pytest.approx(1290312404) and row["period"] == "2026-06-30"
 
 
-def test_spy_holdings_give_the_sp500_weights():
-    from stockreport.fetch import index
-    df = index.parse_spy((SAMPLES / "spy_holdings_sample.xlsx").read_bytes())  # State Street's real file, 2026-10-23
-    w = df.set_index("code")["weight"]
-    assert len(df) == 503 and set(df["date"]) == {"2026-10-23"} and "-" not in w.index  # cash lines left out
-    assert w["NVDA"] == pytest.approx(0.07770484) and {"GOOGL", "GOOG", "BRK.B"} <= set(w.index)
-    assert w.sum() == pytest.approx(0.9962, abs=0.004)  # the rest is cash
+def test_timeseries_ebit_debt_cash_and_minorities_for_ebit_ev():
+    s = load("yahoo_timeseries_ev_sample.json")  # real replies 2026-11-01: GM (USD), Tencent (reports in CNY)
+    gm = yahoo.parse_timeseries("GM", s["GM"], date(2026, 11, 1))
+    assert gm["ebit_ttm"] == pytest.approx(5.248e9) and gm["debt"] == pytest.approx(128.743e9)  # GM Financial's included
+    assert gm["cash"] == pytest.approx(27.805e9) and gm["minority"] == pytest.approx(1.712e9) and gm["period"] == "2026-09-30"
+    assert gm["sta"] == pytest.approx(-0.0841, abs=1e-4)  # FY2025: working capital −9.1bn ... less depreciation, ÷ assets
+    googl = yahoo.parse_timeseries("GOOGL", s["GOOGL"], date(2026, 11, 1))  # no annual D&A: the reconciled depreciation
+    assert googl["sta"] == pytest.approx(-0.0365, abs=1e-4)  # its profit's gap to cash is investment gains, not accruals
+    tencent = yahoo.parse_timeseries("00700", s["00700"], date(2026, 11, 1))
+    assert tencent["currency"] == "CNY" and tencent["ebit_ttm"] == pytest.approx(302.946e9)
 
 
-def test_index_weights_sum_an_issuers_share_classes(tmp_path, monkeypatch):
+def test_ev_is_market_value_plus_debt_and_minorities_less_cash_in_the_quote_currency(tmp_path, monkeypatch):
     import pandas as pd
     from stockreport import universe
-    from stockreport.fetch import index
-    monkeypatch.setattr(index, "load", lambda m: pd.Series({"GOOGL": 0.035, "GOOG": 0.028, "NVDA": 0.078}))
-    monkeypatch.setattr(sec, "load_ciks", lambda: pd.Series({"GOOGL": 1652044.0, "GOOG": 1652044.0, "NVDA": 1045810.0}))
-    df = pd.DataFrame({"cik": [1652044.0, 1045810.0, None]}, index=["GOOG", "NVDA", "TSM"])  # the universe keeps one class
-    w = universe.index_weights(df, "us")
-    assert w["GOOG"] == pytest.approx(0.063) and w["NVDA"] == pytest.approx(0.078) and pd.isna(w["TSM"])
+    monkeypatch.setattr(yahoo, "GAPS", tmp_path / "us_yahoo.csv.gz")
+    pd.DataFrame({"code": ["00700", "X", "Y"], "yahoo": ["ok", "ok", "no recent TTM"], "currency": ["CNY", "HKD", None],
+                  "ebit_ttm": [300.0, 10.0, None], "debt": [470.0, None, None], "cash": [460.0, 5.0, None],
+                  "minority": [87.0, None, None], "liabilities": [937.0, 50.0, None]}
+                 ).to_csv(tmp_path / "hk_yahoo.csv.gz", index=False)
+    monkeypatch.setattr(yahoo, "load_fx", lambda: pd.Series({"USD": 1.0, "HKD": 7.8, "CNY": 7.2}))
+    df = universe.yahoo_balance(pd.DataFrame({"mcap": [5000.0, 100.0, 50.0]}, index=["00700", "X", "Y"]), "hk", "HKD")
+    rate = 7.8 / 7.2  # HKD per CNY
+    assert df.at["00700", "ebit"] == pytest.approx(300 * rate)
+    assert df.at["00700", "ev"] == pytest.approx(5000 + (470 + 87 - 460) * rate)
+    assert df.at["X", "ev"] == pytest.approx(95.0) and pd.isna(df.at["Y", "ev"])  # no debt line: 0; no EBIT: no EV
+
+
+def test_cn_free_float_scales_market_value_by_the_csi_300_factor():
+    import pandas as pd
+    from stockreport import universe
+    mcap = pd.Series({"bank": 300.0, "chip": 100.0, "small": 50.0})
+    w = pd.Series({"bank": 0.5, "chip": 0.5})  # the bank's state holdings: half the weight its value would give
+    f = universe.cn_float(mcap, w)
+    assert f["bank"] / f["chip"] == pytest.approx(1.0) and f["small"] == pytest.approx(50 * (2 / 3 + 2) / 2)
 
 
 def test_us_trend_takes_next_years_estimate_now_and_90_days_ago():

@@ -25,14 +25,16 @@ from stockreport.score import score
 from stockreport.universe import build_cn, build_hk, build_us
 
 log = logging.getLogger("stockreport")
-SHOW = ["rank", "code", "name", "sector", "weight", "price", "g_value", "g_quality", "g_momentum", "score", "why"]
+SHOW = ["rank", "code", "name", "sector", "price", "g_value", "g_quality", "g_growth", "g_momentum", "score", "why"]
 
 
 def scored(market: str, today: date) -> tuple[pd.DataFrame, dict]:
-    """The market's universe with the score (CN: 扣非 TTM and SUE from the reports noticed by today, next year's
-    consensus now and 91 days ago from the research reports; US: profit and book to common shareholders)."""
+    """The market's universe with the score (the long-run components from the annual reports public by today; CN: 扣非
+    TTM and SUE from the reports noticed by today, next year's consensus now and 91 days ago from the research reports;
+    US: profit and book to common shareholders)."""
     universe, info = {"cn": build_cn, "us": build_us, "hk": build_hk}[market](today)
     universe["price_date"] = info["quote_date"]
+    universe = universe.join(signals.long_run(history.YEARS[market](), today.isoformat()))
     cn = None
     if market == "cn":
         table = pd.read_csv(eastmoney.CN_DEDUCT, dtype={"code": str, "period": str, "notice_date": str})

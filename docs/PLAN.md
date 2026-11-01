@@ -37,45 +37,58 @@
   needed. Left as follow-ups: 00966's unreadable report; the bench can't refill a removed buy's sector (closed in stage
   3: the bench is now per sector). The event
   feed's unused fetch and labels and the old title fetchers were removed on 2026-10-26 ("Kept from the old build").
-- Stage 3 (analyst revisions, and a list built like its index): done 2026-10-31. Revisions in every momentum family,
-  forward E/P in value, all families ranked within sectors (signals.py, score.py); the buys from the index fund's own
-  index sector by sector, sized like S&P DJI's QVM index within UCITS 5/10/40 (lists.py; the review's replacement now
-  comes from the removed buy's sector, which closes stage 2's follow-up); holdings judged within their sector as buys
-  are; fetch/index.py (CSI 300 and SPY weight files), the report archive, Yahoo's US estimate trend and HK-listed
-  shares; `track` weighs buys by their share; the US index core and the 可做空 plan removed. 99 tests pass. The
-  2026-10-31 build (reports/2026-10-31; 271 s on a warm cache, 41 min when the weekly US refresh is due; all three
-  markets, no index-core text):
-  - coverage of the scored stocks: forward E/P CN 85%, US 93%, HK 70%; revisions CN 30% (the archive has fewer brokers
-    than the consensus table counts: 44% of the largest 300), US 93%, HK 70%;
-  - each list's sector weights within about 4 points of its index's (CN 4.1, US 3.9, HK 3.1; MSCI allows 5); the
-    index's 10 largest held: CN 中际旭创, 贵州茅台, 药明康德 (25% of the money; 23% of the CSI 300), US NVIDIA,
-    Amazon, Meta, Micron (40%; 39% of the S&P 500), HK 中国移动, 网易 (18%; 45% of the parent);
-  - but only 20 names: the money that overlaps the index's own weights is 18% (CN, US) and 13% (HK), an active share
-    of 82-87%, and a sector's weight held in leaders the list doesn't buy flows to the qualifiers it does (US memory
-    makers Micron, SanDisk, Western Digital ~20% against ~2% of the index; HK mainland insurers). Capping each name
-    near its index weight (MSCI's ±2 points) can't be done with 20 names while keeping the sectors; the report says
-    plainly that the names, not the sectors, differ from the index and that results will swing away from it;
-  - your spot checks (examples, not targets): Micron is the US #2 score and a 10% buy; AMD (279th of 794, value E) and
-    Eli Lilly (625th: value E, quality D on its 76% liabilities and cash backing weak for its sector) are neither
-    bought nor avoided; Stellantis ranks 725th (next year's estimates cut by 11% of its price in 3 months, momentum E;
-    too small for the avoid list's 400 largest); GM ranks 216th, not a buy. Microsoft is 21st of 75 in technology,
-    Apple 71st;
-  - history (docs/BACKTEST.md section 22, without analyst data): 20 names over the fund a year CN +7.2% (67% of
-    windows; about 14 of 2024-26's 22 points from 中际旭创 alone), US −1.3% (32%), HK +3.3% (58%); largest falls CN
-    −37% (fund −37%), US −24% (−24%), HK −38% (−47%).
-  The fresh-context stage review confirmed the parsers, the revisions' point-in-time handling, the issuer-summed SPY
-  weights, the same-sector replacement, no index-core text left, no choice made on a history result (the method was
-  written before the stage-3 history run) and no rule for a named stock, and reproduced every figure. Its findings and
-  the answers: (1) the holding rule still used the whole index while buys are picked within sectors, so 16-24% of each
-  list would have been sold at its anniversary while the buy rule picked it again: fixed (holdings by their rank in
-  their sector, "Holding rule"); (2) "the list's size mix is close to the index" overstated it: the report now says
-  the sectors follow the index and the names don't (overlap above); (3) Yahoo's 0 for a missing 90-day-old estimate
-  read as an estimate (ASMPT had a +5.6% revision): now missing, also in tables saved before; Yum China's HK-listed
-  count was 3× its total shares: a listed count can't exceed all shares; reasons and risks read backwards (中国移动's
-  reason was two falls, Micron's risk a strength): a reason is now a figure that reads well, a weakness one that reads
-  badly; grades are now fifths among the peers exactly; stale plan lines fixed. Answered, not changed: 13 of 236
-  covered CN stocks show a zero revision, brokers keeping their forecasts (维持盈利预测), a real "no change"; the US
-  history stand-in admits a few names the S&P 500 can't hold (an MLP), noted in section 22.
+- Stage 3, redone 2026-11-01 (the first version, commit 930a02b, picked only from each index fund's index and sized by
+  index weight; you rejected that on 2026-10-31: "Stages", item 3). Kept from it: revisions in every momentum family,
+  forward E/P, all families ranked within sectors, the review's same-sector replacement, holdings judged within their
+  sector. New: a growth family (four families, equal weights), EBIT/EV and dividend yield in value, 8-year
+  profitability, margin stability and low volatility in quality (signals.py, score.py; history.YEARS for the annual
+  reports, fetch/yahoo.py for EBIT, debt, cash, minorities and accruals in all three markets); the buys from the whole
+  scored market, each sector's places by its free-float share (CN via the CSI 300's float factors, US total value, HK
+  HK-listed value), its best scores, equal amounts, leaving out Quantitative Value's distress and accruals screen, HK's
+  small caps and partnerships (lists.py). Removed: the index-only parent, index-weight sizing and UCITS caps, SPY's
+  weight file, the index share on cards and in the text, `track`'s weighting. 102 tests pass. The 2026-11-01 build
+  (reports/2026-11-01; 75 min with Sunday's weekly refreshes and the first Yahoo fetch of CN and HK; ~3 min from the
+  day's data):
+  - coverage of the scored stocks: EBIT/EV CN 90%, US 86%, HK 86%; 8-year profitability 96-100%; margin stability CN
+    90%, US 57% (a quarter of US filers tag no gross profit; financials have none), HK 81%; 5-year profit growth
+    87-98%; forward E/P and revisions as before (revisions CN 30%, US 93%, HK 70%);
+  - the screen takes 68 of 778 CN stocks, 64 of 794 US and 29 of 388 HK, among them the US #10 and #13 scores,
+    Exelixis and NVIDIA (its working capital grew by 6.3% of its assets, net of depreciation, in its last fiscal
+    year), and HK's #14, 六福集团; HK's small-cap band leaves out another ~150 HK names, partnerships 4 US names;
+  - places: CN 电子 4, 通信 and 银行 2 each, 12 sectors 1; US technology 8 (Micron, TSMC, Sandisk, Alphabet, Western
+    Digital, ASML, Dell, Microsoft), consumer discretionary 3, industrials, finance and health care 2 each; HK 金融 6
+    (中国太平, 新华保险, 建设银行, 工商银行, 广发证券, 中国太保), 非日常生活消费品 and 通讯服务 3 each. Of each
+    market's 10 largest by free float the lists hold CN 2 (中际旭创, 药明康德), US 3 (Microsoft, Alphabet, TSMC), HK 4
+    (建设银行, 中国海洋石油, 工商银行, 网易);
+  - your spot checks (examples, not targets): Micron is the US #7 score and a buy (value A on next year's P/E of 4.3,
+    growth and momentum A); AMD ranks 183rd (value E: EV/EBIT 106, P/S 20; growth and momentum A) and Eli Lilly 139th
+    (value E, growth A; its accruals put it in the screen), neither bought nor avoided; GM ranks 556th (quality and
+    growth E: EV/EBIT ~33 with GM Financial's debt against a P/E of ~7) and Stellantis 782nd of 794 (a loss, value C,
+    momentum E; screened as likely distressed), neither bought; NVIDIA is the technology #2 score but screened;
+  - history (docs/BACKTEST.md section 23, without analyst data, EBIT/EV or the screen): 20 names over the fund a year
+    CN +4.2% (62% of windows), US +1.9% (54%), HK +5.6% (71%); largest falls CN −35% (fund −37%), US −23% (−24%), HK
+    −41% (−47%); worst 12 months 6-8 points worse than the funds'. US quality ran against its published direction
+    there (−9.8 points a year, low volatility −14.5): no bug found; survivors only, in a high-volatility decade
+    (plausible, untested); the family stays and the 预期 line says so.
+  The fresh-context stage review confirmed the list construction, no index-only selection or index-weight sizing left,
+  the point-in-time long-run components, no name rule, no choice made on the history, and every status figure. Its
+  findings and the answers: (1) the distress inputs weren't winsorized as CHS's are, so market-to-book exploded on
+  negative books from buybacks (Booking, PCCW) and the most negative books left the screen: fixed (winsorized at the
+  5th/95th percentile, a negative book counted as the highest market-to-book; 12 US names left the screen, mostly
+  buyback companies with negative books such as Booking, Hilton, AutoZone and Lowe's; PCCW came back into HK's list); (2) the accruals change after Alphabet was screened out: the reviewer judged
+  it a definition fix applied to every stock, but this plan wrongly said it was Quantitative Value's definition (QV
+  uses the cash-flow form): corrected, with the reason ("Lists"); the cards' cash backing keeps the cash-flow form, as
+  answered there; (3) US 8-year profitability mixed ROE into the ROA average where assets were missing: fixed (ROA
+  only); (4) HK bought 俊知集团, HK$3.4bn and +573% in a year, against "no small caps": fixed (HK's small-cap band
+  can't be bought); (5) the US #1 was Western Midstream, a partnership a non-US holder can't hold cleanly: fixed
+  (partnerships can't be bought; ONEOK takes the place); stale plan lines, the 预期 line's "少 0.0%", the unused SPY
+  sample: fixed. Answered, not changed: three memory makers (Micron, Sandisk, Western Digital) in the US list's
+  technology places, as each sector's best scores (no industry cap is in the borrowed methods); Kenvue is a buy while
+  Kimberly-Clark's part-stock purchase of it is pending, which the review's fixed-price takeover rule doesn't catch
+  (a review rule, outside this stage); HK's #1, 中国太平, rests on a trailing P/E of 1.8 after its 2025 profit tripled
+  on investment gains, from Eastmoney (its own P/E agrees); its report PDF is still unreadable to the deep dive
+  (stage 2's follow-up); Yahoo puts Visa's accruals at 14% of assets while its profit equals its cash flow, a source
+  quirk that changes no buy.
 - Nothing runs on a schedule (your call, 2026-10-24: a fresh start). The 06:30 job (com.stockreport.daily) is unloaded
   and disabled; the keyword listener (com.stockreport.listen) was already off. launchd/com.stockreport.daily.plist is
   rewritten for `run` (no DeepSeek); the copy in ~/Library/LaunchAgents is still the old one until it's loaded. While
@@ -94,20 +107,24 @@
   factors replicate across 93 countries: Jensen-Kelly-Pedersen 2023) plus a live record, not one backtest.
 - **This plan borrows a complete method.** Stockopedia's ranking (quality, value and momentum, equal weights) and its
   NAPS holding rule (hold a year, then repeat), with each market's ingredients taken from published research on that
-  market. Stage 3 replaced NAPS's portfolio rules (2 names per sector, equal amounts) with S&P DJI's QVM index
-  construction, sector-neutral ("Lists").
+  market. Stage 3's redo added the ingredients of the other recipes named at the start (Seeking Alpha's growth grade,
+  Alpha Architect's Quantitative Value, Greenblatt's Magic Formula, the dividend-low-volatility indexes) and replaced
+  NAPS's 2 names per sector with places by each sector's share of the market ("Lists").
 
 ## Goal
 - On the WeChat keyword (股票报告 / 股票简报 / stock report / stock brief), within 30 s, two messages (a text summary and
   a PDF), in Chinese. Per market (CN → US → HK):
-  - **买入组合 (buy portfolio):** 20 names from the index the market's fund tracks, each with its share of the money,
-    the sectors weighted as in the index ("Lists");
+  - **买入组合 (buy portfolio):** 20 names from the whole liquid market, equal amounts, the sectors in proportion to
+    the market's ("Lists");
   - **持仓检查 (your holdings):** 继续持有 / 复核 / 卖出 for each name you hold;
   - **回避 (avoid):** 10 names;
   - **预期 (what to expect):** how this method did in our history and in published research.
 - **Moderate.** The aim is to beat the market's index fund over the year you hold the names, at about the market's level
   of risk. Not a defensive tilt (low volatility, dividends) and not an aggressive one (small caps, a few concentrated
-  bets, chasing the hottest stocks).
+  bets, chasing the hottest stocks). Stage 3's redo uses dividend yield and low volatility as two of the score's 21
+  ingredients (each about a twenty-fourth of the score), not as the strategy: the dividend-low-volatility indexes hold
+  only those names, while the list still takes each sector's best overall scores, with the sectors in proportion to the
+  market's, so it doesn't become a dividend fund.
 - **Honest expectations.** Published factor portfolios have beaten their index by a few percent a year on average, have
   lost to it in roughly 4 years out of 10 (AAII's real-money portfolio: beat the index in 55% of rolling years), and
   their edge shrank after publication (McLean-Pontiff: about −58%). No list is a guarantee; the report says so.
@@ -115,40 +132,78 @@
 ## The method
 
 ### Universe
-- Scored: the 800 largest after the filters (liquidity floors as built). Buys: the index fund's own index (stage 3; "Lists"):
-  the CSI 300 (510300) and the S&P 500 (SPY) from their weight files, HK the largest 200 by HK-listed value. Avoid names:
-  the largest 400.
+- Scored: the 800 largest after the filters (liquidity floors as built; HK has fewer that pass them). Buys: the whole
+  scored universe (stage 3's redo; "Lists"), not an index's members, without small caps: the CN and US 800 are large
+  and mid caps (about the CSI 300 + 500 and the S&P 500 + 400: down to CNY 20bn and $12bn on 2026-11-01), while HK's
+  ~390 reach down to HK$3bn, so HK's buys leave out Hang Seng's SmallCap band ("Lists"). Avoid names: the largest 400.
 - Out only on facts: figures that fail the cross-checks, ST / *ST, suspended, under 12 months of prices, and (from stage
   2) a hard red flag. Everything else is left to the score, so a troubled company ranks low rather than vanishing.
 
-### The score: three families, equal weights
+### The score: four families, equal weights
 Each component is a percentile among the stock's peers on the date, point-in-time; a family is the percentile rank among
 the peers of the mean of its components' percentiles (a missing component is skipped; a missing family counts as 50);
-the score is the mean of the three families. Ranking each family before combining is Stockopedia's way and makes the
-weights equal in effect: a plain mean of three percentiles spreads much less than one percentile, which let
-one-component momentum drive the score (fixed in stage 1 after the stage review).
+the score is the mean of the four families. Ranking each family before combining is Stockopedia's way and makes the
+weights equal in effect: a plain mean of percentiles spreads much less than one percentile, which let one-component
+momentum drive the score (fixed in stage 1 after the stage review).
 - **Peers (stage 3):** the stock's sector, financials apart from the rest (their components differ: no S/P, cash
   backing or debt, which made a bank's one or two components outrank everyone's three-component means in stage 1). Why
-  within sectors: MSCI's Diversified Multiple-Factor indexes score value and quality relative to the sector, and
-  Asness, Porter and Stevens (2000) find industry-relative value and momentum predict returns better than the raw
-  figures; with the buys chosen sector by sector ("Lists") a family ranked market-wide would also weigh differently in
-  each sector. Momentum is ranked within sectors too (MSCI keeps it market-wide, but its optimizer then sets the
-  weights; ours are rank-based). A sector with fewer than 10 scored stocks is too small for fifths: its stocks are
-  ranked against the whole market of their kind (financials or the rest). Sectors: CN 申万 level 1, US the Nasdaq
-  sector, HK Eastmoney's first-level industry type.
+  within sectors: Seeking Alpha grades every factor against the stock's sector, MSCI's Diversified Multiple-Factor
+  indexes score value and quality relative to the sector, and Asness, Porter and Stevens (2000) find industry-relative
+  value and momentum predict returns better than the raw figures. A sector with fewer than 10 scored stocks is too
+  small for fifths: its stocks are ranked against the whole market of their kind (financials or the rest). Sectors: CN
+  申万 level 1, US the Nasdaq sector, HK Eastmoney's first-level industry type.
 
 | Family | CN | HK | US |
 |---|---|---|---|
-| 价值 Value | E/P on 扣非 TTM, forward E/P, B/P, S/P | E/P, forward E/P, B/P, S/P | E/P, forward E/P, B/P, S/P |
-| 质量 Quality | ROE, cash backing, debt ÷ assets | ROE, cash backing, debt ÷ assets | gross profit ÷ assets, cash backing, liabilities ÷ assets |
+| 价值 Value | E/P on 扣非 TTM, forward E/P, B/P, S/P, EBIT/EV, dividend yield | E/P, forward E/P, B/P, S/P, EBIT/EV, dividend yield | the same |
+| 质量 Quality | ROE, cash backing, debt ÷ assets, 8-year ROE, margin stability, low volatility | the same as CN | gross profit ÷ assets, cash backing, liabilities ÷ assets, 8-year ROA, margin stability, low volatility |
+| 成长 Growth | revenue growth, profit growth, 5-year profit growth over book | the same | the same |
 | 动量 Momentum | earnings momentum (SUE), revisions | 12-1-month price return, revisions | 12-1-month price return, revisions |
 
-- **Value:** a composite of three ratios, as Stockopedia's value rank uses several, so no single ratio decides. E/P is
-  CN's strongest value measure (Liu-Stambaugh-Yuan 2019). B/P only where book > 0 (negative book from buybacks is
-  undefined, not cheap or dear). S/P not for banks, insurers and brokers.
+- **Why four families (stage 3's redo).** You named Seeking Alpha's quant grades, Alpha Architect's Quantitative Value,
+  Greenblatt's Magic Formula and the dividend-low-volatility indexes at the start, and stage 1 borrowed only
+  Stockopedia's three families. Seeking Alpha grades five factors within sectors (value, growth, profitability,
+  momentum, EPS revisions) and its ratings beat the market in its live record (a University of Kentucky study, 2024);
+  its profitability is our quality and its revisions are in our momentum, as Stockopedia's momentum rank holds them,
+  so growth is the family that was missing. Equal weights, as before: Seeking Alpha doesn't publish its weights and
+  nothing here is fitted (AGENTS.md rule 3).
+- **Value:** a composite of six ratios, so no single ratio decides: Stockopedia's ValueRank is an equal blend of P/B,
+  P/E, P/S, P/FCF, EBIT/EV and dividend yield (free cash flow isn't in the free CN and HK tables). E/P is CN's strongest
+  value measure (Liu-Stambaugh-Yuan 2019). B/P only where book > 0 (negative book from buybacks is undefined, not cheap
+  or dear). S/P not for banks, insurers and brokers.
+  - **EBIT/EV** (stage 3's redo): trailing operating profit before interest and tax over market value + debt +
+    minorities − cash. Greenblatt's Magic Formula and Gray and Carlisle's Quantitative Value rank on it (they found it
+    the best single value measure in US data 1964-2011, as did Loughran and Wellman 2011), and it is in ValueRank
+    because it counts the debt E/P ignores: on 2026-11-01 GM's P/E is ~7 but its EV/EBIT ~33 with GM Financial's
+    $129bn of debt. From Yahoo's fundamentals timeseries in all three markets (trailing EBIT, the latest total debt,
+    cash with short-term investments, minorities, in the reporting currency, turned into the quote currency); a debt,
+    cash or minorities line Yahoo doesn't list counts as 0; no EBIT (a stale or missing series): skipped. Not for
+    financials (their debt is their product). Coverage: see Status.
+  - **Dividend yield** (stage 3's redo): cash dividends with ex-dates in the last 365 days over the price (0 for a
+    non-payer). In ValueRank, and the first sort of 中证红利低波 (50 high-yield, low-volatility A-shares, yield-weighted)
+    and 恒生港股通红利低波 (HK, net-yield-weighted): a cash yield is hard to fake, which matters most in CN and HK.
 - **Quality:** profitability (Novy-Marx 2013; Asness-Frazzini-Pedersen's quality-minus-junk, which holds in 23 of 24
   countries), cash backing = −(net profit − operating cash flow) ÷ revenue (Sloan 1996), and balance-sheet strength
-  (lower debt is better; not for financials, whose leverage is their business).
+  (lower debt is better; not for financials, whose leverage is their business). Stage 3's redo adds:
+  - **8-year profitability** (Gray and Carlisle's franchise power: 8-year averages of ROA and return on capital): the
+    average yearly ROA (US, profit to common ÷ assets: buybacks leave US books too small for ROE) or ROE (CN 扣非 ROE,
+    HK ROE; the CN and HK tables have no yearly assets) of the last 8 fiscal years public by the date, at least 5,
+    each year clipped to −50%..150%. A year of high profit doesn't make a franchise; eight do.
+  - **Margin stability** (franchise power's second half): the mean gross margin of those years over its standard
+    deviation, at least 5 years; not for financials. Gray and Carlisle take the better of margin stability and margin
+    growth; growth is in its own family here.
+  - **Low volatility** (quality-minus-junk's safety: low beta and low volatility; the dividend-low-volatility indexes'
+    second sort): the 1-year volatility of daily returns, lower is better. The low-volatility effect is strongest in CN
+    (Blitz, Hanauer and van Vliet 2021: 2000-2018, also among the largest and most liquid A-shares).
+- **Growth** (stage 3's redo; Seeking Alpha's growth grade, within sectors):
+  - revenue growth and profit growth: the latest report against a year earlier (CN and HK year to date, from 业绩报表
+    and the HK main indicators; US trailing 12 months). Revenue surprises are followed by drift (Jegadeesh and Livnat
+    2006); one year only, as 5-year past sales growth predicts lower returns (Lakonishok, Shleifer and Vishny 1994);
+  - 5-year profit growth over book: the latest fiscal year's profit minus that of 5 years before, over the book 5 years
+    before (quality-minus-junk's growth in ROE; CN 扣非 profit, US profit to common, HK profit to shareholders). From
+    the annual reports public by the date; the book 5 years before must be positive.
+  - Analysts' forecast growth is left out: stocks with the highest forecast growth have done worse (La Porta 1996), and
+    forward E/P already uses next year's estimate.
 - **Momentum:** the 12-1-month price return in the US and HK. In CN the price trend hasn't paid over 20 years (Jansen,
   Swinkels and Zhou 2021: past-return anomalies weak in A-shares), while earnings surprises are followed by drift
   (A-share studies, 2000-2020). So CN uses SUE: the latest quarter's 扣非 EPS minus the same quarter a year earlier,
@@ -169,9 +224,9 @@ one-component momentum drive the score (fixed in stage 1 after the stage review)
   estimate published in the 180 days to the date (A-share brokers report on a company at least at the annual and
   interim results), the median, now and 91 days earlier, at least 3 brokers at both dates; an estimate published
   before a bonus-share ex-date (送转, common in June) is divided by 1 + the bonus ratio, so a 10-for-10 doesn't read
-  as a halving. Next year: the year after the first fiscal year without an annual report. Coverage on 2026-10-26: see
-  Status. The up-minus-down ratio (S&P DJI's second measure) needs each analyst's revisions over 3 months, which
-  Yahoo gives only for 30 days; one definition in all three markets instead.
+  as a halving. Next year: the year after the first fiscal year without an annual report. The up-minus-down ratio
+  (S&P DJI's second measure) needs each analyst's revisions over 3 months, which Yahoo gives only for 30 days; one
+  definition in all three markets instead.
 - No weights are fitted and nothing is chosen on our backtest.
 - **How each ingredient is built** (stage 1; stockreport/signals.py):
   - Percentiles are taken over the whole scored universe (the 800 largest after the filters), so a holding outside the
@@ -206,62 +261,82 @@ one-component momentum drive the score (fixed in stage 1 after the stage review)
   - An issuer listed in two markets can appear in both lists: each market's portfolio is measured on its own.
 
 ### Lists
-- **Buys (stage 3):** 20 names from the index the market's fund tracks, built like S&P DJI's S&P 500 Quality, Value &
-  Momentum Multi-Factor Index (it holds the top fifth by the averaged score, weighted by market value × score), made
-  sector-neutral (S&P DJI's own study of multi-factor construction on the S&P 500, Innes, Jain and Ponnala 2021, finds
-  sector-neutral selection more efficient; MSCI's multi-factor indexes keep each sector within 5 points of the parent):
-  - the parent: the CSI 300 (CSI's month-end weight file) and the S&P 500 (SPY's daily holdings, an issuer's share
-    classes summed); HK has no free current Hang Seng Index file (the Tracker Fund's holdings file stopped in 2022), so
-    its parent is the 200 largest by HK-listed value (Yahoo's listed-class share count × price: an A+H bank's H shares
-    only; total value would put 38% in financials against 30% listed), weighted by it. A market whose file is missing
-    falls back to the same rule on market value (US home listings);
-  - places: each sector gets 20 × its index weight, rounded by the largest remainders (a sector can't get more places
-    than it has names);
-  - picks: in each sector its top fifth by score qualify (at least its places), and the places go to the largest index
-    weight × score: the largest positions such an index would hold. Past the qualifiers, by score. The next one is the
-    sector's bench, which replaces a buy the review removes;
-  - money: each sector its index weight (over the sectors held), inside it index weight × score, within UCITS 5/10/40
-    (the EU's rule for funds sold to the public: at most 10% in a name and 40% in names above 5%; here the four largest
-    up to 10%, the rest up to 5%), a capped name's excess going to its sector's other names. The report shows each
-    name's share and its index weight; the text summary shows the 10 largest.
-  - Why this replaces "the 20 highest scores, at most 2 per sector, equal amounts" (Stockopedia's NAPS rules) and the
-    US index core: a name had to be good on value, quality and momentum at once, so the expensive leaders that make up
-    much of each index never qualified (on 2026-10-25 NVIDIA, Microsoft and Apple ranked 327, 441 and 522 of 791), two
-    places a sector gave every sector a tenth whatever its size (US technology is ~45% of the S&P 500), and equal
-    amounts put a mid-size company's weight on every name. So the list's sector and size mix drifted from the index:
-    the US 20 names trailed SPY by 2.9 points a year in 2018-2026 (ahead in 24% of 12-month windows), about what the
-    equal-weighted S&P 500 lost to the cap-weighted one then. The half-in-an-index-fund advice (2026-10-25 to 26) only
-    diluted that list, and how you split your money between the list, funds or bonds is your business, not the
-    report's. The published multi-factor indexes (S&P's, MSCI's, FTSE Russell's) all start from the parent's weights
-    and tilt them, none from equal amounts; this is the smallest version of that a 20-name list allows. The same
-    construction in all three markets: each market's fund is cap-weighted and the aim (beat it at about its risk) is
-    the same everywhere; the score's ingredients stay each market's own.
-  - Spot checks on 2026-10-26 (examples, not targets): see Status.
+- **Buys (stage 3's redo):** 20 names from the whole scored market, equal amounts:
+  - what can't be bought (it stays scored, can be avoided and is checked as a holding):
+    - Quantitative Value's screen (Gray and Carlisle, step 1: avoid a permanent loss): the 5% of each market's
+      non-financials most likely to fail within 12 months by Campbell, Hilscher and Szilagyi's model (2008, Table 4,
+      12-month horizon: profit and liabilities and cash over market value + liabilities, the past year's return,
+      3-month volatility, size, market-to-book; each input winsorized at its 5th and 95th percentile among the market's
+      non-financials, as CHS winsorize theirs, and a book still negative after CHS's adjustment counted as the highest
+      market-to-book; the constant and the market terms drop out of a ranking, the US-only $15 price term is left out;
+      liabilities and cash from Yahoo where the market's own tables lack them), and the 5% with the largest accruals:
+      Sloan's (1996) working-capital accruals, the latest fiscal year's working-capital increase less depreciation over
+      total assets, from Yahoo's cash-flow statement. A stock without the figures isn't screened. The model was
+      estimated on US firms; in CN and HK it ranks the same signs of distress (losses, leverage, falling price,
+      volatility, little cash) without an estimate of its own there.
+      - The accruals: Gray and Carlisle's STA is net income minus operating cash flow over assets (the cash-flow form
+        of Hribar and Collins 2002), and the first version here used that form. It also counts mark-to-market gains on
+        investments, which Richardson, Sloan, Soliman and Tuna (2005) class as financial-asset accruals, the reliable
+        kind that doesn't predict low returns; Alphabet's trailing profit held $129bn of them in 2026, which screened it
+        out. Found in the spot checks; the screen now uses Sloan's own operating accruals for every stock. The quality
+        family's cash backing (a sixth of quality, on the cards as 利润缺少现金支撑) keeps profit minus operating cash
+        flow: profit that cash doesn't back, investment gains included, is what that card line says, and CN and HK
+        have no current working-capital figures (only Yahoo's annual ones).
+      - Beneish's M-score, the screen's third measure, needs receivables, current assets, PP&E and SG&A, which the
+        tables we keep don't carry in every market: left out;
+    - HK small caps: the names making up the last 5% of the field's HK-listed value, Hang Seng's SmallCap band (the
+      Composite's LargeCap, MidCap and SmallCap cover the top 80%, the next 15% and the last 5% of its value): about
+      180 of HK's ~390, under ~HK$20bn. Moderate risk, as agreed: no small caps;
+    - partnerships (US master limited partnerships, K-1 units): a non-US holder has 10% of a sale's gross proceeds
+      withheld and tax withheld on distributions (US tax code §1446(a), (f)), and the S&P 500 doesn't admit them. They
+      were kept in the universe in Phase 4 for scoring and stay there;
+  - places: each sector gets 20 × its share of the scored market's free-float value, rounded by the largest remainders
+    (a sector can't get more places than it has names). How the share is measured, from the index providers' practice
+    (MSCI, FTSE, S&P and CSI all weight by free float: shares held by the state, a parent or founders don't trade):
+    - CN: market value × the CSI 300's free-float factor (each member's index weight over its share of the members'
+      market value, from CSI's month-end file; the median factor for the ~500 others). Total value would give banks
+      22% and 石油石化 7% of the places on 2026-10-31; by free float they are 10% and 2% (the CSI 300: 12% and 2%),
+      since the state holds most of their shares;
+    - US: total market value: by sector it is within 2 points of the S&P 500's float-adjusted weights (technology 40%
+      against 42%), and it includes the foreign companies listed in the US, which the S&P 500 leaves out;
+    - HK: HK-listed value (Yahoo's listed-class shares × price): an A+H company's A shares can't be bought in Hong Kong,
+      and total value would give financials 37% instead of 29%. HK has no free free-float source (the Hang Seng's own
+      weights aren't published per stock; Yahoo's floatShares counts all classes and puts ICBC at 62%);
+  - picks: each sector's places go to its best scores; the next one is the sector's bench, which replaces a buy the
+    review removes;
+  - money: equal amounts, 5% each (Stockopedia's NAPS and AAII's model portfolios hold their names equally).
+  - Why this replaces stage 3's first version (commit 930a02b: only the CSI 300 / S&P 500 / HK's largest 200, the
+    largest index weight × score, money by index weight × score within UCITS 5/10/40). You rejected it on 2026-10-31:
+    picking only from the index misses the rest of the liquid market (foreign companies listed in the US, the A-shares
+    and HK names outside the indexes), and sizing by index weight is another bias, towards the largest names (US: 40% in
+    NVIDIA, Amazon, Meta and Micron). The sector places keep what that version fixed: two places a sector gave every
+    sector a tenth of the list whatever its size (US technology is ~40% of the market), which drifted the list away from
+    the market it is measured against (the US 20 names trailed SPY by 2.9 points a year in 2018-2026). How you split
+    your money between the list, funds or bonds is your business, not the report's.
+  - Spot checks on 2026-11-01 (examples, not targets): see Status.
 - **Holding rule (NAPS):** hold each name 12 months from the day you bought it.
   - 继续持有: no hard red flag, and either before its anniversary or still in its sector's top fifth at it;
   - 复核: before the anniversary it has fallen into its sector's bottom half, or the review (stage 2) found a soft
     concern;
-  - 卖出: a hard red flag at any time, or at the anniversary outside its sector's top fifth (replace it with the largest
-    buy you don't hold).
+  - 卖出: a hard red flag at any time, or at the anniversary outside its sector's top fifth (replace it with the
+    highest-scoring buy you don't hold).
   - Every anniversary repeats this: for 30 days after it (the time to act) the top-fifth test applies; after that a new
     year has started, judged by the in-year rule until the next anniversary.
   - Your holdings live in data/holdings.csv (code, buy date), set with `hold CODE [--date D]` and `hold CODE --sold`.
     Without the file, the check covers the names of the last 12 months' buy portfolios (data/picks.csv) that aren't
     in today's, each from the first day it was listed.
-  - "Top fifth" and "bottom half" are the score's rank among the holding's sector's names in the index (stage 3: the
-    line a buy qualifies by; the stage review found the rule still used the whole index, which would have sold 16-24% of
-    each list at its anniversary while the buy rule picked it again), so a holding that left the index is still judged
-    against the same names. A holding the build couldn't score (dropped on facts, or no longer among the 800 largest)
-    gets 复核 with the reason.
+  - "Top fifth" and "bottom half" are the score's rank among the holding's sector's scored names (stage 3: within the
+    sector, as buys are picked). A holding the build couldn't score (dropped on facts, or no longer among the 800
+    largest) gets 复核 with the reason.
 - **Avoid:** the 10 lowest scores among the 400 largest, at most 2 per sector, each with its weakest family named.
 ### Cards
-- The price; the rank; the three grades A-E (fifths of each family); one line on why it's there (its two strongest
+- The price; the rank; the four grades A-E (fifths of each family); one line on why it's there (its two strongest
   components in words, with the figure); the key risk (a loss, heavy debt (70%+ of assets, the SASAC warning line; not
   financials) or a 30%+ fall in 6 months, else its weakest component); the cost of one board lot (CN 100 shares, US 1
   share, HK the board lot from HKEX's List of Securities, verified 2026-10-24: Tencent 100, HSBC 400, China Mobile 500,
-  AIA 200); the re-check date (the anniversary, or sooner if the rank falls into the bottom half); a buy's share of the money and
-  its index weight (stage 3). A ratio is worded by its side of the peers' median (同行中市盈率低 / 高), cash backing,
-  momentum, the SUE and the revisions by their sign (the revisions as the estimate's 3-month change).
+  AIA 200); the re-check date (the anniversary, or sooner if the rank falls into the bottom half); a buy's share of the
+  money (5%). A ratio is worded by its side of the peers' median (同行中市盈率低 / 高), cash backing, momentum, the SUE,
+  the revisions and the growth figures by their sign (the revisions as the estimate's 3-month change).
 - From stage 2: the review's line (审核：… for a hard red flag, 数据存疑：…, 市场可能在担心 … with its quoted source, or
   审核未见重大风险 / 审核进行中 / 审核暂不可用) and the AI note (one sentence, words only).
 - Each market section opens with its 预期 line: from the history run, the 20-name portfolio's average 12-month return
@@ -269,14 +344,14 @@ one-component momentum drive the score (fixed in stage 1 after the stage review)
   the fund's, marked 模拟回测 (simulated, after costs), plus one line on the published evidence.
 
 ### The history run (stage 1, once)
-- On the existing month-end frames (CN 2019-01.., US 2018-01.., HK 2016-10..): each month's 20-name portfolio at its
-  weights, held 12 months with a round trip of costs (0.2% US, 0.3% CN, 0.6% HK), against the index fund with dividends
-  (SPY, 2800.HK, 510300.SS). Also its 10 and 5 largest positions, to show how much fewer names widen the range.
+- On the existing month-end frames (CN 2019-01.., US 2018-01.., HK 2016-10..): each month's 20-name portfolio in equal
+  amounts, held 12 months with a round trip of costs (0.2% US, 0.3% CN, 0.6% HK), against the index fund with dividends
+  (SPY, 2800.HK, 510300.SS). Also its 10 and 5 best scores, to show how much fewer names widen the range.
 - Each family's top fifth against its bottom fifth over the whole sample, per market.
-- Stage 3: no free index history exists, so the parent is a stand-in: each stock's market value then × today's float
-  factor (its index weight today over its share of market value; HK: HK-listed over all shares), the largest 300 (CN),
-  500 (US) and 200 (HK). The snapshots have no consensus estimates, so the history's score has no forward E/P or
-  revisions; the report says both.
+- Stage 3's redo: the whole snapshot is the field; free float then is market value × today's float factor (CN: the
+  CSI 300's; HK: HK-listed over all shares; US: market value). The snapshots have no consensus estimates and Yahoo keeps
+  no history of EBIT, debt, cash and accruals, so the history's score has no forward E/P, revisions or EBIT/EV, and no
+  screen; the long-run components come from the annual reports public by each month end. The report says so.
 - The CN frames are point-in-time by report date but hold only companies still listed (Eastmoney drops delisted ones),
   with restated 扣非 figures; US and HK hold today's listings. So every market's numbers are flattered, and the report
   says so (corrected in stage 1: this line said CN had delisted names).
@@ -333,7 +408,7 @@ build makes no DeepSeek calls.
       board secretaries, 副总经理, a Vice Chair and a subsidiary's or branch's executives are routine. Bare SEC 25-NSE /
       15-12B forms, which don't say which security (Comcast's and ONEOK's were their notes), are left out of the sources.
   - The bench is the next name of each sector held (stage 3); a removed buy's place goes to its sector's bench name if
-    not blocked, else to the best other one, and the money is split again (lists.weigh). With none left the list is
+    not blocked, else to the best other one, and the money is split equally again. With none left the list is
     shorter.
     The scoreboard logs each removed name (bucket removed) and the name that took its place (bucket replacement), so
     `track` shows the two side by side.
@@ -362,8 +437,9 @@ build makes no DeepSeek calls.
     quote naming the profit after deducting them is that profit, and is skipped).
 
 ## Checks, and what each one decides
-- **pytest** on the score math (peer percentiles, families, SUE, revisions, the list's places, picks and weights, the
-  holding rule) and the parsers, on small saved samples: catches calculation and parsing bugs.
+- **pytest** on the score math (peer percentiles, families, SUE, revisions, the long-run components, the distress
+  logit, the list's places, picks, screen and equal amounts, the holding rule) and the parsers, on small saved samples:
+  catches calculation and parsing bugs.
 - **The data cross-checks** (built): a stock whose figures disagree with the second source is dropped (rule 5).
 - **The history run's family check:** a family running strongly against its published direction over the whole sample
   in a market sends me looking for a data or definition bug. If none is found, the family stays (the published evidence
@@ -371,8 +447,8 @@ build makes no DeepSeek calls.
 - **The history run's portfolio numbers:** they fill the report's 预期 line. They don't decide whether the report ships.
 - **The fresh-eyes review** at the end of each stage (.claude/agents/stage-reviewer.md): catches what I missed, and
   spot-checks a few buys and avoid names against their filings and news for common sense.
-- **The live scoreboard** (`track`): each month's portfolio against the index fund (buys weighted by their share of
-  the money from stage 3), shown in the report once a month;
+- **The live scoreboard** (`track`): each month's portfolio against the index fund (equal amounts), shown in the report
+  once a month;
   it catches live data faults and builds the method's own record. It never holds anything up.
 
 ## How decisions are made
@@ -402,23 +478,37 @@ build makes no DeepSeek calls.
    in the source is rejected; a hard flag removes a buy; a soft concern only annotates) and the keyword reply takes
    under 30 s on a warm cache and on a cold one. Done 2026-10-26 (tests/test_review.py, tests/test_deepdive.py; the
    timings are in Status).
-3. **Analyst revisions, and a list built like the index it is measured against** (your words, 2026-10-26: the US
-   index core is a patch that sheds half the job; how you split your money is your business; fix the biased selection
-   and the missing index leaders in how the list itself is built).
-   - Revisions join each market's momentum family: the 3-month change in the next fiscal year's consensus EPS, divided
-     by the price. US and HK from Yahoo's earningsTrend (the +1y estimate now and 90 days ago, at least 3 analysts),
-     CN from Eastmoney's research-report archive (each broker's latest estimate, bonus shares adjusted). No waiting
-     for our own snapshots: the old "26 weekly snapshots" condition was wrong, since both sources keep the past
-     estimates. Adopted on the published evidence (no free history exists to test it).
-   - Value adds forward E/P (next year's consensus EPS ÷ price); value, quality and momentum are ranked within
-     sectors; the 20 names come from the index fund's own index, sector by sector, sized like it (S&P DJI's QVM
-     multi-factor index, MSCI's multi-factor indexes; "The method").
-   - Removed: the US index core (config, report, template, expect.json, this plan, AGENTS.md's goal line). Dropped: the
-     old stage 3's 可做空 label, useful only to someone who shorts; you didn't ask for it.
-   - The history run again (docs/BACKTEST.md section 22) for the 预期 line; it fills the report and decides nothing.
-   - Done when: pytest passes, with the new parsers on saved samples (Yahoo's earningsTrend, the report archive, the
-     CSI 300 and SPY weight files, Yahoo's HK share counts) and the list construction; a full `run` renders all three
-     markets without any index-core text; the history numbers are in BACKTEST.md section 22 and the 预期 lines; the
+3. **Stage 3, redone (2026-10-31): the whole liquid market, the best scores, equal amounts, and the borrowed
+   ingredients that were missing** (your words, 2026-10-31: "you are saying you only pick stocks from each market's
+   index fund? then you are missing a lot ... your list is now index heavy, which is also another kind of bias"; and
+   why Seeking Alpha's quant grades, Alpha Architect's Quantitative Value, Greenblatt's Magic Formula and the
+   dividend-low-volatility indexes you named at the start weren't borrowed). The first version (commit 930a02b) picked
+   only from the CSI 300 / S&P 500 / HK's largest 200, the largest index weight × score in each sector, sized by index
+   weight × score within UCITS 5/10/40 (US: 40% in NVIDIA, Amazon, Meta, Micron).
+   - Kept from 930a02b: analyst revisions in each momentum family, forward E/P in value, every family ranked within
+     sector peers (signals.peers), the review's same-sector replacement, holdings judged within their sector, HK's
+     listed-share cap, the card wording fixes, grades as exact fifths. The 可做空 label stays dropped.
+   - Undone: buys only from the index (lists.parent), the largest index weight × score (lists.positions), money by index
+     weight × score with UCITS caps (lists.weigh), the SPY weight file, the index weight on cards and in the report,
+     `track`'s weighting. Never again: advice on how to split your money between the list and a fund.
+   - Lists: the 20 buys come from the whole scored market (the 800 largest after the liquidity floors in CN and US, all
+     that pass them in HK; no small caps), each sector given places by its share of the market's free-float value,
+     filled by the sector's best scores, equal amounts; the bench is each sector's next name. How "share of the market"
+     is measured, per market, from evidence ("Lists").
+   - Score: four families, equal weights. Growth joins as Seeking Alpha's fifth grade does (revenue and profit growth,
+     the 5-year change in ROE as in Asness-Frazzini-Pedersen's quality-minus-junk). Value adds EBIT/EV (Greenblatt's
+     and Gray-Carlisle's value measure, in Stockopedia's ValueRank too) and dividend yield (ValueRank; 中证红利低波,
+     恒生港股通红利低波); quality adds 8-year average profitability and gross-margin stability (Gray-Carlisle's
+     franchise power) and low volatility (quality-minus-junk's safety; the dividend-low-volatility indexes). Buys skip
+     the 5% most likely distressed (Campbell-Hilscher-Szilagyi probability) and the 5% with the largest accruals, as
+     Quantitative Value's first step. Each with its evidence per market in "The score"; a field the free data lacks in
+     a market is skipped there (rule 5).
+   - AGENTS.md's Goal and rules 3 and 4 follow; the Goal's "not a defensive tilt" stays, with dividends and low
+     volatility as two of the score's ~20 ingredients.
+   - The history run again (docs/BACKTEST.md section 23) for the 预期 line; it fills the report and decides nothing.
+   - Spot checks you gave (examples, not targets): Micron, AMD, Eli Lilly; Stellantis, GM.
+   - Done when: pytest passes, with the new components, the new parsers on saved samples and the list construction; a
+     full `run` renders all three markets; the history numbers are in BACKTEST.md section 23 and the 预期 lines; the
      fresh-context stage review has run and its findings are fixed or answered; this plan's status is updated and the
      work is committed on main.
 
@@ -444,7 +534,16 @@ by score, weighted by market value × score; Indexology, 2026-05-28) and "Harnes
 core" (2021: the QVM Top 90% indices keep the benchmark's sector weights); Innes, Jain and Ponnala, "Exploring
 techniques in multi-factor index construction" (S&P DJI 2021: sector-neutral selection and score-based weighting are
 more efficient); MSCI Diversified Multiple-Factor Indexes Methodology (May 2022: value and quality sector-relative,
-sectors within ±5% of the parent, each stock within ±2% of its parent weight); the UCITS Directive's 5/10/40 rule.
+sectors within ±5% of the parent, each stock within ±2% of its parent weight). Stage 3's redo: Seeking Alpha, "Quant
+Ratings & Factor Grades FAQ" (five sector-relative factor grades) and Cumming et al. (University of Kentucky, 2024) on
+its record; Gray and Carlisle, "Quantitative Value" (Wiley 2012: the forensic and distress screens, EBIT/TEV, franchise
+power); Campbell, Hilscher and Szilagyi, "In Search of Distress Risk" (JF 2008; NBER w12362, Table 4); Greenblatt, "The
+Little Book That Beats the Market" (2006: EBIT/EV and return on capital); Loughran and Wellman, "New evidence on the
+relation between the enterprise multiple and average stock returns" (JFQA 2011); Stockopedia, "The ValueRank" (P/B, P/E,
+P/S, P/FCF, EBIT/EV, dividend yield); 中证红利低波动指数 (H30269) and 恒生港股通红利低波动指数 methodologies; Blitz, Hanauer
+and van Vliet, "The volatility effect in China" (JAR 2021); Jegadeesh and Livnat, "Revenue surprises and stock returns"
+(JAE 2006); Lakonishok, Shleifer and Vishny, "Contrarian investment, extrapolation and risk" (JF 1994); La Porta,
+"Expectations and the cross-section of stock returns" (JF 1996).
 
 ## Decisions kept from the old plan
 - Python 3.12 + uv. The old Swift project is archived read-only at ~/Developer/EquitySignalsClawbot-legacy.
@@ -487,7 +586,9 @@ sectors within ±5% of the parent, each stock within ±2% of its parent weight);
     revisions: stage 3 reads the past estimates from Yahoo and the report archive).
   - Stage 3: cn_reports (every company research report's EPS estimates, one row per report and fiscal year, the last 300
     days, ~0.14 MB, daily top-up); fundamentals/us_trend (next year's US consensus now and 90 days ago, weekly),
-    cn_index / us_index (the CSI 300's and S&P 500's weights, daily), quotes/hk_yahoo_shares (HK-listed shares, daily);
+    cn_index (the CSI 300's weights, CN's free-float factors, daily; us_index, SPY's, removed in the redo),
+    quotes/hk_yahoo_shares (HK-listed shares, daily); stage 3's redo: fundamentals/cn_yahoo and hk_yahoo (Yahoo's
+    trailing EBIT, debt, cash, minorities and liabilities, weekly, ~0.2 MB each);
     a few tens of KB each.
   - Backtest tables (Phase 9, data/backtest, ~0.73 GB, not touched by cleanup and rebuildable with the commands in docs/BACKTEST.md): CN daily returns, closes and turnover 2018-01..2026-10 (one compressed matrix), Eastmoney valuation rows, 业绩报表 since 2009, balance sheets, 业绩预告 since 2017-10, 申万 history, report-archive EPS since 2025-06, the per-market month-end snapshots and v2 inputs, results. The ~2.8 GB of 通达信 packages were parsed in memory and never stored.
   - Measured 2026-10-18: 13.8 MB in all (hk_results 4.8, cn_annual 3.4, cn_valuation 2.6, us_monthly 1.2, hk_monthly 0.9, us_annual 0.6, cn_forecasts 0.4, consensus snapshots 0.06), plus 0.3 MB for 扣非 EPS and ROE in the weekly results tables; growth ~6 MB a year, mostly consensus snapshots and monthly prices. The first build with Phase 7 backfills them once (CN ~10 min; US ~13 min, SEC companyfacts read again for every company plus 1,100 monthly series; HK ~11 min). After that a weekday build adds under 1 s (业绩预告) and a Sunday ~15 s (new months, and re-asking Yahoo for the ~40 HK symbols it has no data for).
@@ -516,7 +617,7 @@ sectors within ±5% of the parent, each stock within ±2% of its parent weight);
     the first read of 300 days took 88 pages. Its broker counts are a third to a half of 研报一致预期's analyst counts
     (which count analysts over a longer window), so 3+ brokers at both dates covers ~30% of the 800 (44% of the
     largest 300). Bonus shares: RPT_SHAREBONUS_DET's BONUS_IT_RATIO (送转 per 10 shares), with the dividends.
-  - CSI 300 weights (stage 3, verified 2026-10-26): CSI's month-end file
+  - CSI 300 weights (stage 3, verified 2026-10-26; since the redo only CN's free-float factors, "Lists"): CSI's month-end file
     oss-ch.csindex.com.cn/static/html/csindex/public/uploads/file/autofile/closeweight/000300closeweight.xls (300 rows,
     weights in %, the date first), read with xlrd. Banks are 12% of the CSI 300 against 24% of the largest 300's total
     market value (state holdings aren't free float), 石油石化 1.7% against 7.4%.
@@ -526,7 +627,7 @@ sectors within ±5% of the parent, each stock within ±2% of its parent weight);
 - US (verified in Phase 4, 2026-10-17):
   - Universe: the Nasdaq screener, api.nasdaq.com/api/screener/stocks?tableonly=true&download=true (every NASDAQ/NYSE/AMEX listing in one call: price, market value, sector, industry). Its market value is company-wide on every share class and ADR, so shares = market value / price; its price can lag Yahoo by a day, so market value is rescaled to Yahoo's close and a stock whose screener price matches none of Yahoo's last 3 closes within 1% is dropped. Share counts (2026-10-25, crosscheck.us_shares): the screener's count is wrong at times (Monster's 2:1 split of 2026-08-11 counted 3:1, Cboe 7% high) and adds Up-C units and voting-only classes that the parent's profit and book leave out (Carvana, TKO, Symbotic, Blue Owl: 30-370%; Ferrari's special voting shares, On's class B). So before the universe is cut, three counts in the listed security's units (an ADR's depositary shares) are judged by the filings: the screener's and Yahoo's two quote counts (v7 quote, 11 calls a day: impliedSharesOutstanding, every class, as Alphabet's three and Berkshire's in B shares; sharesOutstanding, the listed class, as an Up-C's class A). The judges, in the filer's units, × Yahoo's splits since: SEC's basic weighted-average shares of the latest quarter (the EPS denominator) and the latest 10-Q/10-K cover count; for filers with neither (20-F filers), the last annual EPS denominator, only where Yahoo's two counts agree (Itau's 20-F tags one class's count: half the company). The screener's count stands when a judge is within 5% of it (often it is the cover's, newer than the quarter: Gartner's buyback, the shares Martin Marietta and Public Storage issued in acquisitions since); else the first Yahoo count a judge is within 5% of is used; else, more than 20% off every other count, the stock is dropped (rule 5). Yahoo's statement count (OrdinarySharesNumber) is no judge: it leaves out AB InBev's restricted shares, sums Blue Owl's Up-C classes, puts Berkshire in A shares and CME in thousands, and a version that used it set Martin Marietta and Public Storage back to July. Why the parent's count: the published value research's market equity is CRSP's shares of the listed classes (summed across classes, as for Alphabet and Berkshire) against Compustat's parent earnings and common equity, with S/P on consolidated revenue over that market value; an Up-C's unlisted units aren't in it. Not settled, the screener's count stands: an Up-C without an SEC count (Ares: its filings tag the counts per class only, which companyfacts leaves out, and its two Yahoo counts look like Berkshire's; the per-class counts are only in the 10-Q's XBRL instance) and a dual-listed company (Rio Tinto: the screener's is the plc's, the profit the group's). The Eastmoney list (push2 clist) is blocked, as for CN. The 1,100 largest ordinary shares are kept up to date (config `us_candidates`).
   - Trailing-12-month fundamentals: SEC companyfacts (data.sec.gov/api/xbrl/companyfacts), 4 at a time, at most ~8 requests/s, User-Agent = SEC_USER_AGENT from .env; refreshed weekly per company (~5 min for 1,100). Files are 1-8 MB: they are parsed in memory and never written to disk. TTM = year-to-date + last fiscal year - same YTD a year earlier (the CN formula), or, after an annual report for less than a year (a fiscal-year change's transition period, a merger's successor stub), the fewest reported periods added and subtracted end to end that span the 12 months (not otherwise: L3Harris tags its fiscal-year revenue with Q4's dates); growth = TTM vs the TTM a year earlier. Concepts are merged per period in a preference order because companies switch tags between filings, with three rules from the Phase 12 cross-checks (2026-10-19), also in the annual history: revenue is chosen per period, because companies also tag parts of it with its concepts (ASC 606 fee revenue at M&T, AmEx and SoFi, Blue Owl's "Revenues", Zions' non-interest revenue subtotal) and totals before intersegment eliminations (Williams' ASC 606 total, Hasbro's "Revenues"): the concept within 5% of what the income statement implies (gross profit + cost of revenue, else operating income + total costs and expenses), else the largest concept (REITs' rent: OperatingLeaseLeaseIncome), and for banks net interest + noninterest income when larger; a 12-month figure comes only from a 10-K (Comfort Systems' Q1 2026 10-Q tagged Q1 2025 revenue as the 2025 year); equity and net income are the parent's: the total including minorities less MinorityInterest when only the total is tagged (AT&T, Carlyle, TPG, Royalty Pharma), ProfitLoss less the minorities' share when NetIncomeLoss is missing (Invesco).
-  - Gaps (changed in the Phase 4 review; freshness: 200 days, 300 for half-year reporters): Yahoo fundamentals-timeseries (ws/fundamentals-timeseries/v1/finance/timeseries), one call per company, weekly, for companies SEC can't cover: no recent us-gaap 10-Q/10-K (foreign filers), no CIK, or a missing field (e.g. MLPs report partners' capital). It gives TTM revenue / profit / gross profit / operating cash flow and the balance sheet in the reporting currency; growth is TTM vs the TTM a year earlier, else the fiscal year a year earlier, else the same quarter a year earlier, else the last two fiscal years (semiannual reporters). 259 of 262 gap companies covered on 2026-10-17 (~80 s); 796 of the top 800 have complete data. Changed in Phase 12: fetched weekly for all 1,100 candidates (gap companies first), as the second source of the cross-checks, with NetIncome (before preferred dividends) and OrdinarySharesNumber added; ~5 min the first time.
+  - Gaps (changed in the Phase 4 review; freshness: 200 days, 300 for half-year reporters): Yahoo fundamentals-timeseries (ws/fundamentals-timeseries/v1/finance/timeseries), one call per company, weekly, for companies SEC can't cover: no recent us-gaap 10-Q/10-K (foreign filers), no CIK, or a missing field (e.g. MLPs report partners' capital). It gives TTM revenue / profit / gross profit / operating cash flow and the balance sheet in the reporting currency; growth is TTM vs the TTM a year earlier, else the fiscal year a year earlier, else the same quarter a year earlier, else the last two fiscal years (semiannual reporters). 259 of 262 gap companies covered on 2026-10-17 (~80 s); 796 of the top 800 have complete data. Changed in Phase 12: fetched weekly for all 1,100 candidates (gap companies first), as the second source of the cross-checks, with NetIncome (before preferred dividends) and OrdinarySharesNumber added; ~5 min the first time. Stage 3's redo (verified 2026-11-01): also EBIT (trailing), TotalDebt, CashCashEquivalentsAndShortTermInvestments and MinorityInterest (latest quarter, else year), for EBIT/EV and the distress probability (GM: EBIT 5.2bn, debt 128.7bn with GM Financial's, cash 27.8bn); the same call for CN (600519.SS / 000001.SZ, the 1,200 largest A-shares) and HK (the 1,200 candidates) into cn_yahoo / hk_yahoo, weekly, ~12 min each the first time. Yahoo's A-share series were current on 2026-11-01 (600519 to 2026-06-30, 300750 to 2026-09-30); a series older than the freshness rule leaves EBIT/EV out for that stock.
   - Not used: FMP's free key. It served 7 of 184 gap companies (402 "premium" for ASML, NVO, SAP, AZN, SHEL, HSBC, TM, RY...) and stops at ~250 calls a day, which dropped 168 of the top 800.
   - Annual history (Phase 7): the same companyfacts files, forms 10-K, 20-F and 40-F, in us-gaap or ifrs-full: 20-F filers such as TSM and NVO report in ifrs-full (NVO has no ProfitLossAttributableToOwnersOfParent: ProfitLoss and Equity instead), ASML and BABA in us-gaap. One currency per company, the one with the most annual figures (TSM: TWD; its USD convenience figures cover the same years but appear only once each). Companies SEC has no annual history for: Yahoo fundamentals-timeseries annual types (4-5 years).
   - Monthly prices (Phase 7): the Yahoo chart API with interval=1mo and events=div,split over 11 years, for the candidates, ^GSPC and FX (<CUR>=X). Yahoo's closes are split-adjusted (NVDA Nov 2015: 0.79); they are stored as traded (× later split ratios: 31.72) to match the book value per share reported then, and monthly returns come from adjclose. Bars start at local midnight, and the current month appears twice (month start and last trade): only complete months are kept.
@@ -535,10 +636,7 @@ sectors within ±5% of the parent, each stock within ±2% of its parent weight);
     (~7 min): the +1y period's avg, numberOfAnalysts, earningsCurrency and epsTrend's 90daysAgo (the same fiscal year:
     MU's +1y is FY2028, 162.9 then and 206.9 now, while its 0y FY2027 was 153.9 then). epsRevisions counts up and down
     revisions for 7 and 30 days only (90 days is blank).
-  - S&P 500 weights (stage 3, verified 2026-10-26): SPY's daily holdings file,
-    www.ssga.com/library-content/products/fund-data/etfs/us/holdings-daily-us-en-spy.xlsx (the old intermediary path
-    redirects there): Name, Ticker, ..., Weight (%), an "As of" line; 503 lines, cash lines without a ticker left out;
-    read with zipfile and ElementTree. Share classes are summed per issuer by SEC CIK (GOOGL + GOOG).
+  - S&P 500 weights: SPY's holdings file was read in stage 3's first version; removed in the redo (US free float ≈ total value by sector).
   - Price history and dividends: the Yahoo chart API (v8/finance/chart), one call per stock, incremental. It answers 429 to a full browser User-Agent but works with "Mozilla/5.0". Returns come from the adjusted close inside each response (splits and dividends included), stored as close + implied prev_close like the CN table. Index: ^GSPC (stored as SPX). The fetch updates every stock behind the newer of the index's and the largest candidate's latest day; the trading days (the screen's last day, momentum and volatility) are the days with prices for at least half as many stocks as the busiest day, in every market (2026-10-21 fix: Yahoo's ^HSI skipped 2026-10-20).
   - 10-year yield: FRED DGS10 (FRED_API_KEY).
   - FX for gap companies reporting in another currency: Yahoo "<CUR>=X" (21 currencies on 2026-10-17; ECB rates via frankfurter have no TWD, CLP, COP, PEN or KZT).

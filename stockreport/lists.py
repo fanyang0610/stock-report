@@ -1,8 +1,7 @@
-"""The lists (PLAN.md, "Lists"): the 20-name buy portfolio, built from the index fund's own index like S&P DJI's QVM
-multi-factor index, sector by sector (each sector its index weight; in it the top fifth by score, the largest index
-weight × score taken; the money index weight × score, within UCITS 5/10/40), your holdings checked by NAPS's 12-month
-rule, and the 10 avoid names. Your holdings are in data/holdings.csv (`hold`); without it the check covers the names
-of the last 12 months' buy portfolios that aren't in today's."""
+"""The lists (PLAN.md, "Lists"): the 20-name buy portfolio from the whole scored market (each sector its places by its
+share of the market's free-float value, filled by its best scores, equal amounts; Quantitative Value's screen first),
+your holdings checked by NAPS's 12-month rule, and the 10 avoid names. Your holdings are in data/holdings.csv (`hold`);
+without it the check covers the names of the last 12 months' buy portfolios that aren't in today's."""
 
 from datetime import date, timedelta
 
@@ -13,26 +12,36 @@ from stockreport import track, verdicts
 from stockreport.config import CONFIG, DATA
 
 HOLDINGS = DATA / "holdings.csv"
-HOME = "United States"  # without the S&P 500 file, US buys only among home listings
 LOT = {"cn": 100, "us": 1}  # HK: each stock's board lot (HKEX)
 REVIEW = 0.5  # before the anniversary review below the middle of the sector; at it keep the top fifth (`top_share`)
 WINDOW = 30  # days after an anniversary in which a holding is judged at it (the time to sell); then a new year starts
-COLUMNS = ["list", "rank", "code", "name", "sector", "weight", "index_weight", "sector_weight", "price", "price_date",
-           "lot", "lot_cost", "score", "score_rank", "f_value", "f_quality", "f_momentum", "g_value", "g_quality",
+PARTNERSHIP = r"(?:\bL\.?P\.?|Limited Partnership)$"  # US master limited partnerships (K-1 units)
+COLUMNS = ["list", "rank", "code", "name", "sector", "weight", "price", "price_date", "lot", "lot_cost", "score",
+           "score_rank", "f_value", "f_quality", "f_growth", "f_momentum", "g_value", "g_quality", "g_growth",
            "g_momentum", "why", "weak", "risk", "status", "reason", "since", "recheck", "period", "np_ytd", "np_ttm",
            "report_currency"]
 
 
-def parent(df: pd.DataFrame, market: str) -> pd.Series:
-    """Each stock's weight in the index fund's index, over the scored stocks (0 outside it): the CSI 300's and the S&P
-    500's from their files (universe.index_weights); HK's, and a market's whose file is missing, the largest
-    `buy_largest` by listed value (HK-listed shares × price; else market value; US home listings), weighted by it."""
-    w = df["index_weight"] if "index_weight" in df else pd.Series(np.nan, index=df.index)
-    if w.notna().sum() == 0:
-        value = df["listed_value"].fillna(df["mcap"]) if "listed_value" in df else df["mcap"]
-        home = df["country"].fillna(HOME) == HOME if market == "us" else pd.Series(True, index=df.index)
-        w = value[home].nlargest(CONFIG["lists"]["buy_largest"][market]).reindex(df.index)
-    return (w / w.sum()).fillna(0)
+def screened(df: pd.DataFrame) -> pd.Series:
+    """Quantitative Value's first step (Gray and Carlisle 2012): the `screen` share of non-financials most likely to
+    fail (Campbell-Hilscher-Szilagyi, signals.distress) or with the largest scaled total accruals (sta: the latest
+    fiscal year's working-capital increase less depreciation over assets, Sloan 1996) can't be bought; they stay
+    scored and can be avoided. A stock without the figure isn't screened."""
+    share, fin = CONFIG["lists"]["screen"], df["financial"].astype(bool)
+    worst = lambda x: x[~fin].rank(pct=True, ascending=False) <= share
+    sta = df["sta"] if "sta" in df else pd.Series(np.nan, index=df.index)
+    return (worst(df["distress"]) | worst(sta)).reindex(df.index, fill_value=False)
+
+
+def buyable(df: pd.DataFrame, market: str) -> pd.Series:
+    """Can be bought: not screened; not a small cap (HK: the names making up the last `small_share` of the field's
+    free-float value, Hang Seng's SmallCap band; the CN and US fields, the 800 largest, are large and mid caps already);
+    not a partnership (a non-US holder pays 10% of a sale's gross proceeds and withholding on distributions; the S&P
+    500 excludes them). The rest stay scored, avoidable and checked as holdings."""
+    small = CONFIG["lists"]["small_share"].get(market, 0.0)
+    value = df["float_value" if "float_value" in df else "mcap"].sort_values(ascending=False, kind="stable")
+    large = (value.cumsum().shift(fill_value=0) / value.sum() < 1 - small).reindex(df.index)
+    return ~screened(df) & large & ~df["name"].astype(str).str.contains(PARTNERSHIP)
 
 
 def slots(weights: pd.Series, n: int, room: pd.Series) -> pd.Series:
@@ -48,45 +57,20 @@ def slots(weights: pd.Series, n: int, room: pd.Series) -> pd.Series:
     return out
 
 
-def positions(df: pd.DataFrame, w: pd.Series, n: int) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """The n buys and the bench (the next one in each sector held). Each sector gets places by its index weight; its
-    top fifth by score qualify (at least its places), and the places go to the largest index weight × score, an S&P
-    QVM index's largest positions; past the qualifiers, by score."""
-    members = df[w.reindex(df.index) > 0].assign(index_weight=w)
-    sector_weight = members.groupby("sector")["index_weight"].sum()
-    k = slots(sector_weight, n, members["sector"].value_counts())
+def positions(df: pd.DataFrame, n: int, market: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The n buys and the bench (the next one in each sector held), from the scored stocks that can be bought. Each
+    sector gets places by its share of the scored market's free-float value (float_value, universe.py), filled by its
+    best scores; equal amounts."""
+    share = df.groupby("sector")["float_value" if "float_value" in df else "mcap"].sum()
+    field = df[buyable(df, market)]
+    k = slots(share, n, field["sector"].value_counts())
     buys, bench = [], []
-    for sector, g in members[members["sector"].map(k) > 0].groupby("sector"):
-        g = g.sort_values("score", ascending=False).assign(sector_weight=sector_weight[sector])
-        top = max(k[sector], int(np.ceil(len(g) * CONFIG["lists"]["top_share"])))
-        qual = g.iloc[:top].assign(size=g["index_weight"] * g["score"]).sort_values("size", ascending=False)
-        order = pd.concat([qual, g.iloc[top:]])
-        buys.append(order.iloc[:k[sector]])
-        bench.append(order.iloc[k[sector]:k[sector] + 1])
-    buys = pd.concat(buys)
-    return buys.assign(weight=weigh(buys)).sort_values("weight", ascending=False), pd.concat(bench)
-
-
-def weigh(buys: pd.DataFrame) -> pd.Series:
-    """Each buy's share of the money: each sector its index weight (over the sectors held), inside it index weight ×
-    score (S&P's QVM weighting); UCITS 5/10/40 (the four largest positions up to 10%, the rest up to 5%), a capped
-    name's excess going to its sector's other names, else to all."""
-    big, small, n_big = CONFIG["lists"]["caps"]
-    size, sector = buys["index_weight"] * buys["score"], buys["sector"]
-    held = buys.drop_duplicates("sector").set_index("sector")["sector_weight"]
-    w = size / size.groupby(sector).transform("sum") * sector.map(held / held.sum())
-    cap = pd.Series(small, index=buys.index)
-    cap[size.nlargest(n_big).index] = big
-    for _ in range(len(buys)):
-        excess = (w - cap).clip(lower=0)
-        if excess.sum() < 1e-12:
-            break
-        w = w.clip(upper=cap)
-        for s, e in excess[excess > 0].groupby(sector[excess > 0]).sum().items():
-            room = (w < cap - 1e-12) & (sector == s)
-            room = room if room.any() else w < cap - 1e-12
-            w[room] += e * size[room] / size[room].sum()
-    return w
+    for sector, g in field[field["sector"].map(k) > 0].groupby("sector"):
+        g = g.sort_values("score", ascending=False)
+        buys.append(g.iloc[:k[sector]])
+        bench.append(g.iloc[k[sector]:k[sector] + 1])
+    buys = pd.concat(buys).sort_values("score", ascending=False)
+    return buys.assign(weight=1 / len(buys)), pd.concat(bench)
 
 
 def capped(ranked: pd.DataFrame, n: int, cap: int) -> pd.DataFrame:
@@ -99,10 +83,6 @@ def capped(ranked: pd.DataFrame, n: int, cap: int) -> pd.DataFrame:
             if len(keep) == n:
                 break
     return ranked.loc[keep]
-
-
-def buy_field(df: pd.DataFrame, market: str) -> pd.Series:
-    return parent(df, market) > 0
 
 
 def anniversary(d: date, years: int = 1) -> date:
@@ -138,8 +118,7 @@ def held(market: str, today: date, buys: pd.Index) -> pd.DataFrame:
 
 def check(df: pd.DataFrame, market: str, today: date, buys: pd.DataFrame, dropped: dict[str, str]) -> pd.DataFrame:
     """继续持有 / 复核 / 卖出 per holding (PLAN.md, "Holding rule"), judged as the buys are picked: by the score's rank
-    among its sector's names in the index; the results review adds its findings (review.apply)."""
-    field = df[buy_field(df, market)]
+    among its sector's scored names; the results review adds its findings (review.apply)."""
     holdings = held(market, today, buys.index)
     swap = next((f"{c} {buys.at[c, 'name']}" for c in buys.index if c not in holdings.index), "")
     rows = []
@@ -150,8 +129,8 @@ def check(df: pd.DataFrame, market: str, today: date, buys: pd.DataFrame, droppe
             rows.append(row | {"status": "复核", "recheck": today.isoformat(),
                                "reason": f"今日未评分（{dropped.get(code, '不在市值前列或数据不全')}）"})
             continue
-        others = field.loc[(field["sector"] == df.at[code, "sector"]) & (field.index != code), "score"]
-        others = others if len(others) else field.loc[field.index != code, "score"]
+        others = df.loc[(df["sector"] == df.at[code, "sector"]) & (df.index != code), "score"]
+        others = others if len(others) else df.loc[df.index != code, "score"]
         rank, n = int((others > df.at[code, "score"]).sum()) + 1, len(others) + 1
         place = f"同行业 {n} 只中第 {rank} 名"
         if years is None and rank > n * REVIEW:
@@ -175,7 +154,7 @@ def build(df: pd.DataFrame, market: str, today: date, dropped: dict[str, str]) -
     df = df.assign(lot=df["lot"] if "lot" in df else LOT[market])
     df["lot_cost"] = df["price"] * df["lot"]
     ranked = df.sort_values("score", ascending=False)
-    buys, bench = positions(ranked[~ranked.index.isin(list(vetoes))], parent(df, market), cfg["buys"])
+    buys, bench = positions(ranked[~ranked.index.isin(list(vetoes))], cfg["buys"], market)
     bench = bench.sort_values("score", ascending=False)  # each replaces a removed buy of its sector (review.apply)
     avoid = capped(ranked[ranked["mcap_rank"] <= cfg["avoid_largest"]].iloc[::-1], cfg["avoid"], cfg["per_sector"])
     parts = [buys.assign(list="buy", rank=range(1, len(buys) + 1), recheck=anniversary(today).isoformat()),

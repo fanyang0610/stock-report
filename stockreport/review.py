@@ -18,7 +18,7 @@ import httpx
 import pandas as pd
 from dotenv import dotenv_values
 
-from stockreport import deepdive, lists, notes, quotes
+from stockreport import deepdive, notes, quotes
 from stockreport.config import CONFIG, DATA, REPORTS, ROOT
 from stockreport.fetch import filings, news
 
@@ -309,7 +309,7 @@ def apply(rows: pd.DataFrame, market: str, states: dict | None, deep: dict, conf
     """The lists after the review (states: code -> state; deep: code -> deep-dive findings; confirmed: code -> your
     confirm verdict in force). A buy with a hard red flag or data_suspect is removed (list 'removed', with the reason)
     and the next name of its sector not blocked takes its place (else the best other one; its 'replaces' names the
-    removed one), the money split again (lists.weigh); a holding with a hard
+    removed one), equal amounts again; a holding with a hard
     red flag becomes 卖出, with data_suspect or a soft concern (if it was 继续持有) 复核; avoid names keep their place.
     Your confirm keeps a name as the lists have it, and its card says so. Every row gets its review line and AI note.
     Without states (the build), only the 'next' rows are dropped."""
@@ -336,9 +336,8 @@ def apply(rows: pd.DataFrame, market: str, states: dict | None, deep: dict, conf
                             "status": f"由 {replace['code']} {replace['name']} 替换" if replace else "候补已用完"})
         keep += [replace | {"replaces": b["code"]}] if replace else []
     keep = pd.DataFrame(keep).assign(list="buy") if keep else pd.DataFrame()
-    if removed and len(keep):
-        keep["weight"] = lists.weigh(keep.set_index("code")).to_numpy()
-    keep = keep.sort_values("weight", ascending=False) if len(keep) else keep
+    if len(keep):
+        keep = keep.assign(weight=1 / len(keep)).sort_values("score", ascending=False)
     keep["rank"] = range(1, len(keep) + 1)
     rest = rows[~rows["list"].isin(["buy", "next"])].copy()
     for i, r in rest[(rest["list"] == "holding") & ~rest["code"].isin(list(confirmed))].iterrows():

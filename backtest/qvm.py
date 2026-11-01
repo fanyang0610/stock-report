@@ -1,20 +1,21 @@
-"""The history run (docs/PLAN.md, "The history run"; stage 1, again in stage 3): the app's own score and list
-(stockreport.score, stockreport.lists) on every month-end snapshot (backtest/run.py), each month's 20-name portfolio and
-its 10 and 5 largest positions held 12 months after a round trip of costs against the index fund with dividends (SPY,
+"""The history run (docs/PLAN.md, "The history run"; stage 1, again in stage 3 and its redo): the app's own score and
+list (stockreport.score, stockreport.lists) on every month-end snapshot (backtest/run.py), each month's 20-name portfolio
+and its 10 and 5 highest scores held 12 months after a round trip of costs against the index fund with dividends (SPY,
 2800.HK, 510300.SS), and each family's top fifth against its bottom fifth. It fills the report's 预期 line
 (data/history/expect.json) and catches bugs; it decides nothing else.
-- Portfolios: the app's buy rule each month (lists.positions and lists.weigh) on a stand-in for the index: no free
-  index history exists, so each stock's market value then × today's float factor (its index weight today over its share
-  of market value; HK: HK-listed ÷ all shares; float_factors), the largest 300 (CN), 500 (US: home listings and today's
-  S&P 500 names) and 200 (HK). Held 12 months at the list's weights (the 10 and 5 largest scaled to the whole); a
-  cohort's 12 months run month end to month end (CN: month-end trading days). The snapshots have no consensus
-  estimates (CN's only from 2026), so the score has no forward E/P or revisions here.
+- Portfolios: the app's buy rule each month (lists.positions: each sector's places by its share of the free-float
+  value, its best scores, equal amounts, the screen) on the whole snapshot (the 800 largest; HK all that pass the
+  floors). Free float then: CN market value × today's CSI 300 float factor (the median outside it; float_factors), HK
+  market value × today's HK-listed share of all shares, US market value. Held 12 months; a cohort's 12 months run month
+  end to month end (CN: month-end trading days). The snapshots have no consensus estimates (CN's only from 2026) and
+  Yahoo keeps no history of EBIT, debt, cash and accruals, so the score has no forward E/P, revisions or EBIT/EV here
+  and the screen doesn't run; the long-run components come from the annual reports public by each date.
 - The largest fall: the Jegadeesh-Titman portfolio, 1/12 of the money in each of the last 12 cohorts, each month's
   return the cohorts' average (cost spread as 1/12 of a round trip a month), against the fund over the same months.
-- Snapshots built before stage 1 carry inputs winsorized at 2/98% (ROE, debt, 12-1 momentum: ties at the extremes) and
-  dropped stocks without growth figures; US gross profit has no Yahoo fill here; all three hold today's listings
-  (Eastmoney drops delisted A-shares), and CN 扣非 figures are Eastmoney's latest (restated) ones under the first notice
-  date. The score's financials are set by today's definitions (stockreport.universe) on each snapshot.
+- Snapshots built before stage 1 carry inputs winsorized at 2/98% (ROE, debt, 12-1 momentum, growth: ties at the
+  extremes) and dropped stocks without growth figures; US gross profit has no Yahoo fill here; all three hold today's
+  listings (Eastmoney drops delisted A-shares), and CN 扣非 figures are Eastmoney's latest (restated) ones under the
+  first notice date. The score's financials are set by today's definitions (stockreport.universe) on each snapshot.
 
   uv run python -m backtest.qvm frame cn|us|hk   # the score on every snapshot: data/backtest/qvm_<market>.pkl
   uv run python -m backtest.qvm run cn|us|hk     # portfolios and families; writes data/history/expect.json
@@ -33,36 +34,25 @@ from backtest.funnel import COST, PERIODS
 from backtest.stage1 import ETF
 from stockreport import history, lists, signals, universe
 from stockreport.config import CONFIG, DATA
-from stockreport.fetch import eastmoney, sec, swclass, yahoo
+from stockreport.fetch import eastmoney, index, sec, swclass, yahoo
 from stockreport.score import score
 
 SIZES, HOLD = (20, 10, 5), 12
-FIELD = {"cn": 300, "us": 500, "hk": 200}  # the stand-in index: the largest by float-adjusted value
-KEEP = ["name", "sector", "financial", "country", "mcap_rank", "mcap", "index_weight", "price", "score", "f_value",
-        "f_quality", "f_momentum"]
+KEEP = ["name", "sector", "financial", "country", "mcap_rank", "mcap", "float_value", "price", "score", "distress",
+        "f_value", "f_quality", "f_growth", "f_momentum"]
 EXPECT = history.HISTORY / "expect.json"
 
 
 def float_factors(market: str) -> pd.Series:
-    """Today's float factor per stock: its index weight over its share of market value (CN, US: the index files), HK
-    its HK-listed shares over all its shares (Yahoo's quote, the newest snapshot's shares)."""
+    """Today's free-float factor per stock (CN: the CSI 300 file's, relative, as universe.cn_float reads it; HK: its
+    HK-listed shares over all its shares), from the newest snapshot; US none (market value)."""
     snap = pd.read_csv(sorted((DATA / "snapshots").glob(f"*/{market}.csv.gz"))[-1], dtype={"code": str}).set_index("code")
     if market == "hk":
         listed = pd.read_csv(yahoo.HK_SHARES, dtype={"code": str}).drop_duplicates("code").set_index("code")["shares_class"]
         return (listed / snap["shares"]).dropna().clip(upper=1)
-    w = universe.index_weights(snap, market).dropna()
-    value = snap["mcap"].reindex(w.index)
-    return w / w.sum() / (value / value.sum())
-
-
-def stand_in(s: pd.DataFrame, market: str, factor: pd.Series) -> pd.Series:
-    """The index's weights on a past snapshot: market value × today's float factor (the median where unknown), the
-    largest FIELD names (US: home listings and today's S&P 500 names)."""
-    value = s["mcap"] * factor.reindex(s.index).fillna(factor.median())
-    if market == "us":
-        value = value[(s["country"].fillna(lists.HOME) == lists.HOME) | s.index.isin(factor.index)]
-    top = value.nlargest(FIELD[market])
-    return (top / top.sum()).reindex(s.index)
+    if market == "cn":
+        return universe.cn_float(snap["mcap"], index.load()) / snap["mcap"]
+    return pd.Series(dtype=float)
 
 
 # ---------------------------------------------------------------- the score on each snapshot
@@ -100,12 +90,14 @@ def frame(market: str) -> pd.DataFrame:
         deduct = pd.read_csv(eastmoney.CN_DEDUCT, dtype={"code": str, "period": str, "notice_date": str})
     if market == "hk":
         ytd = history.hk_results().sort_values("date_type").drop_duplicates(["code", "period"]).set_index(["code", "period"])
+    years = history.YEARS[market]()
     for m, d in snaps.items():
         if m < run.START.get(market, ""):
             continue
         s = prepare(d["snap"], market, m, ytd)
-        s["index_weight"] = stand_in(s, market, factor)
+        s["float_value"] = s["mcap"] * (factor.reindex(s.index).fillna(factor.median()) if len(factor) else 1.0)
         day = run.day_of(market, m)
+        s = s.join(signals.long_run(years, day.isoformat()))
         cn = signals.cn_deduct(deduct, (day - timedelta(days=1)).isoformat()) if market == "cn" else None  # public before
         sc = score(s, market, cn, lines=False)
         rows.append(sc.reindex(columns=KEEP + [c for c in sc if c.startswith("p_")]).join(d["fwd"]).assign(date=m))
@@ -157,18 +149,17 @@ class Paths:
 
 
 def portfolios(f: pd.DataFrame, market: str) -> dict[str, pd.Series]:
-    """Each month's 20-name list: code -> weight (lists.positions on the stand-in index)."""
+    """Each month's 20-name list: code -> weight (lists.positions, in score order)."""
     out = {}
     for d, g in f.groupby("date"):
-        g = g.set_index("code").sort_values("score", ascending=False)
-        buys, _ = lists.positions(g, lists.parent(g, market), CONFIG["lists"]["buys"])
+        buys, _ = lists.positions(g.set_index("code").sort_values("score", ascending=False), CONFIG["lists"]["buys"], market)
         out[d] = buys["weight"]
     return out
 
 
 def largest(picks: dict[str, pd.Series], n: int) -> dict[str, pd.Series]:
-    """The n largest positions of each list (scaled to the whole in Paths.growth)."""
-    return {d: w.nlargest(n) for d, w in picks.items()}
+    """The n highest scores of each list (the lists are in score order; equal amounts, scaled in Paths.growth)."""
+    return {d: w.iloc[:n] for d, w in picks.items()}
 
 
 def drawdown(monthly: pd.Series) -> float:
@@ -202,7 +193,7 @@ def families(f: pd.DataFrame) -> pd.DataFrame:
     f = f[f["ret_12m"].notna()]
     per = np.select([f["date"].between(*p) for p in PERIODS.values()], list(PERIODS), "")
     rows = {}
-    for col in ("f_value", "f_quality", "f_momentum", "score"):
+    for col in ("f_value", "f_quality", "f_growth", "f_momentum", "score"):
         pct = f.groupby("date")[col].rank(pct=True)
         spread = (f[pct > 0.8].groupby("date")["ret_12m"].mean() - f[pct <= 0.2].groupby("date")["ret_12m"].mean())
         p = pd.Series(per, f.index).groupby(f["date"]).first().reindex(spread.index)

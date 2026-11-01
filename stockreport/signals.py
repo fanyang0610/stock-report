@@ -1,17 +1,24 @@
-"""The score's ingredients (PLAN.md, "The score: three families"): each component per stock, and its percentile among
-its sector's stocks on the date. Inputs are point-in-time: the universe's latest public reports, prices and consensus,
-for CN the quarterly 扣非 profit by notice date (fetch.eastmoney.CN_DEDUCT) and the research reports by publication
-date (fetch.eastmoney.CN_REPORTS)."""
+"""The score's ingredients (PLAN.md, "The score: four families"): each component per stock, and its percentile among
+its sector's stocks on the date; and the distress probability the buys screen on. Inputs are point-in-time: the
+universe's latest public reports, prices and consensus, the annual reports public by the date (history.YEARS), for CN
+the quarterly 扣非 profit by notice date (fetch.eastmoney.CN_DEDUCT) and the research reports by publication date
+(fetch.eastmoney.CN_REPORTS)."""
 
 import numpy as np
 import pandas as pd
 
 FAMILIES = {  # family -> market -> components
-    "value": {m: ["ep", "fep", "bp", "sp"] for m in ("cn", "hk", "us")},
-    "quality": {"cn": ["roe", "cash", "debt"], "hk": ["roe", "cash", "debt"], "us": ["gpa", "cash", "debt"]},
+    "value": {m: ["ep", "fep", "bp", "sp", "ev", "dy"] for m in ("cn", "hk", "us")},
+    "quality": {m: [prof, "cash", "debt", "prof8", "gm8", "vol"] for m, prof in (("cn", "roe"), ("hk", "roe"), ("us", "gpa"))},
+    "growth": {m: ["rg", "pg", "roe5"] for m in ("cn", "hk", "us")},
     "momentum": {"cn": ["sue", "rev"], "hk": ["mom", "rev"], "us": ["mom", "rev"]},
 }
-LOWER_IS_BETTER = {"debt"}
+LOWER_IS_BETTER = {"debt", "vol"}
+LONG_YEARS, LONG_MIN, ROE_CLIP = 8, 5, (-0.5, 1.5)  # the last 8 fiscal years, at least 5; a yearly ratio on a tiny base
+# Campbell, Hilscher and Szilagyi (2008), Table 4, failure within 12 months (Gray and Carlisle's distress screen). For a
+# ranking the constant, the index's return in EXRETAVG and the market total in RSIZE drop out; PRICE (log price capped
+# at $15) is left out, a US small-stock term.
+CHS = {"nimta": -20.264, "tlmta": 1.416, "exret": -7.129, "sigma": 1.411, "rsize": -0.045, "cashmta": -2.132, "mb": 0.075}
 SUE_QUARTERS, SUE_MIN = 8, 6  # the change's spread over the preceding 8 quarters, at least 6 of them known
 MIN_ANALYSTS = 3  # forward E/P and the revisions need at least 3 estimates (both now and 91 days ago)
 REV_LAG, REV_WINDOW = 91, 180  # CN: the consensus 91 days ago; a broker's estimate stands 180 days (two reports a year)
@@ -65,12 +72,51 @@ def cn_revisions(reports: pd.DataFrame, bonus: pd.DataFrame, next_year: pd.Serie
     return est.assign(est_n=est[["n_now", "n_90"]].min(axis=1).fillna(0))[["est_now", "est_90", "est_n"]]
 
 
+def long_run(years: pd.DataFrame, day: str) -> pd.DataFrame:
+    """Per stock, from its last LONG_YEARS fiscal years public by `day` (history.YEARS: code, year, roe, core, book,
+    gm, avail and, US, roa), at least LONG_MIN of them: the average profitability (prof8: US ROA, CN and HK ROE;
+    Gray and Carlisle's franchise power), gross-margin stability (gm8: mean ÷ standard deviation) and the 5-year growth
+    in profit over the book 5 years before (roe5: the latest year's profit minus that year's, Asness, Frazzini and
+    Pedersen's growth in ROE)."""
+    y = years[(years["avail"] != "") & (years["avail"] <= day)].sort_values(["code", "year"])
+    y = y.groupby("code").tail(LONG_YEARS).copy()
+    y["prof"] = (y["roa"] if "roa" in y else y["roe"]).clip(*ROE_CLIP)  # US ROA only, never mixed with ROE
+    g, gm = y.groupby("code"), y.groupby("code")["gm"]
+    last = y.drop_duplicates("code", keep="last").set_index("code")
+    before = y.set_index(["code", "year"])[["core", "book"]].reindex(
+        pd.MultiIndex.from_arrays([last.index, last["year"] - 5])).set_axis(last.index)
+    return pd.DataFrame({"prof8": g["prof"].mean().where(g["prof"].count() >= LONG_MIN),
+                         "gm8": (gm.mean() / gm.std().where(gm.std() > 0)).where(gm.count() >= LONG_MIN),
+                         "roe5": ((last["core"] - before["core"]) / before["book"].where(before["book"] > 0))})
+
+
+def distress(df: pd.DataFrame) -> pd.Series:
+    """Campbell-Hilscher-Szilagyi's failure logit without its constant (higher = more likely to fail), non-financials:
+    trailing profit as a quarter's over market value + liabilities, liabilities and cash over it, the 12-month log
+    return as a monthly average, 3-month volatility, log market value and market over book (book + a tenth of the
+    gap, as CHS adjust it; still not positive: the highest). Each input winsorized at its 5th and 95th percentile
+    among the market's non-financials, as CHS winsorize theirs. NaN where liabilities or cash are missing: not
+    screened."""
+    col = lambda c: df[c] if c in df else pd.Series(np.nan, index=df.index)
+    fin = df["financial"].astype(bool)
+    liab = col("liabilities").fillna(col("liab_y"))
+    mta, book = df["mcap"] + liab, df["bps"] * col("shares")
+    adj = book + 0.1 * (df["mcap"] - book)
+    x = {"nimta": df["np_ttm"] / 4 / mta, "tlmta": liab / mta, "exret": np.log1p(col("ret_12m")) / 12,
+         "sigma": col("vol_3m"), "rsize": np.log(df["mcap"]), "cashmta": col("cash") / mta,
+         "mb": (df["mcap"] / adj).mask(adj <= 0, np.inf)}
+    bounds = lambda v: v[~fin].replace(np.inf, np.nan).quantile([0.05, 0.95])
+    return sum(CHS[k] * v.clip(*bounds(v)) for k, v in x.items()).where(~fin)
+
+
 def components(df: pd.DataFrame, market: str, cn: pd.DataFrame | None = None) -> pd.DataFrame:
     """Each component's raw value (NaN where it doesn't apply). E/P on 扣非 TTM in CN (reported profit where 扣非 is
     missing), and on profit to common shareholders in the US (B/P and ROE on common book, history.us_preferred); B/P only on
     a positive book; S/P, cash backing and debt not for banks, insurers and brokers. Forward E/P is next year's consensus
     EPS over the price, the revisions next year's consensus now minus 91 days ago over the price (Chan, Jegadeesh and
-    Lakonishok 1996), both with at least 3 estimates."""
+    Lakonishok 1996), both with at least 3 estimates. EBIT/EV and margin stability not for financials either; growth
+    is the latest report's against a year earlier (CN and HK year to date, US trailing 12 months); the long-run
+    columns come from long_run."""
     fin = df["financial"].astype(bool)
     col = lambda c: df[c] if c in df else pd.Series(np.nan, index=df.index)
     pref = df.get("pref_share", 0.0)
@@ -89,6 +135,10 @@ def components(df: pd.DataFrame, market: str, cn: pd.DataFrame | None = None) ->
         "mom": df["mom_12_1"],
         "fep": (col("eps_e2") / df["price"]).where(col("analysts") >= MIN_ANALYSTS),
         "rev": ((col("est_now") - col("est_90")) / df["price"]).where(col("est_n") >= MIN_ANALYSTS),
+        "ev": (col("ebit") / col("ev")).where(~fin & (col("ev") > 0)),
+        "dy": col("div_yield"),
+        "prof8": col("prof8"), "gm8": col("gm8").where(~fin), "vol": col("vol_1y"),
+        "rg": col("rev_growth"), "pg": col("np_growth"), "roe5": col("roe5"),
     }, index=df.index)
     if market == "us":
         out["gpa"] = (df["gp_ttm"] / df["assets"]).where(~fin & (df["assets"] > 0))

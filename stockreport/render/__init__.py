@@ -59,10 +59,10 @@ def text_summary(report: dict, limit: int = 4000) -> str:
             lines.append(f"注意：{m['stale']}")
         if m.get("expect"):
             lines.append("预期：" + m["expect"][0])
-        lines.append(f"买入组合前 10（共 {len(m['buys'])} 只，从{m.get('index', '指数')}里选，按比例买入，持有 12 个月）：")
+        lines.append(f"买入组合前 10（共 {len(m['buys'])} 只，从{m.get('field', '全市场')}里选，每只等额，持有 12 个月）：")
         for p in m["buys"][:10]:
-            g = p["grades"]
-            lines.append(f"{p['rank']}. {p['ticker']} {p['name']} {p.get('share', '')} 价{g['价值']}质{g['质量']}动{g['动量']}")
+            g = "".join(f"{k[0]}{v}" for k, v in p["grades"].items())
+            lines.append(f"{p['rank']}. {p['ticker']} {p['name']} {g}")
         if m.get("removed"):
             lines.append("审核剔除：" + "；".join(f"{p['name'] or p['ticker']}（{p['reason'].split('（')[0]}）" for p in m["removed"]))
         flagged = [p for k in ("holdings", "avoid") for p in m[k] if (p.get("review") or "").startswith(("审核：", "数据存疑"))]

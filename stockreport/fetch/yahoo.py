@@ -1,11 +1,11 @@
 """Yahoo (query1.finance.yahoo.com; a bare User-Agent, a full browser one gets 429): chart API daily US/HK prices and
 dividends (incremental; returns from each response's adjusted close, stored as close and an implied prev_close);
-fundamentals timeseries (trailing 12 months, reporting currency, weekly) for companies SEC companyfacts can't cover;
-'<CUR>=X' FX and daily '<CUR>CNY=X' history (to undo Eastmoney's CNY conversion of HK figures); quoteSummary HK
-consensus EPS and reporting currency, and for US and HK next year's estimate now and 90 days ago (cookie + crumb); the
-v7 quote's share counts (daily, 100 symbols a call: the US share check, HK's listed shares); on Sundays annual results
-where SEC has none (4-5 years) and
-~11 years of month-end closes, returns and splits for US/HK stocks, their index and the FX own-history P/B needs."""
+fundamentals timeseries (reporting currency, weekly) for companies SEC companyfacts can't cover, and in every market
+for EBIT, debt, cash, minorities and accruals (EBIT/EV, the buys' screen); '<CUR>=X' FX and daily '<CUR>CNY=X' history
+(to undo Eastmoney's CNY conversion of HK figures); quoteSummary HK consensus EPS and reporting currency, and for US
+and HK next year's estimate now and 90 days ago (cookie + crumb); the v7 quote's share counts (daily, 100 symbols a
+call: the US share check, HK's listed shares); on Sundays annual results where SEC has none (4-5 years) and ~11 years
+of month-end closes, returns and splits for US/HK stocks, their index and the FX own-history P/B needs."""
 
 import logging
 import time
@@ -24,30 +24,36 @@ SUMMARY = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}"
 QUOTE = "https://query1.finance.yahoo.com/v7/finance/quote"
 PRICES, DIVIDENDS = DATA / "prices" / "{}.csv.gz", DATA / "fundamentals" / "{}_dividends.csv.gz"
 GAPS, FX, CONSENSUS = DATA / "fundamentals" / "us_yahoo.csv.gz", DATA / "fx.csv", DATA / "fundamentals" / "hk_consensus.csv.gz"
-FX_CNY = DATA / "fx_cny.csv.gz"
+FX_CNY, HISTORY_YEARS = DATA / "fx_cny.csv.gz", 11
 SHARES = DATA / "quotes" / "us_yahoo_shares.csv.gz"  # the share counts of Yahoo's quotes, for crosscheck.us_shares
-HK_SHARES = DATA / "quotes" / "hk_yahoo_shares.csv.gz"  # HK-listed shares (H shares of A+H issuers): the HK parent
+HK_SHARES = DATA / "quotes" / "hk_yahoo_shares.csv.gz"  # HK-listed shares (H shares of A+H issuers): HK's free float
 US_TREND = DATA / "fundamentals" / "us_trend.csv.gz"  # next year's US consensus EPS now and 90 days ago (revisions)
 MONTHLY, SPLITS = HISTORY / "{}_monthly.csv.gz", HISTORY / "{}_splits.csv.gz"
-HISTORY_YEARS = 11
 # annual history columns as in sec.TAXONOMIES; capex and dividends paid are negative in Yahoo, stored positive
 ANNUAL_FIELDS = {"revenue": "TotalRevenue", "gp": "GrossProfit", "op_income": "OperatingIncome", "ni": "NetIncome",
                  "ni_common": "NetIncomeCommonStockholders", "ni_cont": "NetIncomeContinuousOperations",
                  "ocf": "OperatingCashFlow", "capex": "CapitalExpenditure", "div": "CashDividendsPaid",
                  "dil_shares": "DilutedAverageShares", "equity": "StockholdersEquity", "pref": "PreferredStockEquity",
                  "assets": "TotalAssets", "liabilities": "TotalLiabilitiesNetMinorityInterest", "shares": "OrdinarySharesNumber"}
-# ni (net income before preferred dividends, like SEC's NetIncomeLoss) and shares: for the US cross-checks
+# ni (net income before preferred dividends, like SEC's NetIncomeLoss) and shares: for the US cross-checks; EBIT,
+# debt, cash (with short-term investments) and minorities: EBIT/EV and the distress probability; the cash flow's
+# working-capital change and depreciation: the accruals screen (sta), in every market
 FIELDS = {"revenue": "TotalRevenue", "np": "NetIncomeCommonStockholders", "gp": "GrossProfit",
           "ocf": "OperatingCashFlow", "equity": "StockholdersEquity",
           "liabilities": "TotalLiabilitiesNetMinorityInterest", "assets": "TotalAssets",
-          "ni": "NetIncome", "shares": "OrdinarySharesNumber"}
+          "ni": "NetIncome", "shares": "OrdinarySharesNumber", "ebit": "EBIT", "debt": "TotalDebt",
+          "cash": "CashCashEquivalentsAndShortTermInvestments", "minority": "MinorityInterest",
+          "wc": "ChangeInWorkingCapital", "da": "DepreciationAndAmortization", "dep": "ReconciledDepreciation"}
+ANNUAL_AGE_DAYS = 550  # the accruals' fiscal year: its end, the filing ~4 months later, then a year
+BALANCE = ["equity", "liabilities", "assets", "shares", "debt", "cash", "minority"]
 MAX_AGE_DAYS = 200  # same freshness rule as SEC
 # Half-year and annual reporters (no quarterly figures in the last 400 days: BHP, Unilever, National Grid, HDFC Bank...)
 # report the next half within 3-4 months of its end (UK, EU, Australian listing rules), up to ~300 days after the last.
 HALF_YEAR_AGE_DAYS, QUARTERLY_WITHIN_DAYS = 300, 400
 # market -> (index symbol, its code in the price table, ticker -> Yahoo symbol); the index is the
 # trading calendar (and the benchmark in Phase 6): S&P 500, Hang Seng
-MARKETS = {"us": ("^GSPC", "SPX", lambda c: c.replace(".", "-")), "hk": ("^HSI", "HSI", lambda c: f"{int(c):04d}.HK")}
+MARKETS = {"us": ("^GSPC", "SPX", lambda c: c.replace(".", "-")), "hk": ("^HSI", "HSI", lambda c: f"{int(c):04d}.HK"),
+           "cn": (None, None, lambda c: f"{c}.{'SS' if c.startswith('6') else 'SZ'}")}  # CN: fundamentals only
 make_http = lambda: Http(min_interval=0.3, headers={"User-Agent": "Mozilla/5.0"})
 
 
@@ -154,14 +160,20 @@ def parse_timeseries(code: str, payload: dict, today: date) -> dict:
         return {"code": code, "yahoo": "no recent TTM"}
     end = date.fromisoformat(profit[-1][0])
     row = {"code": code, "yahoo": "ok", "period": end.isoformat(), "currency": profit[-1][2]}
-    for key in ("revenue", "np", "gp", "ocf", "ni"):
+    for key in ("revenue", "np", "gp", "ocf", "ni", "ebit"):
         row[f"{key}_ttm"] = near("trailing" + FIELDS[key], end)
-    for key in ("equity", "liabilities", "assets", "shares"):
+    for key in BALANCE:
         points = series.get("quarterly" + FIELDS[key]) or series.get("annual" + FIELDS[key]) or []
         recent = points and abs((date.fromisoformat(points[-1][0]) - end).days) <= MAX_AGE_DAYS
         day, row[key] = points[-1][:2] if recent else (None, None)
         if key == "equity":
             row["balance_period"] = day
+    # Sloan's scaled total accruals (Gray and Carlisle's STA), latest fiscal year: the working-capital increase (the
+    # cash flow's change is negative when it grows) less depreciation, over total assets
+    if (years := series.get("annual" + FIELDS["wc"], [])) and age(years[-1][0]) <= ANNUAL_AGE_DAYS:
+        a = lambda k: near("annual" + FIELDS[k], date.fromisoformat(years[-1][0]))
+        da, assets = a("da") if a("da") is not None else a("dep"), a("assets")
+        row["sta"] = (-years[-1][1] - da) / assets if da is not None and assets else None
     year_ago = end - timedelta(days=365)
     for key, out in (("revenue", "rev_yoy"), ("np", "np_yoy")):
         now = row[f"{key}_ttm"]
@@ -174,22 +186,27 @@ def parse_timeseries(code: str, payload: dict, today: date) -> dict:
     return row
 
 
-def timeseries(client: Http, job: tuple[str, date]) -> dict:
-    code, today = job
+def timeseries(client: Http, job: tuple[str, str, date]) -> dict:
+    code, symbol, today = job
     types = ",".join(f + FIELDS[k] for f in ("trailing", "quarterly", "annual") for k in FIELDS)
-    payload = client.get(TIMESERIES.format(symbol=code.replace(".", "-")), params={
+    payload = client.get(TIMESERIES.format(symbol=symbol), params={
         "type": types, "period1": int(time.time()) - 5 * 365 * 86400, "period2": int(time.time())}).json()
     return parse_timeseries(code, payload, today)
 
 
-def update_gaps(today: date, codes: list[str]) -> None:
-    """Weekly per company: the codes SEC has no recent quarterly numbers for first, then the rest of the
-    candidates, whose Yahoo numbers are only the second source of the cross-checks. A table fetched before
-    balance_period was added is fetched again for every company."""
-    todo = stale(GAPS, codes, today)
-    if GAPS.exists() and "balance_period" not in pd.read_csv(GAPS, nrows=0).columns:
+gaps_path = lambda market="us": GAPS if market == "us" else GAPS.with_name(f"{market}_yahoo.csv.gz")  # US: SEC's gaps
+
+
+def update_gaps(today: date, codes: list[str], market: str = "us") -> None:
+    """Weekly per company. US: the codes SEC has no recent quarterly numbers for first, then the rest of the
+    candidates, whose Yahoo numbers are the second source of the cross-checks; CN and HK: EBIT, debt, cash,
+    minorities and accruals. A table fetched before the accruals were added (stage 3) is fetched again for every
+    company."""
+    path, symbol = gaps_path(market), MARKETS[market][2]
+    todo = stale(path, codes, today)
+    if path.exists() and "sta" not in pd.read_csv(path, nrows=0).columns:
         todo = list(codes)
-    upsert_each(GAPS, make_http, timeseries, [(c, today) for c in todo], today, 2, "yahoo fundamentals")
+    upsert_each(path, make_http, timeseries, [(c, symbol(c), today) for c in todo], today, 2, f"yahoo {market} fundamentals")
 
 
 def crumb_http() -> Http:

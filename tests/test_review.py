@@ -9,6 +9,7 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from stockreport import review
 from stockreport.events import classify
@@ -66,7 +67,7 @@ def test_a_hard_flag_must_name_its_subject():
 
 def row(code: str, lst: str, rank, score: float, **kw) -> dict:
     return {"list": lst, "code": code, "name": code, "rank": rank, "score": score, "sector": "s", "status": None,
-            "reason": None, "weight": 0.05, "index_weight": 0.01, "sector_weight": 0.3} | kw
+            "reason": None, "weight": 0.05} | kw
 
 
 def states(*codes: str) -> dict:
@@ -79,9 +80,9 @@ def states(*codes: str) -> dict:
 
 
 def test_a_hard_flag_removes_a_buy_sells_a_holding_and_is_noted_on_an_avoid_name():
-    rows = pd.DataFrame([row("601225", "buy", 1, 0.95), row("600576", "buy", 2, 0.94, sector="t", sector_weight=0.2),
+    rows = pd.DataFrame([row("601225", "buy", 1, 0.95), row("600576", "buy", 2, 0.94, sector="t"),
                          row("601009", "buy", 3, 0.93), row("688585", "next", 4, 0.92),
-                         row("00728", "next", 5, 0.91, sector="t", sector_weight=0.2),
+                         row("00728", "next", 5, 0.91, sector="t"),
                          row("600576", "holding", None, 0.94, status="继续持有", reason="未到满年"),
                          row("600576", "avoid", 1, 0.10)])
     st = states("601225", "600576", "601009", "688585", "00728")
@@ -89,7 +90,7 @@ def test_a_hard_flag_removes_a_buy_sells_a_holding_and_is_noted_on_an_avoid_name
     buys = out[out["list"] == "buy"]
     assert set(buys["code"]) == {"601225", "601009", "00728"} and buys["rank"].tolist() == [1, 2, 3]
     assert buys.set_index("code").at["00728", "replaces"] == "600576"  # its sector's next name; the scoreboard pairs them
-    assert buys["weight"].is_monotonic_decreasing  # the money split again, largest first
+    assert buys["weight"].tolist() == pytest.approx([1 / 3] * 3)  # equal amounts again
     removed = out[out["list"] == "removed"].iloc[0]
     assert removed["code"] == "600576" and "立案告知书" in removed["reason"] and removed["status"] == "由 00728 00728 替换"
     held = out[out["list"] == "holding"].iloc[0]

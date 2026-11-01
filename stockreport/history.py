@@ -36,7 +36,8 @@ def cn_years() -> pd.DataFrame:
     shares = a["np"] / a["eps"].where(a["eps"].abs() > 0.005)
     return pd.DataFrame({"code": a["code"], "year": a["period"].str[:4].astype(int), "roe": a["roe"] / 100 * core,
                          "core": a["np"] * core, "ni": a["np"], "rev": a["revenue"], "ocf": a["ocfps"] * shares,
-                         "gm": a["gross_margin"] / 100, "fcf": np.nan, "avail": a["notice_date"].fillna("")})
+                         "gm": a["gross_margin"] / 100, "fcf": np.nan, "avail": a["notice_date"].fillna(""),
+                         "book": a["bps"] * shares})
 
 
 def us_annual(today: date | None = None) -> pd.DataFrame:
@@ -52,7 +53,7 @@ def us_annual(today: date | None = None) -> pd.DataFrame:
 
 def us_years() -> pd.DataFrame:
     """US fiscal years on continuing operations less preferred dividends, over book net of preferred
-    equity (reporting currency; only ratios are used)."""
+    equity, and over assets (roa: the long-run profitability, signals.long_run; reporting currency, only ratios)."""
     a = us_annual()
     core = a["ni_cont"].fillna(a["ni"]) - (a["ni"] - a["ni_common"]).clip(lower=0).fillna(0)
     eq = a["equity"] - a["pref"].fillna(0)
@@ -60,7 +61,8 @@ def us_years() -> pd.DataFrame:
     roe = (core / ((eq + prev) / 2).where(prev > 0, eq)).where(eq > 0)
     return pd.DataFrame({"code": a["code"], "year": a["year"], "roe": roe, "core": core, "ni": a["ni"],
                          "rev": a["revenue"], "ocf": a["ocf"], "gm": a["gp"] / a["revenue"],
-                         "fcf": a["ocf"] - a["capex"].fillna(0), "avail": a["avail"]})
+                         "fcf": a["ocf"] - a["capex"].fillna(0), "avail": a["avail"],
+                         "roa": core / a["assets"].where(a["assets"] > 0), "book": eq})
 
 
 def hk_results() -> pd.DataFrame:
@@ -79,7 +81,7 @@ def hk_years() -> pd.DataFrame:
     roe = (fy["roe"] / 100).fillna(fy["np"] / (fy["bps"] * fy["shares"]).where(fy["bps"] > 0))
     return pd.DataFrame({"code": fy["code"], "year": fy["year"], "roe": roe, "core": fy["np"], "ni": fy["np"],
                          "rev": fy["revenue"], "ocf": fy["ocf"], "gm": fy["gross_margin"] / 100, "fcf": np.nan,
-                         "avail": fy["avail"]})
+                         "avail": fy["avail"], "book": fy["bps"] * fy["shares"]})
 
 
 YEARS = {"cn": cn_years, "us": us_years, "hk": hk_years}

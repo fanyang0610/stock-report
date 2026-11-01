@@ -1,5 +1,5 @@
-"""End-to-end dry run: a saved CN universe (the 400 largest, 2026-10-24, without the CSI 300 file: its parent is the
-largest 300 by market value) -> score -> lists -> lists CSV -> PDF + text summary + data/picks.csv, with one recorded
+"""End-to-end dry run: a saved CN universe (the 400 largest, 2026-10-24, without free-float values: sector places by
+market value) -> score -> lists -> lists CSV -> PDF + text summary + data/picks.csv, with one recorded
 holding, one of your vetoes, HK's lists only from the day before, and the same lists as US's (no index-core advice
 anywhere); then the same day built again with a results review that found a hard red flag on the top buy and a soft
 concern on the holding."""
@@ -27,7 +27,7 @@ def test_report_dry_run(tmp_path, monkeypatch):
     monkeypatch.setattr(verdicts, "periods", lambda m: pd.Series(dtype=str))
     df = pd.read_csv(SAMPLES / "cn_universe_sample.csv", dtype={"code": str, "period": str}).set_index("code")
     scored = score(df, "cn", df[["deduct_ttm", "sue"]])
-    top = scored[scored["mcap_rank"] <= 300].sort_values("score", ascending=False).index[0]
+    top = scored.sort_values("score", ascending=False).index[0]
     verdicts.add(top, "veto", "2026-12-31", "测试否决", DAY)
     lists.hold("600519", "2025-06-30", False, DAY)
     run = {"first": "2019-01", "last": "2025-09", "windows": 81, "fund_drawdown": -0.365, "portfolios": {
@@ -46,11 +46,12 @@ def test_report_dry_run(tmp_path, monkeypatch):
     pdf, summary = report.build(DAY)
 
     buys, avoid = out[out["list"] == "buy"], out[out["list"] == "avoid"]
-    field = scored[scored["mcap_rank"] <= 300]
-    places = lists.slots(field.groupby("sector")["mcap"].sum(), 20, field["sector"].value_counts())
-    assert len(buys) == 20 and buys["sector"].value_counts().to_dict() == places[places > 0].to_dict()  # the index's mix
-    assert buys["weight"].sum() == pytest.approx(1) and buys["weight"].max() <= 0.1 + 1e-9
-    assert (buys["weight"] > 0.05 + 1e-9).sum() <= 4 and buys["weight"].is_monotonic_decreasing  # UCITS 5/10/40
+    field = scored.drop(index=top)[~lists.screened(scored.drop(index=top))]  # the whole scored market, screened
+    places = lists.slots(scored.groupby("sector")["mcap"].sum(), 20, field["sector"].value_counts())
+    assert len(buys) == 20 and buys["sector"].value_counts().to_dict() == places[places > 0].to_dict()  # the market's mix
+    for sector, k in places[places > 0].items():  # each sector's best scores
+        assert set(buys.loc[buys["sector"] == sector, "code"]) == set(field[field["sector"] == sector].nlargest(k, "score").index)
+    assert (buys["weight"] == 0.05).all() and buys["score"].is_monotonic_decreasing  # equal amounts
     assert len(avoid) == 10 and avoid["sector"].value_counts().max() <= 2
     assert top not in set(buys["code"]) and out.loc[out["list"] == "veto", "code"].tolist() == [top]
     held = out[out["list"] == "holding"].iloc[0]
@@ -70,8 +71,8 @@ def test_report_dry_run(tmp_path, monkeypatch):
     assert "你的否决（至 2026-12-31）：测试否决" in html and html.count('class="card"') == 60  # CN, US and HK buys
     us = summary.split("【美股 US】")[1].split("【港股 HK】")[0]
     assert "预期：模拟回测（2019-01 至 2025-09 每月建仓的 81 个 12 个月，扣交易成本）：20 只组合" in us
-    assert "从标普500里选，按比例买入" in us and f"1. {buys.iloc[0]['code']} " in us and f"{buys.iloc[0]['weight']:.1%}" in us
-    assert not any(w in summary + html for w in ("建议配置", "指数基金", "标普500指数基金", "只买 20 只"))
+    assert "从美股市值前 800 只里选，每只等额" in us and f"1. {buys.iloc[0]['code']} " in us and "价" in us and "成" in us
+    assert not any(w in summary + html for w in ("建议配置", "指数基金", "标普500指数基金", "只买 20 只", "指数权重", "从标普500"))
     assert pdf.stat().st_size > 10_000 and report.newest() == ("2026-10-24", pdf, summary)
     logged = track.load()
     assert len(logged) == 60 and set(logged["market"]) == {"cn", "us"}  # today's lists only (HK's are from the day before)
