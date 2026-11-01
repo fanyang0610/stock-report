@@ -357,7 +357,7 @@ momentum drive the score (fixed in stage 1 after the stage review).
   says so (corrected in stage 1: this line said CN had delisted names).
 
 ### Results review (stage 2; only when you ask for a report)
-The numbers can't see a fraud investigation, a going-concern doubt, a takeover at a fixed price, or a story the market is
+The numbers can't see a fraud investigation, a going-concern doubt, an agreed takeover, or a story the market is
 worried about. DeepSeek reads the stock's non-routine filings of the last 90 days (CNINFO, HKEXnews, SEC) and free
 headlines, at temperature 0 with a fixed checklist and JSON out; every finding quotes its source and code checks the
 quote (quotes.py). It never changes a number (rule 2). It reviews the 20 buys, the bench (the next name of each sector
@@ -368,7 +368,11 @@ build makes no DeepSeek calls.
 - **Hard red flags** remove a buy (the next-ranked name takes its place, listed under 审核剔除 with the reason and
   source), turn a holding into 卖出, and are noted on an avoid name: a regulator's investigation, a fraud finding or a
   Wells notice; a non-standard audit opinion or the auditor resigning; a going-concern doubt or a debt default; delisting
-  or ST risk, or a suspension; a takeover or privatisation at a fixed price; sanctions or a ban naming the company.
+  or ST risk, or a suspension; an agreed takeover, merger or privatisation not yet completed, for cash, the acquirer's
+  shares or both (2026-11-01: the rule first said "at a fixed price", which missed Kenvue, a US buy whose sale to
+  Kimberly-Clark for 0.14625 of its shares plus $3.50 a share is pending: once a sale is agreed, the price follows the
+  deal's terms and the acquirer, not the company's own results, and it stops trading at the closing); sanctions or a ban
+  naming the company.
 - **Soft concerns only annotate** (an industry downturn, a lost customer, a guidance cut, management leaving,
   litigation, a one-off gain): the card says 市场可能在担心 … and a holding gets 复核. Cheap stocks carry bad news by
   nature, and that is where value pays off on average.
@@ -433,7 +437,10 @@ build makes no DeepSeek calls.
     that size fails the second-source cross-checks). The same reading gives the hard flags of a non-standard audit
     opinion, a going-concern doubt, an investigation opened or a fraud finding (立案, a Wells notice, an SEC subpoena or
     the Division of Enforcement, 欺诈, 虚假记载, 造假; legal-proceedings boilerplate such as "in the ordinary course" and
-    denials are not) and an offer price, and the soft concern of non-recurring items at 30%+ of the period's profit (a
+    denials are not), an offer price, and an agreed sale of the company not yet completed (the quote must name the
+    company as the one acquired: "acquire ... the Company", "Company shareholders will receive", 被吸收合并, 协议安排;
+    not one it is buying, nor a completed or terminated deal; filing titles rarely name the deal, so it is found in the
+    report's text), and the soft concern of non-recurring items at 30%+ of the period's profit (a
     quote naming the profit after deducting them is that profit, and is skipped).
 
 ## Checks, and what each one decides

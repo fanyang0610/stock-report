@@ -48,9 +48,9 @@ KINDS = {
     "delisting": ("退市、ST 或停牌", True,
                   r"退市|终止上市|終止上市|(?-i:(?<![A-Za-z])\*?ST(?![A-Za-z]))|风险警示|停牌|暫停買賣|除牌|delist|suspen|"
                   r"listing-rule failure", OTHER_SECURITY),
-    "takeover": ("以固定价格被收购或私有化", True,
+    "takeover": ("被收购或私有化（协议已签署、尚未完成）", True,
                  r"要约|要約|私有化|被吸收合并|被吸收合併|协议安排|協議安排|tender offer|merger proxy|privatization|"
-                 r"go(ing)?.private|to be acquired|scheme of arrangement",
+                 r"go(ing)?.private|to be acquired|will be acquired|scheme of arrangement|merger agreement|plan of merger",
                  r"持续督导|持續督導|督导意见|督導意見|过户|過戶|收[购購]结果|收[购購]結果|已完成|已經完成|"
                  r"(has|have|was|were) (been )?completed"),  # reports on an offer already done
     "sanctions": ("制裁或禁令", True, r"制裁|实体清单|實體清單|禁令|sanction|entity list|\bban\b|banned", None),
@@ -75,7 +75,7 @@ SYSTEM = """你是上市公司审核员。下面是一只股票的卡片（程�
 - going_concern：持续经营存在重大疑虑，债务违约或逾期，破产、重整、清盘；
 - delisting：本公司普通股（A 股、H 股或美股普通股）退市风险、被实施 ST 或 *ST、终止上市或停牌；优先股、债券、可转债的停牌或摘牌不算，
   美股 25-NSE、15-12B 表格标题没说明是普通股的也不算（常是债券到期或赎回）；
-- takeover：本公司作为被收购方，正被以固定价格收购、要约收购或私有化（本公司去收购别人、已经完成的收购不算）；
+- takeover：本公司作为被收购方，已签署但尚未完成的收购或合并（现金、收购方股票或两者）、要约收购或私有化（本公司去收购别人、已经完成的收购不算）；
 - sanctions：制裁、实体清单或禁令点名本公司。
 软风险（kind，市场可能在担心的事）：downturn 行业下行或产品价格下跌；customer 失去大客户或订单；guidance 下调指引、业绩预减、预亏或明显下滑、盈利警告；
 management 董事长、总经理（CEO）、财务总监（CFO）离职，或公司高管被调查；litigation 重大诉讼或仲裁；

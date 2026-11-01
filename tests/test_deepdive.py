@@ -113,6 +113,25 @@ def test_findings():
     denial = {"quote": "During the period none of the Company or its current Directors was subject to any investigation."}
     assert kinds(investigation=denial) == []  # PetroChina's interim report
     assert kinds(investigation={"quote": "公司收到上海证券交易所监管工作函"}) == [("other", False)]
+    acquirer = {"quote": "On May 1, 2026, the Company entered into an Agreement and Plan of Merger with Target Inc., "
+                         "pursuant to which the Company will acquire all of the outstanding shares of Target Inc."}
+    assert kinds(acquisition=acquirer) == []  # the company buying another isn't being sold
+    done = {"quote": "The merger, under which K-C will acquire all of the outstanding shares of the Company, was "
+                     "completed on October 30, 2026."}
+    assert kinds(acquisition=done) == []
+    assert kinds(acquisition={"quote": "本公司拟以协议安排方式私有化"}) == [("takeover", True)]
+
+
+def test_a_pending_stock_and_cash_merger_is_a_hard_flag():
+    text = (SAMPLES / "filing_us_kvue_sample.txt").read_text(encoding="utf-8")  # Kenvue's 10-Q, filed 2026-10-30
+    quote = ("pursuant to which K-C will acquire all of the outstanding shares of the Company in a series of "
+             "transactions (the “Pending Transaction”). Pursuant to the terms and subject to the conditions of the Merger "
+             "Agreement, Company shareholders will receive 1) 0.14625 shares of K-C common stock")
+    facts = deepdive.verify({"acquisition": {"quote": quote}, "offer_price": {"quote": "", "number": ""}}, text, "us")
+    found = {"facts": facts["facts"], "asked": 1, "title": "10-Q: Quarterly report", "date": "2026-10-30"}
+    got = deepdive.findings({"code": "KVUE", "price": 19.31}, found, "us")
+    assert [(f["kind"], f["hard"]) for f in got] == [("takeover", True)] and "股价跟随交易条款" in got[0]["words"]
+    assert deepdive.verify({"acquisition": {"quote": "K-C will acquire Kenvue for $50 in cash"}}, text, "us")["facts"] == {}
 
 
 def test_daily_limit_and_cache(tmp_path, monkeypatch):

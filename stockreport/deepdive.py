@@ -4,7 +4,8 @@ filings per market a day, after the results review (never inside the keyword rep
 fixed questionnaire with quoted sentences; code verifies every quote (quotes.py), takes each number from it and
 decides what it means (findings()): the data check (the period's net profit 20%+ off the figure behind the card:
 data_suspect), hard red flags (a non-standard audit opinion, a going-concern doubt, a regulator's investigation, an
-offer price for the company) and a soft concern (non-recurring items 30%+ of the period's profit)."""
+offer price for the company, an agreed sale of the company not yet completed, for cash, shares or both) and a soft
+concern (non-recurring items 30%+ of the period's profit)."""
 
 import json
 import logging
@@ -25,13 +26,14 @@ CFG = CONFIG["deepdive"]
 CACHE = DATA / "deepdive"
 CURRENCY = {"cn": "CNY", "us": "USD", "hk": "HKD"}
 NUMERIC = ("net_profit", "non_recurring", "offer_price")
-TEXTUAL = ("period_end", "audit_opinion", "going_concern", "investigation")
+TEXTUAL = ("period_end", "audit_opinion", "going_concern", "investigation", "acquisition")
 # Where the questionnaire's answers usually are: windows of text around these words go to DeepSeek
 KEYWORDS = re.compile(
     r"非经常性损益|非經常性|一次性|审计意见|審計意見|核數師意見|持续经营|持續經營|立案|行政处罚|行政處罰|要约|要約|收购价|收購價|"
     r"归属于上市公司股东的净利润|本公司擁有人應佔|报告期末|截至|non-recurring|one-time|gain on (the )?(sale|disposal)|"
     r"going concern|substantial doubt|subpoena|Wells notice|investigation|per share in cash|merger consideration|"
-    r"offer price|attributable to (common|ordinary|owners|equity holders)|period ended|year ended", re.I)
+    r"offer price|attributable to (common|ordinary|owners|equity holders)|period ended|year ended|"
+    r"Agreement and Plan of Merger|Pending Transaction|merger agreement|吸收合[并併]|协议安排|協議安排|scheme of arrangement", re.I)
 
 SYSTEM = """你是财报事实摘录员。下面是一份上市公司定期报告的节选文本。按固定问卷从文本中找事实，每项都附原文引文。
 规则：
@@ -44,13 +46,15 @@ SYSTEM = """你是财报事实摘录员。下面是一份上市公司定期报�
 - net_profit：报告期（年初至报告期末）归属于母公司股东（本公司拥有人）的净利润；表格行整行引用。
 - non_recurring：与 net_profit 同一期间的非经常性损益合计；美股、港股为报告明确列示的一次性收益或损失合计。
 - period_end：说明报告期截止日期的原句（如"截至2026年9月30日"、"for the quarterly period ended September 30, 2026"）。
-- offer_price：本公司是被收购方时，针对本公司股份的每股要约价、收购价或私有化价格。
+- offer_price：本公司是被收购方、对价全部是现金时，针对本公司股份的每股要约价、收购价或私有化价格（对价含收购方股票的不填，见 acquisition）。
 - audit_opinion：审计师对最近年度财务报表发表审计意见的原句。
 - going_concern：关于持续经营能力存在重大不确定性的原句。
 - investigation：监管机构对公司或其控股股东、实际控制人立案调查、行政处罚或调查的原句。
+- acquisition：本公司作为被收购方、已签署但尚未完成的收购或合并协议的原句（现金、收购方股票或两者都算），最好是说明本公司股东每股得到什么的那句；
+  本公司去收购别人、已经完成或已终止的交易不算。
 只输出 JSON：{"net_profit": {"quote": "", "number": "", "unit_quote": ""}, "non_recurring": {...同上},
 "offer_price": {...同上}, "period_end": {"quote": ""}, "audit_opinion": {"quote": ""}, "going_concern": {"quote": ""},
-"investigation": {"quote": ""}}"""
+"investigation": {"quote": ""}, "acquisition": {"quote": ""}}"""
 
 
 def excerpt(text: str) -> str:
@@ -174,6 +178,12 @@ ATTRIBUTABLE = re.compile(r"归属于.{0,10}(股东|所有者)|歸屬於.{0,10}(
                           r"(拥有人|权益持有人|股东)应占|attributable to|available to (common|ordinary)|"
                           r"(share|stock)holders of|equity holders of|owners of", re.I)
 MINORITY = re.compile(r"少数股东|少數股東|非控股|non-controlling|minority", re.I)
+# an agreed sale of the company itself (it is the one acquired: a filer's 10-Q says "acquire the Company" and "Company
+# shareholders will receive"; an acquirer's names the target), not completed or terminated
+ACQUIRED = re.compile(r"acquire (the|all (of )?the (outstanding )?(shares|common stock) of the) Company|"
+                      r"Company'?s? (share|stock)holders will receive|merger consideration|被.{0,10}(吸收合[并併]|收[购購])|"
+                      r"(吸收合[并併]|收[购購])本公司|私有化|协议安排|協議安排|scheme of arrangement", re.I)
+DONE = re.compile(r"已完成|已經完成|已终止|已終止|(has|have|was|were) (been )?(completed|consummated|terminated)", re.I)
 
 
 def title_period(title: str) -> str | None:
@@ -243,6 +253,9 @@ def findings(row: dict, found: dict, market: str) -> list[dict]:
     if "offer_price" in f and rate and pd.notna(row.get("price")):
         offer = f["offer_price"]["value"] * rate
         add("takeover", f"每股要约/收购价 {offer:,.2f}（较现价 {offer / row['price'] - 1:+.0%}）", True, f["offer_price"]["quote"])
+    elif ACQUIRED.search(deal := f.get("acquisition", {}).get("quote", "")) and not DONE.search(deal) \
+            and not DENIAL.search(deal):
+        add("takeover", "已签署、尚未完成的被收购协议：股价跟随交易条款，不再由本公司业绩决定", True, deal)
     return out
 
 
