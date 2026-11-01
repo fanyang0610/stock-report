@@ -223,9 +223,9 @@ def send(test: bool, assume_yes: bool) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="stockreport")
     sub = parser.add_subparsers(dest="command", required=True)
-    send = sub.add_parser("send", help="send the text summary + PDF to WeChat")
-    send.add_argument("--test", action="store_true", help="send the TEST report (fake data)")
-    send.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
+    send_p = sub.add_parser("send", help="send the text summary + PDF to WeChat")
+    send_p.add_argument("--test", action="store_true", help="send the TEST report (fake data)")
+    send_p.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
     sub.add_parser("listen", help="answer the WeChat keyword for ~55 s (launchd restarts it 10 s after it ends)")
     fetch = sub.add_parser("fetch", help="update the cached data for a market")
     fetch.add_argument("--market", choices=["cn", "us", "hk"], required=True)

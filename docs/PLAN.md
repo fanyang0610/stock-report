@@ -107,9 +107,13 @@
   all of HK on a day of many sells (sells become counts last). Answered: review_kind read from the review line's
   prefix is kept (one place, review.line's own words); exact score ties and Skydance's 退市 flag (an 8-K title that
   may concern a retired share class) are outside this stage (follow-ups).
-- Switched on with your OK of 2026-11-01 (rule 9): the 06:30 `run` job (com.stockreport.daily) loaded 2026-11-02
-  from this checkout. The test send and the keyword listener wait for the bot's reply window: your last message to
-  the bot was ~14 days ago, and it can only reply after a recent one.
+- Switched on with your OK of 2026-11-01 (rule 9), on 2026-11-02 from this checkout: the 06:30 `run` job
+  (com.stockreport.daily; ~/Library/LaunchAgents now holds the repo's plist, the old fetch-only one replaced); one
+  `send --test` at 04:39 (the test text, 3,617 bytes, then the test PDF, 股票报告_测试_20261102.pdf, after your
+  message to the bot opened its reply window); the keyword listener (com.stockreport.listen). `send` had never run
+  in this build: the subcommand's parser shadowed the send function (fixed). The keyword reply is report.fresh
+  (review within 20 s, build) then the text, then the PDF: two messages (listener.reply), 11.4 s before sending on
+  2026-11-01; WeChat's two sends took ~3 s in past replies.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
