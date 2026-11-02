@@ -1359,20 +1359,22 @@ Run again 2026-11-02 after exact score ties were given a fixed order (the larger
 code, scores compared at 12 decimals; docs/PLAN.md, "Lists"): before, a tie went to whichever row came first, or to
 a float's last bit. The table has the new figures. Over the fund: CN +4.2% (62%) → +4.3% (63%), US +1.9% (54% → 53%;
 worst 12 months −17.2% → −18.0%), HK +5.6% (71%) → +5.5% (68%); single sub-periods moved up to 1.3 points (US 2023
-+7.2 → +8.5); the family check is unchanged.
++7.2 → +8.5); the family check is unchanged. CN once more on 2026-11-02, the free-float factor fixed (each member's
+value at the CSI file's date, not today's; docs/PLAN.md, "Lists"): +4.3% (63%) → +3.8% (65%), the frames rebuilt
+(`frame cn`), the family check unchanged.
 
 | 12 months from each month end, after costs | CN (510300) | US (SPY) | HK (2800) |
 |---|---|---|---|
 | windows | 81 (2019-01..2025-09) | 93 (2018-01..2025-09) | 108 (2016-10..2025-09) |
-| 20 names: mean return / the fund's | +10.9% / +6.6% | +17.8% / +15.9% | +11.0% / +5.5% |
-| over the fund (windows ahead) | **+4.3% (63%)** | **+1.9% (53%)** | **+5.5% (68%)** |
+| 20 names: mean return / the fund's | +10.4% / +6.6% | +17.8% / +15.9% | +11.0% / +5.5% |
+| over the fund (windows ahead) | **+3.8% (65%)** | **+1.9% (53%)** | **+5.5% (68%)** |
 | section 22's (the index-weighted list) | +7.2% (67%) | −1.3% (32%) | +3.3% (58%) |
-| 10th / 90th percentile over the fund | −7.6% / +16.0% | −9.3% / +12.9% | −6.0% / +18.6% |
+| 10th / 90th percentile over the fund | −8.8% / +16.7% | −9.3% / +12.9% | −6.0% / +18.6% |
 | worst 12 months (the fund's; start) | −27.0% (−20.4%; 2021-09) | −18.0% (−10.6%; 2021-06) | −32.4% (−24.5%; 2021-04) |
-| largest fall, overlapping portfolio (the fund's) | −34.6% (−36.5%) | −23.3% (−23.9%) | −41.1% (−47.2%) |
-| over the fund by sub-period: 2019-20 / 2021-22 / 2023 / 2024-26 | +2.6 / +1.7 / −0.5 / +11.9 | −1.4 / +1.5 / +8.5 / +7.2 | +10.0 / +3.4 / +15.4 / +3.7 |
-| 10 best scores: over the fund, ahead, worst against the fund | +1.6%, 40%, −25.7% | +2.3%, 53%, −25.1% | +5.1%, 57%, −20.0% |
-| 5 best scores: the same | −3.6%, 43%, −37.3% | +2.9%, 55%, −31.9% | +3.9%, 54%, −35.7% |
+| largest fall, overlapping portfolio (the fund's) | −34.9% (−36.5%) | −23.3% (−23.9%) | −41.1% (−47.2%) |
+| over the fund by sub-period: 2019-20 / 2021-22 / 2023 / 2024-26 | +2.2 / +1.9 / −0.9 / +10.3 | −1.4 / +1.5 / +8.5 / +7.2 | +10.0 / +3.4 / +15.4 / +3.7 |
+| 10 best scores: over the fund, ahead, worst against the fund | +1.4%, 44%, −25.7% | +2.3%, 53%, −25.1% | +5.1%, 57%, −20.0% |
+| 5 best scores: the same | −3.6%, 44%, −37.3% | +2.9%, 55%, −31.9% | +3.9%, 54%, −35.7% |
 | the market's 10 largest held, per list (their share of the money) | 0.4 (2%) | 1.4 (7%) | 2.6 (13%) |
 
 **The family check** (top fifth minus bottom fifth within sectors, mean 12-month return; sub-periods positive of 4): CN
@@ -1394,12 +1396,12 @@ against it.
 **What it says.** Picking each sector's best scores from the whole market in equal amounts puts the US list ahead of
 SPY in this history (+1.9 points a year, ahead in 53% of windows; section 22: −1.3, 32%), with SPY's largest fall
 (−23% against −24%), despite US quality running backwards here: the value and growth families and the sector places
-carry it. CN's lead is smaller than section 22's (+4.3 against +7.2) because the list no longer holds 中际旭创 at up to
-10% (section 22's 2024-26 lead was mostly that one name); it is now spread (2024-26 +11.9). HK's is larger (+5.5,
+carry it. CN's lead is smaller than section 22's (+3.8 against +7.2) because the list no longer holds 中际旭创 at up to
+10% (section 22's 2024-26 lead was mostly that one name); it is now spread (2024-26 +10.3). HK's is larger (+5.5,
 ahead in 68%): the list holds the best of the large and mid caps rather than the index's large financials and telecoms.
 The lists hold few of the market's 10 largest companies (CN 0.4, US 1.4, HK 2.6 a month) and their worst 12 months are
 6-8 points worse than the funds', the cost of 20 names in equal amounts; the largest falls stay at or below the funds'.
-Fewer names widen the range: the worst 12 months against the fund go from −16% (20 names) to −26% (10) and −37% (5) in
+Fewer names widen the range: the worst 12 months against the fund go from −17% (20 names) to −26% (10) and −37% (5) in
 CN, from −13% to −25% and −32% in the US, and in HK −20% for 20 and for 10 names, −36% for 5.
 
 **Limits.** All of sections 21 and 22's (today's listings only; CN's restated 扣非 figures under the first notice date;

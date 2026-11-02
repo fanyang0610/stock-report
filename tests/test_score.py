@@ -243,13 +243,13 @@ def test_holding_rule(tmp_path, monkeypatch):
     assert out.loc["C70", "status"] == "继续持有" and out.loc["C70", "recheck"] == "2027-06-01"
 
 
-def test_without_holdings_the_check_covers_the_last_years_buy_lists(tmp_path, monkeypatch):
+def test_without_holdings_there_is_no_check_each_list_is_new(tmp_path, monkeypatch):
     monkeypatch.setattr(lists, "HOLDINGS", tmp_path / "none.csv")
-    monkeypatch.setattr(track, "PICKS_LOG", tmp_path / "picks.csv")
-    pd.DataFrame({"date": ["2025-10-01", "2026-03-02", "2026-03-03", "2026-03-02"], "market": "cn", "bucket": "buy",
-                  "ticker": ["OLD", "C5", "C5", "C9"], "name": "x", "score": 0.9}).to_csv(track.PICKS_LOG, index=False)
-    held = lists.held("cn", DAY, pd.Index(["C9"]))  # C9 is in today's list; OLD is over a year old
-    assert held.index.tolist() == ["C5"] and held.loc["C5", "since"] == "2026-03-02"
+    monkeypatch.setattr(track, "PICKS_LOG", tmp_path / "picks.csv")  # past lists don't count as holdings
+    pd.DataFrame({"date": ["2026-03-02"], "market": "cn", "bucket": "buy", "ticker": ["C5"], "name": "x",
+                  "score": 0.9}).to_csv(track.PICKS_LOG, index=False)
+    df = universe(100).assign(score=np.linspace(0, 1, 100), mcap_rank=np.arange(1, 101))
+    assert lists.held("cn").empty and lists.check(df, "cn", DAY, df.head(3), {}).empty
 
 
 def test_key_risk_names_a_loss_heavy_debt_or_a_big_fall_first():

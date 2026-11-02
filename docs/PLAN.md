@@ -66,7 +66,7 @@
     growth E: EV/EBIT ~33 with GM Financial's debt against a P/E of ~7) and Stellantis 782nd of 794 (a loss, value C,
     momentum E; screened as likely distressed), neither bought; NVIDIA is the technology #2 score but screened;
   - history (docs/BACKTEST.md section 23, without analyst data, EBIT/EV or the screen): 20 names over the fund a year
-    CN +4.3% (63% of windows), US +1.9% (53%), HK +5.5% (68%) (with 2026-11-02's tie rule); largest falls CN −35%
+    CN +3.8% (65% of windows), US +1.9% (53%), HK +5.5% (68%) (with 2026-11-02's fixes); largest falls CN −35%
     (fund −37%), US −23% (−24%), HK −41% (−47%); worst 12 months 6-8 points worse than the funds'. US quality ran against its published direction
     there (−9.8 points a year, low volatility −14.5): no bug found; survivors only, in a high-volatility decade
     (plausible, untested); the family stays and the 预期 line says so.
@@ -114,6 +114,20 @@
   history run: CN +4.3% (63%), US +1.9% (53%), HK +5.5% (68%) (BACKTEST.md section 23). Its fresh-context review
   found the float's-last-bit ties the first version missed (fixed) and the docs' "no buy changes" (corrected). 105
   tests.
+- Three fixes and a check, 2026-11-02 (your words: "I have no holdings. Every list should be treated as new."):
+  - no holdings check without data/holdings.csv ("Holding rule"); it had listed 90 past-list names (CN 31, US 32, HK
+    27) as if bought, growing daily. The PDF went from 21 pages to 15;
+  - CN free-float factors at the CSI file's date ("Lists"): with 9-30 weights against today's values, a stock's
+    factor moved with its October price (新易盛 −50%, factor 5.1×; now 2.7× at most). CN's places: 电子 4 → 3 and
+    通信 2 → 1 (生益科技 and 中天科技 out), 非银金融 1 → 2 and 家用电器 0 → 1 (广发证券 and 海信视像 in); history
+    +4.3% (63%) → +3.8% (65%) a year over the fund (BACKTEST.md section 23);
+  - an 8-K Item 3.01 that only moves the listing to another exchange is routine ("Results review"): Skydance's hard
+    退市 flag on the US avoid list was its move from Nasdaq to the NYSE. The fresh-context review found the first
+    deficiency check too narrow (a move offered as a cure would have passed) and a failed read dropping all of a
+    stock's filings: both fixed, with its test cases; it confirmed the CN factor exactly (members at 100% float
+    2.67-2.69×) and the place changes;
+  - the first unattended day: the 06:30 build ran 21 min, exit 0, no errors; your keyword at 11:33 was answered in
+    4 s, the text then the PDF (logs/2026-11-02.log); the listener had run 399 times without a failure.
 - Switched on with your OK of 2026-11-01 (rule 9), on 2026-11-02 from this checkout: the 06:30 `run` job
   (com.stockreport.daily; ~/Library/LaunchAgents now holds the repo's plist, the old fetch-only one replaced); one
   `send --test` at 04:39 (the test text, 3,617 bytes, then the test PDF, 股票报告_测试_20261102.pdf, after your
@@ -324,7 +338,12 @@ momentum drive the score (fixed in stage 1 after the stage review).
     - CN: market value × the CSI 300's free-float factor (each member's index weight over its share of the members'
       market value, from CSI's month-end file; the median factor for the ~500 others). Total value would give banks
       22% and 石油石化 7% of the places on 2026-10-31; by free float they are 10% and 2% (the CSI 300: 12% and 2%),
-      since the state holds most of their shares;
+      since the state holds most of their shares. The members' market value is taken at the file's date (today's ÷
+      the price change since, chained so bonus shares don't count; 2026-11-02 fix): with today's against a month-end
+      weight, a member's factor moved with its price since the month end (新易盛 fell 50% in October 2026 and its
+      factor doubled, to 5.1× its market value), which gave 电子 and 通信 a place each too many on 2026-11-02. The
+      factor is relative (each member's free-float ratio over the members' average), so most exceed 1; a constant
+      scale cancels in the sector shares;
     - US: total market value: by sector it is within 2 points of the S&P 500's float-adjusted weights (technology 40%
       against 42%), and it includes the foreign companies listed in the US, which the S&P 500 leaves out;
     - HK: HK-listed value (Yahoo's listed-class shares × price): an A+H company's A shares can't be bought in Hong Kong,
@@ -363,8 +382,9 @@ momentum drive the score (fixed in stage 1 after the stage review).
   - Every anniversary repeats this: for 30 days after it (the time to act) the top-fifth test applies; after that a new
     year has started, judged by the in-year rule until the next anniversary.
   - Your holdings live in data/holdings.csv (code, buy date), set with `hold CODE [--date D]` and `hold CODE --sold`.
-    Without the file, the check covers the names of the last 12 months' buy portfolios (data/picks.csv) that aren't
-    in today's, each from the first day it was listed.
+    Without the file there is no holdings check: each day's list is a new list (your call, 2026-11-02: "I have no
+    holdings. Every list should be treated as new."). Until then, the check covered every name of the last 12 months'
+    buy lists that wasn't in today's, as if you had bought each one: 90 names after 5 lists, growing daily.
   - "Top fifth" and "bottom half" are the score's rank among the holding's sector's scored names (stage 3: within the
     sector, as buys are picked). A holding the build couldn't score (dropped on facts, or no longer among the 800
     largest) gets 复核 with the reason.
@@ -391,7 +411,7 @@ momentum drive the score (fixed in stage 1 after the stage review).
   took its place, the 20 buys by name with the amount and the date they are held to, what changed since the market's
   last earlier report in data/picks.csv (counts, and the names gone when 8 or fewer), the avoid names, the 预期 line in
   one sentence; then a five-line guide (the lists, the grades in words, the holding statuses, avoid and the review, no
-  guarantee). Without data/holdings.csv it says the holdings checked are past lists' names.
+  guarantee). Without data/holdings.csv it says there is no holdings check (2026-11-02).
 - Market pages: the 预期 line in plain words, then each buy's card (rank, name, ticker, sector, price, one-lot cost,
   re-check date; the business line; the grades; 为什么买; 风险; the review's finding, "审核：未见重大风险" on the risk line;
   the AI note), 新 on a name new since the last report; 审核剔除 and your vetoes; the holdings: 卖出 and 复核 as cards with
@@ -422,7 +442,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
 - The card's risk line says 风险 for a loss, debt of 70%+ or a 30%+ fall in 6 months, else 短板 (the weakest component,
   which isn't a risk by itself; the page 1 guide says so). An avoid card's reasons leave out a fact its weak line
   already shows (负债率高（88%） and 负债率 88%).
-- Without data/holdings.csv the 持仓 lines are past lists' names, not yours: page 1 and the summary say so first.
+- Without data/holdings.csv there is no holdings check (2026-11-02, "Holding rule"): page 1 and the summary say so in
+  one line.
 - The WeChat summary: the actions first (卖出 by name, 复核 counts, 审核剔除 with the replacement), then per market the
   data date, the 20 buys by name (US: the ticker and the Chinese short name, else the English name without Inc, Corp…;
   （新） on a new name), the change counts with the names gone, the review's hard findings on holdings and avoid names,
@@ -476,6 +497,12 @@ build makes no DeepSeek calls.
     Per-stock queries rather than the old market-wide event feed, which only held the days the build ran (10 back;
     removed 2026-10-26). The routine rules drop bond, guarantee and auditor titles; a default, an overdue debt or an
     auditor resigning is checked first and kept as a risk filing (events.ALARM; found by the stage review).
+    A US 8-K's Item 3.01 covers both a delisting or listing-rule notice and a company's own move to another exchange;
+    for one, the item's text is read (fetch/filings.listing_moved) and a move with no deficiency language is routine
+    (2026-11-02: Skydance's move from Nasdaq to the NYSE had been read as a hard 退市 flag from the item's title). Any
+    sign of a listing problem keeps it a notice (compliance, a hearing or panel, a bid-price or listing rule, a letter
+    received, a merger or Form 25: the review found a move offered as a cure for a deficiency would otherwise pass),
+    and a filing that can't be read stays as filed.
   - Headline sources, verified 2026-10-25: CN and HK Eastmoney's per-stock news list (np-listapi getListInfo, biz
     web_stock_news, market 1 / 0 / 116: the 资讯 tab of its quote pages; 0.1-0.5 s a call, at most ~2 a second); US
     Yahoo Finance's RSS feed per ticker (feeds.finance.yahoo.com/rss/2.0/headline; 429 to a full browser User-Agent,

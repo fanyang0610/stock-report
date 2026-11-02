@@ -203,6 +203,9 @@ def test_cn_free_float_scales_market_value_by_the_csi_300_factor():
     w = pd.Series({"bank": 0.5, "chip": 0.5})  # the bank's state holdings: half the weight its value would give
     f = universe.cn_float(mcap, w)
     assert f["bank"] / f["chip"] == pytest.approx(1.0) and f["small"] == pytest.approx(50 * (2 / 3 + 2) / 2)
+    # the weights are a month-end file's: a member that halved since keeps the factor it had then
+    halved = universe.cn_float(mcap.where(mcap.index != "chip", 50.0), w, pd.Series({"chip": 0.5}))
+    assert halved["chip"] / 50.0 == pytest.approx(f["chip"] / 100.0) and halved["bank"] / 300 == pytest.approx(f["bank"] / 300)
 
 
 def test_us_trend_takes_next_years_estimate_now_and_90_days_ago():

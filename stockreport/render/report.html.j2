@@ -78,7 +78,7 @@
   <h3>今天要做什么</h3>
   {% set stale = r.markets | map(attribute="stale") | unique | list %}{% set one_stale = stale | length == 1 and stale[0] %}
   {% if one_stale %}<p class="warn small">{{ stale[0] }}（三个市场都是）</p>{% endif %}
-  {% if not r.recorded and not r.test %}<p class="warn small">注意：你还没有用 hold 命令记录持仓。下面的「持仓」查的是过去 12 个月名单里、今天已不在名单中的股票，不一定是你买过的。</p>{% endif %}
+  {% if not r.recorded and not r.test %}<p class="small muted">没有记录持仓：每天的名单都是新名单。买入后用 hold 代码 --date 买入日 记录，这里就会检查你的持仓。</p>{% endif %}
   <div class="todo">
   {% for m in r.markets %}
     <div class="mk">
@@ -86,7 +86,7 @@
       {% if m.stale and not one_stale %}<p class="warn">{{ m.stale }}</p>{% endif %}
       <p><span class="k">持仓</span>{% if m.holdings %}<span class="status s卖出">卖出 {{ m.sell | length }}</span>{% if m.sell %}（{% for h in m.sell %}{{ h.short }}{% if not loop.last %}、{% endif %}{% endfor %}）{% endif %}
         · <span class="status s复核">复核 {{ m.check | length }}</span>{% if m.check %}（{% for h in m.check %}{{ h.short }}{% if not loop.last %}、{% endif %}{% endfor %}）{% endif %}
-        · <span class="status s继续持有">继续持有 {{ m.keep | length }}</span>{% else %}无{% endif %}</p>
+        · <span class="status s继续持有">继续持有 {{ m.keep | length }}</span>{% else %}{{ "无" if r.recorded else "未记录" }}{% endif %}</p>
       {% if m.removed %}<p><span class="k">剔除</span>{% for p in m.removed %}{{ p.short }}：<span class="rv-hard">{{ p.reason.split("（")[0].split("：")[0] }}</span>{% if p.replaced_by %}，由 {{ p.replaced_by }} 替补{% else %}，{{ p.status }}{% endif %}{% if not loop.last %}；{% endif %}{% endfor %}</p>{% endif %}
       <p><span class="k">买入</span><b>{{ m.buys | length }} 只，每只 {{ m.share or "等额" }}，持有到 {{ m.recheck }}：</b>{% for p in m.buys %}{{ p.short }}{% if not loop.last %}、{% endif %}{% endfor %}</p>
       {% if m.changes %}<p class="small"><span class="k">变化</span>与 {{ m.changes.since }} 的名单相比{% if not m.changes.new and not m.changes.gone %}没有变化{% else %}：新进 {{ m.changes.new | length }} 只，移出 {{ m.changes.gone | length }} 只{% if m.changes.gone and m.changes.gone | length <= 8 %}（{{ m.changes.gone | join("、") }}）{% endif %}{% endif %}</p>{% endif %}
@@ -128,7 +128,7 @@
   {% if m.vetoes %}<p class="small muted">不列入（你的否决）：{% for v in m.vetoes %}{{ v.ticker }} {{ v.name }} {{ v.reason }}{% if not loop.last %}；{% endif %}{% endfor %}</p>{% endif %}
 
   <h3>持仓检查<span class="count">{% if m.holdings %}卖出 {{ m.sell | length }} · 复核 {{ m.check | length }} · 继续持有 {{ m.keep | length }}{% else %}无{% endif %}</span></h3>
-  {% if not r.recorded and m.holdings and not r.test %}<p class="small muted">你还没有记录持仓（hold 命令）：这里检查的是过去 12 个月买入组合里、今天已不在组合中的股票。</p>{% endif %}
+  {% if not r.recorded and not r.test %}<p class="small muted">没有记录持仓（hold 代码 --date 买入日）。</p>{% endif %}
   {% for h in m.sell + m.check %}
   <div class="card">
     <div class="top"><span class="status s{{ h.status }}">{{ h.status }}</span><span class="who">{{ who(h, m) }}</span>

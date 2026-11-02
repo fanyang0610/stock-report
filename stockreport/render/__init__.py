@@ -50,8 +50,7 @@ def fit_bytes(lines: list[str], limit: int) -> str:
 def text_summary(report: dict, limit: int = 4000) -> str:
     """The WeChat message: what to do today (holdings to sell or re-check, buys the review removed), then per market the
     buys by name (新 marks a name new since the last report), the holdings to re-check, the avoid names and the 预期
-    line, and a pointer to the PDF for the cards. Without recorded holdings it says the holdings checked are past lists'
-    names. Over 90% of `limit` the names gone from the list become a count, then the 新 marks go (the count of new names
+    line, and a pointer to the PDF for the cards. Without recorded holdings the actions say so in one line. Over 90% of `limit` the names gone from the list become a count, then the 新 marks go (the count of new names
     stays), then the holdings to re-check, then those to sell become counts; fit_bytes is the last guard."""
     for level in (0, 1, 2, 3, 4):
         text = "\n".join(summary_lines(report, level))
@@ -70,10 +69,12 @@ def summary_lines(report: dict, level: int = 0) -> list[str]:
     checks = [f"{m['short']} {len(m['check'])} 只" for m in markets if m["check"]]
     removed = [f"{m['short']} {p['short']}（{p['reason'].split('（')[0].split('：')[0]}）→ "
                f"{p.get('replaced_by') or p['status'].removeprefix('由 ').removesuffix(' 替换')}" for m in markets for p in m["removed"]]
-    past = not report.get("recorded", True) and any(m["holdings"] for m in markets)
-    lines += ["", "今天要做的：", *(["（你还没有用 hold 命令记录持仓：下面的卖出、复核查的是过去 12 个月名单里、今天已不在名单中的股票）"]
-                                  if past else []), "· 卖出：" + ("；".join(sells) if sells else "无"),
-              "· 复核：" + ("、".join(checks) + "（评分下滑或有负面消息，看原因再决定）" if checks else "无")]
+    lines += ["", "今天要做的："]
+    if report.get("recorded", True):
+        lines += ["· 卖出：" + ("；".join(sells) if sells else "无"),
+                  "· 复核：" + ("、".join(checks) + "（评分下滑或有负面消息，看原因再决定）" if checks else "无")]
+    else:
+        lines.append("· 持仓：没有记录，每天的名单都是新名单（买入后用 hold 命令记录，就会检查卖出和复核）")
     lines += ["· 审核剔除：" + "；".join(removed)] if removed else []
     for m in markets:
         new = {p["ticker"] for p in (m.get("changes") or {}).get("new", [])}

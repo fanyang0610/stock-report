@@ -1,14 +1,14 @@
 """The lists (PLAN.md, "Lists"): the 20-name buy portfolio from the whole scored market (each sector its places by its
 share of the market's free-float value, filled by its best scores, equal amounts; Quantitative Value's screen first),
 your holdings checked by NAPS's 12-month rule, and the 10 avoid names. Your holdings are in data/holdings.csv (`hold`);
-without it the check covers the names of the last 12 months' buy portfolios that aren't in today's."""
+without it there is no holdings check."""
 
-from datetime import date, timedelta
+from datetime import date
 
 import numpy as np
 import pandas as pd
 
-from stockreport import track, verdicts
+from stockreport import verdicts
 from stockreport.config import CONFIG, DATA
 from stockreport.score import ranked
 
@@ -102,25 +102,19 @@ def cycle(since: date, today: date) -> tuple[int | None, date]:
     return (k - 1 if k > 1 and (today - last).days <= WINDOW else None), due
 
 
-def held(market: str, today: date, buys: pd.Index) -> pd.DataFrame:
-    """Code -> buy date and name: your holdings in the market, else the names in a buy portfolio of the last 12 months
-    (logged with a score, so the old method's picks don't count) that aren't in today's."""
-    if HOLDINGS.exists():
-        h = pd.read_csv(HOLDINGS, dtype=str, keep_default_na=False)
-        return h[h["market"] == market].set_index("code")[["since", "name"]]
-    log = track.load()
-    if "score" not in log:
+def held(market: str) -> pd.DataFrame:
+    """Code -> buy date and name: your holdings in the market (data/holdings.csv, `hold`). Without the file there are
+    none: each day's list is a new list, not one you're assumed to have bought (your call, 2026-11-02)."""
+    if not HOLDINGS.exists():
         return pd.DataFrame(columns=["since", "name"])
-    past = log[(log["market"] == market) & (log["bucket"] == "buy") & log["score"].notna()
-               & (log["date"] >= (today - timedelta(days=365)).isoformat()) & (log["date"] < today.isoformat())]
-    first = past.sort_values("date").groupby("ticker")[["date", "name"]].first().rename(columns={"date": "since"})
-    return first[~first.index.isin(buys)]
+    h = pd.read_csv(HOLDINGS, dtype=str, keep_default_na=False)
+    return h[h["market"] == market].set_index("code")[["since", "name"]]
 
 
 def check(df: pd.DataFrame, market: str, today: date, buys: pd.DataFrame, dropped: dict[str, str]) -> pd.DataFrame:
     """继续持有 / 复核 / 卖出 per holding (PLAN.md, "Holding rule"), judged as the buys are picked: by the score's rank
     among its sector's scored names; the results review adds its findings (review.apply)."""
-    holdings = held(market, today, buys.index)
+    holdings = held(market)
     swap = next((f"{c} {buys.at[c, 'name']}" for c in buys.index if c not in holdings.index), "")
     rows = []
     for code, h in holdings.iterrows():

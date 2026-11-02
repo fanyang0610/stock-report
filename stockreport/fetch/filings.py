@@ -13,6 +13,7 @@ from functools import cache
 
 from stockreport.fetch import Http, cninfo, hkex, sec
 
+log = logging.getLogger(__name__)
 logging.getLogger("pypdf").setLevel(logging.ERROR)  # font warnings on most filings; unreadable text is checked below
 CN_PERIODIC = "category_ndbg_szsh;category_bndbg_szsh;category_yjdbg_szsh;category_sjdbg_szsh"
 US_PERIODIC = ("10-K", "10-Q", "20-F", "40-F")
@@ -98,6 +99,26 @@ def parse_us(payload: dict, cik: int) -> list[dict]:
                                                         r["primaryDocument"], r["primaryDocDescription"])]
 
 
+# An 8-K's Item 3.01 covers both a notice of delisting or of failing a listing rule and a company's own move to another
+# exchange (Skydance, Nasdaq to the NYSE, 2026-09-25): the item's text tells them apart (the item's fixed heading,
+# which names both, is skipped).
+ITEM_301 = re.compile(r"(?is)Item\s*3\.01\.?\s*(?:Notice of Delisting or Failure to Satisfy a Continued Listing Rule or\s*"
+                      r"Standard;?\s*Transfer of Listing\.?)?(.*?)(?=Item\s*\d\.\d\d|$)")
+MOVED = re.compile(r"(?i)\b(?:transfer|mov)\w*\b[^.]{0,120}?\bto\s+(?:the\s+)?(?:New\s+York\s+Stock\s+Exchange|NYSE|Nasdaq)")
+# any sign of a listing problem keeps the item a notice (a move offered as a cure, a hearing, a bid-price rule...)
+FAILED = re.compile(r"(?i)deficien|complian|fail\w*\s+to\s+(?:satisfy|comply|meet|regain)|did\s+not\s+(?:comply|meet|satisfy)|"
+                    r"no\s+longer\s+(?:meet|satisf)|delisting\s+determination|suspen|minimum|bid\s+price|hearing|panel|"
+                    r"listing\s+rule|section\s+80\d|receiv\w*\s+(?:a\s+)?(?:written\s+)?(?:letter|notice|notification)|"
+                    r"merger|form\s+25")
+
+
+def listing_moved(body: str) -> bool:
+    """True when an 8-K's Item 3.01 only moves the listing to another exchange, which is no delisting risk; any doubt
+    (no readable text, a sign of a listing problem) keeps it a notice."""
+    item = ITEM_301.search(body)
+    return bool(item) and bool(MOVED.search(item.group(1))) and not FAILED.search(item.group(1))
+
+
 def recent(market: str, code: str, today: date, days: int) -> list[dict]:
     """A stock's non-routine filings of the last `days` days, newest first: {date, kind, title, url}, classified by
     the filing rules (events.classify). None when the stock has no filing id."""
@@ -126,6 +147,10 @@ def recent(market: str, code: str, today: date, days: int) -> list[dict]:
     else:
         rows = [r for r in parse_us(http.get(sec.SUBMISSIONS.format(cik=int(sid))).json(), int(sid))
                 if r["date"] >= start.isoformat()]
+        for r in rows:  # a move to another exchange under Item 3.01 isn't a delisting notice (one more read, rare)
+            if r["form"].startswith("8-K") and "3.01" in r["items"].split(",") and listing_moved(body(r["url"])):
+                r["items"] = ",".join(i for i in r["items"].split(",") if i != "3.01")
+                r["title"] = r["title"].replace(sec.ITEMS["3.01"], "Transfer of listing to another exchange")
     out, seen = [], set()
     for r in rows:
         kind = classify(market, r)
@@ -133,6 +158,15 @@ def recent(market: str, code: str, today: date, days: int) -> list[dict]:
             seen.add((r["date"], r["title"]))
             out.append({"date": r["date"], "kind": kind, "title": r["title"], "url": r["url"]})
     return sorted(out, key=lambda r: r["date"], reverse=True)
+
+
+def body(url: str) -> str:
+    """A US filing's text, '' when it can't be read (the filing then stays as filed)."""
+    try:
+        return text("us", url)
+    except Exception as e:
+        log.warning("%s: %s", url, e)
+        return ""
 
 
 def html_text(markup: str) -> str:

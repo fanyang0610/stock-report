@@ -39,3 +39,18 @@ def test_us_rules():
     assert [events.classify("us", r) for r in rows] == ["earnings", "routine", "deal", "other", "other", "deal"]
     assert filings.us_title("8-K", "2.02,7.01", "8-K") == "8-K: Results of operations; Item 7.01"
     assert filings.us_title("6-K", "", "6-K") == "6-K: Report of foreign issuer"
+
+
+def test_an_item_301_move_to_another_exchange_is_no_delisting_notice():
+    moved = (SAMPLES / "filing_us_skyd_301_sample.txt").read_text()  # Skydance, 2026-09-25: Nasdaq to the NYSE
+    assert filings.listing_moved(moved)
+    notice = ("Item 3.01. Notice of Delisting or Failure to Satisfy a Continued Listing Rule or Standard; Transfer of "
+              "Listing. On May 1, 2026 the Company received a letter from Nasdaq stating that it is not in compliance "
+              "with Listing Rule 5250(c)(1), as it has not filed its Form 10-K. Item 9.01. Exhibits.")
+    assert not filings.listing_moved(notice) and not filings.listing_moved("Item 7.01. Regulation FD Disclosure.")
+    head = "Item 3.01. Notice of Delisting or Failure to Satisfy a Continued Listing Rule or Standard; Transfer of Listing.\n"
+    cure = (head + "The Company received a written notice from Nasdaq that the closing bid price of its common stock was "
+            "below $1. If it does not regain compliance, it may transfer the listing to The Nasdaq Capital Market.\nItem 9.01")
+    wrapped = head + "The Company received a letter stating that it is not in\ncompliance and may transfer to Nasdaq.\nItem 9.01"
+    move = head + "The Board approved the transfer of the listing of its common stock from Nasdaq to\nthe NYSE.\nItem 9.01"
+    assert not filings.listing_moved(cure) and not filings.listing_moved(wrapped) and filings.listing_moved(move)

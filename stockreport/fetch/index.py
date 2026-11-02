@@ -36,3 +36,8 @@ def load() -> pd.Series:
     """Code -> share of the CSI 300 (empty without a file)."""
     return pd.read_csv(WEIGHTS, dtype={"code": str}).groupby("code")["weight"].sum() if WEIGHTS.exists() \
         else pd.Series(dtype=float)
+
+
+def as_of() -> str | None:
+    """The weights' date (CSI's month end), or None without a file."""
+    return pd.read_csv(WEIGHTS, usecols=["date"])["date"].max() if WEIGHTS.exists() else None

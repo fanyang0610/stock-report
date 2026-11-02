@@ -34,7 +34,7 @@ from backtest.funnel import COST, PERIODS
 from backtest.stage1 import ETF
 from stockreport import history, lists, signals, universe
 from stockreport.config import CONFIG, DATA
-from stockreport.fetch import eastmoney, index, sec, swclass, yahoo
+from stockreport.fetch import eastmoney, sec, swclass, yahoo
 from stockreport.score import score
 
 SIZES, HOLD = (20, 10, 5), 12
@@ -44,14 +44,14 @@ EXPECT = history.HISTORY / "expect.json"
 
 
 def float_factors(market: str) -> pd.Series:
-    """Today's free-float factor per stock (CN: the CSI 300 file's, relative, as universe.cn_float reads it; HK: its
+    """Today's free-float factor per stock (CN: the CSI 300 file's, relative, as the build's universe.cn_float; HK: its
     HK-listed shares over all its shares), from the newest snapshot; US none (market value)."""
     snap = pd.read_csv(sorted((DATA / "snapshots").glob(f"*/{market}.csv.gz"))[-1], dtype={"code": str}).set_index("code")
     if market == "hk":
         listed = pd.read_csv(yahoo.HK_SHARES, dtype={"code": str}).drop_duplicates("code").set_index("code")["shares_class"]
         return (listed / snap["shares"]).dropna().clip(upper=1)
     if market == "cn":
-        return universe.cn_float(snap["mcap"], index.load()) / snap["mcap"]
+        return snap["float_value"] / snap["mcap"]  # universe.cn_float, the members' value at the weights' date
     return pd.Series(dtype=float)
 
 

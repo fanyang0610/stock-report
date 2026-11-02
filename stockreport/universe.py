@@ -59,14 +59,23 @@ def ttm(results: pd.DataFrame) -> pd.DataFrame:
     return latest.set_index("code")
 
 
-def cn_float(mcap: pd.Series, weights: pd.Series) -> pd.Series:
+def moved(prices: pd.DataFrame, day: str | None) -> pd.Series:
+    """Each stock's price change after `day` (chained close ÷ previous close, so bonus shares and splits don't count)."""
+    after = prices[prices["date"] > day] if day else prices.iloc[:0]
+    return (after["close"] / after["prev_close"]).groupby(after["code"]).prod()
+
+
+def cn_float(mcap: pd.Series, weights: pd.Series, since: pd.Series | None = None) -> pd.Series:
     """CN free-float value: market value × the CSI 300's float factor (a member's index weight over its share of the
     members' market value; the median factor outside the index), as total value counts state holdings that never
-    trade (PLAN.md, "Lists"). Market value where the file is missing."""
+    trade (PLAN.md, "Lists"). The weights are CSI's month-end file's, so each member's value is taken at that date
+    (today's ÷ its price change `since`): with today's, a member that fell after the month end got a factor larger in
+    proportion. Market value where the file is missing."""
     w = weights.reindex(mcap.index).dropna()
     if w.empty:
         return mcap
-    factor = (w / w.sum()) / (mcap[w.index] / mcap[w.index].sum())
+    then = mcap[w.index] / (since.reindex(w.index).fillna(1.0) if since is not None else 1.0)
+    factor = (w / w.sum()) / (then / then.sum())
     return mcap * factor.reindex(mcap.index).fillna(factor.median())
 
 
@@ -239,7 +248,7 @@ def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
     df["cash_conv"] = (df["ocfps"] / df["eps"]).where(df["eps"] > 0)
     df["sector"] = swclass.level1().reindex(df.index).fillna("未分类")
     df["financial"] = df["sector"].isin(CN_FINANCIAL)
-    df["float_value"] = cn_float(df["mcap"], index.load())
+    df["float_value"] = cn_float(df["mcap"], index.load(), moved(prices, index.as_of()))
     df = yahoo_balance(df, "cn", "CNY")
 
     checks = {
