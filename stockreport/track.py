@@ -10,6 +10,8 @@ import pandas as pd
 from stockreport.config import DATA
 
 PICKS_LOG = DATA / "picks.csv"
+SENT_LOG = DATA / "sent.csv"  # the buys of each report sent to you
+SENT = ["date", "market", "ticker", "name", "listed"]  # sent on `date`, from the market's lists of `listed`
 COLUMNS = ["date", "market", "bucket", "ticker", "name", "price", "price_date", "score", "rank"]
 INDEX = {"us": "SPX", "hk": "HSI", "cn": "CSI300"}
 HORIZONS = {"1w": 7, "1m": 30, "3m": 91}  # calendar days after the price date
@@ -18,6 +20,24 @@ HORIZONS = {"1w": 7, "1m": 30, "3m": 91}  # calendar days after the price date
 def load() -> pd.DataFrame:
     return pd.read_csv(PICKS_LOG, dtype={"ticker": str, "price_date": str}) if PICKS_LOG.exists() \
         else pd.DataFrame(columns=COLUMNS)
+
+
+def load_sent() -> pd.DataFrame:
+    if not SENT_LOG.exists():
+        return pd.DataFrame(columns=SENT)
+    sent = pd.read_csv(SENT_LOG, dtype={"ticker": str}).reindex(columns=SENT)
+    return sent.assign(listed=sent["listed"].fillna(sent["date"]))
+
+
+def log_sent(day: date, folder) -> None:
+    """Append the buys of the report in `folder` (its buys.csv) as sent to you on `day`: the record of what was
+    recommended, never rewritten (data/picks.csv keeps only each day's last build, sent or not)."""
+    shown = folder / "buys.csv"
+    if not shown.exists():
+        return
+    new = pd.read_csv(shown, dtype={"ticker": str}).assign(date=day.isoformat()).reindex(columns=SENT)
+    new["listed"] = new["listed"].fillna(new["date"])
+    pd.concat([load_sent(), new]).drop_duplicates(["date", "market", "ticker"]).to_csv(SENT_LOG, index=False)
 
 
 def log_picks(today: date, final: dict[str, pd.DataFrame]) -> None:

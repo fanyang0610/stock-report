@@ -22,7 +22,8 @@ DAY = date(2026, 10, 24)
 
 def test_report_dry_run(tmp_path, monkeypatch):
     for module, attr, path in ((lists, "HOLDINGS", "holdings.csv"), (verdicts, "PATH", "verdicts.csv"),
-                               (track, "PICKS_LOG", "picks.csv"), (report, "REPORTS", "reports"),
+                               (track, "PICKS_LOG", "picks.csv"), (track, "SENT_LOG", "sent.csv"),
+                               (report, "REPORTS", "reports"),
                                (report, "EXPECT", "expect.json"), (deepdive, "CACHE", "deepdive")):
         monkeypatch.setattr(module, attr, tmp_path / path)
     monkeypatch.setattr(verdicts, "periods", lambda m: pd.Series(dtype=str))
@@ -77,6 +78,9 @@ def test_report_dry_run(tmp_path, monkeypatch):
     assert "从美股市值前 800 只里选" in html
     assert not any(w in summary + html for w in ("建议配置", "指数基金", "标普500指数基金", "只买 20 只", "指数权重", "从标普500"))
     assert pdf.stat().st_size > 10_000 and report.newest() == ("2026-10-24", pdf, summary)
+    track.log_sent(DAY, folder)
+    track.log_sent(DAY, folder)  # a second reply the same day adds nothing new
+    assert len(track.load_sent()) == 60 and set(track.load_sent()["market"]) == {"cn", "us", "hk"}
     logged = track.load()
     assert len(logged) == 60 and set(logged["market"]) == {"cn", "us"}  # today's lists only (HK's are from the day before)
     assert set(logged["bucket"]) == {"buy", "avoid"} and logged["score"].notna().all()
@@ -111,7 +115,8 @@ def test_summary_fits():
     busy = fake_report(DAY)
     for m in busy["markets"]:
         m["sell"] = [h | {"status": "卖出"} for h in m["holdings"][:12]]
-    for report_ in (calm, busy):
+    neutral = busy | {"recorded": False}  # a hold rating of past recommendations: one more line
+    for report_ in (calm, busy, neutral):
         summary = text_summary(report_, deliver.MAX_TEXT_BYTES)
         assert len(summary.encode("utf-8")) <= deliver.MAX_TEXT_BYTES and "已截断" not in summary
         for market in ("【A股】", "【美股】", "【港股】"):

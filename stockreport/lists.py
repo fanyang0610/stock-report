@@ -1,14 +1,14 @@
 """The lists (PLAN.md, "Lists"): the 20-name buy portfolio from the whole scored market (each sector its places by its
 share of the market's free-float value, filled by its best scores, equal amounts; Quantitative Value's screen first),
-your holdings checked by NAPS's 12-month rule, and the 10 avoid names. Your holdings are in data/holdings.csv (`hold`);
-without it there is no holdings check."""
+the names held, checked by NAPS's 12-month rule (your holdings in data/holdings.csv, `hold`, if you keep them; else
+a neutral hold rating of the names the published lists recommended), and the 10 avoid names."""
 
-from datetime import date
+from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
 
-from stockreport import verdicts
+from stockreport import track, verdicts
 from stockreport.config import CONFIG, DATA
 from stockreport.score import ranked
 
@@ -102,19 +102,30 @@ def cycle(since: date, today: date) -> tuple[int | None, date]:
     return (k - 1 if k > 1 and (today - last).days <= WINDOW else None), due
 
 
-def held(market: str) -> pd.DataFrame:
-    """Code -> buy date and name: your holdings in the market (data/holdings.csv, `hold`). Without the file there are
-    none: each day's list is a new list, not one you're assumed to have bought (your call, 2026-11-02)."""
-    if not HOLDINGS.exists():
-        return pd.DataFrame(columns=["since", "name"])
-    h = pd.read_csv(HOLDINGS, dtype=str, keep_default_na=False)
-    return h[h["market"] == market].set_index("code")[["since", "name"]]
+def recorded() -> pd.DataFrame:
+    """Your holdings (data/holdings.csv, `hold`); none when there's no file or it's empty."""
+    return pd.read_csv(HOLDINGS, dtype=str, keep_default_na=False) if HOLDINGS.exists() \
+        else pd.DataFrame(columns=["market", "code", "name", "since"])
+
+
+def held(market: str, today: date, buys: pd.Index) -> pd.DataFrame:
+    """Code -> the date it counts from and name: your holdings if you keep them; else a neutral hold rating, as an
+    analyst rates the names he recommended without knowing your portfolio: each name of a buy list sent to you
+    (data/sent.csv) that isn't in today's, from the date of the last list it was sent in (the day its card said 持有到
+    a year on), until its 12-month review and the WINDOW days to act on it have passed."""
+    if len(mine := recorded()):
+        return mine[mine["market"] == market].set_index("code")[["since", "name"]]
+    sent = track.load_sent()
+    sent = sent[(sent["market"] == market) & (sent["listed"] <= today.isoformat())]
+    last = sent.sort_values("listed").groupby("ticker")[["listed", "name"]].last().rename(columns={"listed": "since"})
+    live = last["since"].map(lambda d: anniversary(date.fromisoformat(d)) + timedelta(days=WINDOW) >= today)
+    return last[live.astype(bool) & ~last.index.isin(buys)]
 
 
 def check(df: pd.DataFrame, market: str, today: date, buys: pd.DataFrame, dropped: dict[str, str]) -> pd.DataFrame:
     """继续持有 / 复核 / 卖出 per holding (PLAN.md, "Holding rule"), judged as the buys are picked: by the score's rank
     among its sector's scored names; the results review adds its findings (review.apply)."""
-    holdings = held(market)
+    holdings, neutral = held(market, today, buys.index), not len(recorded())
     swap = next((f"{c} {buys.at[c, 'name']}" for c in buys.index if c not in holdings.index), "")
     rows = []
     for code, h in holdings.iterrows():
@@ -135,10 +146,13 @@ def check(df: pd.DataFrame, market: str, today: date, buys: pd.DataFrame, droppe
             status, reason, recheck = "继续持有", f"未到满年（{due}），评分在同行业前半（{place}）", due
         elif rank <= max(1, np.ceil(n * CONFIG["lists"]["top_share"])):
             status, reason, recheck = "继续持有", f"满 {years} 年，仍在同行业前五分之一（{place}），再持有一年", due
+            if neutral:  # a rating ends with the year it was recommended for; a name picked again comes back
+                reason, recheck = f"满 12 个月仍在同行业前五分之一（{place}）：可继续持有，此后不再列出（重新入选会再出现）", None
         else:
             status, reason, recheck = "卖出", f"满 {years} 年，已不在同行业前五分之一（{place}）", today
-            reason += f"，可换入未持有的最高分 {swap}" if swap else ""
-        rows.append(row | df.loc[code].to_dict() | {"status": status, "reason": reason, "recheck": recheck.isoformat()})
+            reason += f"，可换入今天的最高分 {swap}" if swap else ""
+        rows.append(row | df.loc[code].to_dict() | {"status": status, "reason": reason,
+                                                     "recheck": recheck.isoformat() if recheck else ""})
     return pd.DataFrame(rows).assign(list="holding")
 
 

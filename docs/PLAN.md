@@ -115,8 +115,17 @@
   found the float's-last-bit ties the first version missed (fixed) and the docs' "no buy changes" (corrected). 105
   tests.
 - Three fixes and a check, 2026-11-02 (your words: "I have no holdings. Every list should be treated as new."):
-  - no holdings check without data/holdings.csv ("Holding rule"); it had listed 90 past-list names (CN 31, US 32, HK
-    27) as if bought, growing daily. The PDF went from 21 pages to 15;
+  - the holdings check counted the test builds' lists as recommendations (90 names: CN 31, US 32, HK 27). First
+    removed when you said you hold nothing; then, on your correction ("neutral 'hold' advice ... doesn't mean you need
+    to know the investor's actual portfolio"), restored as a neutral hold rating (持有建议) of the lists actually sent
+    to you ("Holding rule"). Its fresh-context review found the first version's 12-month rule broken (dated from the
+    first listing inside a moving 12-month window, a sell showed for one day at most and names dropped off unjudged),
+    picks.csv losing the 11:33 list you were sent, and a table that would grow to 45-80 names: all fixed. Its
+    re-check found a 继续持有 at 12 months promising a year it wouldn't follow, the table losing a 复核's news concern,
+    replies from an older list dated today, a sent text not logged when the PDF failed, and stale wording: fixed.
+    Answered, unchanged: rated names stay reviewed before avoid names (a hard flag turns a rating into 卖出; on an
+    avoid name it only annotates); a `run` finishing in the second between a reply's build and its log. On
+    2026-11-02 it is empty (nothing was sent before); the PDF is 15 pages;
   - CN free-float factors at the CSI file's date ("Lists"): with 9-30 weights against today's values, a stock's
     factor moved with its October price (新易盛 −50%, factor 5.1×; now 2.7× at most). CN's places: 电子 4 → 3 and
     通信 2 → 1 (生益科技 and 中天科技 out), 非银金融 1 → 2 and 家用电器 0 → 1 (广发证券 and 海信视像 in); history
@@ -382,9 +391,18 @@ momentum drive the score (fixed in stage 1 after the stage review).
   - Every anniversary repeats this: for 30 days after it (the time to act) the top-fifth test applies; after that a new
     year has started, judged by the in-year rule until the next anniversary.
   - Your holdings live in data/holdings.csv (code, buy date), set with `hold CODE [--date D]` and `hold CODE --sold`.
-    Without the file there is no holdings check: each day's list is a new list (your call, 2026-11-02: "I have no
-    holdings. Every list should be treated as new."). Until then, the check covered every name of the last 12 months'
-    buy lists that wasn't in today's, as if you had bought each one: 90 names after 5 lists, growing daily.
+    Without the file, or with an empty one (you keep none, 2026-11-02: "I don't want you to record my holdings and give
+    biased advice. It doesn't mean you should not give me neutral 'hold' advice"), the check is a neutral hold rating,
+    as an analyst rates the names he recommended without knowing your portfolio ("if you hold it"): each name of a buy
+    list sent to you that isn't in today's, from the last list it was sent in (the day its card said 持有到 a year on),
+    until its 12-month review and the 30 days to act on it have passed; then it drops off. At the review a name still
+    in its sector's top fifth gets a last 继续持有 (可继续持有，此后不再列出: a rating ends with the year it was
+    recommended for; picked again, it comes back), without a re-check date. The date is the list's own (a reply sent
+    from an older list counts from that list), and a rebuild later the same day counts that day's sends. The sent
+    lists are logged once the keyword reply's or `send`'s text goes out, as it names every buy (data/sent.csv, the
+    buys of the report sent; never rewritten): before, the check read data/picks.csv, which keeps each day's last
+    build, sent or not, and held the test builds' lists (90 names after 5 of them). 2026-11-02 was filled in from the
+    two reports you received that day (11:33 and 12:28).
   - "Top fifth" and "bottom half" are the score's rank among the holding's sector's scored names (stage 3: within the
     sector, as buys are picked). A holding the build couldn't score (dropped on facts, or no longer among the 800
     largest) gets 复核 with the reason.
@@ -409,13 +427,13 @@ momentum drive the score (fixed in stage 1 after the stage review).
 - The reader isn't an investment expert, so the decision comes first and the method last.
 - Page 1, 今天要做什么, per market: the holdings to sell or re-check by name, what the review removed and the name that
   took its place, the 20 buys by name with the amount and the date they are held to, what changed since the market's
-  last earlier report in data/picks.csv (counts, and the names gone when 8 or fewer), the avoid names, the 预期 line in
+  last report sent to you before today (data/sent.csv; counts, and the names gone when 8 or fewer), the avoid names, the 预期 line in
   one sentence; then a five-line guide (the lists, the grades in words, the holding statuses, avoid and the review, no
-  guarantee). Without data/holdings.csv it says there is no holdings check (2026-11-02).
+  guarantee). Without data/holdings.csv it says the hold rating isn't based on your portfolio (2026-11-02).
 - Market pages: the 预期 line in plain words, then each buy's card (rank, name, ticker, sector, price, one-lot cost,
   re-check date; the business line; the grades; 为什么买; 风险; the review's finding, "审核：未见重大风险" on the risk line;
-  the AI note), 新 on a name new since the last report; 审核剔除 and your vetoes; the holdings: 卖出 and 复核 as cards with
-  the reason, 继续持有 one table (buy date, grades, re-check date, AI note); the avoid names as cards with 为什么回避.
+  the AI note), 新 on a name new since the last report; 审核剔除 and your vetoes; the holdings: 卖出 as cards with the
+  reason, 复核 and 继续持有 one table (2026-11-02); the avoid names as cards with 为什么回避.
   US cards are named by Eastmoney's Chinese short name (美光科技), with the English name beside it.
 - Back pages: how the score and the lists are built, the holding rule, the review rules, where the words come from,
   the 预期 details (the 10 and 5 name ranges, the history's limits, families running against the research) and the
@@ -442,8 +460,11 @@ momentum drive the score (fixed in stage 1 after the stage review).
 - The card's risk line says 风险 for a loss, debt of 70%+ or a 30%+ fall in 6 months, else 短板 (the weakest component,
   which isn't a risk by itself; the page 1 guide says so). An avoid card's reasons leave out a fact its weak line
   already shows (负债率高（88%） and 负债率 88%).
-- Without data/holdings.csv there is no holdings check (2026-11-02, "Holding rule"): page 1 and the summary say so in
-  one line.
+- Without data/holdings.csv the check is a neutral hold rating of the names sent to you before ("Holding rule"),
+  titled 持有建议, dated from each name's last recommendation; page 1 and the summary say it isn't your portfolio. 卖出
+  names get full cards; 复核 and 继续持有 one table (name, date, status, grades, the reason without its quote, re-check
+  date), as the rating can hold 45-80 names a market after a year (the history's monthly lists: CN median 64, US 57,
+  HK 45); page 1 and the summary name the re-checks only when 8 or fewer. "Changes" compare with the last report sent.
 - The WeChat summary: the actions first (卖出 by name, 复核 counts, 审核剔除 with the replacement), then per market the
   data date, the 20 buys by name (US: the ticker and the Chinese short name, else the English name without Inc, Corp…;
   （新） on a new name), the change counts with the names gone, the review's hard findings on holdings and avoid names,
@@ -738,6 +759,7 @@ and van Vliet, "The volatility effect in China" (JAR 2021); Jegadeesh and Livnat
     quotes/hk_yahoo_shares (HK-listed shares, daily); stage 3's redo: fundamentals/cn_yahoo and hk_yahoo (Yahoo's
     trailing EBIT, debt, cash, minorities and liabilities, weekly, ~0.2 MB each);
     a few tens of KB each.
+  - data/sent.csv (2026-11-02): date, market, ticker, name of each report's buys sent to you, a few KB a year, kept.
   - Stage 4: fundamentals/<market>_profiles (each listed name's Chinese short name and business line; US also Yahoo's
     English sentence and its Chinese line), fetched again after 180 days, a few tens of KB each.
   - Backtest tables (Phase 9, data/backtest, ~0.73 GB, not touched by cleanup and rebuildable with the commands in docs/BACKTEST.md): CN daily returns, closes and turnover 2018-01..2026-10 (one compressed matrix), Eastmoney valuation rows, 业绩报表 since 2009, balance sheets, 业绩预告 since 2017-10, 申万 history, report-archive EPS since 2025-06, the per-market month-end snapshots and v2 inputs, results. The ~2.8 GB of 通达信 packages were parsed in memory and never stored.

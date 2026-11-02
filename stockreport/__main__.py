@@ -216,6 +216,8 @@ def send(test: bool, assume_yes: bool) -> int:
     print("1/2 text summary sent", flush=True)
     time.sleep(1)
     deliver.send_file(pdf, title=title)
+    if not test:
+        track.log_sent(today, pdf.parent)
     print("2/2 PDF sent. Check your phone: did both arrive, and does the PDF open?")
     return 0
 

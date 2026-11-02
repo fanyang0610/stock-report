@@ -23,7 +23,7 @@ def card(row: dict, market: str, role: str) -> str:
     """The card's own lines for one name, as DeepSeek reads them."""
     rank = int(row["rank"]) if pd.notna(row.get("rank")) else None
     where = {"buy": f"买入组合第 {rank} 名（评分最高的 20 只之一）", "next": "买入候补（排在买入组合之后，有买入被剔除时替补）",
-             "holding": f"你的持仓，持仓检查结论：{row.get('status')}（{row.get('reason')}）",
+             "holding": f"推荐过、今天不在买入名单的股票（或你记录的持仓），持有建议：{row.get('status')}（{row.get('reason')}）",
              "avoid": f"回避名单第 {rank} 名（市值前 400 中评分最低的 10 只之一）"}[role]
     graded = pd.notna(row.get("g_value"))
     lines = [f"股票：{row['code']} {row['name']}（{MARKET_NAMES[market]}，行业：{row.get('sector') or '未知'}）", f"名单：{where}",

@@ -42,8 +42,8 @@ GUIDE = [  # page 1: how to read it, in five lines
     "<b>评级 A–E</b>：价值（价格相对利润和资产贵不贵）、质量（赚钱能力和稳定性）、成长（营收和利润在不在增长）、动量（股价和分析师预期在不在"
     "变好），都和同行业比：A 是同行最好的五分之一，E 是最差的五分之一。<b>风险</b>是亏损、负债率 70% 以上或半年跌超 30%；没有这些"
     "时写<b>短板</b>，即和同行比最弱的一项。",
-    "<b>持仓检查</b>：继续持有 = 照计划拿着；复核 = 评分滑到同行业后半或有负面消息，看原因再决定；卖出 = 出现硬风险，或满 12 个月已不在"
-    "同行业前五分之一。",
+    "<b>持有建议</b>（发给你的推荐里、今天不在名单的股票，如果你持有；不看你的实际持仓）：继续持有 = 照计划拿着；复核 = 评分滑到同行业后半或有"
+    "负面消息，看原因再决定；卖出 = 出现硬风险，或满 12 个月已不在同行业前五分之一。",
     "<b>回避</b>：大公司里评分最低的 10 只。<b>审核</b>：DeepSeek 读每只股票近期的公告和新闻，引文由程序核对；有硬风险的买入会被换掉。",
     "<b>不是保证</b>：这类方法平均每年跑赢指数几个百分点，但约 4 成年份跑输。所有数字来自程序和公开数据，不构成投资建议。",
 ]
@@ -57,13 +57,14 @@ METHOD = [  # the back pages
      "市值里的份额分到名额，名额给行业里评分最高的股票，每只等额，持有 12 个月。最可能陷入财务困境（Campbell-Hilscher-Szilagyi "
      "概率）和应计利润最大的各 5% 不买（量化价值的第一步），港股小盘股和美股合伙企业也不买。组合只有 20 只，收益会明显偏离指数，"
      "好坏都可能。回避：市值前 400 里评分最低的 10 只，每个行业最多 2 只。"),
-    ("持仓检查", "每只持有 12 个月，和买入一样按同行业里的排名：继续持有 = 未满 12 个月且评分在同行业前半，或满 12 个月仍在同行业前"
-     "五分之一；复核 = 未满 12 个月但跌入同行业后半，或审核有软风险；卖出 = 满 12 个月已不在同行业前五分之一（换入未持有的评分最高的"
-     "买入股），或审核有硬风险。记录持仓：hold 代码 --date 买入日；没有记录时不做持仓检查，每天的名单都是新名单。"),
+    ("持有建议", "每只持有 12 个月，和买入一样按同行业里的排名：继续持有 = 未满 12 个月且评分在同行业前半，或满 12 个月仍在同行业前"
+     "五分之一；复核 = 未满 12 个月但跌入同行业后半，或审核有软风险；卖出 = 满 12 个月已不在同行业前五分之一（换入今天评分最高的"
+     "买入股），或审核有硬风险。不记录持仓时，这是中立的持有建议：发给你的买入名单里、今天不在名单的股票，从最近一次推荐起算，"
+     "满 12 个月复查后 30 天内仍列出；用 hold 代码 --date 买入日 记录后，改为检查你的持仓。"),
     ("审核（你请求报告时进行）", "DeepSeek 读每只股票近 90 天的非例行公告和近 30 天的新闻标题，每条结论都引用原文，由程序核对引文确实出自"
      "该标题。硬风险（监管立案调查或欺诈认定、非标审计意见或审计师辞任、持续经营疑虑或债务违约、退市/ST/停牌、已签署尚未完成的被收购"
-     "或私有化（现金或换股）、制裁）只认公司自己的公告：买入被剔除（由同行业下一名替补，列在「审核剔除」），持仓改为卖出；软风险只标注"
-     "「市场可能在担心」，持仓改为复核。最新定期报告的归母净利润与卡片所用数据相差 20% 以上时标「数据存疑」，同样剔除。"),
+     "或私有化（现金或换股）、制裁）只认公司自己的公告：买入被剔除（由同行业下一名替补，列在「审核剔除」），持有建议改为卖出；软风险只标注"
+     "「市场可能在担心」，持有建议改为复核。最新定期报告的归母净利润与卡片所用数据相差 20% 以上时标「数据存疑」，同样剔除。"),
     ("文字从哪里来", "所有数字都来自程序和公开数据。AI 点评只用文字，不含数字。公司业务：A 股、港股取自东方财富的公司资料（主营业务），"
      "美股取自雅虎财经的公司简介，由 DeepSeek 译成一句中文（不含数字；没有译文时显示英文原句）。"),
 ]
@@ -117,6 +118,16 @@ def business(market: str, code: str, table: pd.DataFrame) -> str:
     return cut if cut == text.replace(",", "，") else cut.rstrip("。") + "…"
 
 
+def brief(reason: str, review_text: str) -> str:
+    """A rated name's reason in a table cell: the concern with its quote when there is one (the reason's, else the
+    review's on a name re-checked for its rank), with its place, else its place, without the review date."""
+    place, _, concern = reason.partition("；市场可能在担心：")
+    place = re.sub(r"^未到满年（[^）]*），", "", place)
+    if concern:
+        return "市场可能在担心：" + concern
+    return place + ("；" + review_text if review_text.startswith("市场可能在担心") else "")
+
+
 def risk(r: dict) -> tuple[str, str, str]:
     """The card's risk line: 风险 for a loss, heavy debt or a big fall (score.card_lines), else 短板, the weakest
     component; and an avoid card's reasons, without a fact the weak line already shows (负债率高（88%） and 负债率 88%)."""
@@ -156,7 +167,7 @@ def card(r: dict, market: str, table: pd.DataFrame) -> dict:
         "short": short,
         "grades": {NAMES[f]: r.get(f"g_{f}") for f in NAMES},
         "weakest": f"{NAMES[weakest]} {r[f'g_{weakest}']}" if weakest else "",
-        "risk_label": label, "risk_text": risk_text, "avoid_why": avoid_why,
+        "risk_label": label, "risk_text": risk_text, "avoid_why": avoid_why, "brief": brief(reason, review_text),
         "review_kind": ("hard" if review_text.startswith(("审核：", "数据存疑")) else "soft" if review_text.startswith("市场可能在担心")
                         else "ok" if review_text == "审核未见重大风险" else "wait" if review_text else ""),
         "review_shown": "" if dup else review_text}
@@ -177,8 +188,8 @@ def latest_lists(market: str, today: date) -> Path | None:
 
 
 def changes(market: str, day: str, buys: list[dict], log: pd.DataFrame, table: pd.DataFrame) -> dict:
-    """The buys new since the market's last earlier report in data/picks.csv, and the names gone from it."""
-    past = log[(log["market"] == market) & (log["bucket"] == "buy") & (log["date"] < day)]
+    """The buys new since the last report sent to you before `day` (data/sent.csv), and the names gone from it."""
+    past = log[(log["market"] == market) & (log["date"] < day)]
     if past.empty:
         return {}
     last = past[past["date"] == past["date"].max()]
@@ -195,7 +206,7 @@ def section(market: str, rows: pd.DataFrame, day: str, today: date, failed: list
     held = {s: [h for h in cards["holding"] if h["status"] == s] for s in ("卖出", "复核", "继续持有")}
     for p in cards["removed"]:  # the name that took its place, as the cards name it
         p["replaced_by"] = next((b["short"] for b in cards["buy"] if b.get("replaces") == p["ticker"]), "")
-    return {"code": market.upper(), "name": name, "short": name.split()[0], "currency": currency, "unit": unit,
+    return {"code": market.upper(), "name": name, "short": name.split()[0], "currency": currency, "unit": unit, "day": day,
             "expect": expect(market), "field": FIELD[market],
             "data_date": max((c["price_date"] for c in cards["buy"] if c["price_date"]), default=day),
             "recheck": cards["buy"][0]["recheck"] if cards["buy"] else "",
@@ -204,7 +215,7 @@ def section(market: str, rows: pd.DataFrame, day: str, today: date, failed: list
                       f"今日部分数据获取失败（{'、'.join(failed)}），沿用上次的缓存数据" if failed else ""),
             "buys": cards["buy"], "holdings": cards["holding"], "sell": held["卖出"], "check": held["复核"],
             "keep": held["继续持有"], "avoid": cards["avoid"], "vetoes": cards["veto"], "removed": cards["removed"],
-            "changes": changes(market, day, cards["buy"], log, table), "review": review_status(cards)}
+            "changes": changes(market, today.isoformat(), cards["buy"], log, table), "review": review_status(cards)}
 
 
 def review_status(cards: dict) -> str:
@@ -236,7 +247,7 @@ def build(today: date, states: dict | None = None) -> tuple[Path, str]:
     out = REPORTS / today.isoformat()
     status = out / "fetch_failed.json"
     failed = json.loads(status.read_text(encoding="utf-8")) if status.exists() else {}
-    markets, logged, picked = [], {}, track.load()
+    markets, logged, sent = [], {}, track.load_sent()
     for market in MARKETS:
         path = latest_lists(market, today)
         if not path:
@@ -250,18 +261,21 @@ def build(today: date, states: dict | None = None) -> tuple[Path, str]:
             replacing = rows[(rows["list"] == "buy") & rows["replaces"].notna()].assign(list="replacement")
             logged[market] = pd.concat([rows[rows["list"].isin(["buy", "avoid", "removed"])], replacing]).rename(
                 columns={"list": "bucket"})
-        markets.append(section(market, rows, path.parent.name, today, failed.get(market, []), picked))
+        markets.append(section(market, rows, path.parent.name, today, failed.get(market, []), sent))
     if not markets:
         raise SystemExit(f"no lists CSV in {REPORTS}; run `run` first")
     if logged:
         track.log_picks(today, logged)
     size_gb = (size_of(DATA) + size_of(REPORTS)) / 1e9
     report = {"title": "股票报告", "date": today.isoformat(), "markets": markets, "guide": GUIDE, "method": METHOD,
-              "common": COMMON, "recorded": lists.HOLDINGS.exists(),
+              "common": COMMON, "recorded": bool(len(lists.recorded())),
               "storage_warning": (f"注意：data/ + reports/ 已占用 {size_gb:.1f} GB，超过 {CONFIG['storage']['warn_gb']} GB 上限。"
                                   if size_gb > CONFIG["storage"]["warn_gb"] else "")}
     out.mkdir(parents=True, exist_ok=True)
     pdf = html_to_pdf(render_html(report, out / "report.html"), out / "report.tmp.pdf").replace(out / "report.pdf")
+    pd.DataFrame([{"market": m["code"].lower(), "ticker": b["ticker"], "name": b["name"], "listed": m["day"]}
+                  for m in markets for b in m["buys"]],
+                 columns=["market", "ticker", "name", "listed"]).to_csv(out / "buys.csv", index=False)  # logged when sent
     summary = text_summary(report, deliver.MAX_TEXT_BYTES)
     (out / "summary.tmp").write_text(summary, encoding="utf-8")
     (out / "summary.tmp").replace(out / "summary.txt")  # the listener may send the report at any moment

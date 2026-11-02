@@ -72,21 +72,21 @@
 
 <section class="overview">
   <h1>{{ r.title }} {{ r.date }}{% if r.test %} <span class="tag test">测试数据</span>{% endif %}</h1>
-  <div class="sub">{% for m in r.markets %}{{ m.short }}数据 {{ m.data_date }}{% if not loop.last %} · {% endif %}{% endfor %} · 每个市场：买入 20 只 / 持仓检查 / 回避 10 只</div>
+  <div class="sub">{% for m in r.markets %}{{ m.short }}数据 {{ m.data_date }}{% if not loop.last %} · {% endif %}{% endfor %} · 每个市场：买入 20 只 / 持有建议 / 回避 10 只</div>
   {% if r.test %}<div class="test-banner">测试数据：本报告所有公司、价格和评分均为虚构，仅用于测试微信发送与手机打开效果。</div>{% endif %}
 
   <h3>今天要做什么</h3>
   {% set stale = r.markets | map(attribute="stale") | unique | list %}{% set one_stale = stale | length == 1 and stale[0] %}
   {% if one_stale %}<p class="warn small">{{ stale[0] }}（三个市场都是）</p>{% endif %}
-  {% if not r.recorded and not r.test %}<p class="small muted">没有记录持仓：每天的名单都是新名单。买入后用 hold 代码 --date 买入日 记录，这里就会检查你的持仓。</p>{% endif %}
+  {% if not r.recorded and not r.test %}<p class="small muted">「持有」是中立的持有建议，不看你的实际持仓：发给你的买入名单里、今天已不在名单的股票，从最近一次推荐起按持有 12 个月的规则，给出继续持有、复核或卖出（如果你持有）。</p>{% endif %}
   <div class="todo">
   {% for m in r.markets %}
     <div class="mk">
       <h4>{{ m.name }}<span class="sub">数据 {{ m.data_date }}</span></h4>
       {% if m.stale and not one_stale %}<p class="warn">{{ m.stale }}</p>{% endif %}
-      <p><span class="k">持仓</span>{% if m.holdings %}<span class="status s卖出">卖出 {{ m.sell | length }}</span>{% if m.sell %}（{% for h in m.sell %}{{ h.short }}{% if not loop.last %}、{% endif %}{% endfor %}）{% endif %}
-        · <span class="status s复核">复核 {{ m.check | length }}</span>{% if m.check %}（{% for h in m.check %}{{ h.short }}{% if not loop.last %}、{% endif %}{% endfor %}）{% endif %}
-        · <span class="status s继续持有">继续持有 {{ m.keep | length }}</span>{% else %}{{ "无" if r.recorded else "未记录" }}{% endif %}</p>
+      <p><span class="k">持有</span>{% if m.holdings %}<span class="status s卖出">卖出 {{ m.sell | length }}</span>{% if m.sell %}（{% for h in m.sell %}{{ h.short }}{% if not loop.last %}、{% endif %}{% endfor %}）{% endif %}
+        · <span class="status s复核">复核 {{ m.check | length }}</span>{% if m.check and m.check | length <= 8 %}（{% for h in m.check %}{{ h.short }}{% if not loop.last %}、{% endif %}{% endfor %}）{% endif %}
+        · <span class="status s继续持有">继续持有 {{ m.keep | length }}</span>{% else %}{{ "无" if r.recorded else "暂无" }}{% endif %}</p>
       {% if m.removed %}<p><span class="k">剔除</span>{% for p in m.removed %}{{ p.short }}：<span class="rv-hard">{{ p.reason.split("（")[0].split("：")[0] }}</span>{% if p.replaced_by %}，由 {{ p.replaced_by }} 替补{% else %}，{{ p.status }}{% endif %}{% if not loop.last %}；{% endif %}{% endfor %}</p>{% endif %}
       <p><span class="k">买入</span><b>{{ m.buys | length }} 只，每只 {{ m.share or "等额" }}，持有到 {{ m.recheck }}：</b>{% for p in m.buys %}{{ p.short }}{% if not loop.last %}、{% endif %}{% endfor %}</p>
       {% if m.changes %}<p class="small"><span class="k">变化</span>与 {{ m.changes.since }} 的名单相比{% if not m.changes.new and not m.changes.gone %}没有变化{% else %}：新进 {{ m.changes.new | length }} 只，移出 {{ m.changes.gone | length }} 只{% if m.changes.gone and m.changes.gone | length <= 8 %}（{{ m.changes.gone | join("、") }}）{% endif %}{% endif %}</p>{% endif %}
@@ -127,23 +127,24 @@
   {% endif %}
   {% if m.vetoes %}<p class="small muted">不列入（你的否决）：{% for v in m.vetoes %}{{ v.ticker }} {{ v.name }} {{ v.reason }}{% if not loop.last %}；{% endif %}{% endfor %}</p>{% endif %}
 
-  <h3>持仓检查<span class="count">{% if m.holdings %}卖出 {{ m.sell | length }} · 复核 {{ m.check | length }} · 继续持有 {{ m.keep | length }}{% else %}无{% endif %}</span></h3>
-  {% if not r.recorded and not r.test %}<p class="small muted">没有记录持仓（hold 代码 --date 买入日）。</p>{% endif %}
-  {% for h in m.sell + m.check %}
+  <h3>{{ "持仓检查" if r.recorded else "持有建议" }}<span class="count">{% if m.holdings %}卖出 {{ m.sell | length }} · 复核 {{ m.check | length }} · 继续持有 {{ m.keep | length }}{% else %}无{% endif %}</span></h3>
+  {% if not r.recorded and not r.test %}<p class="small muted">发给你的买入名单里、今天已不在名单的股票（如果你持有），从最近一次推荐起算：满 12 个月复查，之后 30 天内仍列出。</p>{% endif %}
+  {% for h in m.sell %}
   <div class="card">
     <div class="top"><span class="status s{{ h.status }}">{{ h.status }}</span><span class="who">{{ who(h, m) }}</span>
-      <span class="right muted small">买入 {{ h.since }} · 复查 {{ h.recheck }}</span></div>
+      <span class="right muted small">{{ "买入" if r.recorded else "最近推荐" }} {{ h.since }} · 复查 {{ h.recheck }}</span></div>
     {% if h.business %}<div class="line biz small">{{ h.business }}</div>{% endif %}
     <div class="line">{% if h.grades["价值"] %}{{ grades(h) }} {% endif %}<span class="lbl">原因：</span>{{ h.reason }}</div>
     {% if h.review_shown and h.review_kind != 'ok' %}<div class="line small">{{ rv(h) }}</div>{% endif %}
     {% if h.note %}<div class="line small ai">AI 点评：{{ h.note }}</div>{% endif %}
   </div>
   {% endfor %}
-  {% if m.keep %}
-  <p class="small muted" style="margin-top:2mm">继续持有：评分仍在同行业前半（或满 12 个月仍在前五分之一），到复查日再看。</p>
-  <table class="small"><thead><tr><th>名称</th><th>买入日</th><th>评级</th><th>复查日</th><th>AI 点评</th></tr></thead><tbody>
-  {% for h in m.keep %}<tr><td><b>{{ h.name }}</b> <span class="muted">{{ h.ticker }}</span></td><td class="num">{{ h.since }}</td>
-    <td style="white-space:nowrap">{{ grades(h) }}</td><td class="num">{{ h.recheck }}</td><td class="ai">{{ h.note or "" }}</td></tr>{% endfor %}
+  {% if m.check or m.keep %}
+  <p class="small muted" style="margin-top:2mm">复核 = 评分滑到同行业后半或有负面消息，看原因再决定；继续持有 = 照计划拿着，到复查日再看。</p>
+  <table class="small"><thead><tr><th>名称</th><th>{{ "买入日" if r.recorded else "最近推荐" }}</th><th>结论</th><th>评级</th><th>原因</th><th>复查日</th></tr></thead><tbody>
+  {% for h in m.check + m.keep %}<tr><td><b>{{ h.name }}</b> <span class="muted">{{ h.ticker }}</span></td><td class="num">{{ h.since }}</td>
+    <td class="status s{{ h.status }}">{{ h.status }}</td><td style="white-space:nowrap">{{ grades(h) }}</td><td>{{ h.brief }}</td>
+    <td class="num">{{ h.recheck }}</td></tr>{% endfor %}
   </tbody></table>
   {% endif %}
 

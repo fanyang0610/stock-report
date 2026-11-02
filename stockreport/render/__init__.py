@@ -50,7 +50,8 @@ def fit_bytes(lines: list[str], limit: int) -> str:
 def text_summary(report: dict, limit: int = 4000) -> str:
     """The WeChat message: what to do today (holdings to sell or re-check, buys the review removed), then per market the
     buys by name (新 marks a name new since the last report), the holdings to re-check, the avoid names and the 预期
-    line, and a pointer to the PDF for the cards. Without recorded holdings the actions say so in one line. Over 90% of `limit` the names gone from the list become a count, then the 新 marks go (the count of new names
+    line, and a pointer to the PDF for the cards. Without recorded holdings the sells and re-checks are a neutral hold
+    rating of the names recommended before. Over 90% of `limit` the names gone from the list become a count, then the 新 marks go (the count of new names
     stays), then the holdings to re-check, then those to sell become counts; fit_bytes is the last guard."""
     for level in (0, 1, 2, 3, 4):
         text = "\n".join(summary_lines(report, level))
@@ -70,11 +71,12 @@ def summary_lines(report: dict, level: int = 0) -> list[str]:
     removed = [f"{m['short']} {p['short']}（{p['reason'].split('（')[0].split('：')[0]}）→ "
                f"{p.get('replaced_by') or p['status'].removeprefix('由 ').removesuffix(' 替换')}" for m in markets for p in m["removed"]]
     lines += ["", "今天要做的："]
-    if report.get("recorded", True):
-        lines += ["· 卖出：" + ("；".join(sells) if sells else "无"),
+    if any(m["holdings"] for m in markets) or report.get("recorded", True):
+        lines += [*([] if report.get("recorded", True) else ["（持有建议：发给你的推荐里、今天不在名单的股票，如果你持有）"]),
+                  "· 卖出：" + ("；".join(sells) if sells else "无"),
                   "· 复核：" + ("、".join(checks) + "（评分下滑或有负面消息，看原因再决定）" if checks else "无")]
     else:
-        lines.append("· 持仓：没有记录，每天的名单都是新名单（买入后用 hold 命令记录，就会检查卖出和复核）")
+        lines.append("· 持有建议：暂无")
     lines += ["· 审核剔除：" + "；".join(removed)] if removed else []
     for m in markets:
         new = {p["ticker"] for p in (m.get("changes") or {}).get("new", [])}
@@ -91,7 +93,8 @@ def summary_lines(report: dict, level: int = 0) -> list[str]:
         if m.get("review"):
             lines.append(m["review"])
         if m["check"]:
-            lines.append(f"复核 {len(m['check'])} 只" + ("，名单见 PDF" if level > 2 else "：" + join(m["check"])))
+            short = level > 2 or len(m["check"]) > 8  # a long re-check list stays in the PDF
+            lines.append(f"复核 {len(m['check'])} 只" + ("，名单见 PDF" if short else "：" + join(m["check"])))
         if m["avoid"]:
             lines.append("回避：" + join(m["avoid"]))
         lines.append("预期：" + m["expect"]["short"])

@@ -33,7 +33,8 @@ def test_report(today: date | None = None) -> dict:
     markets = []
     for code, name, currency, unit in _MARKETS:
         buys = [_card(code, i, data_date, unit, "ABBA") for i in range(20)]
-        held = [_card(code, i, data_date, unit, "BCCB", since=data_date, status=s, reason=f"测试数据：{s}的原因")
+        held = [_card(code, i, data_date, unit, "BCCB", since=data_date, status=s, reason=f"测试数据：{s}的原因",
+                      brief=f"测试数据：{s}的原因")
                 for i, s in zip(range(10, 24), ["卖出"] + ["复核"] * 6 + ["继续持有"] * 7)]
         soft = {"review": "市场可能在担心：测试数据（新闻：「虚构的标题」）", "review_kind": "soft",
                 "review_shown": "市场可能在担心：测试数据（新闻：「虚构的标题」）"}

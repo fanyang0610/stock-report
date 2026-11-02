@@ -12,7 +12,7 @@ import sys
 import time
 from datetime import date, datetime, timezone
 
-from stockreport import deliver, report
+from stockreport import deliver, report, track
 from stockreport.config import CONFIG, DATA, ROOT
 from stockreport.render import fit_bytes
 
@@ -63,7 +63,8 @@ def reply(today: date) -> None:
             summary = fit_bytes([f"（今天的报告还没生成，以下是 {day} 的报告）", *summary.splitlines()],
                                 deliver.MAX_TEXT_BYTES)
     built = time.monotonic() - started
-    send_with_retry("text", lambda: deliver.send_text(summary))
+    if send_with_retry("text", lambda: deliver.send_text(summary)):  # the text names every buy
+        track.log_sent(today, pdf.parent)  # what was recommended: the hold rating's record
     time.sleep(1)
     send_with_retry("PDF", lambda: deliver.send_file(pdf, title=f"股票报告_{day.replace('-', '')}.pdf"))
     log.info("replied with the %s report in %.0fs (review and build %.0fs)", day, time.monotonic() - started, built)

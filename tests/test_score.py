@@ -243,13 +243,20 @@ def test_holding_rule(tmp_path, monkeypatch):
     assert out.loc["C70", "status"] == "继续持有" and out.loc["C70", "recheck"] == "2027-06-01"
 
 
-def test_without_holdings_there_is_no_check_each_list_is_new(tmp_path, monkeypatch):
-    monkeypatch.setattr(lists, "HOLDINGS", tmp_path / "none.csv")
-    monkeypatch.setattr(track, "PICKS_LOG", tmp_path / "picks.csv")  # past lists don't count as holdings
-    pd.DataFrame({"date": ["2026-03-02"], "market": "cn", "bucket": "buy", "ticker": ["C5"], "name": "x",
-                  "score": 0.9}).to_csv(track.PICKS_LOG, index=False)
+def test_without_holdings_the_hold_rating_covers_the_buys_sent_to_you_until_their_review_window_ends(tmp_path, monkeypatch):
+    monkeypatch.setattr(lists, "HOLDINGS", tmp_path / "holdings.csv")
+    lists.HOLDINGS.write_text("market,code,name,since\n")  # an empty file (the last one sold) is no holdings
+    monkeypatch.setattr(track, "SENT_LOG", tmp_path / "sent.csv")
+    pd.DataFrame({"date": ["2025-10-20", "2025-10-25", "2025-09-30", "2025-09-01", "2026-10-01", "2025-09-30"],
+                  "market": "cn", "ticker": ["C5", "C5", "C6", "C7", "C9", "C96"], "name": "x"}).to_csv(track.SENT_LOG, index=False)
+    held = lists.held("cn", DAY, pd.Index(["C9"]))  # C9 is in today's list: a buy, not a hold
+    assert held["since"].to_dict() == {"C5": "2025-10-25", "C6": "2025-09-30", "C96": "2025-09-30"}  # the last list sent
+    # C6's year ended 2026-09-30: judged now, in the 30 days to act; C7's ended 2026-09-01, past them: no longer rated
     df = universe(100).assign(score=np.linspace(0, 1, 100), mcap_rank=np.arange(1, 101))
-    assert lists.held("cn").empty and lists.check(df, "cn", DAY, df.head(3), {}).empty
+    out = lists.check(df, "cn", DAY, df.sort_values("score").tail(3), {}).set_index("code")
+    assert out.loc["C6", "reason"].startswith("满 1 年") and out.loc["C5", "reason"].startswith("未到满年")
+    # still in its sector's top fifth at 12 months: the rating's last word, with no re-check date (it then drops off)
+    assert out.loc["C96", "status"] == "继续持有" and "此后不再列出" in out.loc["C96", "reason"] and out.loc["C96", "recheck"] == ""
 
 
 def test_key_risk_names_a_loss_heavy_debt_or_a_big_fall_first():
