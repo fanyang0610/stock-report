@@ -1,0 +1,56 @@
+{
+ "quoteResponse": {
+  "result": [
+   {
+    "symbol": "BNS",
+    "longName": "The Bank of Nova Scotia",
+    "shortName": "Bank Nova Scotia Halifax Pfd 3",
+    "sharesOutstanding": 1216806570,
+    "impliedSharesOutstanding": 1216806570
+   },
+   {
+    "symbol": "BRK-B",
+    "longName": "Berkshire Hathaway Inc.",
+    "shortName": "Berkshire Hathaway Inc. New",
+    "sharesOutstanding": 1408035161,
+    "impliedSharesOutstanding": 2140709794
+   },
+   {
+    "symbol": "GOOGL",
+    "longName": "Alphabet Inc.",
+    "shortName": "Alphabet Inc.",
+    "sharesOutstanding": 5888000000,
+    "impliedSharesOutstanding": 12294000000
+   },
+   {
+    "symbol": "RY",
+    "longName": "Royal Bank of Canada",
+    "shortName": "Royal Bank Of Canada",
+    "sharesOutstanding": 1384429799,
+    "impliedSharesOutstanding": 1384429799
+   },
+   {
+    "symbol": "TD",
+    "longName": "The Toronto-Dominion Bank",
+    "shortName": "Toronto Dominion Bank (The)",
+    "sharesOutstanding": 1633016726,
+    "impliedSharesOutstanding": 1633016726
+   },
+   {
+    "symbol": "KIM",
+    "longName": "Kimco Realty Corporation",
+    "shortName": "Kimco Realty Corporation (HC)",
+    "sharesOutstanding": 664489869,
+    "impliedSharesOutstanding": 664489869
+   },
+   {
+    "symbol": "0700.HK",
+    "longName": "Tencent Holdings Limited",
+    "shortName": "TENCENT",
+    "sharesOutstanding": 9004607601,
+    "impliedSharesOutstanding": 9004607601
+   }
+  ],
+  "error": null
+ }
+}

@@ -131,13 +131,15 @@ def test_data_suspect_removes_a_buy():
     assert out[out["list"] == "removed"].iloc[0]["reason"].startswith("数据存疑：最新报告的归母净利润")
 
 
-def test_cache_is_redone_for_a_new_source_a_new_list_or_after_seven_days():
+def test_cache_is_redone_for_a_new_source_a_new_list_a_new_name_or_after_seven_days():
     ids = ["2026-10-20 a", "2026-10-21 b"]
-    entry = {"date": "2026-10-20", "role": "buy", "sources": ids}
-    assert review.valid(entry, "buy", ids[:1], DAY)  # a source that aged out of the window changes nothing
-    assert not review.valid(entry, "buy", ids + ["2026-10-24 c"], DAY)  # a new headline or filing
-    assert not review.valid(entry, "hold", ids, DAY)  # new to its list
-    assert not review.valid(entry, "buy", ids, date(2026, 10, 28))  # over 7 days old
+    entry = {"date": "2026-10-20", "role": "buy", "name": "The Bank of Nova Scotia", "sources": ids}
+    valid = lambda role, ids, day=DAY, name="The Bank of Nova Scotia": review.valid(entry, role, ids, day, name)
+    assert valid("buy", ids[:1])  # a source that aged out of the window changes nothing
+    assert not valid("buy", ids + ["2026-10-24 c"])  # a new headline or filing
+    assert not valid("hold", ids)  # new to its list
+    assert not valid("buy", ids, date(2026, 10, 28))  # over 7 days old
+    assert not valid("buy", ids, name="Bank Nova Scotia Halifax Pfd 3")  # renamed: the note read the old name
 
 
 def test_the_note_goes_when_code_changes_a_finding(tmp_path, monkeypatch):

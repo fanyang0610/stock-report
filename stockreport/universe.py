@@ -293,7 +293,7 @@ def build_us(today: date) -> tuple[pd.DataFrame, dict]:
     last = str(trading_days(prices)[-1])
     info = {"quote_date": last, "price_date": last, "stages": {}, "dropped": {}}
     codes = nasdaq.candidates()
-    df = nasdaq.load_list().drop_duplicates("code").set_index("code").loc[codes]
+    df = nasdaq.named(nasdaq.load_list().drop_duplicates("code").set_index("code").loc[codes])  # Yahoo's names
     info["stages"][f"ordinary shares (largest {len(codes)})"] = len(df)
     df = screen(df, prices, today, "us", info)
     df["cik"] = sec.load_ciks().reindex(df.index)

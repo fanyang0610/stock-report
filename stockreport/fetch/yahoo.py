@@ -220,11 +220,11 @@ def crumb_http() -> Http:
 def parse_quotes(payload: dict) -> pd.DataFrame:
     """Each listed symbol's share counts in its own units (an ADR's in depositary shares): the listed class's
     (sharesOutstanding: an A+H issuer's H shares) and every class's (impliedSharesOutstanding, Yahoo's market value ÷
-    price)."""
+    price); and the company's name (longName: shortName repeats the screener's, "Bank Nova Scotia Halifax Pfd 3")."""
     code = lambda s: s[:-3].zfill(5) if s.endswith(".HK") else s.replace("-", ".")
-    rows = [{"code": code(q["symbol"]), "shares_class": q.get("sharesOutstanding"),
+    rows = [{"code": code(q["symbol"]), "shares_class": q.get("sharesOutstanding"), "name": q.get("longName"),
              "shares_all": q.get("impliedSharesOutstanding")} for q in payload["quoteResponse"]["result"]]
-    return pd.DataFrame(rows, columns=["code", "shares_class", "shares_all"])
+    return pd.DataFrame(rows, columns=["code", "shares_class", "shares_all", "name"])
 
 
 def update_share_counts(codes: list[str], market: str = "us") -> None:

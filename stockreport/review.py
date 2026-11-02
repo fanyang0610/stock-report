@@ -5,7 +5,7 @@ finding quotes one of those lines and code checks the quote (quotes.py), and a h
 subject in the quote (KINDS) without denying it (deepdive.DENIAL). The names on the cards are reviewed first, in their
 order (the 20 Buy, the 10 Hold, the 10 Sell), then the benches (the next name of each sector held, the next Hold
 names), `workers` calls at a time within `budget` seconds; each review is cached per
-stock (data/review/<market>/<code>.json) and redone only for a name new to its list, a new filing or headline, or a
+stock (data/review/<market>/<code>.json) and redone only for a name new to its list or renamed, a new filing or headline, or a
 review over `keep_days` old. apply() turns the findings (and the deep-dive lane's, deepdive.py) into the lists."""
 
 import json
@@ -202,8 +202,10 @@ def cached(market: str, code: str) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
-def valid(entry: dict | None, role: str, ids: list[str], today: date) -> bool:
-    return bool(entry) and entry["role"] == role and set(ids) <= set(entry["sources"]) \
+def valid(entry: dict | None, role: str, ids: list[str], today: date, name: str) -> bool:
+    """A cached review stands for the same list, sources and name (the note is written about the name it read) for
+    `keep_days`."""
+    return bool(entry) and entry["role"] == role and set(ids) <= set(entry["sources"]) and entry.get("name") == name \
         and (today - date.fromisoformat(entry["date"])).days <= CFG["keep_days"]
 
 
@@ -211,7 +213,7 @@ def review_one(client: httpx.Client, market: str, row: dict, role: str, lines: l
     """One name's review, saved to its cache file (written whole, so a reader never sees half of one)."""
     answer = ask(client, prompt(row, market, role, lines))
     findings, rejected, altered = verify(answer, lines)
-    entry = {"date": today.isoformat(), "role": role, "sources": ids_of(lines), "findings": findings,
+    entry = {"date": today.isoformat(), "role": role, "name": row["name"], "sources": ids_of(lines), "findings": findings,
              "rejected": rejected, "note": "" if rejected or altered else notes.words_only(answer.get("note"))}
     path = CACHE / market / f"{row['code']}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -238,7 +240,7 @@ def run(lists: dict, sources: dict, today: date, budget: float | None) -> dict:
                     continue
                 lines = lines_of(src)
                 entry = cached(market, code)
-                if valid(entry, role, ids_of(lines), today):
+                if valid(entry, role, ids_of(lines), today, row["name"]):
                     st[code], hits = entry | {"status": "done"}, hits + 1
                     continue
                 st[code] = {"status": "pending"}

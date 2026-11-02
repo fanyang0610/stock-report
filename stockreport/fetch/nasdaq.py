@@ -64,6 +64,18 @@ def load_list() -> pd.DataFrame:
     return pd.read_csv(LIST, dtype={"code": str}, keep_default_na=False, na_values={"mcap": [""], "last": [""]})
 
 
+def named(df: pd.DataFrame) -> pd.DataFrame:
+    """The company's name from Yahoo's quote (longName, fetched daily with the share counts: yahoo.SHARES), else the
+    screener's. About 20 of the 800 screener names carry share-class, registry or domicile words ("Bank Nova Scotia
+    Halifax Pfd 3", "Kimco Realty Corporation (HC)", "Mizuho Financial Group Inc. Sponosred ADR (Japan)") that a card
+    shows and the review's prompt reads as facts: DeepSeek called BNS's common share a preferred one."""
+    from stockreport.fetch import yahoo
+    if not yahoo.SHARES.exists() or "name" not in pd.read_csv(yahoo.SHARES, nrows=0).columns:
+        return df
+    quote = pd.read_csv(yahoo.SHARES, dtype={"code": str}).drop_duplicates("code", keep="last").set_index("code")
+    return df.assign(name=quote["name"].reindex(df.index).fillna(df["name"]))
+
+
 def ordinary(df: pd.DataFrame) -> pd.Series:
     return ((~df["listing"].str.contains(NOT_ORDINARY) | df["listing"].str.contains(ORDINARY))
             & ~df["industry"].isin(NOT_COMPANY))

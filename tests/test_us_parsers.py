@@ -2,6 +2,7 @@ import json
 from datetime import date
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from stockreport.fetch import fred, nasdaq, sec, yahoo
@@ -137,9 +138,25 @@ def test_basic_shares_are_the_latest_quarters():
 def test_yahoo_quote_share_counts_in_the_listed_units():
     # Real quote reply (2026-10-25), cut to the fields used: Ares' class A and every class (its LLC units included),
     # Berkshire's B shares and every class in B shares, TSM's depositary shares
-    df = yahoo.parse_quotes(load("us_quote_shares_sample.json")).set_index("code")
+    df = yahoo.parse_quotes(load("us_quote_shares_sample.json")).set_index("code")[["shares_class", "shares_all"]]
     assert df.loc["BRK.B"].tolist() == [1_408_035_161, 2_140_709_794]
     assert df.loc["ARES"].tolist() == [223_957_742, 331_775_947] and df.at["TSM", "shares_all"] == 5_186_474_013
+
+
+def test_us_names_come_from_yahoos_quote_else_the_screener(tmp_path, monkeypatch):
+    # Real quote reply (2026-11-02), cut to the fields used: longName is the company's name, shortName repeats the
+    # screener's ("Bank Nova Scotia Halifax Pfd 3", which the review's DeepSeek note read as a preferred share)
+    quotes = yahoo.parse_quotes(load("yahoo_quote_names_sample.json"))
+    assert quotes.set_index("code")["name"].to_dict() == {
+        "BNS": "The Bank of Nova Scotia", "BRK.B": "Berkshire Hathaway Inc.", "GOOGL": "Alphabet Inc.",
+        "RY": "Royal Bank of Canada", "TD": "The Toronto-Dominion Bank", "KIM": "Kimco Realty Corporation",
+        "00700": "Tencent Holdings Limited"}
+    monkeypatch.setattr(yahoo, "SHARES", tmp_path / "quotes.csv")
+    listed = pd.DataFrame({"name": ["Bank Nova Scotia Halifax Pfd 3", "Kimco Realty Corporation (HC)", "Newco Inc"]},
+                          index=["BNS", "KIM", "NEWCO"])
+    assert nasdaq.named(listed).equals(listed)  # no quote file yet: the screener's
+    quotes.to_csv(yahoo.SHARES, index=False)
+    assert nasdaq.named(listed)["name"].tolist() == ["The Bank of Nova Scotia", "Kimco Realty Corporation", "Newco Inc"]
 
 
 def test_yahoo_fundamentals_for_sec_gaps():
