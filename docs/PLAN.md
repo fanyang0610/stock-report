@@ -174,8 +174,8 @@
     as every market now has stage-5 lists; stage-reviewer.md's checklist now names the three ratings.
   - Follow-ups, not this stage: US names came from Nasdaq's screener, which calls Bank of Nova Scotia's common share
     "Bank Nova Scotia Halifax Pfd 3", and the AI note repeated that it is a preferred share (fixed the same day: "US
-    company names" below); Moderna's 194% volatility rests on one +177% day in Yahoo's prices (2026-08-19), not
-    verified.
+    company names" below); Moderna's 194% volatility rests on one +177% day in Yahoo's prices (2026-08-19), a real
+    move (your confirmation, 2026-11-02): nothing to change.
 - US company names (2026-11-02, a follow-up of stage 5's review): from Yahoo's quote longName instead of the
   Nasdaq screener's names (Data sources, US); BNS's card now reads The Bank of Nova Scotia, its new note no longer
   calls it a preferred share, and no card says Pfd. The names change no list (the same snapshot gives the same lists
