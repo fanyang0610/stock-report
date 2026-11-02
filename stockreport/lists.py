@@ -10,6 +10,7 @@ import pandas as pd
 
 from stockreport import track, verdicts
 from stockreport.config import CONFIG, DATA
+from stockreport.score import ranked
 
 HOLDINGS = DATA / "holdings.csv"
 LOT = {"cn": 100, "us": 1}  # HK: each stock's board lot (HKEX)
@@ -66,10 +67,10 @@ def positions(df: pd.DataFrame, n: int, market: str) -> tuple[pd.DataFrame, pd.D
     k = slots(share, n, field["sector"].value_counts())
     buys, bench = [], []
     for sector, g in field[field["sector"].map(k) > 0].groupby("sector"):
-        g = g.sort_values("score", ascending=False)
+        g = ranked(g)
         buys.append(g.iloc[:k[sector]])
         bench.append(g.iloc[k[sector]:k[sector] + 1])
-    buys = pd.concat(buys).sort_values("score", ascending=False)
+    buys = ranked(pd.concat(buys))
     return buys.assign(weight=1 / len(buys)), pd.concat(bench)
 
 
@@ -154,10 +155,10 @@ def build(df: pd.DataFrame, market: str, today: date, dropped: dict[str, str]) -
     vetoes = {c: v for c, v in verdicts.active(market, today, df["period"].astype(str)).items() if v["verdict"] == "veto"}
     df = df.assign(lot=df["lot"] if "lot" in df else LOT[market])
     df["lot_cost"] = df["price"] * df["lot"]
-    ranked = df.sort_values("score", ascending=False)
-    buys, bench = positions(ranked[~ranked.index.isin(list(vetoes))], cfg["buys"], market)
-    bench = bench.sort_values("score", ascending=False)  # each replaces a removed buy of its sector (review.apply)
-    avoid = capped(ranked[ranked["mcap_rank"] <= cfg["avoid_largest"]].iloc[::-1], cfg["avoid"], cfg["per_sector"])
+    order = ranked(df)  # ties: score.ranked
+    buys, bench = positions(order[~order.index.isin(list(vetoes))], cfg["buys"], market)
+    bench = ranked(bench)  # each replaces a removed buy of its sector (review.apply)
+    avoid = capped(order[order["mcap_rank"] <= cfg["avoid_largest"]].iloc[::-1], cfg["avoid"], cfg["per_sector"])
     parts = [buys.assign(list="buy", rank=range(1, len(buys) + 1), recheck=anniversary(today).isoformat()),
              bench.assign(list="next", rank=range(len(buys) + 1, len(buys) + len(bench) + 1),
                           recheck=anniversary(today).isoformat()),

@@ -12,7 +12,7 @@ from stockreport import lists, track
 from stockreport import universe as uni
 from stockreport.fetch import frames
 from stockreport.config import CONFIG
-from stockreport.score import grade, phrase, score
+from stockreport.score import grade, phrase, ranked, score
 from stockreport.signals import CHS, cn_deduct, cn_revisions, distress, long_run, quarters
 
 DAY = date(2026, 10, 24)
@@ -160,6 +160,23 @@ def test_picks_are_each_sectors_best_scores_in_equal_amounts():
     buys, bench = lists.positions(picks_field(), 4, "us")  # a holds 60 of 90 by free float: 3 places, b 1
     assert buys.index.tolist() == ["A0", "A1", "A2", "B0"] and set(bench.index) == {"A3", "B1"}  # by score, not size
     assert buys["weight"].tolist() == pytest.approx([0.25] * 4)
+
+
+def test_exact_ties_go_to_the_larger_free_float_then_the_lower_code_whatever_the_row_order():
+    df = picks_field()
+    df.loc[["A1", "A2", "A3"], "score"] = 0.9  # four names tie with A0 for sector a's three places
+    df.loc["A1", "float_value"] = 2.0  # the largest of the four
+    for rows in (df, df.iloc[::-1], df.sample(frac=1, random_state=7)):
+        buys, bench = lists.positions(rows, 4, "us")
+        assert buys.index.tolist() == ["A1", "A0", "A2", "B0"] and bench.index.tolist() == ["A3", "B1"]
+        assert ranked(rows).index[:4].tolist() == ["A1", "A0", "A2", "A3"]
+    families = pd.DataFrame([[26, 28, 20, 26], [29, 16, 28, 27]], index=["X1", "X2"]) / 29  # both average 25/29
+    noisy = pd.DataFrame({"score": families.mean(axis=1), "float_value": [1.0, 4.0]})  # one bit apart as floats
+    assert noisy["score"].iloc[0] != noisy["score"].iloc[1] and ranked(noisy).index.tolist() == ["X2", "X1"]
+    same = universe(10, mom_12_1=0.0, np_ttm=1.0, revenue_ttm=10.0, bps=1.0, roe=0.05, debt_ratio=0.5, ocf_ttm=2.0,
+                    gp_ttm=1.0, ocf_ytd=2.0, div_yield=0.0, vol_1y=0.3, rev_growth=0.0, np_growth=0.0)
+    s = score(same.iloc[::-1], "hk")  # every name ties, listed backwards: ranked by code, not by row
+    assert s["score"].nunique() == 1 and s.sort_index()["score_rank"].tolist() == list(range(1, 11))
 
 
 def test_the_most_distressed_and_the_largest_accruals_are_not_bought(monkeypatch):

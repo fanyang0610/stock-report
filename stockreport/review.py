@@ -21,6 +21,7 @@ from dotenv import dotenv_values
 from stockreport import deepdive, notes, quotes
 from stockreport.config import CONFIG, DATA, REPORTS, ROOT
 from stockreport.fetch import filings, news
+from stockreport.score import DIGITS
 
 log = logging.getLogger(__name__)
 CFG = CONFIG["review"]
@@ -338,7 +339,8 @@ def apply(rows: pd.DataFrame, market: str, states: dict | None, deep: dict, conf
         keep += [replace | {"replaces": b["code"]}] if replace else []
     keep = pd.DataFrame(keep).assign(list="buy") if keep else pd.DataFrame()
     if len(keep):
-        keep = keep.assign(weight=1 / len(keep)).sort_values("score", ascending=False)
+        keep = keep.assign(weight=1 / len(keep)).sort_values(  # ties keep the lists' order (score.ranked)
+            "score", ascending=False, kind="stable", key=lambda x: x.round(DIGITS))
     keep["rank"] = range(1, len(keep) + 1)
     rest = rows[~rows["list"].isin(["buy", "next"])].copy()
     for i, r in rest[(rest["list"] == "holding") & ~rest["code"].isin(list(confirmed))].iterrows():

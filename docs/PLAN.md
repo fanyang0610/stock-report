@@ -66,8 +66,8 @@
     growth E: EV/EBIT ~33 with GM Financial's debt against a P/E of ~7) and Stellantis 782nd of 794 (a loss, value C,
     momentum E; screened as likely distressed), neither bought; NVIDIA is the technology #2 score but screened;
   - history (docs/BACKTEST.md section 23, without analyst data, EBIT/EV or the screen): 20 names over the fund a year
-    CN +4.2% (62% of windows), US +1.9% (54%), HK +5.6% (71%); largest falls CN −35% (fund −37%), US −23% (−24%), HK
-    −41% (−47%); worst 12 months 6-8 points worse than the funds'. US quality ran against its published direction
+    CN +4.3% (63% of windows), US +1.9% (53%), HK +5.5% (68%) (with 2026-11-02's tie rule); largest falls CN −35%
+    (fund −37%), US −23% (−24%), HK −41% (−47%); worst 12 months 6-8 points worse than the funds'. US quality ran against its published direction
     there (−9.8 points a year, low volatility −14.5): no bug found; survivors only, in a high-volatility decade
     (plausible, untested); the family stays and the 预期 line says so.
   The fresh-context stage review confirmed the list construction, no index-only selection or index-weight sizing left,
@@ -107,6 +107,13 @@
   all of HK on a day of many sells (sells become counts last). Answered: review_kind read from the review line's
   prefix is kept (one place, review.line's own words); exact score ties and Skydance's 退市 flag (an 8-K title that
   may concern a retired share class) are outside this stage (follow-ups).
+- Exact score ties (2026-11-02, a fault found in stage 4's review): they went to whichever row came first, or to a
+  float's last bit, so two builds from the same data could buy different names (HK 长飞光纤光缆 and 联想集团 at 0.744186).
+  Now the larger free-float value, then the lower code, scores compared at 12 decimals ("Lists"; score.ranked). It
+  changes CN's 国防军工 buy to 中国船舶 (from 中航光电) and, on 11-02, HK's 日常消费品 buy to 农夫山泉 (from 万洲国际); the
+  history run: CN +4.3% (63%), US +1.9% (53%), HK +5.5% (68%) (BACKTEST.md section 23). Its fresh-context review
+  found the float's-last-bit ties the first version missed (fixed) and the docs' "no buy changes" (corrected). 105
+  tests.
 - Switched on with your OK of 2026-11-01 (rule 9), on 2026-11-02 from this checkout: the 06:30 `run` job
   (com.stockreport.daily; ~/Library/LaunchAgents now holds the repo's plist, the old fetch-only one replaced); one
   `send --test` at 04:39 (the test text, 3,617 bytes, then the test PDF, 股票报告_测试_20261102.pdf, after your
@@ -325,6 +332,18 @@ momentum drive the score (fixed in stage 1 after the stage review).
       weights aren't published per stock; Yahoo's floatShares counts all classes and puts ICBC at 62%);
   - picks: each sector's places go to its best scores; the next one is the sector's bench, which replaces a buy the
     review removes;
+  - exact ties (2026-11-02): a tie goes to the larger free-float value, then the lower code (score.ranked), for the
+    buys, the bench and the market rank; the avoid list is that order reversed (the lowest first, so of tied names
+    the smaller). Scores are compared at 12 decimals: equal means can differ in a float's last bit (中航光电 and
+    中国船舶 both score 25/29, from 26,28,20,26 and 29,16,28,27 of 29 peers, stored 0.8620689655172414 and …413).
+    Why: the same data must give the same list. Each family is a percentile among a sector's few dozen peers, so
+    exact ties are common (on 2026-11-01, 162 CN, 253 US and 131 HK names shared a score with another), and they went
+    to whichever row came first or to a float's last bit: HK's 长飞光纤光缆 and 联想集团 both scored 0.744186 for one
+    place, and two builds picked differently. The larger name first, as each sector's places follow free-float value;
+    the code only orders names that tie on both. What it changed: CN's 国防军工 place goes to 中国船舶 (free float
+    457bn against 中航光电's 110bn; 2026-11-01 and 11-02); on 11-02 HK's 日常消费品 place goes to 农夫山泉 over 万洲国际
+    (0.646552 both); bench names (11-01 US HALO for EHC, HK 古茗 for 青岛啤酒; 11-02 US NUE for MLI, HK 香港中华煤气 for
+    华润电力) and the order of tied avoid names;
   - money: equal amounts, 5% each (Stockopedia's NAPS and AAII's model portfolios hold their names equally).
   - Why this replaces stage 3's first version (commit 930a02b: only the CSI 300 / S&P 500 / HK's largest 200, the
     largest index weight × score, money by index weight × score within UCITS 5/10/40). You rejected it on 2026-10-31:

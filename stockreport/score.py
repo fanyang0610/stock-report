@@ -36,6 +36,20 @@ WORDS = {  # component -> (good, bad, the figure shown)
 }
 
 
+DIGITS = 12  # a score's float noise is ~1e-16; real differences are at least 1/(4 × peers)
+
+
+def ranked(df: pd.DataFrame) -> pd.DataFrame:
+    """Best score first. An exact tie (common: each family is a percentile among a sector's few dozen peers) goes to the
+    larger free-float value, then the lower code, so the same data always gives the same order and lists. Scores are
+    compared at DIGITS decimals: equal means can differ in the last bit of a float (25/29 as 26,28,20,26 and as
+    29,16,28,27), and a snapshot read back from CSV can too."""
+    value = df["float_value"] if "float_value" in df else df["mcap"] if "mcap" in df else pd.Series(0.0, index=df.index)
+    key = pd.DataFrame({"score": df["score"].round(DIGITS).to_numpy(), "value": value.to_numpy(),
+                        "code": df.index.astype(str)})
+    return df.iloc[key.sort_values(["score", "value", "code"], ascending=[False, False, True], kind="stable").index]
+
+
 def grade(pct: pd.Series) -> pd.Series:
     """A for the top fifth of a family's percentile ranks among the peers, E for the bottom."""
     return pd.cut(pct, [0, 0.2, 0.4, 0.6, 0.8, 1], labels=list("EDCBA"), include_lowest=True).astype(str)
@@ -50,8 +64,8 @@ def score(df: pd.DataFrame, market: str, cn: pd.DataFrame | None = None, lines: 
     for fam, parts in FAMILIES.items():
         out[f"f_{fam}"] = peer_rank(pct[parts[market]].mean(axis=1), group).fillna(0.5)
         out[f"g_{fam}"] = grade(out[f"f_{fam}"])
-    out["score"] = out[[f"f_{fam}" for fam in FAMILIES]].mean(axis=1)
-    out["score_rank"] = out["score"].rank(ascending=False, method="first").astype(int)
+    out["score"] = out[[f"f_{fam}" for fam in FAMILIES]].mean(axis=1).round(DIGITS)  # equal means compare equal
+    out["score_rank"] = pd.Series(range(1, len(out) + 1), index=ranked(out).index)
     out["distress"] = distress(df)
     if lines and len(out):
         used = sorted({c for fam in FAMILIES.values() for c in fam[market]})
