@@ -18,7 +18,7 @@ Then answer each question in two to four sentences, with the evidence (file:line
 output). Say "not checked" when you could not check something; never guess.
 
 1. Does the code implement the method as docs/PLAN.md defines it (each family's components, percentiles within the
-   market and date, point-in-time inputs, the sector cap, the holding rule)? Name any difference.
+   market and date, point-in-time inputs, the sector cap, the Buy, Hold and Sell rules)? Name any difference.
 2. Was anything in the method chosen or changed because of a backtest result, a sub-period or one stock, rather than a
    bug or published evidence?
 3. Was any rule written in response to specific names (a patch)?
@@ -26,7 +26,7 @@ output). Say "not checked" when you could not check something; never guess.
 5. Does every number a card shows come from code and data (rule 2)?
 6. Is there any sign of a data fault (missing data, a benchmark mismatch, survivorship, look-ahead, a family running
    strongly against its published direction)?
-7. Do the lists look like sensible recommendations to a sceptical investor? Spot-check 3 buys and 3 avoid names from the
+7. Do the lists look like sensible recommendations to a sceptical investor? Spot-check 3 Buy, 3 Hold and 3 Sell names from the
    latest lists against what the data and their latest filings show (earnings, debt, price trend, news), and say whether
    each sits where the method says it should and whether anything obvious was missed.
 

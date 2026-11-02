@@ -49,8 +49,9 @@ def send_with_retry(what: str, send) -> bool:
 
 def reply(today: date) -> None:
     started = time.monotonic()
+    buys = None  # the fallback below sends a report built earlier: its buys aren't known for sure, so not logged
     try:
-        pdf, summary = report.fresh(today, CONFIG["review"]["budget"])
+        pdf, summary, buys = report.fresh(today, CONFIG["review"]["budget"])
         day = today.isoformat()
     except (Exception, SystemExit) as e:  # SystemExit: no lists at all
         log.error("the reviewed report failed (%s); sending the newest built one", e)
@@ -63,8 +64,8 @@ def reply(today: date) -> None:
             summary = fit_bytes([f"（今天的报告还没生成，以下是 {day} 的报告）", *summary.splitlines()],
                                 deliver.MAX_TEXT_BYTES)
     built = time.monotonic() - started
-    if send_with_retry("text", lambda: deliver.send_text(summary)):  # the text names every buy
-        track.log_sent(today, pdf.parent)  # what was recommended: the hold rating's record
+    if send_with_retry("text", lambda: deliver.send_text(summary)) and buys is not None:  # the text names every buy
+        track.log_sent(today, buys)  # what was sent: the next report's "changes" line
     time.sleep(1)
     send_with_retry("PDF", lambda: deliver.send_file(pdf, title=f"股票报告_{day.replace('-', '')}.pdf"))
     log.info("replied with the %s report in %.0fs (review and build %.0fs)", day, time.monotonic() - started, built)

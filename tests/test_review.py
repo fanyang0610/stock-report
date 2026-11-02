@@ -1,7 +1,7 @@
 """Results review (PLAN.md, "Results review") on saved sources: real non-routine filing titles and headlines of six
 names (2026-10-25) and DeepSeek's real answers to the checklist. A quote not in its source is rejected; a hard red
-flag removes a buy (the next name takes its place), sells a holding and is only noted on an avoid name; a soft concern
-only annotates; the cache, the budget and the parsers of the sources."""
+flag removes a Buy or Hold name (the next name of its bench takes its place) and is only noted on a Sell name; a soft
+concern only annotates; the review's order, the cache, the budget and the parsers of the sources."""
 
 import json
 import time
@@ -67,7 +67,7 @@ def test_a_hard_flag_must_name_its_subject():
 
 def row(code: str, lst: str, rank, score: float, **kw) -> dict:
     return {"list": lst, "code": code, "name": code, "rank": rank, "score": score, "sector": "s", "status": None,
-            "reason": None, "weight": 0.05} | kw
+            "reason": None, "weight": 0.05, "vol_1y": 0.2} | kw
 
 
 def states(*codes: str) -> dict:
@@ -79,40 +79,43 @@ def states(*codes: str) -> dict:
     return out
 
 
-def test_a_hard_flag_removes_a_buy_sells_a_holding_and_is_noted_on_an_avoid_name():
+def test_a_hard_flag_removes_a_buy_or_a_hold_and_is_noted_on_a_sell_name():
     rows = pd.DataFrame([row("601225", "buy", 1, 0.95), row("600576", "buy", 2, 0.94, sector="t"),
                          row("601009", "buy", 3, 0.93), row("688585", "next", 4, 0.92),
                          row("00728", "next", 5, 0.91, sector="t"),
-                         row("600576", "holding", None, 0.94, status="继续持有", reason="未到满年"),
-                         row("600576", "avoid", 1, 0.10)])
+                         row("H1", "hold", 1, 0.5, vol_1y=0.15), row("H2", "hold", 2, 0.5, vol_1y=0.16),
+                         row("H3", "hold_next", 3, 0.5, vol_1y=0.19, sector="u"), row("H4", "hold_next", 4, 0.5, vol_1y=0.18),
+                         row("600576", "sell", 1, 0.10)])
     st = states("601225", "600576", "601009", "688585", "00728")
-    out = review.apply(rows, "cn", st, {})
+    hard = verified("cn", "600576")[0]  # a Hold name with the same finding, from a deep dive
+    out = review.apply(rows, "cn", st, {"H1": hard})
     buys = out[out["list"] == "buy"]
     assert set(buys["code"]) == {"601225", "601009", "00728"} and buys["rank"].tolist() == [1, 2, 3]
     assert buys.set_index("code").at["00728", "replaces"] == "600576"  # its sector's next name; the scoreboard pairs them
     assert buys["weight"].tolist() == pytest.approx([1 / 3] * 3)  # equal amounts again
-    removed = out[out["list"] == "removed"].iloc[0]
-    assert removed["code"] == "600576" and "立案告知书" in removed["reason"] and removed["status"] == "由 00728 00728 替换"
-    held = out[out["list"] == "holding"].iloc[0]
-    assert held["status"] == "卖出" and held["reason"].startswith("监管立案调查或欺诈认定")
-    avoid = out[out["list"] == "avoid"].iloc[0]
-    assert avoid["review"].startswith("审核：监管立案调查或欺诈认定") and len(out[out["list"] == "avoid"]) == 1
-    assert "next" not in set(out["list"])
-    mine = review.apply(rows, "cn", st, {}, confirmed={"600576": {"until": "2026-12-31", "reason": "已读公告"}})
+    removed = out[out["list"] == "removed"].set_index("from")
+    assert removed.at["buy", "code"] == "600576" and "立案告知书" in removed.at["buy", "reason"]
+    assert removed.at["buy", "status"] == "由 00728 00728 替换"
+    holds = out[out["list"] == "hold"]  # H1 off the Hold list; the next of its sector in Hold's bench takes its place
+    assert holds["code"].tolist() == ["H2", "H4"] and holds["rank"].tolist() == [1, 2]  # the steadiest first
+    assert removed.at["hold", "code"] == "H1" and holds.set_index("code").at["H4", "replaces"] == "H1"
+    sell = out[out["list"] == "sell"].iloc[0]
+    assert sell["review"].startswith("审核：监管立案调查或欺诈认定") and len(out[out["list"] == "sell"]) == 1
+    assert not {"next", "hold_next"} & set(out["list"])
+    mine = review.apply(rows, "cn", st, {"H1": hard}, confirmed={c: {"until": "2026-12-31", "reason": "已读公告"}
+                                                                for c in ("600576", "H1")})
     assert "600576" in set(mine.loc[mine["list"] == "buy", "code"]) and "removed" not in set(mine["list"])
-    kept = mine[mine["list"] == "holding"].iloc[0]
-    assert kept["status"] == "继续持有" and kept["review"].endswith("（你已确认，至 2026-12-31：已读公告）")
+    kept = mine[(mine["list"] == "hold") & (mine["code"] == "H1")].iloc[0]
+    assert kept["review"].endswith("（你已确认，至 2026-12-31：已读公告）")
 
 
 def test_a_soft_concern_only_annotates():
-    rows = pd.DataFrame([row("00728", "buy", 1, 0.9), row("02650", "next", 2, 0.8),
-                         row("00728", "holding", None, 0.9, status="继续持有", reason="未到满年")])
+    rows = pd.DataFrame([row("00728", "buy", 1, 0.9), row("02650", "next", 2, 0.8), row("00728", "hold", 1, 0.5)])
     out = review.apply(rows, "hk", states("00728", "02650"), {})
     buy = out[out["list"] == "buy"].iloc[0]
     assert buy["code"] == "00728" and buy["review"].startswith("市场可能在担心：下调指引或业绩下滑")
     assert "removed" not in set(out["list"]) and buy["note"] and not any(ch.isdigit() for ch in buy["note"])
-    held = out[out["list"] == "holding"].iloc[0]
-    assert held["status"] == "复核" and "市场可能在担心" in held["reason"]
+    assert out[out["list"] == "hold"].iloc[0]["review"].startswith("市场可能在担心")  # kept, annotated
     clean = review.apply(pd.DataFrame([row("601225", "buy", 1, 0.9)]), "cn", states("601225"), {})
     assert clean.iloc[0]["review"] == "审核未见重大风险"
     pending = review.apply(pd.DataFrame([row("601225", "buy", 1, 0.9)]), "cn", {"601225": {"status": "pending"}}, {})
@@ -133,7 +136,7 @@ def test_cache_is_redone_for_a_new_source_a_new_list_or_after_seven_days():
     entry = {"date": "2026-10-20", "role": "buy", "sources": ids}
     assert review.valid(entry, "buy", ids[:1], DAY)  # a source that aged out of the window changes nothing
     assert not review.valid(entry, "buy", ids + ["2026-10-24 c"], DAY)  # a new headline or filing
-    assert not review.valid(entry, "holding", ids, DAY)  # new to its list
+    assert not review.valid(entry, "hold", ids, DAY)  # new to its list
     assert not review.valid(entry, "buy", ids, date(2026, 10, 28))  # over 7 days old
 
 
@@ -141,7 +144,7 @@ def test_the_note_goes_when_code_changes_a_finding(tmp_path, monkeypatch):
     monkeypatch.setattr(review, "CACHE", tmp_path)
     monkeypatch.setattr(review, "ask", lambda client, content: ANSWERS["688585"])  # its takeover finding is dropped
     lines = review.lines_of(SOURCES["cn"]["688585"])
-    assert review.review_one(None, "cn", row("688585", "avoid", 1, 0.1), "avoid", lines, DAY)["note"] == ""
+    assert review.review_one(None, "cn", row("688585", "sell", 1, 0.1), "sell", lines, DAY)["note"] == ""
     monkeypatch.setattr(review, "ask", lambda client, content: ANSWERS["00728"])  # kept as it was
     entry = review.review_one(None, "hk", row("00728", "buy", 1, 0.9), "buy", review.lines_of(SOURCES["hk"]["00728"]), DAY)
     assert entry["note"] == ANSWERS["00728"]["note"]
@@ -162,6 +165,23 @@ def test_budget_leaves_slow_reviews_pending(tmp_path, monkeypatch):
     monkeypatch.setattr(review, "dotenv_values", lambda p: {})
     monkeypatch.setattr(review, "CACHE", tmp_path / "empty")
     assert review.run(lists, sources, DAY, budget=0.5)["cn"]["601225"]["status"] == "unavailable"  # no DeepSeek
+
+
+def test_the_cards_are_reviewed_first_in_their_order_then_the_benches(tmp_path, monkeypatch):
+    """Within the keyword reply's budget what the cards show comes first: every market's Buy, then Hold, then Sell
+    names, then the benches (small point (a) of 2026-11-02)."""
+    monkeypatch.setattr(review, "CACHE", tmp_path)
+    monkeypatch.setattr(review, "dotenv_values", lambda p: {"DEEPSEEK_API_KEY": "test"})
+    monkeypatch.setitem(review.CFG, "workers", 1)
+    asked = []
+    monkeypatch.setattr(review, "ask", lambda client, content: asked.append(content.split()[0].removeprefix("股票：")) or
+                        {"findings": [], "note": ""})
+    lists = {"cn": pd.DataFrame([row("688585", "next", 2, 0.8), row("600576", "sell", 1, 0.1),
+                                 row("601009", "hold", 1, 0.5), row("601225", "buy", 1, 0.9)]),
+             "hk": pd.DataFrame([row("02650", "sell", 1, 0.1), row("00728", "buy", 1, 0.9)])}
+    sources = {m: {c: SOURCES[m][c] for c in rows["code"]} for m, rows in lists.items()}
+    review.run(lists, sources, DAY, budget=None)
+    assert asked == ["601225", "00728", "601009", "600576", "02650", "688585"]
 
 
 def test_source_parsers():

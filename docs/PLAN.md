@@ -137,6 +137,45 @@
     2.67-2.69×) and the place changes;
   - the first unattended day: the 06:30 build ran 21 min, exit 0, no errors; your keyword at 11:33 was answered in
     4 s, the text then the PDF (logs/2026-11-02.log); the listener had run 399 times without a failure.
+- Stage 5 (three ratings, Buy 20 / Hold 10 / Sell 10, no portfolio check): done 2026-11-02. Your words: the project
+  was meant to split each market into stocks expected to go up, be stable and go down, as a sell-side analyst rates
+  them, with no regard to anyone's holdings. Hold is the 10 steadiest prices among the 400 largest names in the middle
+  fifth of the score, at most 2 a sector ("Lists": the brokers' relative ratings, the persistence of volatility); Sell
+  is the avoid list renamed (the same rule); Buy is unchanged. Removed: the holdings check, the neutral hold rating,
+  the holding rule, data/holdings.csv and `hold`, the review's holding role, holdings among the deep dives. The review
+  runs Buy, then Hold, then Sell, then the benches (small point (a)); a hard red flag takes a name off Hold as off Buy.
+  data/sent.csv logs the buys report.build returned for the text sent (small point (b); buys.csv is gone). Every card
+  has the Goal's fields, the re-check date 12 months on. The history (BACKTEST.md section 24): Hold over the fund CN
+  −1.0% (ahead in 51% of windows), US −6.2% (37%), HK −2.2% (43%), with 0.7-0.8 times the fund's volatility and
+  smaller falls (CN −17% against −37%); Sell trailed the fund in 57%, 57% and 63% of windows but on average only in HK
+  (CN +1.4%, US +1.5%, HK −0.5%); the history leaves out delisted companies, which flatters Sell most; it decided
+  nothing. The 2026-11-02 evening build (`run` 688 s, then `review`: 170 names, 126 reviewed in 13 s, no hard flag, 0
+  quotes rejected): Hold CN 中国核电…招商公路, US Royal Bank of Canada…Ventas, HK 交通银行…福耀玻璃 ("Lists"); the PDF
+  17 pages, the summary 3,484 bytes with every name. data/picks.csv's old v3 rows relabelled (Storage). 108 tests
+  pass; app Python 5,693 lines (5,769 before).
+  The fresh-context stage review confirmed the Buy, bench and Sell lists identical to the old code's on the same
+  snapshots, the Hold rule as written, no holdings path left, the review order, the Hold removal, the sent log, rule 2,
+  and that the Hold rule was fixed in code before the history ran. Its findings and the answers:
+  - Hold was worded 预计和大盘差不多、股价较稳（涨跌通常都比大盘小）, which neither the definition nor the history bears
+    out for single names: fixed. The report now says 评分居中、不偏涨也不偏跌、股价较稳, that the 10 together moved
+    less and fell less than the fund but lagged strong markets, that a single name can still move a lot, and that
+    daily volatility misses a steady slide ("Lists"). The definition stays: its parts rest on published evidence, and a
+    rule to drop recent fallers would be fitted to two names (中国旺旺, 中国飞鹤);
+  - Sell's average beat Hold's in all three markets, and page 1 showed Sell's 平均多赚 without the survivorship caveat:
+    the caveat is now on page 1 and in the summary's last line; nothing is changed for the numbers (rules 3 and 12);
+  - Sell cards hid a clean or pending review (8 of 30): fixed (it ends the 为什么卖出 line);
+  - Hold didn't leave out the buys' bench, so a name could become both after a review removal: fixed (no list
+    changed on 11-02; the history's HK Hold −2.3% → −2.2%);
+  - wrong figures in the docs (the scored counts 796 and 390; section 23's HK 10 and 5 best, moved by the frames'
+    rebuild with that day's float factors; section 24's "written before this run"): fixed;
+  - answered, unchanged: HK's "400 largest" is its whole ~390-name field, so HK Sell can hold HK$2-4bn names (the avoid
+    rule as it was; the stage changes Sell only for evidence); the scoreboard pools removed Buy and Hold names in one
+    bucket (the comparison is removed against replacement either way); the old-CSV mapping it questioned was removed,
+    as every market now has stage-5 lists; stage-reviewer.md's checklist now names the three ratings.
+  - Follow-ups, not this stage: US names come from Nasdaq's screener, which calls Bank of Nova Scotia's common share
+    "Bank Nova Scotia Halifax Pfd 3", and the AI note repeated that it is a preferred share (fix: take US English names
+    from a cleaner source, e.g. Yahoo's quote name); Moderna's 194% volatility rests on one +177% day in Yahoo's prices
+    (2026-08-19), not verified.
 - Switched on with your OK of 2026-11-01 (rule 9), on 2026-11-02 from this checkout: the 06:30 `run` job
   (com.stockreport.daily; ~/Library/LaunchAgents now holds the repo's plist, the old fetch-only one replaced); one
   `send --test` at 04:39 (the test text, 3,617 bytes, then the test PDF, 股票报告_测试_20261102.pdf, after your
@@ -164,12 +203,13 @@
 
 ## Goal
 - On the WeChat keyword (股票报告 / 股票简报 / stock report / stock brief), within 30 s, two messages (a text summary and
-  a PDF), in Chinese. Per market (CN → US → HK):
-  - **买入组合 (buy portfolio):** 20 names from the whole liquid market, equal amounts, the sectors in proportion to
-    the market's ("Lists");
-  - **持仓检查 (your holdings):** 继续持有 / 复核 / 卖出 for each name you hold;
-  - **回避 (avoid):** 10 names;
-  - **预期 (what to expect):** how this method did in our history and in published research.
+  a PDF), in Chinese. Per market (CN → US → HK), three ratings, each a list of the top candidates, rated as a
+  sell-side analyst rates stocks, without anyone's portfolio (stage 5, your words of 2026-11-02):
+  - **买入 (Buy, expected to go up, beating the market):** 20 names from the whole liquid market, equal amounts, the
+    sectors in proportion to the market's: the buy portfolio ("Lists");
+  - **持有 (Hold, expected to be stable):** 10 names;
+  - **卖出 (Sell, expected to go down, lagging the market):** 10 names;
+  - **预期 (what to expect):** how each rating did in our history and what published research says.
 - **Moderate.** The aim is to beat the market's index fund over the year you hold the names, at about the market's level
   of risk. Not a defensive tilt (low volatility, dividends) and not an aggressive one (small caps, a few concentrated
   bets, chasing the hottest stocks). Stage 3's redo uses dividend yield and low volatility as two of the score's 21
@@ -186,7 +226,7 @@
 - Scored: the 800 largest after the filters (liquidity floors as built; HK has fewer that pass them). Buys: the whole
   scored universe (stage 3's redo; "Lists"), not an index's members, without small caps: the CN and US 800 are large
   and mid caps (about the CSI 300 + 500 and the S&P 500 + 400: down to CNY 20bn and $12bn on 2026-11-01), while HK's
-  ~390 reach down to HK$3bn, so HK's buys leave out Hang Seng's SmallCap band ("Lists"). Avoid names: the largest 400.
+  ~390 reach down to HK$3bn, so HK's buys leave out Hang Seng's SmallCap band ("Lists"). Hold and Sell: the largest 400.
 - Out only on facts: figures that fail the cross-checks, ST / *ST, suspended, under 12 months of prices, and (from stage
   2) a hard red flag. Everything else is left to the score, so a troubled company ranks low rather than vanishing.
 
@@ -280,8 +320,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
   definition in all three markets instead.
 - No weights are fitted and nothing is chosen on our backtest.
 - **How each ingredient is built** (stage 1; stockreport/signals.py):
-  - Percentiles are taken over the whole scored universe (the 800 largest after the filters), so a holding outside the
-    buy universe still has a score; the buy and avoid lists then take their own size cuts.
+  - Percentiles are taken over the whole scored universe (the 800 largest after the filters); the three lists then
+    take their own size cuts.
   - CN 扣非 comes from 主要财务指标 (year-to-date 扣非 net profit as an amount, each quarter since 2015, by its first
     notice date), because 业绩报表 has 扣非 EPS only in half-year and annual reports. E/P = 扣非 TTM profit ÷ market value
     (reported profit for the ~1% without it). The SUE uses amounts, not per-share figures, so bonus shares (送转) don't
@@ -312,8 +352,25 @@ momentum drive the score (fixed in stage 1 after the stage review).
   - An issuer listed in two markets can appear in both lists: each market's portfolio is measured on its own.
 
 ### Lists
+- **Three ratings (stage 5, 2026-11-02).** Each market is split by the score into three sections and each section's
+  top candidates are listed, as a sell-side analyst rates a stock Buy, Hold or Sell without knowing his clients'
+  holdings: 20 Buy, 10 Hold, 10 Sell (your numbers). No portfolio enters the lists.
+  - What "expected to go up / be stable / go down" can mean here. Brokers' ratings are relative: JPMorgan's Overweight /
+    Neutral / Underweight expect a stock to beat, match or trail the average total return of the analyst's coverage over
+    the next 6-12 months, Morgan Stanley's Overweight / Equal-weight / Underweight the same against the analyst's
+    industry coverage over 12-18 months (their research disclosures). The score is built the same way: each family is
+    ranked within the stock's sector, and the research behind it measures returns against the market, not their sign.
+    So 买入 is expected to beat the market, 卖出 to trail it (in a rising market it may still rise), and the report says
+    so in those words.
+  - Sections: in the published sorts of composite factor scores the return spread is between the top and the bottom
+    fifths; the middle has no expected edge either way. So the score's top fifth leans to Buy, its bottom fifth to
+    Sell, the middle to Hold, and each list takes its section's best candidates by its own rule below.
+  - Re-check date: 12 months from the report, for every rating: the rating's horizon (the brokers' 6-18 months; the
+    history measures 12 months; NAPS holds a year). The lists are rebuilt each day, so a rating can change sooner; the
+    newest report has the current one. (Before stage 5 a buy's re-check came sooner if its rank fell; with no holdings
+    check there is nothing to re-check before the year ends.)
 - **Buys (stage 3's redo):** 20 names from the whole scored market, equal amounts:
-  - what can't be bought (it stays scored, can be avoided and is checked as a holding):
+  - what can't be bought (it stays scored and can be rated Sell; the screen keeps it off Hold too):
     - Quantitative Value's screen (Gray and Carlisle, step 1: avoid a permanent loss): the 5% of each market's
       non-financials most likely to fail within 12 months by Campbell, Hilscher and Szilagyi's model (2008, Table 4,
       12-month horizon: profit and liabilities and cash over market value + liabilities, the past year's return,
@@ -361,8 +418,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
   - picks: each sector's places go to its best scores; the next one is the sector's bench, which replaces a buy the
     review removes;
   - exact ties (2026-11-02): a tie goes to the larger free-float value, then the lower code (score.ranked), for the
-    buys, the bench and the market rank; the avoid list is that order reversed (the lowest first, so of tied names
-    the smaller). Scores are compared at 12 decimals: equal means can differ in a float's last bit (中航光电 and
+    buys, the bench and the market rank; the Sell list is that order reversed (the lowest first, so of tied names
+    the smaller); Hold's ties in volatility go to the lower code. Scores are compared at 12 decimals: equal means can differ in a float's last bit (中航光电 and
     中国船舶 both score 25/29, from 26,28,20,26 and 29,16,28,27 of 29 peers, stored 0.8620689655172414 and …413).
     Why: the same data must give the same list. Each family is a percentile among a sector's few dozen peers, so
     exact ties are common (on 2026-11-01, 162 CN, 253 US and 131 HK names shared a score with another), and they went
@@ -382,60 +439,75 @@ momentum drive the score (fixed in stage 1 after the stage review).
     the market it is measured against (the US 20 names trailed SPY by 2.9 points a year in 2018-2026). How you split
     your money between the list, funds or bonds is your business, not the report's.
   - Spot checks on 2026-11-01 (examples, not targets): see Status.
-- **Holding rule (NAPS):** hold each name 12 months from the day you bought it.
-  - 继续持有: no hard red flag, and either before its anniversary or still in its sector's top fifth at it;
-  - 复核: before the anniversary it has fallen into its sector's bottom half, or the review (stage 2) found a soft
-    concern;
-  - 卖出: a hard red flag at any time, or at the anniversary outside its sector's top fifth (replace it with the
-    highest-scoring buy you don't hold).
-  - Every anniversary repeats this: for 30 days after it (the time to act) the top-fifth test applies; after that a new
-    year has started, judged by the in-year rule until the next anniversary.
-  - Your holdings live in data/holdings.csv (code, buy date), set with `hold CODE [--date D]` and `hold CODE --sold`.
-    Without the file, or with an empty one (you keep none, 2026-11-02: "I don't want you to record my holdings and give
-    biased advice. It doesn't mean you should not give me neutral 'hold' advice"), the check is a neutral hold rating,
-    as an analyst rates the names he recommended without knowing your portfolio ("if you hold it"): each name of a buy
-    list sent to you that isn't in today's, from the last list it was sent in (the day its card said 持有到 a year on),
-    until its 12-month review and the 30 days to act on it have passed; then it drops off. At the review a name still
-    in its sector's top fifth gets a last 继续持有 (可继续持有，此后不再列出: a rating ends with the year it was
-    recommended for; picked again, it comes back), without a re-check date. The date is the list's own (a reply sent
-    from an older list counts from that list), and a rebuild later the same day counts that day's sends. The sent
-    lists are logged once the keyword reply's or `send`'s text goes out, as it names every buy (data/sent.csv, the
-    buys of the report sent; never rewritten): before, the check read data/picks.csv, which keeps each day's last
-    build, sent or not, and held the test builds' lists (90 names after 5 of them). 2026-11-02 was filled in from the
-    two reports you received that day (11:33 and 12:28).
-  - "Top fifth" and "bottom half" are the score's rank among the holding's sector's scored names (stage 3: within the
-    sector, as buys are picked). A holding the build couldn't score (dropped on facts, or no longer among the 800
-    largest) gets 复核 with the reason.
-- **Avoid:** the 10 lowest scores among the 400 largest, at most 2 per sector, each with its weakest family named.
+- **Hold (stage 5):** the 10 steadiest prices among the 400 largest names in the middle fifth of the market's score
+  (from the top, the 40th to the 60th percentile), at most 2 per sector, not in Quantitative Value's screen, not a buy
+  or a buy's bench, not vetoed (lists.holds). The next 5 in that order are Hold's bench, which replaces a Hold name the review removes.
+  - Why the middle fifth, not the whole middle three fifths: its names lean neither to the top nor to the bottom (in the
+    sorts the second and fourth fifths lean a little), the market-perform reading of a Hold.
+  - Why the steadiest price (the lowest 1-year volatility of daily returns, the quality family's low-volatility measure
+    and the dividend-low-volatility indexes' second sort): your word is "stable", and past volatility predicts future
+    volatility well: it is persistent, which is why the low-volatility research sorts on it (Blitz and van Vliet 2007:
+    portfolios sorted on past volatility keep their order out of sample; in China Blitz, Hanauer and van Vliet 2021).
+    Among names with no expected edge these are the likeliest to stay near where they are. The same research found the
+    least volatile stocks earned about the market's return with less risk ("lower risk without lower return"); they
+    move less than the market both ways (low betas: Baker, Bradley and Wurgler 2011), so in a strongly rising year the
+    list trails and in a falling one it falls less. What it doesn't promise, as the report says (the stage review's
+    first finding): that a single Hold moves less than its index (a single stock rarely does: on 2026-11-02 every US
+    and HK Hold and 8 of the 10 CN Holds had a higher 1-year volatility than their index), or that it holds its price
+    over a year: daily volatility misses a steady slide (中国旺旺 −46% in a year at 29%), which the card's 风险 line names
+    when the fall is 30%+ in 6 months. So the report words Hold as 评分居中、不偏涨也不偏跌、股价较稳, not "in line with
+    the market", and says the 10 together moved less and fell less than the fund but lagged strong markets.
+  - Why the 400 largest and 2 a sector, as Sell: names an investor is likely to know or hold, and the steadiest prices
+    cluster in a few sectors (banks, utilities); why not the screen: a name likely to fail, or with the largest
+    accruals, isn't expected to be stable.
+  - Why not the 10 closest to the median score: a score's distance from the median says nothing about how a price will
+    move, and it changes with every small move of the score.
+  - On 2026-11-02 (the evening build): CN 中国核电, 平安银行, 兴业银行, 中国交建, 青岛啤酒, 国货航, 中国中车, 光大证券,
+    上汽集团, 招商公路 (1-year volatility 16-22%); US Royal Bank of Canada, Xcel, TC Energy, Bank of Nova Scotia,
+    McDonald's, Procter & Gamble, Illinois Tool Works, Pfizer, Canadian National, Ventas (16-23%); HK 交通银行, 招商银行,
+    中国电信, 光大环境, 信和置业, 中国中车, 中国神华, 中国飞鹤, 中国旺旺, 福耀玻璃 (19-29%). Score ranks 323-470 of 796 (CN),
+    336-469 of 794 (US), 163-223 of 390 (HK).
+- **Sell:** the 10 lowest scores among the 400 largest, at most 2 per sector (lists.sells; the avoid list until stage 5,
+  the same rule), each card with its weakest components and risks. A hard red flag only adds to its card.
+- **No holdings check (stage 5).** Until 2026-11-02 the lists included a check of your holdings by NAPS's 12-month rule
+  (data/holdings.csv and `hold`), then a neutral hold rating of the names sent to you. You said it is not our concern
+  ("this has nothing to do what i hold in my portfolio"): both are removed, with the holding rule. How you split your
+  money between the list, funds and bonds stays yours.
 ### Cards
 - The price; the rank; the four grades A-E (fifths of each family); one line on why it's there (its two strongest
   components in words, with the figure); the key risk (a loss, heavy debt (70%+ of assets, the SASAC warning line; not
   financials) or a 30%+ fall in 6 months, else its weakest component); the cost of one board lot (CN 100 shares, US 1
   share, HK the board lot from HKEX's List of Securities, verified 2026-10-24: Tencent 100, HSBC 400, China Mobile 500,
-  AIA 200); the re-check date (the anniversary, or sooner if the rank falls into the bottom half); what the company
-  does in one line (stage 4, "Report"). A buy's share of the money (5%, the same for every buy) is in the list's
-  heading. A ratio is worded by its side of the peers' median (同行中市盈率低 / 高), cash backing, momentum, the SUE,
+  AIA 200); the re-check date (12 months on, the rating's horizon: "Lists"); what the company does in one line (stage
+  4, "Report"). A buy's share of the money (5%, the same for every buy) is in the list's heading. Stage 5: every
+  rating's card has all of this; why it's there is 为什么买 (the two strongest components) on a Buy, 为什么持有 (its place
+  in the market's score and its 1-year volatility) on a Hold, 为什么卖出 (the weakest components and the risks) on a
+  Sell. A ratio is worded by its side of the peers' median (同行中市盈率低 / 高), cash backing, momentum, the SUE,
   the revisions and the growth figures by their sign (the revisions as the estimate's 3-month change).
 - From stage 2: the review's line (审核：… for a hard red flag, 数据存疑：…, 市场可能在担心 … with its quoted source, or
   审核未见重大风险 / 审核进行中 / 审核暂不可用) and the AI note (one sentence, words only). Stage 4: a soft concern shows the
   first one found, with 等 N 条 when there are more (a card has room for one; the rule and the findings are unchanged).
 - Each market section opens with its 预期 line: from the history run, the 20-name portfolio's average 12-month return
   over the index fund, the share of 12-month windows it beat the fund, its worst 12 months and its largest fall against
-  the fund's, marked as simulated; the details and the published evidence are on the back pages (stage 4).
+  the fund's, marked as simulated; the details and the published evidence are on the back pages (stage 4). Stage 5:
+  under the Hold heading the Hold 10's average over the fund, their volatility against the fund's and their largest
+  fall; under the Sell heading the share of windows the Sell 10 trailed the fund, their average over it, their own
+  average return and that the history leaves out delisted companies, which flatters Sell most (BACKTEST.md section
+  24).
 
 ### Report (stage 4)
 - The reader isn't an investment expert, so the decision comes first and the method last.
-- Page 1, 今天要做什么, per market: the holdings to sell or re-check by name, what the review removed and the name that
-  took its place, the 20 buys by name with the amount and the date they are held to, what changed since the market's
-  last report sent to you before today (data/sent.csv; counts, and the names gone when 8 or fewer), the avoid names, the 预期 line in
-  one sentence; then a five-line guide (the lists, the grades in words, the holding statuses, avoid and the review, no
-  guarantee). Without data/holdings.csv it says the hold rating isn't based on your portfolio (2026-11-02).
+- Page 1, 今天要做什么, per market (stage 5): what the review removed and the name that took its place, the 20 buys by
+  name with the amount and the date they are held to, what changed since the market's last report sent to you before
+  today (data/sent.csv; counts, and the names gone when 8 or fewer), the 10 Hold and the 10 Sell names, the 预期 line in
+  one sentence for all three; then a five-line guide (the three ratings in plain words, relative to the market and
+  without anyone's portfolio; the three lists; the grades in words; the review; no guarantee).
 - Market pages: the 预期 line in plain words, then each buy's card (rank, name, ticker, sector, price, one-lot cost,
   re-check date; the business line; the grades; 为什么买; 风险; the review's finding, "审核：未见重大风险" on the risk line;
-  the AI note), 新 on a name new since the last report; 审核剔除 and your vetoes; the holdings: 卖出 as cards with the
-  reason, 复核 and 继续持有 one table (2026-11-02); the avoid names as cards with 为什么回避.
+  the AI note), 新 on a name new since the last report; 审核剔除 and your vetoes; then Hold and Sell, each opening with
+  its 预期 line, as cards with the same fields (为什么持有, 为什么卖出; stage 5).
   US cards are named by Eastmoney's Chinese short name (美光科技), with the English name beside it.
-- Back pages: how the score and the lists are built, the holding rule, the review rules, where the words come from,
+- Back pages: how the score and the lists are built, the three ratings, the review rules, where the words come from,
   the 预期 details (the 10 and 5 name ranges, the history's limits, families running against the research) and the
   published evidence.
 - The business line (verified 2026-11-01; all 200 names of the day found, CN 72, HK 62, US 66):
@@ -458,19 +530,21 @@ momentum drive the score (fixed in stage 1 after the stage review).
     number (a line with one is dropped), and the source stays in the table beside its line. 2026-11-02: 66 of 66 US
     lines and 20 of 20 long CN/HK ones kept. data/fundamentals/<market>_profiles.csv.gz, fetched again after 180 days.
 - The card's risk line says 风险 for a loss, debt of 70%+ or a 30%+ fall in 6 months, else 短板 (the weakest component,
-  which isn't a risk by itself; the page 1 guide says so). An avoid card's reasons leave out a fact its weak line
+  which isn't a risk by itself; the page 1 guide says so). A Sell card's reasons leave out a fact its weak line
   already shows (负债率高（88%） and 负债率 88%).
-- Without data/holdings.csv the check is a neutral hold rating of the names sent to you before ("Holding rule"),
-  titled 持有建议, dated from each name's last recommendation; page 1 and the summary say it isn't your portfolio. 卖出
-  names get full cards; 复核 and 继续持有 one table (name, date, status, grades, the reason without its quote, re-check
-  date), as the rating can hold 45-80 names a market after a year (the history's monthly lists: CN median 64, US 57,
-  HK 45); page 1 and the summary name the re-checks only when 8 or fewer. "Changes" compare with the last report sent.
-- The WeChat summary: the actions first (卖出 by name, 复核 counts, 审核剔除 with the replacement), then per market the
-  data date, the 20 buys by name (US: the ticker and the Chinese short name, else the English name without Inc, Corp…;
-  （新） on a new name), the change counts with the names gone, the review's hard findings on holdings and avoid names,
-  the holdings to re-check by name, the avoid names and the 预期 line in one sentence, and a last line pointing to the
-  PDF. Over 3,600 bytes (90% of WeChat's 4,000), first the gone names become a count, then the 新 marks go, then the
-  re-check names, then the sells become counts; cutting whole lines from the end (fit_bytes) stays the last guard.
+- "Changes" compare the buys with the last report sent to you (data/sent.csv). Stage 5 (small point (b) of the last
+  review): the sender logs the buys report.build returned for the very text it sent, not reports/<day>/buys.csv, which
+  a `run` finishing between the reply's build and its log could have rewritten (the file is gone). A reply that falls
+  back to a report built earlier (the reviewed build failed) logs nothing: which list that file holds isn't certain.
+- The WeChat summary (stage 5): the three ratings in one line, 审核剔除 with the replacement, then per market the data
+  date, the 20 buys by name (US: the ticker and the Chinese short name, else the English name without Inc, Corp…; （新）
+  on a new name), the change counts with the names gone, the 10 Hold and the 10 Sell names, the review's hard findings
+  on Hold and Sell names, the 预期 line, and a last line pointing to the PDF. Over 3,600 bytes (90% of WeChat's 4,000),
+  first the gone names become a count, then the 新 marks go, then US Hold and Sell keep only their tickers (a US name
+  without a Chinese short name is long), then 预期 keeps only the buys' part, then US Hold and Sell become counts, then
+  every market's; cutting whole lines from the end (fit_bytes) stays the last guard. The test data (CN and HK names
+  five characters, three gone names a market): with US names in Chinese every name shows (3,542 bytes); with every US
+  name in English, Hold and Sell go by count (3,176).
   2026-11-02 (11-01's lists, marked not updated): 3,244 bytes, the re-check names as counts; the test data (every US
   name long and in English) 3,617 bytes, and 3,620 with 12 sells in each market (tests/test_report.py).
 
@@ -483,6 +557,9 @@ momentum drive the score (fixed in stage 1 after the stage review).
   CSI 300's; HK: HK-listed over all shares; US: market value). The snapshots have no consensus estimates and Yahoo keeps
   no history of EBIT, debt, cash and accruals, so the history's score has no forward E/P, revisions or EBIT/EV, and no
   screen; the long-run components come from the annual reports public by each month end. The report says so.
+- Stage 5: each month's Hold and Sell 10 by the live rules (lists.holds, without that month's buys; lists.sells), held
+  12 months the same way, with their volatility and largest fall against the fund's (BACKTEST.md section 24). Without
+  the screen's inputs in the history, Hold isn't screened there.
 - The CN frames are point-in-time by report date but hold only companies still listed (Eastmoney drops delisted ones),
   with restated 扣非 figures; US and HK hold today's listings. So every market's numbers are flattered, and the report
   says so (corrected in stage 1: this line said CN had delisted names).
@@ -491,13 +568,16 @@ momentum drive the score (fixed in stage 1 after the stage review).
 The numbers can't see a fraud investigation, a going-concern doubt, an agreed takeover, or a story the market is
 worried about. DeepSeek reads the stock's non-routine filings of the last 90 days (CNINFO, HKEXnews, SEC) and free
 headlines, at temperature 0 with a fixed checklist and JSON out; every finding quotes its source and code checks the
-quote (quotes.py). It never changes a number (rule 2). It reviews the 20 buys, the bench (the next name of each sector
-held), your holdings and the 10 avoid names, buys first, up to 10 calls at a time, within a 20-second budget; each review is cached per stock and redone only
+quote (quotes.py). It never changes a number (rule 2). It reviews what the cards show first, in their order (every
+market's 20 Buy names, then the 10 Hold, then the 10 Sell; stage 5, small point (a) of the last review), then the
+benches (the next name of each sector held, the next 5 Hold names), up to 10 calls at a time, within a 20-second
+budget; each review is cached per stock and redone only
 for a name new to a list, a new filing or headline, or a review over 7 days old. A name not reviewed in time shows
 审核进行中 and is finished in the background; if DeepSeek is down, the report goes out marked 审核暂不可用. The 06:30
 build makes no DeepSeek calls.
-- **Hard red flags** remove a buy (the next-ranked name takes its place, listed under 审核剔除 with the reason and
-  source), turn a holding into 卖出, and are noted on an avoid name: a regulator's investigation, a fraud finding or a
+- **Hard red flags** remove a Buy or a Hold name (the next name of its bench takes its place, of its sector first,
+  listed under 审核剔除 with the reason and source: such a name is neither expected to beat the market nor to be
+  stable; stage 5), and are noted on a Sell name: a regulator's investigation, a fraud finding or a
   Wells notice; a non-standard audit opinion or the auditor resigning; a going-concern doubt or a debt default; delisting
   or ST risk, or a suspension; an agreed takeover, merger or privatisation not yet completed, for cash, the acquirer's
   shares or both (2026-11-01: the rule first said "at a fixed price", which missed Kenvue, a US buy whose sale to
@@ -505,7 +585,7 @@ build makes no DeepSeek calls.
   deal's terms and the acquirer, not the company's own results, and it stops trading at the closing); sanctions or a ban
   naming the company.
 - **Soft concerns only annotate** (an industry downturn, a lost customer, a guidance cut, management leaving,
-  litigation, a one-off gain): the card says 市场可能在担心 … and a holding gets 复核. Cheap stocks carry bad news by
+  litigation, a one-off gain): the card says 市场可能在担心 …. Cheap stocks carry bad news by
   nature, and that is where value pays off on average.
 - **Data check:** a latest filing that contradicts a card's figure by 20%+ drops the name as data_suspect, and the next
   one takes its place (rule 5).
@@ -554,7 +634,8 @@ build makes no DeepSeek calls.
     The scoreboard logs each removed name (bucket removed) and the name that took its place (bucket replacement), so
     `track` shows the two side by side.
   - Your confirm verdict (`verdict CODE confirm --until D --reason "..."`) overrides the review for that name until its
-    date or the next report period: a buy stays, a holding keeps its status, and the card says 你已确认 with your reason.
+    date or the next report period: a Buy or Hold name stays, and the card says 你已确认 with your reason. A veto
+    keeps a name off the Buy and Hold lists.
   - Cached per stock (data/review/<market>/<code>.json); the keyword reply waits `budget` (20 s), then sends what is
     done, and a background `review` finishes the rest and the day's deep dives. `review` runs it all without a limit.
     The AI note is dropped if it holds a figure (a digit, or one in characters like 三成), so every number on a card
@@ -562,7 +643,7 @@ build makes no DeepSeek calls.
     names a concern the card doesn't show. Stage 4: nor is it shown beside a deep dive's findings, which it was written
     without (CF's note said no negative event next to the FTC investigation its 10-Q names), and it gives no buy, sell
     or hold advice (a status is code's).
-  - Deep dives (the lane of rule 3): the latest periodic report of the buys, the bench and your scored holdings, read once
+  - Deep dives (the lane of rule 3): the latest periodic report of the buys, their bench and the Hold names, read once
     per filing, at most 3 new filings per market a day, after the review. The data check compares the report's net
     profit to shareholders for the card's period (the period end quoted in the report, '30 June' or '30th June'; CN:
     else its standard title) with the card's figure: CN and HK year to date (HK in the reporting currency), US the year's
@@ -584,7 +665,7 @@ build makes no DeepSeek calls.
 
 ## Checks, and what each one decides
 - **pytest** on the score math (peer percentiles, families, SUE, revisions, the long-run components, the distress
-  logit, the list's places, picks, screen and equal amounts, the holding rule) and the parsers, on small saved samples:
+  logit, the list's places, picks, screen and equal amounts, the Hold and Sell lists) and the parsers, on small saved samples:
   catches calculation and parsing bugs.
 - **The data cross-checks** (built): a stock whose figures disagree with the second source is dropped (rule 5).
 - **The history run's family check:** a family running strongly against its published direction over the whole sample
@@ -592,7 +673,7 @@ build makes no DeepSeek calls.
   is far longer than ours), and the report says so.
 - **The history run's portfolio numbers:** they fill the report's 预期 line. They don't decide whether the report ships.
 - **The fresh-eyes review** at the end of each stage (.claude/agents/stage-reviewer.md): catches what I missed, and
-  spot-checks a few buys and avoid names against their filings and news for common sense.
+  spot-checks a few Buy, Hold and Sell names against their filings and news for common sense.
 - **The live scoreboard** (`track`): each month's portfolio against the index fund (equal amounts), shown in the report
   once a month;
   it catches live data faults and builds the method's own record. It never holds anything up.
@@ -680,6 +761,31 @@ build makes no DeepSeek calls.
      renders the new PDF and a summary that fits; I've read the PDF's pages and fixed what reads badly; both jobs run
      from this checkout and the one test send went out; the fresh-context stage review has run and its findings are
      fixed or answered; this plan's status is updated and the work is committed on main.
+5. **Three ratings per market, Buy 20 / Hold 10 / Sell 10, and no portfolio check** (your words, 2026-11-02: "divide
+   the market to three sections, stocks expect price to go up would be categorized as buy, while price to be stable
+   would be categorized as hold, and price to go down would be categorized as sell. then pick the top candidates from
+   each sections. this has nothing to do what i hold in my portfolio ... just like when a sell-side analyst issue a
+   stock report, he would rate this stock with buy, hold or sell, without need to consider his clients holdings ... i
+   am ok with you enlarge the buy list from top 5 to top 20, while i still want you to keep the hold and sell list to
+   be 10 each per market").
+   - Buy: the 20-name portfolio as built. Hold: 10 names, defined from published evidence ("Lists"). Sell: the avoid
+     list (the 10 lowest scores among the 400 largest, at most 2 per sector), renamed and reworded.
+   - Removed: the holdings check and the neutral hold rating (lists.held, check, recorded, cycle; the holding rule;
+     data/holdings.csv and `hold`; the review's holding role; holdings among the deep dives; the 持仓检查 / 持有建议
+     sections of the PDF and the summary).
+   - The review in the order the cards show them (Buy, Hold, Sell, then the benches); a hard red flag or data_suspect
+     takes a name off the Hold list as off the Buy list. data/sent.csv logs the buys report.build returned for the
+     text that went out (not a file a later `run` may have rewritten).
+   - Cards: everything AGENTS.md's Goal lists, on all three ratings, with the re-check date a rating's 12 months.
+   - History: each month's Hold and Sell 10 against the fund (docs/BACKTEST.md section 24) in the 预期 line; it fills
+     the report and decides nothing.
+   - AGENTS.md's Goal and rule 4 follow, and this plan's Goal, Lists, Cards, Report and the review's roles.
+   - Not changed: the score, the buy list, the review's red-flag rules.
+   - Done when: pytest passes, with tests for the Hold selection, the Sell list and the removed holdings path; a full
+     `run`, then `review`, renders the new PDF and a summary that fits, and I've read the PDF's pages and fixed what
+     reads badly; the Hold and Sell history is in BACKTEST.md and the 预期 line; the fresh-context stage review has
+     run and its findings are fixed or answered; this plan's status and AGENTS.md are updated and the work is
+     committed on main.
 
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
@@ -712,7 +818,11 @@ relation between the enterprise multiple and average stock returns" (JFQA 2011);
 P/S, P/FCF, EBIT/EV, dividend yield); 中证红利低波动指数 (H30269) and 恒生港股通红利低波动指数 methodologies; Blitz, Hanauer
 and van Vliet, "The volatility effect in China" (JAR 2021); Jegadeesh and Livnat, "Revenue surprises and stock returns"
 (JAE 2006); Lakonishok, Shleifer and Vishny, "Contrarian investment, extrapolation and risk" (JF 1994); La Porta,
-"Expectations and the cross-section of stock returns" (JF 1996).
+"Expectations and the cross-section of stock returns" (JF 1996). Stage 5: JPMorgan's and Morgan Stanley's rating
+definitions in their research disclosures (Overweight / Neutral / Underweight against the average total return of the
+analyst's coverage over 6-12 months; Overweight / Equal-weight / Underweight against the industry coverage over 12-18
+months); Blitz and van Vliet, "The volatility effect: lower risk without lower return" (JPM 2007); Baker, Bradley and
+Wurgler, "Benchmarks as limits to arbitrage: understanding the low-volatility anomaly" (FAJ 2011).
 
 ## Decisions kept from the old plan
 - Python 3.12 + uv. The old Swift project is archived read-only at ~/Developer/EquitySignalsClawbot-legacy.
@@ -759,7 +869,10 @@ and van Vliet, "The volatility effect in China" (JAR 2021); Jegadeesh and Livnat
     quotes/hk_yahoo_shares (HK-listed shares, daily); stage 3's redo: fundamentals/cn_yahoo and hk_yahoo (Yahoo's
     trailing EBIT, debt, cash, minorities and liabilities, weekly, ~0.2 MB each);
     a few tens of KB each.
-  - data/sent.csv (2026-11-02): date, market, ticker, name of each report's buys sent to you, a few KB a year, kept.
+  - data/sent.csv (2026-11-02): date, market, ticker, name and the lists' date of each report's buys sent to you (for
+    the "changes" line), a few KB a year, kept. data/picks.csv's rows of the old v3 method (2026-10-17..21, Buy 5 /
+    Hold 5 / Sell 5 a market) were bucketed v3 buy / v3 hold / v3 sell in stage 5, so `track` keeps them apart from the
+    new Hold and Sell, and the avoid rows (the Sell rule since 2026-10-24) became sell.
   - Stage 4: fundamentals/<market>_profiles (each listed name's Chinese short name and business line; US also Yahoo's
     English sentence and its Chinese line), fetched again after 180 days, a few tens of KB each.
   - Backtest tables (Phase 9, data/backtest, ~0.73 GB, not touched by cleanup and rebuildable with the commands in docs/BACKTEST.md): CN daily returns, closes and turnover 2018-01..2026-10 (one compressed matrix), Eastmoney valuation rows, 业绩报表 since 2009, balance sheets, 业绩预告 since 2017-10, 申万 history, report-archive EPS since 2025-06, the per-market month-end snapshots and v2 inputs, results. The ~2.8 GB of 通达信 packages were parsed in memory and never stored.

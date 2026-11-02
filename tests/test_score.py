@@ -1,6 +1,6 @@
 """The score's math (PLAN.md, "The score" and "Lists"): percentiles among sector peers, families, grades, the SUE, the
 revisions and forward E/P, the long-run components, the distress logit, the list's places, picks, screen and equal
-amounts, the avoid list's sector cap, the holding rule and the card's key risk, on small made-up frames."""
+amounts, the Hold and Sell lists and their sector cap, and the card's key risk, on small made-up frames."""
 
 from datetime import date
 
@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from stockreport import lists, track
+from stockreport import lists
 from stockreport import universe as uni
 from stockreport.fetch import frames
 from stockreport.config import CONFIG
@@ -106,7 +106,7 @@ def test_sue_uses_only_reports_noticed_by_the_day():
     assert after.loc["A", "deduct_ttm"] == pytest.approx(15 + 17 + 25 + 30)
 
 
-def test_avoid_names_keep_at_most_two_per_sector():
+def test_hold_and_sell_names_keep_at_most_two_per_sector():
     ranked = pd.DataFrame({"sector": list("aaabbbcd")}, index=list("12345678"))
     assert list(lists.capped(ranked, 5, 2).index) == ["1", "2", "4", "5", "7"]
 
@@ -224,39 +224,46 @@ def test_long_run_takes_the_years_public_by_the_day():
     assert long_run(years[years["year"] >= 2022], "2026-03-31").isna().all(axis=None)  # 4 years: too few
 
 
-def test_holding_rule(tmp_path, monkeypatch):
-    df = universe(100).assign(score=np.linspace(0, 1, 100), mcap_rank=np.arange(1, 101))
-    df["score_rank"] = df["score"].rank(ascending=False).astype(int)
-    monkeypatch.setattr(lists, "HOLDINGS", tmp_path / "holdings.csv")
-    pd.DataFrame({"market": "cn", "code": ["C95", "C10", "C90", "C60", "C70", "X1"], "name": "",
-                  "since": ["2026-07-01", "2026-07-01", "2025-10-01", "2025-10-01", "2024-06-01", "2026-01-05"]}
-                 ).to_csv(lists.HOLDINGS, index=False)
-    buys = df.sort_values("score", ascending=False).head(3)  # C99, C98, C97: none held
-    out = lists.check(df, "cn", DAY, buys, {"X1": "missing fundamentals"}).set_index("code")
-    assert out.loc["C95", "status"] == "继续持有" and out.loc["C95", "recheck"] == "2027-07-01"
-    assert out.loc["C10", "status"] == "复核"                      # before the anniversary, in its sector's bottom half
-    assert "同行业 50 只中第 45 名" in out.loc["C10", "reason"]  # judged within its sector, as buys are picked
-    assert out.loc["C90", "status"] == "继续持有" and out.loc["C90", "recheck"] == "2027-10-01"
-    assert out.loc["C60", "status"] == "卖出" and "C99 S99" in out.loc["C60", "reason"]  # outside the top fifth at 12 months
-    assert out.loc["X1", "status"] == "复核" and "数据缺失或与第二来源对不上" in out.loc["X1", "reason"]
-    # held since 2024-06: its second year started 2025-06 (kept then), so in-year rules apply until 2027-06-01
-    assert out.loc["C70", "status"] == "继续持有" and out.loc["C70", "recheck"] == "2027-06-01"
+def rated(n: int = 100) -> pd.DataFrame:
+    """n names scored 0..1 by position (the last is the best), all among the largest, 6 sectors, volatility rising
+    with the position modulo 7."""
+    df = universe(n).assign(score=np.linspace(0, 1, n), mcap_rank=np.arange(n, 0, -1), distress=0.0, sta=0.0)
+    return df.assign(sector=[f"s{k % 6}" for k in range(n)], vol_1y=[0.10 + (k % 7) / 100 for k in range(n)])
 
 
-def test_without_holdings_the_hold_rating_covers_the_buys_sent_to_you_until_their_review_window_ends(tmp_path, monkeypatch):
-    monkeypatch.setattr(lists, "HOLDINGS", tmp_path / "holdings.csv")
-    lists.HOLDINGS.write_text("market,code,name,since\n")  # an empty file (the last one sold) is no holdings
-    monkeypatch.setattr(track, "SENT_LOG", tmp_path / "sent.csv")
-    pd.DataFrame({"date": ["2025-10-20", "2025-10-25", "2025-09-30", "2025-09-01", "2026-10-01", "2025-09-30"],
-                  "market": "cn", "ticker": ["C5", "C5", "C6", "C7", "C9", "C96"], "name": "x"}).to_csv(track.SENT_LOG, index=False)
-    held = lists.held("cn", DAY, pd.Index(["C9"]))  # C9 is in today's list: a buy, not a hold
-    assert held["since"].to_dict() == {"C5": "2025-10-25", "C6": "2025-09-30", "C96": "2025-09-30"}  # the last list sent
-    # C6's year ended 2026-09-30: judged now, in the 30 days to act; C7's ended 2026-09-01, past them: no longer rated
-    df = universe(100).assign(score=np.linspace(0, 1, 100), mcap_rank=np.arange(1, 101))
-    out = lists.check(df, "cn", DAY, df.sort_values("score").tail(3), {}).set_index("code")
-    assert out.loc["C6", "reason"].startswith("满 1 年") and out.loc["C5", "reason"].startswith("未到满年")
-    # still in its sector's top fifth at 12 months: the rating's last word, with no re-check date (it then drops off)
-    assert out.loc["C96", "status"] == "继续持有" and "此后不再列出" in out.loc["C96", "reason"] and out.loc["C96", "recheck"] == ""
+def test_hold_is_the_steadiest_prices_in_the_middle_fifth_of_the_score(monkeypatch):
+    monkeypatch.setitem(CONFIG["lists"], "largest", 400)
+    df = rated()
+    df.loc["C55", "vol_1y"] = 0.01  # the steadiest of all, in the middle fifth: first
+    df.loc["C99", "vol_1y"] = 0.001  # steadier still, but the top score: a Buy, not a Hold
+    df.loc["C10", "vol_1y"] = 0.001  # the bottom of the score: not a Hold either
+    h = lists.holds(df, 6, pd.Index(["C99"]))
+    middle = ranked(df).index[40:60]  # from the top: the 41st to the 60th of 100
+    assert set(h.index) <= set(middle) and h.index[0] == "C55"
+    assert h["vol_1y"].is_monotonic_increasing and h["sector"].value_counts().max() <= 2  # steadiest first, 2 a sector
+    assert h.loc["C55", "reason"] == "评分居中（全市场 100 只中第 45 名）；股价波动小（近一年年化 1%）"
+    df.loc["C55", "distress"] = 9.0  # likely to fail: not expected to be stable (Quantitative Value's screen)
+    df.loc["C56", "vol_1y"] = np.nan  # no volatility: dropped (rule 5)
+    h = lists.holds(df, 6, pd.Index([]))
+    assert "C55" not in h.index and "C56" not in h.index
+    monkeypatch.setitem(CONFIG["lists"], "largest", 50)  # only the 50 largest: C50 and up here
+    assert (lists.holds(df, 6, pd.Index([]))["mcap_rank"] <= 50).all()
+
+
+def test_sell_is_the_lowest_scores_among_the_largest(monkeypatch):
+    monkeypatch.setitem(CONFIG["lists"], "largest", 90)  # C0..C9 are the 10 smallest: not rated
+    s = lists.sells(rated(), 5)
+    assert s.index.tolist() == ["C10", "C11", "C12", "C13", "C14"] and s["sector"].value_counts().max() <= 2
+
+
+def test_the_ratings_leave_out_the_holdings_check():
+    """No portfolio enters the lists (2026-11-02): no holdings file, no holding rows, no `hold` command."""
+    assert not any(hasattr(lists, x) for x in ("held", "check", "recorded", "cycle", "HOLDINGS", "hold"))
+    out = lists.build(rated().assign(lot=100, period="2026-06-30"), "cn", DAY)
+    assert set(out["list"]) <= {"buy", "next", "hold", "hold_next", "sell", "veto"}
+    assert (out["list"] == "hold").sum() == 10 and (out["list"] == "sell").sum() == 10
+    assert set(out.loc[out["list"] == "hold", "code"]).isdisjoint(out.loc[out["list"] == "buy", "code"])
+    assert (out["recheck"] == "2027-10-24").all()  # every rating's horizon: 12 months
 
 
 def test_key_risk_names_a_loss_heavy_debt_or_a_big_fall_first():

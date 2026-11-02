@@ -2,8 +2,9 @@
 sources without DeepSeek (gather(): non-routine filings of the last 90 days, fetch/filings.recent, and headlines of
 the last 30, fetch/news). On request DeepSeek reads them at temperature 0 against a fixed checklist, JSON out; every
 finding quotes one of those lines and code checks the quote (quotes.py), and a hard red flag must also name its
-subject in the quote (KINDS) without denying it (deepdive.DENIAL). The 20 buys, the bench (the next name of each sector
-held), your holdings and the 10 avoid names are reviewed, buys first, `workers` calls at a time within `budget` seconds; each review is cached per
+subject in the quote (KINDS) without denying it (deepdive.DENIAL). The names on the cards are reviewed first, in their
+order (the 20 Buy, the 10 Hold, the 10 Sell), then the benches (the next name of each sector held, the next Hold
+names), `workers` calls at a time within `budget` seconds; each review is cached per
 stock (data/review/<market>/<code>.json) and redone only for a name new to its list, a new filing or headline, or a
 review over `keep_days` old. apply() turns the findings (and the deep-dive lane's, deepdive.py) into the lists."""
 
@@ -26,7 +27,7 @@ from stockreport.score import DIGITS
 log = logging.getLogger(__name__)
 CFG = CONFIG["review"]
 CACHE = DATA / "review"
-ROLES = ("buy", "next", "holding", "avoid")  # the review's order: buys first
+ROLES = ("buy", "hold", "sell", "next", "hold_next")  # the review's order: what the cards show first, then the benches
 # A suspension or delisting of another security of the company (preferred shares, bonds, convertibles) isn't the stock's;
 # nor is a bare SEC delisting or deregistration form, which doesn't say which security (often notes redeemed or matured)
 OTHER_SECURITY = r"优先股|優先股|债券|債券|可转债|可轉債|转债|轉債|票据|票據|preferred|bond|notes due|warrant|25-NSE|15-12[BG]"
@@ -87,7 +88,7 @@ one_off 利润主要来自一次性收益（出售资产、公允价值变动、
 3. 不算风险的例行事项：董事会决议、股东大会、权益分派、回购和增持、业绩说明会，普通董事、监事、独立董事、董秘、证券代表的变动
    （美股 8-K 的 Director or officer change 没说明是董事长、CEO、CFO 的也算例行），股东或高管的减持计划，以及利好消息。
 4. note：一句中文，不超过 40 个字，用文字说明这只股票为什么在这个名单上、最需要注意什么（参考卡片和 findings）；
-   不得出现任何数字，不写价格、目标价或预测，也不写买入、卖出或继续持有之类的建议（结论由程序给出）。
+   不得出现任何数字，不写价格、目标价或预测，也不写买入、卖出或持有之类的建议（评级由程序给出）。
 只输出 JSON：{"findings": [{"kind": "", "source": 1, "quote": ""}], "note": ""}"""
 
 
@@ -231,7 +232,7 @@ def run(lists: dict, sources: dict, today: date, budget: float | None) -> dict:
             for row in rows[rows["list"] == role].to_dict("records"):
                 code, src = row["code"], sources.get(market, {}).get(row["code"])
                 if code in st:
-                    continue  # a holding that is also a buy is reviewed once, as the buy
+                    continue  # a name on two lists is reviewed once, in its first role
                 if not src or (src["filings"] is None and src["headlines"] is None):
                     st[code] = {"status": "no_sources"}
                     continue
@@ -308,15 +309,14 @@ def line(state: dict, found: list[dict]) -> str:
 
 def apply(rows: pd.DataFrame, market: str, states: dict | None, deep: dict, confirmed: dict | None = None) -> pd.DataFrame:
     """The lists after the review (states: code -> state; deep: code -> deep-dive findings; confirmed: code -> your
-    confirm verdict in force). A buy with a hard red flag or data_suspect is removed (list 'removed', with the reason)
-    and the next name of its sector not blocked takes its place (else the best other one; its 'replaces' names the
-    removed one), equal amounts again; a holding with a hard
-    red flag becomes 卖出, with data_suspect or a soft concern (if it was 继续持有) 复核; avoid names keep their place.
-    Your confirm keeps a name as the lists have it, and its card says so. Every row gets its review line and AI note.
-    Without states (the build), only the 'next' rows are dropped."""
+    confirm verdict in force). A Buy or Hold name with a hard red flag or data_suspect is removed (list 'removed', with
+    the reason and the list it came from) and the next name of its bench not blocked takes its place (of its sector
+    first, else the next; its 'replaces' names the removed one); the buys get equal amounts again. Sell names keep
+    their place, the finding on their card. Your confirm keeps a name as the lists have it, and its card says so.
+    Every row gets its review line and AI note. Without states (the build), only the bench rows are dropped."""
     rows, confirmed = rows.assign(review="", note="", replaces=None), confirmed or {}
     if states is None:
-        return rows[rows["list"] != "next"]
+        return rows[~rows["list"].isin(["next", "hold_next"])]
     found = {c: list(states.get(c, {}).get("findings") or []) + list(deep.get(c, [])) for c in rows["code"]}
     for i, r in rows.iterrows():
         rows.at[i, "review"] = line(states.get(r["code"], {}), found[r["code"]])
@@ -325,32 +325,28 @@ def apply(rows: pd.DataFrame, market: str, states: dict | None, deep: dict, conf
         # the note was written without the deep dive's findings, so it isn't shown beside them (it could deny one)
         rows.at[i, "note"] = "" if deep.get(r["code"]) else states.get(r["code"], {}).get("note") or ""
     blocked = lambda c: None if c in confirmed else next((f for f in found[c] if f["hard"] or f.get("suspect")), None)
-    bench = rows[rows["list"] == "next"].sort_values("rank").to_dict("records")
-    keep, removed = [], []
-    for b in rows[rows["list"] == "buy"].sort_values("rank").to_dict("records"):
-        if not (why := blocked(b["code"])):
-            keep.append(b)
-            continue
-        free = [n for n in bench if not blocked(n["code"])]
-        replace = next((n for n in free if n["sector"] == b["sector"]), free[0] if free else None)
-        bench = [n for n in bench if n is not replace]
-        removed.append(b | {"list": "removed", "reason": ("数据存疑：" + why["words"]) if why.get("suspect") else cite(why),
-                            "status": f"由 {replace['code']} {replace['name']} 替换" if replace else "候补已用完"})
-        keep += [replace | {"replaces": b["code"]}] if replace else []
-    keep = pd.DataFrame(keep).assign(list="buy") if keep else pd.DataFrame()
-    if len(keep):
-        keep = keep.assign(weight=1 / len(keep)).sort_values(  # ties keep the lists' order (score.ranked)
-            "score", ascending=False, kind="stable", key=lambda x: x.round(DIGITS))
-    keep["rank"] = range(1, len(keep) + 1)
-    rest = rows[~rows["list"].isin(["buy", "next"])].copy()
-    for i, r in rest[(rest["list"] == "holding") & ~rest["code"].isin(list(confirmed))].iterrows():
-        hard = next((f for f in found[r["code"]] if f["hard"]), None)
-        odd = next((f for f in found[r["code"]] if f.get("suspect")), None)
-        soft = next((f for f in found[r["code"]] if not f["hard"] and not f.get("suspect")), None)
-        if hard:
-            rest.loc[i, ["status", "reason"]] = ["卖出", cite(hard)]
-        elif odd:
-            rest.loc[i, ["status", "reason"]] = ["复核", "数据存疑：" + odd["words"]]
-        elif soft and r["status"] == "继续持有":
-            rest.loc[i, ["status", "reason"]] = ["复核", f"{r['reason']}；市场可能在担心：{cite(soft)}"]
-    return pd.concat([keep, pd.DataFrame(removed), rest], ignore_index=True)
+    out = []
+    for kind, reserve in (("buy", "next"), ("hold", "hold_next")):
+        bench = rows[rows["list"] == reserve].sort_values("rank").to_dict("records")
+        keep, removed = [], []
+        for b in rows[rows["list"] == kind].sort_values("rank").to_dict("records"):
+            if not (why := blocked(b["code"])):
+                keep.append(b)
+                continue
+            free = [n for n in bench if not blocked(n["code"])]
+            replace = next((n for n in free if n["sector"] == b["sector"]), free[0] if free else None)
+            bench = [n for n in bench if n is not replace]
+            removed.append(b | {"list": "removed", "from": kind,
+                                "reason": ("数据存疑：" + why["words"]) if why.get("suspect") else cite(why),
+                                "status": f"由 {replace['code']} {replace['name']} 替换" if replace else "候补已用完"})
+            keep += [replace | {"replaces": b["code"]}] if replace else []
+        keep = pd.DataFrame(keep).assign(list=kind) if keep else pd.DataFrame(columns=rows.columns)
+        if kind == "buy" and len(keep):  # ties keep the lists' order (score.ranked)
+            keep = keep.assign(weight=1 / len(keep)).sort_values(
+                "score", ascending=False, kind="stable", key=lambda x: x.round(DIGITS))
+        elif len(keep):  # the steadiest first, as lists.holds orders them
+            keep = keep.sort_values(["vol_1y", "code"], kind="stable")
+        keep["rank"] = range(1, len(keep) + 1)
+        out += [keep, pd.DataFrame(removed)]
+    rest = rows[~rows["list"].isin(["buy", "next", "hold", "hold_next"])]
+    return pd.concat([x for x in out + [rest] if len(x)], ignore_index=True)

@@ -2,7 +2,8 @@
 list (stockreport.score, stockreport.lists) on every month-end snapshot (backtest/run.py), each month's 20-name portfolio
 and its 10 and 5 highest scores held 12 months after a round trip of costs against the index fund with dividends (SPY,
 2800.HK, 510300.SS), and each family's top fifth against its bottom fifth. It fills the report's 预期 line
-(data/history/expect.json) and catches bugs; it decides nothing else.
+(data/history/expect.json) and catches bugs; it decides nothing else. Stage 5: each month's Hold and Sell 10 too
+(lists.holds, lists.sells: the live rules), held the same way, with how far each stays from the fund.
 - Portfolios: the app's buy rule each month (lists.positions: each sector's places by its share of the free-float
   value, its best scores, equal amounts, the screen) on the whole snapshot (the 800 largest; HK all that pass the
   floors). Free float then: CN market value × today's CSI 300 float factor (the median outside it; float_factors), HK
@@ -38,7 +39,7 @@ from stockreport.fetch import eastmoney, sec, swclass, yahoo
 from stockreport.score import score
 
 SIZES, HOLD = (20, 10, 5), 12
-KEEP = ["name", "sector", "financial", "country", "mcap_rank", "mcap", "float_value", "price", "score", "distress",
+KEEP = ["name", "sector", "financial", "country", "mcap_rank", "mcap", "float_value", "price", "score", "distress", "vol_1y",
         "f_value", "f_quality", "f_growth", "f_momentum"]
 EXPECT = history.HISTORY / "expect.json"
 
@@ -157,6 +158,19 @@ def portfolios(f: pd.DataFrame, market: str) -> dict[str, pd.Series]:
     return out
 
 
+def ratings(f: pd.DataFrame, market: str) -> dict[str, dict[str, pd.Series]]:
+    """Each month's Hold and Sell names (the live rules, lists.holds and lists.sells; Hold leaves out that month's
+    buys and their bench): code -> equal weight."""
+    out, cfg = {"hold": {}, "sell": {}}, CONFIG["lists"]
+    for d, g in f.groupby("date"):
+        g = g.set_index("code")
+        buys, bench = lists.positions(g.sort_values("score", ascending=False), cfg["buys"], market)
+        held = lists.holds(g, cfg["holds"], buys.index.union(bench.index))
+        for kind, names in (("hold", held), ("sell", lists.sells(g, cfg["sells"]))):
+            out[kind][d] = pd.Series(1 / max(len(names), 1), index=names.index)
+    return out
+
+
 def largest(picks: dict[str, pd.Series], n: int) -> dict[str, pd.Series]:
     """The n highest scores of each list (the lists are in score order; equal amounts, scaled in Paths.growth)."""
     return {d: w.iloc[:n] for d, w in picks.items()}
@@ -229,6 +243,18 @@ def run_market(market: str) -> None:
               "by sub-period " + ", ".join(f"{k} {v:+.1%}" for k, v in r["periods"].items()))
         if n == 20:
             first, last_month, fund_dd, n_windows = w.index[0][:7], w.index[-1][:7], drawdown(fund), len(w)
+    result_ratings = {}
+    for kind, picks in ratings(f, market).items():
+        w, monthly, fund = evaluate(paths, picks, cost)
+        ex = w["ret"] - w["fund"]
+        r = {"excess": ex.mean(), "beat": (ex > 0).mean(), "half": ex.abs().median(), "p10": ex.quantile(0.1),
+             "p90": ex.quantile(0.9), "worst": w["ret"].min(), "mean": w["ret"].mean(), "fund_mean": w["fund"].mean(),
+             "vol": monthly.std() * np.sqrt(12), "fund_vol": fund.std() * np.sqrt(12), "drawdown": drawdown(monthly)}
+        result_ratings[kind] = r
+        print(f"-- {kind} 10: {len(w)} windows; 12-month return {r['mean']:+.1%} vs fund {r['fund_mean']:+.1%}: excess "
+              f"{r['excess']:+.1%}, ahead {r['beat']:.0%}, half within {r['half']:.1%} of the fund, 10th/90th pct "
+              f"{r['p10']:+.1%}/{r['p90']:+.1%}; worst 12 months {r['worst']:+.1%}; volatility {r['vol']:.1%} (fund "
+              f"{r['fund_vol']:.1%}); largest fall {r['drawdown']:.1%} (fund {drawdown(fund):.1%})")
     last = lists20[dates[-1]]
     names = f[f["date"] == dates[-1]].set_index("code")["name"]
     print(f"-- {dates[-1]} portfolio: " + ", ".join(f"{c} {names[c]} {x:.1%}" for c, x in last.items()))
@@ -238,7 +264,7 @@ def run_market(market: str) -> None:
           f"weight in them {np.mean([lists20[d][lists20[d].index.isin(top[d])].sum() for d in dates]):.0%}")
     runs = json.loads(EXPECT.read_text(encoding="utf-8")) if EXPECT.exists() else {}
     runs[market] = {"first": first, "last": last_month, "windows": n_windows, "fund_drawdown": fund_dd, "portfolios": result,
-                    "families": {k: v["all"] for k, v in t.T.to_dict().items()}}
+                    "ratings": result_ratings, "families": {k: v["all"] for k, v in t.T.to_dict().items()}}
     EXPECT.write_text(json.dumps(runs, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
 
 

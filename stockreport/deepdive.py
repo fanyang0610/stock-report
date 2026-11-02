@@ -1,5 +1,5 @@
 """Deep-dive lane (AGENTS.md rule 3; PLAN.md, "Results review"): the latest periodic report of each buy, the bench
-(the next name of each sector held) and your scored holdings, read once per filing (data/deepdive/<market>/<code>_<filing>.json), at most `per_day` new
+(the next name of each sector held) and the Hold names, read once per filing (data/deepdive/<market>/<code>_<filing>.json), at most `per_day` new
 filings per market a day, after the results review (never inside the keyword reply's budget). DeepSeek answers a
 fixed questionnaire with quoted sentences; code verifies every quote (quotes.py), takes each number from it and
 decides what it means (findings()): the data check (the period's net profit 20%+ off the figure behind the card:
@@ -260,10 +260,9 @@ def findings(row: dict, found: dict, market: str) -> list[dict]:
 
 
 def candidates(rows: pd.DataFrame) -> list[dict]:
-    """The names whose latest report is read: the buys and the bench (the next name of each sector held) by rank, then
-    your scored holdings."""
-    order = [rows[rows["list"] == k].sort_values("rank") for k in ("buy", "next")] + \
-            [rows[(rows["list"] == "holding") & rows["score"].notna()]]
+    """The names whose latest report is read: the buys, their bench (the next name of each sector held), then the Hold
+    names, by rank."""
+    order = [rows[rows["list"] == k].sort_values("rank") for k in ("buy", "next", "hold")]
     return [r for part in order for r in part.to_dict("records")]
 
 

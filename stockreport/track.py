@@ -1,7 +1,9 @@
-"""Tracking (PLAN.md, the live scoreboard): every report's buys and avoid names go to data/picks.csv (bucket buy / avoid
-with the score; the old method's buy / hold / sell rows stay as they were); `track` prints their average return by
-market and bucket against the index at 1 week, 1 and 3 months (the buys are equal amounts), from the close each pick
-was priced at, chained from close / prev_close (dividends and splits included; the indexes are price indexes)."""
+"""Tracking (PLAN.md, the live scoreboard): every report's three ratings go to data/picks.csv (bucket buy / hold / sell
+with the score, and the review's removals beside their replacements; the old v3 method's lists of 2026-10-17..21 are
+bucketed v3 buy / v3 hold / v3 sell); `track` prints their average return by market and bucket against the index at
+1 week, 1 and 3 months (the buys are equal amounts), from the close each pick was priced at, chained from close /
+prev_close (dividends and splits included; the indexes are price indexes). data/sent.csv records the buys of each
+report sent to you, for the report's "changes" line."""
 
 from datetime import date, timedelta
 
@@ -29,13 +31,11 @@ def load_sent() -> pd.DataFrame:
     return sent.assign(listed=sent["listed"].fillna(sent["date"]))
 
 
-def log_sent(day: date, folder) -> None:
-    """Append the buys of the report in `folder` (its buys.csv) as sent to you on `day`: the record of what was
-    recommended, never rewritten (data/picks.csv keeps only each day's last build, sent or not)."""
-    shown = folder / "buys.csv"
-    if not shown.exists():
-        return
-    new = pd.read_csv(shown, dtype={"ticker": str}).assign(date=day.isoformat()).reindex(columns=SENT)
+def log_sent(day: date, buys: pd.DataFrame) -> None:
+    """Append the buys of a report sent to you on `day` (market, ticker, name, listed: as report.build returned them
+    for that very text, not a file a later build may have rewritten): the record of what was sent, never rewritten
+    (data/picks.csv keeps only each day's last build, sent or not)."""
+    new = buys.assign(date=day.isoformat()).reindex(columns=SENT)
     new["listed"] = new["listed"].fillna(new["date"])
     pd.concat([load_sent(), new]).drop_duplicates(["date", "market", "ticker"]).to_csv(SENT_LOG, index=False)
 
@@ -109,7 +109,7 @@ def scorecard() -> int:
     print(f"Scorecard: {len(picks)} picks (one per stock, bucket and price date) from "
           f"{picks['price_date'].min()} to {picks['price_date'].max()}, against CSI 300 / Hang Seng / S&P 500.")
     print("Return from the close the pick was priced at; 1w / 1m / 3m = 7 / 30 / 91 days later (blank until then).")
-    print("'vs index' = average of pick return minus the index over the same days; an avoid name worked if it is negative.\n")
+    print("'vs index' = average of pick return minus the index over the same days; a sell worked if it is negative.\n")
     print(show.to_string())
     return 0
 

@@ -1,25 +1,23 @@
-"""The lists (PLAN.md, "Lists"): the 20-name buy portfolio from the whole scored market (each sector its places by its
-share of the market's free-float value, filled by its best scores, equal amounts; Quantitative Value's screen first),
-the names held, checked by NAPS's 12-month rule (your holdings in data/holdings.csv, `hold`, if you keep them; else
-a neutral hold rating of the names the published lists recommended), and the 10 avoid names."""
+"""The three ratings (PLAN.md, "Lists"), each market's top candidates, rated as a sell-side analyst rates stocks,
+without anyone's portfolio: 买入 (Buy, expected to beat the market) the 20-name portfolio from the whole scored market
+(each sector its places by its share of the market's free-float value, filled by its best scores, equal amounts;
+Quantitative Value's screen first); 持有 (Hold, expected in line with it) the 10 steadiest prices among the largest
+names at the middle of the score; 卖出 (Sell, expected to lag it) the 10 lowest scores among the largest."""
 
-from datetime import date, timedelta
+from datetime import date
 
 import numpy as np
 import pandas as pd
 
-from stockreport import track, verdicts
-from stockreport.config import CONFIG, DATA
+from stockreport import verdicts
+from stockreport.config import CONFIG
 from stockreport.score import ranked
 
-HOLDINGS = DATA / "holdings.csv"
 LOT = {"cn": 100, "us": 1}  # HK: each stock's board lot (HKEX)
-REVIEW = 0.5  # before the anniversary review below the middle of the sector; at it keep the top fifth (`top_share`)
-WINDOW = 30  # days after an anniversary in which a holding is judged at it (the time to sell); then a new year starts
 PARTNERSHIP = r"(?:\bL\.?P\.?|Limited Partnership)$"  # US master limited partnerships (K-1 units)
 COLUMNS = ["list", "rank", "code", "name", "sector", "weight", "price", "price_date", "lot", "lot_cost", "score",
            "score_rank", "f_value", "f_quality", "f_growth", "f_momentum", "g_value", "g_quality", "g_growth",
-           "g_momentum", "why", "weak", "risk", "status", "reason", "since", "recheck", "period", "np_ytd", "np_ttm",
+           "g_momentum", "vol_1y", "why", "weak", "risk", "status", "reason", "recheck", "period", "np_ytd", "np_ttm",
            "report_currency"]
 
 
@@ -27,7 +25,7 @@ def screened(df: pd.DataFrame) -> pd.Series:
     """Quantitative Value's first step (Gray and Carlisle 2012): the `screen` share of non-financials most likely to
     fail (Campbell-Hilscher-Szilagyi, signals.distress) or with the largest scaled total accruals (sta: the latest
     fiscal year's working-capital increase less depreciation over assets, Sloan 1996) can't be bought; they stay
-    scored and can be avoided. A stock without the figure isn't screened."""
+    scored and can be rated Sell. A stock without the figure isn't screened."""
     share, fin = CONFIG["lists"]["screen"], df["financial"].astype(bool)
     worst = lambda x: x[~fin].rank(pct=True, ascending=False) <= share
     sta = df["sta"] if "sta" in df else pd.Series(np.nan, index=df.index)
@@ -38,7 +36,7 @@ def buyable(df: pd.DataFrame, market: str) -> pd.Series:
     """Can be bought: not screened; not a small cap (HK: the names making up the last `small_share` of the field's
     free-float value, Hang Seng's SmallCap band; the CN and US fields, the 800 largest, are large and mid caps already);
     not a partnership (a non-US holder pays 10% of a sale's gross proceeds and withholding on distributions; the S&P
-    500 excludes them). The rest stay scored, avoidable and checked as holdings."""
+    500 excludes them). The rest stay scored and can be rated Hold or Sell."""
     small = CONFIG["lists"]["small_share"].get(market, 0.0)
     value = df["float_value" if "float_value" in df else "mcap"].sort_values(ascending=False, kind="stable")
     large = (value.cumsum().shift(fill_value=0) / value.sum() < 1 - small).reindex(df.index)
@@ -93,72 +91,33 @@ def anniversary(d: date, years: int = 1) -> date:
         return d.replace(year=d.year + years, day=28)
 
 
-def cycle(since: date, today: date) -> tuple[int | None, date]:
-    """The years held if an anniversary passed within WINDOW days (else None), and the next anniversary."""
-    k = 1
-    while anniversary(since, k) <= today:
-        k += 1
-    due, last = anniversary(since, k), anniversary(since, k - 1)
-    return (k - 1 if k > 1 and (today - last).days <= WINDOW else None), due
+def holds(df: pd.DataFrame, n: int, out: pd.Index) -> pd.DataFrame:
+    """The Hold candidates in order (PLAN.md, "Lists"): among the `largest` names, those in the middle fifth of the
+    market's score (`middle`: leaning neither to the top nor to the bottom), not screened (screened()) nor `out` (the
+    buys and their bench, your vetoes), the steadiest prices first (1-year volatility of daily returns, the lowest first; then the code), at most
+    `per_sector` a sector; the first n are the list, the next ones its bench."""
+    cfg, order = CONFIG["lists"], ranked(df)
+    at = pd.Series(np.arange(len(order)) / max(len(order), 1), index=order.index).reindex(df.index)
+    lo, hi = cfg["middle"]
+    field = df[(at >= lo) & (at < hi) & (df["mcap_rank"] <= cfg["largest"]) & ~screened(df) & ~df.index.isin(out)
+               & df["vol_1y"].notna()]
+    field = field.iloc[np.lexsort([field.index.astype(str), field["vol_1y"].to_numpy()])]
+    return capped(field, n, cfg["per_sector"]).assign(
+        reason=lambda h: [f"评分居中（全市场 {len(df)} 只中第 {r} 名）；股价波动小（近一年年化 {v:.0%}）"
+                          for r, v in zip(order.index.get_indexer(h.index) + 1, h["vol_1y"])])
 
 
-def recorded() -> pd.DataFrame:
-    """Your holdings (data/holdings.csv, `hold`); none when there's no file or it's empty."""
-    return pd.read_csv(HOLDINGS, dtype=str, keep_default_na=False) if HOLDINGS.exists() \
-        else pd.DataFrame(columns=["market", "code", "name", "since"])
+def sells(df: pd.DataFrame, n: int) -> pd.DataFrame:
+    """The Sell list: the n lowest scores among the `largest` names, at most `per_sector` a sector (ties: score.ranked
+    reversed, so of tied names the smaller)."""
+    cfg, order = CONFIG["lists"], ranked(df)
+    return capped(order[order["mcap_rank"] <= cfg["largest"]].iloc[::-1], n, cfg["per_sector"])
 
 
-def held(market: str, today: date, buys: pd.Index) -> pd.DataFrame:
-    """Code -> the date it counts from and name: your holdings if you keep them; else a neutral hold rating, as an
-    analyst rates the names he recommended without knowing your portfolio: each name of a buy list sent to you
-    (data/sent.csv) that isn't in today's, from the date of the last list it was sent in (the day its card said 持有到
-    a year on), until its 12-month review and the WINDOW days to act on it have passed."""
-    if len(mine := recorded()):
-        return mine[mine["market"] == market].set_index("code")[["since", "name"]]
-    sent = track.load_sent()
-    sent = sent[(sent["market"] == market) & (sent["listed"] <= today.isoformat())]
-    last = sent.sort_values("listed").groupby("ticker")[["listed", "name"]].last().rename(columns={"listed": "since"})
-    live = last["since"].map(lambda d: anniversary(date.fromisoformat(d)) + timedelta(days=WINDOW) >= today)
-    return last[live.astype(bool) & ~last.index.isin(buys)]
-
-
-def check(df: pd.DataFrame, market: str, today: date, buys: pd.DataFrame, dropped: dict[str, str]) -> pd.DataFrame:
-    """继续持有 / 复核 / 卖出 per holding (PLAN.md, "Holding rule"), judged as the buys are picked: by the score's rank
-    among its sector's scored names; the results review adds its findings (review.apply)."""
-    holdings, neutral = held(market, today, buys.index), not len(recorded())
-    swap = next((f"{c} {buys.at[c, 'name']}" for c in buys.index if c not in holdings.index), "")
-    rows = []
-    for code, h in holdings.iterrows():
-        years, due = cycle(date.fromisoformat(h["since"]), today)
-        row = {"code": code, "name": h["name"], "since": h["since"]}
-        if code not in df.index:
-            rows.append(row | {"status": "复核", "recheck": today.isoformat(),
-                               "reason": "今日未评分：" + ("数据缺失或与第二来源对不上" if code in dropped else "不在市值前列或数据不全") +
-                                         "，看不到它在同行业的排名"})
-            continue
-        others = df.loc[(df["sector"] == df.at[code, "sector"]) & (df.index != code), "score"]
-        others = others if len(others) else df.loc[df.index != code, "score"]
-        rank, n = int((others > df.at[code, "score"]).sum()) + 1, len(others) + 1
-        place = f"同行业 {n} 只中第 {rank} 名"
-        if years is None and rank > n * REVIEW:
-            status, reason, recheck = "复核", f"未到满年（{due}），评分跌入同行业后半（{place}）", today
-        elif years is None:
-            status, reason, recheck = "继续持有", f"未到满年（{due}），评分在同行业前半（{place}）", due
-        elif rank <= max(1, np.ceil(n * CONFIG["lists"]["top_share"])):
-            status, reason, recheck = "继续持有", f"满 {years} 年，仍在同行业前五分之一（{place}），再持有一年", due
-            if neutral:  # a rating ends with the year it was recommended for; a name picked again comes back
-                reason, recheck = f"满 12 个月仍在同行业前五分之一（{place}）：可继续持有，此后不再列出（重新入选会再出现）", None
-        else:
-            status, reason, recheck = "卖出", f"满 {years} 年，已不在同行业前五分之一（{place}）", today
-            reason += f"，可换入今天的最高分 {swap}" if swap else ""
-        rows.append(row | df.loc[code].to_dict() | {"status": status, "reason": reason,
-                                                     "recheck": recheck.isoformat() if recheck else ""})
-    return pd.DataFrame(rows).assign(list="holding")
-
-
-def build(df: pd.DataFrame, market: str, today: date, dropped: dict[str, str]) -> pd.DataFrame:
-    """The day's buys, the next names (they replace buys the results review removes), avoid names, holdings check
-    and your vetoes, one row each (COLUMNS)."""
+def build(df: pd.DataFrame, market: str, today: date) -> pd.DataFrame:
+    """The day's three ratings, one row each (COLUMNS): the buys, their bench (it replaces buys the results review
+    removes), the Hold names and theirs, the Sell names, and your vetoes (kept out of Buy and Hold); each rating's
+    re-check date is 12 months on, its horizon."""
     cfg = CONFIG["lists"]
     vetoes = {c: v for c, v in verdicts.active(market, today, df["period"].astype(str)).items() if v["verdict"] == "veto"}
     df = df.assign(lot=df["lot"] if "lot" in df else LOT[market])
@@ -166,38 +125,16 @@ def build(df: pd.DataFrame, market: str, today: date, dropped: dict[str, str]) -
     order = ranked(df)  # ties: score.ranked
     buys, bench = positions(order[~order.index.isin(list(vetoes))], cfg["buys"], market)
     bench = ranked(bench)  # each replaces a removed buy of its sector (review.apply)
-    avoid = capped(order[order["mcap_rank"] <= cfg["avoid_largest"]].iloc[::-1], cfg["avoid"], cfg["per_sector"])
-    parts = [buys.assign(list="buy", rank=range(1, len(buys) + 1), recheck=anniversary(today).isoformat()),
-             bench.assign(list="next", rank=range(len(buys) + 1, len(buys) + len(bench) + 1),
-                          recheck=anniversary(today).isoformat()),
-             avoid.assign(list="avoid", rank=range(1, len(avoid) + 1)),
-             check(df, market, today, buys, dropped),
+    held = holds(order, cfg["holds"] + cfg["bench"], buys.index.union(bench.index).union(list(vetoes)))
+    sell = sells(order, cfg["sells"])
+    k, due = cfg["holds"], anniversary(today).isoformat()
+    parts = [buys.assign(list="buy", rank=range(1, len(buys) + 1)),
+             bench.assign(list="next", rank=range(len(buys) + 1, len(buys) + len(bench) + 1)),
+             held.iloc[:k].assign(list="hold", rank=range(1, min(k, len(held)) + 1)),
+             held.iloc[k:].assign(list="hold_next", rank=range(k + 1, len(held) + 1)),
+             sell.assign(list="sell", rank=range(1, len(sell) + 1)),
              pd.DataFrame([{"list": "veto", "code": c, "name": df["name"].get(c, ""),
                             "reason": f"你的否决（至 {v['until']}）：{v['reason']}"} for c, v in vetoes.items()])]
     out = pd.concat([p.rename_axis("code").reset_index() if "code" not in p else p for p in parts if len(p)])
+    out.loc[out["list"] != "veto", "recheck"] = due
     return out.reindex(columns=COLUMNS)
-
-
-def name_of(market: str, code: str) -> str:
-    snaps = sorted((DATA / "snapshots").glob(f"*/{market}.csv.gz"))
-    names = pd.read_csv(snaps[-1], usecols=["code", "name"], dtype=str).set_index("code")["name"] if snaps else {}
-    return names.get(code, "")
-
-
-def hold(code: str | None, day: str | None, sold: bool, today: date) -> str:
-    """`hold CODE [--date D]` records a holding bought on D (default today); `hold CODE --sold` removes it; `hold`
-    lists them."""
-    h = pd.read_csv(HOLDINGS, dtype=str) if HOLDINGS.exists() else pd.DataFrame(columns=["market", "code", "name", "since"])
-    if not code:
-        return "\n".join(f"{r.market.upper()} {r.code} {r.name} since {r.since}" for r in h.itertuples()) or "No holdings."
-    code = code.zfill(5) if code.isdigit() and len(code) <= 5 else code.upper()
-    market = verdicts.market_of(code)
-    h = h[h["code"] != code]
-    if sold:
-        msg = f"Removed {code}."
-    else:
-        since = date.fromisoformat(day) if day else today
-        h = pd.concat([h, pd.DataFrame([{"market": market, "code": code, "name": name_of(market, code), "since": since.isoformat()}])])
-        msg = f"Holding {market.upper()} {code} since {since}; the next `run` checks it."
-    h.sort_values(["market", "code"]).to_csv(HOLDINGS, index=False)
-    return msg

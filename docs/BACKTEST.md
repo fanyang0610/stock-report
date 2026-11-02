@@ -1361,7 +1361,10 @@ a float's last bit. The table has the new figures. Over the fund: CN +4.2% (62%)
 worst 12 months −17.2% → −18.0%), HK +5.6% (71%) → +5.5% (68%); single sub-periods moved up to 1.3 points (US 2023
 +7.2 → +8.5); the family check is unchanged. CN once more on 2026-11-02, the free-float factor fixed (each member's
 value at the CSI file's date, not today's; docs/PLAN.md, "Lists"): +4.3% (63%) → +3.8% (65%), the frames rebuilt
-(`frame cn`), the family check unchanged.
+(`frame cn`), the family check unchanged. All three frames rebuilt on 2026-11-02 evening for section 24 (each stock's
+volatility kept): CN and US identical; HK's float factors came from that day's newer snapshot, which moved HK's 2019-20
+from +10.0 to +9.8, the 10 best +5.1% (57%) → +5.2% (56%) and the 5 best +3.9% → +4.1%; the 20 names' +5.5% (68%)
+held (5.50 → 5.47). The table has the new figures.
 
 | 12 months from each month end, after costs | CN (510300) | US (SPY) | HK (2800) |
 |---|---|---|---|
@@ -1372,9 +1375,9 @@ value at the CSI file's date, not today's; docs/PLAN.md, "Lists"): +4.3% (63%) �
 | 10th / 90th percentile over the fund | −8.8% / +16.7% | −9.3% / +12.9% | −6.0% / +18.6% |
 | worst 12 months (the fund's; start) | −27.0% (−20.4%; 2021-09) | −18.0% (−10.6%; 2021-06) | −32.4% (−24.5%; 2021-04) |
 | largest fall, overlapping portfolio (the fund's) | −34.9% (−36.5%) | −23.3% (−23.9%) | −41.1% (−47.2%) |
-| over the fund by sub-period: 2019-20 / 2021-22 / 2023 / 2024-26 | +2.2 / +1.9 / −0.9 / +10.3 | −1.4 / +1.5 / +8.5 / +7.2 | +10.0 / +3.4 / +15.4 / +3.7 |
-| 10 best scores: over the fund, ahead, worst against the fund | +1.4%, 44%, −25.7% | +2.3%, 53%, −25.1% | +5.1%, 57%, −20.0% |
-| 5 best scores: the same | −3.6%, 44%, −37.3% | +2.9%, 55%, −31.9% | +3.9%, 54%, −35.7% |
+| over the fund by sub-period: 2019-20 / 2021-22 / 2023 / 2024-26 | +2.2 / +1.9 / −0.9 / +10.3 | −1.4 / +1.5 / +8.5 / +7.2 | +9.8 / +3.4 / +15.4 / +3.7 |
+| 10 best scores: over the fund, ahead, worst against the fund | +1.4%, 44%, −25.7% | +2.3%, 53%, −25.1% | +5.2%, 56%, −20.0% |
+| 5 best scores: the same | −3.6%, 44%, −37.3% | +2.9%, 55%, −31.9% | +4.1%, 54%, −35.7% |
 | the market's 10 largest held, per list (their share of the money) | 0.4 (2%) | 1.4 (7%) | 2.6 (13%) |
 
 **The family check** (top fifth minus bottom fifth within sectors, mean 12-month return; sub-periods positive of 4): CN
@@ -1411,3 +1414,47 @@ the live score's forward E/P, revisions, EBIT/EV and the screen aren't in it.
 
 Rerun: `uv run python -m backtest.qvm frame cn|us|hk`, then `run cn|us|hk` (the float factors come from the newest live
 snapshot and the CSI 300 file, so run the daily build first).
+
+## 24. Stage 5: the Hold and Sell ratings (2026-11-02; backtest/qvm.py)
+
+Each month end, the live rules (stockreport.lists) on section 23's frames, rebuilt with each stock's 1-year
+volatility (section 23's note: HK's 10 and 5 best moved slightly): **Hold** = the 10 lowest 1-year volatilities among
+the 400 largest in the middle fifth of the score (the 40th to the 60th percentile from the top), at most 2 per sector,
+not that month's buys or their bench (Quantitative Value's screen has no inputs in the history, so it doesn't run);
+**Sell** = the 10 lowest scores among the 400 largest, at most 2 per sector (the avoid list until stage 5). Equal
+amounts, held 12 months after a round trip of costs, against the fund, as the buys. The rules were fixed in the code
+(lists.holds, config.toml) before this run and written into docs/PLAN.md ("Lists") after it, unchanged; the stage
+review then had the buys' bench left out of Hold too (a name can't be both), which moved only HK's Hold (−2.3% →
+−2.2%). These numbers fill the 预期 lines and decide nothing.
+
+| 12 months from each month end, after costs | CN (510300) | US (SPY) | HK (2800) |
+|---|---|---|---|
+| windows | 81 (2019-01..2025-09) | 93 (2018-01..2025-09) | 108 (2016-10..2025-09) |
+| Hold 10: mean return / the fund's | +5.6% / +6.6% | +9.7% / +15.9% | +3.3% / +5.5% |
+| Hold over the fund (windows ahead) | **−1.0% (51%)** | **−6.2% (37%)** | **−2.2% (43%)** |
+| Hold: half the windows within this of the fund | 17.2% | 11.1% | 9.8% |
+| Hold: 10th / 90th percentile over the fund | −27.4% / +22.9% | −20.0% / +10.2% | −18.3% / +15.9% |
+| Hold: volatility, overlapping portfolio (the fund's) | 14.4% (18.9%) | 13.6% (16.4%) | 15.0% (21.5%) |
+| Hold: worst 12 months; largest fall (the fund's) | −20.7%; −16.5% (−36.5%) | −13.2%; −19.2% (−23.9%) | −31.1%; −36.4% (−47.2%) |
+| Sell 10: mean return / the fund's | +8.0% / +6.6% | +17.4% / +15.9% | +5.0% / +5.5% |
+| Sell over the fund (windows behind) | **+1.4% (57%)** | **+1.5% (57%)** | **−0.5% (63%)** |
+| Sell: 10th / 90th percentile over the fund | −19.4% / +22.6% | −16.5% / +24.2% | −31.6% / +32.6% |
+| Sell: volatility (the fund's) | 27.3% (18.9%) | 22.0% (16.4%) | 33.2% (21.5%) |
+| Sell: worst 12 months; largest fall | −28.3%; −44.1% | −23.3%; −27.8% | −46.7%; −54.2% |
+
+**What it says.** As a list of 10, Hold is the stable one: its volatility was 0.7-0.8 times the fund's and its
+largest fall much smaller in CN (−17% against −37%) and HK (−36% against −47%). It trailed the fund in these mostly
+rising years, most in the US (−6.2 points a year: steady names in a decade led by high-volatility technology, as
+section 23's US quality family showed). It doesn't track the fund: half its 12-month windows were more than 10-17
+points away from it, since low-volatility stocks move less than the market both ways. Single names are another
+matter: on 2026-11-02 every US Hold (16-23%) and HK Hold (19-29%) and 8 of the 10 CN Holds had a higher 1-year
+volatility than their index, and a steady slide can have a low daily volatility (中国旺旺 fell from HK$5.32 to 2.88 in a
+year at 29%). Sell trailed the fund in most windows (57-63%), but on
+average only in HK (−0.5); in CN and the US it was ahead on average (+1.4, +1.5), with 1.3-1.5 times the fund's
+volatility, and in all three markets Sell's average was above Hold's. **Limits.** All of section 23's, and one that bears hardest on Sell: the frames hold today's listings
+only, so the companies that failed or were delisted, which come mostly from the bottom of the score (losses, falling
+prices, distress: Campbell, Hilscher and Szilagyi 2008), are missing; that flatters Sell most. The US score itself ran
+against its published direction in this sample (section 23: the top fifth −4.1% against the bottom fifth), which shows
+here as US Sell ahead of SPY. Nothing is changed for it (AGENTS.md rules 3 and 12); the 预期 lines give these numbers.
+
+Rerun: as section 23 (`frame`, then `run`; the Hold and Sell rows print after the 20, 10 and 5 names).

@@ -29,10 +29,12 @@ financial_industries_hk = ["区域性银行", "综合性银行", "人寿与健�
 buys = 20                     # from the whole scored market, places per sector by its free-float share (lists.positions)
 screen = 0.05                 # Quantitative Value: the 5% most likely distressed or with the largest accruals not bought
 small_share = { hk = 0.05 }   # HK small caps not bought: the last 5% of value (Hang Seng's SmallCap band, lists.buyable)
-top_share = 0.2               # holding rule: at the anniversary keep a name still in its sector's top fifth
-avoid = 10
-per_sector = 2                # avoid names per sector
-avoid_largest = 400
+holds = 10                    # Hold: the steadiest prices among the largest names in the score's middle (lists.holds)
+middle = [0.4, 0.6]           # ... the middle fifth of the market's score (from the top: 40% to 60%)
+bench = 5                     # Hold names next in line, for the review's removals
+sells = 10                    # Sell: the lowest scores among the largest names (lists.sells)
+per_sector = 2                # Hold and Sell names per sector
+largest = 400                 # Hold and Sell come from the largest names by market value
 
 [cards]
 heavy_debt = 0.7              # debt ÷ assets at or above this is a key risk (not financials): SASAC's 70% warning line

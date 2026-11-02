@@ -57,8 +57,7 @@ def build_market(market: str, today: date) -> None:
     failed = fetch_market(market, today)
     report.save_failed(today, market, failed)
     df, info = scored(market, today)
-    dropped = {code: reason for reason, codes in info["dropped"].items() for code in codes}
-    out_lists = lists.build(df, market, today, dropped)
+    out_lists = lists.build(df, market, today)
     try:  # the results review's sources (no DeepSeek: the review runs when you ask for a report)
         review.gather(market, out_lists, today)
     except Exception:
@@ -92,12 +91,9 @@ def build_market(market: str, today: date) -> None:
     print(f"Scored {len(df)}; components present: {have}")
     print("\n".join(drift))
     show = out_lists.assign(score=out_lists["score"].round(3), weight=out_lists["weight"].map("{:.1%}".format))
-    for name, words in (("buy", "why"), ("avoid", "weak")):
+    for name, words in (("buy", "why"), ("hold", "reason"), ("sell", "weak")):
         part = show.loc[show["list"] == name, SHOW[:-1] + [words, "risk"]]
         print(f"\n== {name} ({len(part)})\n" + part.to_string(index=False))
-    held = show[show["list"] == "holding"]
-    if len(held):
-        print("\n== holdings\n" + held[["code", "name", "since", "status", "reason"]].to_string(index=False))
     print(f"\nWrote {(out / f'{market}_lists.csv').relative_to(ROOT)} and the snapshot {(snap / f'{market}.csv.gz').relative_to(ROOT)}")
 
 
@@ -111,7 +107,7 @@ def run(markets: list[str]) -> int:
         except Exception:
             log.exception("%s build failed; the report shows its newest earlier lists", market.upper())
             crashed.append(market)
-    pdf, summary = report.build(today)
+    pdf, summary, _ = report.build(today)
     print(f"Wrote {pdf.relative_to(ROOT)} ({pdf.stat().st_size // 1024} KB) and summary.txt "
           f"({len(summary.encode('utf-8'))} bytes)")
     cleanup()
@@ -153,7 +149,7 @@ def review_all(background: bool) -> int:
     if background:
         log.info("background review done in %.0fs", time.monotonic() - started)
         return 0
-    pdf, summary = report.build(today, states)
+    pdf, summary, _ = report.build(today, states)
     print(review.stats(states))
     print(f"\n{summary}\n\nWrote {pdf.relative_to(ROOT)} in {time.monotonic() - started:.0f}s")
     return 0
@@ -200,10 +196,10 @@ def send(test: bool, assume_yes: bool) -> int:
     """Send the TEST report, or the newest real report, after confirming."""
     if test:
         today = date.today()
-        (summary, pdf), what, title = build_test(today), "TEST", f"股票报告_测试_{today:%Y%m%d}.pdf"
+        (summary, pdf), what, title, buys = build_test(today), "TEST", f"股票报告_测试_{today:%Y%m%d}.pdf", None
     else:
         today = date.today()
-        pdf, summary = report.fresh(today, CONFIG["review"]["budget"])
+        pdf, summary, buys = report.fresh(today, CONFIG["review"]["budget"])
         what, title = f"the {today} (reviewed)", f"股票报告_{today:%Y%m%d}.pdf"
     if not wait_for_window():
         print("Still no reply window. Text the bot, then run this again.")
@@ -213,11 +209,11 @@ def send(test: bool, assume_yes: bool) -> int:
         print("Not sent.")
         return 1
     deliver.send_text(summary)
+    if buys is not None:  # the text names every buy: the record of what was sent (the "changes" line)
+        track.log_sent(today, buys)
     print("1/2 text summary sent", flush=True)
     time.sleep(1)
     deliver.send_file(pdf, title=title)
-    if not test:
-        track.log_sent(today, pdf.parent)
     print("2/2 PDF sent. Check your phone: did both arrive, and does the PDF open?")
     return 0
 
@@ -237,11 +233,6 @@ def main(argv: list[str] | None = None) -> int:
     rev = sub.add_parser("review", help="the results review of the newest lists (DeepSeek, no time limit), the day's "
                                         "deep dives, then the report")
     rev.add_argument("--background", action="store_true", help="finish what a keyword reply's budget left; no report")
-    hold = sub.add_parser("hold", help="record a stock you hold (not the index fund; no arguments: list them); "
-                                       "the next `run` checks it")
-    hold.add_argument("code", nargs="?", help="ticker, e.g. 600519, 00700 or AAPL")
-    hold.add_argument("--date", help="the day you bought it, YYYY-MM-DD (default: today)")
-    hold.add_argument("--sold", action="store_true", help="remove it")
     verdict = sub.add_parser("verdict", help="your veto or confirm for a stock (no arguments: list those in force)")
     verdict.add_argument("code", nargs="?", help="ticker, e.g. 600519, 00700 or AAPL")
     verdict.add_argument("action", nargs="?", choices=["veto", "confirm"])
@@ -259,9 +250,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "review":
         setup_logging(console=not args.background)
         return review_all(args.background)
-    if args.command == "hold":
-        print(lists.hold(args.code, args.date, args.sold, date.today()))
-        return 0
     if args.command == "listen":
         setup_logging(console=False)
         return listen()
