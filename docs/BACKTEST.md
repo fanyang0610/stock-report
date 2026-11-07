@@ -1373,30 +1373,33 @@ a newer snapshot moved HK's 20 names by 0.03 points). Over the fund: CN +3.8% (6
 counted as −50%) gave CN +4.4% (67%) and HK +5.8% (72%); it was replaced for the fault docs/PLAN.md describes, not for
 these numbers. The family check: CN quality +1.9% → +1.5%, growth +0.4% → 0.0%, the score +1.8% → +1.6%; US growth
 −1.5% → −1.6%, the score −4.1% → −4.3%; HK quality −2.9% → −1.1%, the score +5.3% → +6.2%; the rest within 0.1 points.
-The component spreads in the paragraph below are the 11-01 run's, not redone; the dividend yield's are void (the
-snapshots carry no dividends: every stock's yield is 0, so its percentile is one value a sector and its spread sorts
-sectors by their size; stage 7). The table has the new figures.
+The component spreads in the paragraph below are the 11-01 run's, not redone. Run again for stage 7 (section 25): the
+dividend yield missing rather than 0 (the snapshots carry no dividends), which changed 5% of CN's month-lists, 9% of the
+US's and 2% of HK's, by one name (two in one US and one HK month; CN ahead in 53% → 54% of windows; every mean within
+0.1 points), and the family check within sectors. The table has these figures.
 
 | 12 months from each month end, after costs | CN (510300) | US (SPY) | HK (2800) |
 |---|---|---|---|
 | windows | 81 (2019-01..2025-09) | 93 (2018-01..2025-09) | 108 (2016-10..2025-09) |
-| 20 names: mean return / the fund's | +8.8% / +6.6% | +17.3% / +15.9% | +12.2% / +5.5% |
-| over the fund (windows ahead) | **+2.2% (53%)** | **+1.5% (54%)** | **+6.6% (69%)** |
+| 20 names: mean return / the fund's | +8.8% / +6.6% | +17.3% / +15.9% | +12.1% / +5.5% |
+| over the fund (windows ahead) | **+2.2% (54%)** | **+1.5% (54%)** | **+6.6% (69%)** |
 | section 22's (the index-weighted list) | +7.2% (67%) | −1.3% (32%) | +3.3% (58%) |
 | 10th / 90th percentile over the fund | −9.4% / +15.8% | −8.5% / +11.2% | −7.2% / +22.0% |
 | worst 12 months (the fund's; start) | −25.3% (−27.3%; 2021-10) | −16.3% (−10.6%; 2021-06) | −30.2% (−20.3%; 2021-03) |
-| largest fall, overlapping portfolio (the fund's) | −35.5% (−36.5%) | −23.3% (−23.9%) | −40.3% (−47.2%) |
-| over the fund by sub-period: 2019-20 / 2021-22 / 2023 / 2024-26 | +1.2 / +0.7 / −1.0 / +6.9 | −1.4 / +1.1 / +7.1 / +6.4 | +12.0 / +4.6 / +11.9 / +7.1 |
-| 10 best scores: over the fund, ahead, worst against the fund | −0.5%, 31%, −27.2% | +2.1%, 53%, −25.1% | +5.7%, 60%, −20.0% |
-| 5 best scores: the same | −4.8%, 40%, −34.3% | +3.0%, 56%, −31.9% | +6.4%, 55%, −23.2% |
+| largest fall, overlapping portfolio (the fund's) | −35.6% (−36.5%) | −23.4% (−23.9%) | −40.3% (−47.2%) |
+| over the fund by sub-period: 2019-20 / 2021-22 / 2023 / 2024-26 | +1.2 / +0.6 / −0.9 / +6.9 | −1.5 / +1.2 / +7.3 / +6.4 | +12.0 / +4.6 / +11.9 / +7.0 |
+| 10 best scores: over the fund, ahead, worst against the fund | −0.4%, 31%, −27.2% | +2.1%, 53%, −25.1% | +5.6%, 60%, −20.0% |
+| 5 best scores: the same | −4.9%, 40%, −34.3% | +3.0%, 56%, −31.9% | +6.5%, 55%, −23.2% |
 | the market's 10 largest held, per list (their share of the money) | 0.3 (1%) | 1.4 (7%) | 2.5 (13%) |
 
-**The family check** (top fifth minus bottom fifth within sectors, mean 12-month return; sub-periods positive of 4): CN
-value +0.3% (2), quality +1.5% (3), growth 0.0% (2), momentum (SUE) +2.2% (2), the score +1.6% (3); US value +2.6% (3),
-quality −9.8% (0), growth −1.6% (2), momentum −1.7% (2), the score −4.3% (1); HK value 0.0% (3), quality −1.1% (2),
-growth +6.6% (3), momentum +7.9% (4), the score +6.2% (3) (stage 6's figures). By component (the 11-01 run), US: low volatility −14.5%, margin stability
-−9.7%, 5-year profit growth −8.7%, 8-year ROA −8.3%, E/P −4.9%, S/P +7.1%, B/P +4.4%; CN: low volatility +1.9%,
-dividend yield −5.3%; HK: dividend yield +6.0%, revenue growth +6.8%, margin stability −11.0%. US quality runs well
+**The family check** (stage 7: top fifth minus bottom fifth within each sector (peer group) and month, the sectors
+weighted by their share of the month's stocks, mean 12-month return; sub-periods positive of 4; section 25): CN value
++0.4% (2), quality +1.8% (3), growth 0.0% (2), momentum (SUE) +2.2% (2), the score +2.0% (3); US value +2.2% (3),
+quality −9.6% (0), growth −1.5% (2), momentum −1.7% (2), the score −4.1% (1); HK value −0.4% (2), quality −1.2% (2),
+growth +5.9% (3), momentum +7.6% (4), the score +5.8% (3). By component (the 11-01 run, fifths across the market), US:
+low volatility −14.5%, margin stability −9.7%, 5-year profit growth −8.7%, 8-year ROA −8.3%, E/P −4.9%, S/P +7.1%, B/P
++4.4%; CN: low volatility +1.9%; HK: revenue growth +6.8%, margin stability −11.0% (the dividend yield's spreads,
+CN −5.3% and HK +6.0%, are deleted: with every yield 0 they only sorted sectors by their size; section 25). US quality runs well
 against its published direction (section 22: −1.5% without the new parts). I looked for a bug and found none: the
 signs are right (lower volatility ranks higher; a steadier margin ranks higher), the long-run figures are taken only
 from reports filed by each month end, and each component is computed as in the live build. What the sample is: today's
@@ -1439,31 +1442,37 @@ amounts, held 12 months after a round trip of costs, against the fund, as the bu
 review then had the buys' bench left out of Hold too (a name can't be both), which moved only HK's Hold (−2.3% →
 −2.2%). These numbers fill the 预期 lines and decide nothing. Run again 2026-11-07 on stage 6's frames (section 23):
 Hold CN −1.0% → −0.8%, US −6.2% → −6.4%, HK −2.2% → −1.8%; Sell CN +1.4% → +3.0%, US +1.5% → +1.7%, HK −0.5% → +0.7%.
+Again for stage 7 (section 25; the dividend yield missing): Hold CN −0.8% → −0.7%, US −6.4% → −6.5%; Sell HK +0.7% →
++0.6%; the rest within 0.1 points. The table has these figures, and each held year's own largest fall.
 
 | 12 months from each month end, after costs | CN (510300) | US (SPY) | HK (2800) |
 |---|---|---|---|
 | windows | 81 (2019-01..2025-09) | 93 (2018-01..2025-09) | 108 (2016-10..2025-09) |
 | Hold 10: mean return / the fund's | +5.8% / +6.6% | +9.4% / +15.9% | +3.7% / +5.5% |
-| Hold over the fund (windows ahead) | **−0.8% (53%)** | **−6.4% (35%)** | **−1.8% (44%)** |
+| Hold over the fund (windows ahead) | **−0.7% (53%)** | **−6.5% (35%)** | **−1.8% (44%)** |
 | Hold: half the windows within this of the fund | 15.1% | 12.3% | 9.7% |
-| Hold: 10th / 90th percentile over the fund | −25.3% / +22.0% | −20.8% / +11.4% | −17.6% / +15.3% |
-| Hold: volatility, overlapping portfolio (the fund's) | 13.8% (18.9%) | 13.7% (16.4%) | 14.0% (21.5%) |
-| Hold: worst 12 months; largest fall (the fund's) | −21.6%; −15.5% (−36.5%) | −13.2%; −19.2% (−23.9%) | −35.6%; −36.6% (−47.2%) |
-| Sell 10: mean return / the fund's | +9.6% / +6.6% | +17.5% / +15.9% | +6.2% / +5.5% |
-| Sell over the fund (windows behind) | **+3.0% (52%)** | **+1.7% (55%)** | **+0.7% (61%)** |
-| Sell: 10th / 90th percentile over the fund | −19.5% / +21.8% | −17.1% / +26.6% | −28.1% / +41.0% |
-| Sell: volatility (the fund's) | 28.1% (18.9%) | 21.9% (16.4%) | 34.0% (21.5%) |
-| Sell: worst 12 months; largest fall | −33.5%; −44.9% | −22.6%; −27.8% | −50.9%; −57.5% |
+| Hold: 10th / 90th percentile over the fund | −26.4% / +22.0% | −20.2% / +11.4% | −17.6% / +15.3% |
+| Hold: volatility, overlapping portfolio (the fund's) | 13.6% (18.9%) | 13.6% (16.4%) | 14.0% (21.5%) |
+| Hold: worst 12 months; largest fall (the fund's) | −21.6%; −15.6% (−36.5%) | −13.2%; −19.1% (−23.9%) | −35.6%; −36.6% (−47.2%) |
+| Hold: each held year's largest fall, median (the fund's) | −7.5% (−10.4%) | −8.9% (−8.3%) | −9.4% (−15.0%) |
+| Hold: the worst held year's (the fund's, same months; start) | −22.9% (−27.7%; 2021-10) | −22.3% (−19.4%; 2019-10) | −35.2% (−18.4%; 2019-06) |
+| Sell 10: mean return / the fund's | +9.6% / +6.6% | +17.5% / +15.9% | +6.1% / +5.5% |
+| Sell over the fund (windows behind) | **+3.0% (52%)** | **+1.7% (55%)** | **+0.6% (61%)** |
+| Sell: 10th / 90th percentile over the fund | −19.5% / +21.8% | −17.1% / +26.6% | −27.0% / +41.0% |
+| Sell: volatility (the fund's) | 28.1% (18.9%) | 21.9% (16.4%) | 33.8% (21.5%) |
+| Sell: worst 12 months; largest fall | −33.5%; −44.9% | −22.6%; −28.0% | −50.9%; −58.1% |
+| Sell: each held year's largest fall, median (the fund's) | −17.6% (−10.4%) | −12.4% (−8.3%) | −25.2% (−15.0%) |
+| Sell: the worst held year's (the fund's, same months; start) | −36.1% (−21.6%; 2021-09) | −35.8% (−19.4%; 2019-11) | −50.6% (−21.6%; 2023-07) |
 
 **What it says.** As a list of 10, Hold is the stable one: its volatility was 0.7-0.8 times the fund's and its
 largest fall much smaller in CN (−16% against −37%) and HK (−37% against −47%). It trailed the fund in these mostly
-rising years, most in the US (−6.4 points a year: steady names in a decade led by high-volatility technology, as
+rising years, most in the US (−6.5 points a year: steady names in a decade led by high-volatility technology, as
 section 23's US quality family showed). It doesn't track the fund: half its 12-month windows were more than 10-17
 points away from it, since low-volatility stocks move less than the market both ways. Single names are another
 matter: on 2026-11-02 every US Hold (16-23%) and HK Hold (19-29%) and 8 of the 10 CN Holds had a higher 1-year
 volatility than their index, and a steady slide can have a low daily volatility (中国旺旺 fell from HK$5.32 to 2.88 in a
 year at 29%). Sell trailed the fund in most windows (52-61%), but on
-average in none of the three (CN +3.0, US +1.7, HK +0.7), with 1.3-1.6 times the fund's
+average in none of the three (CN +3.0, US +1.7, HK +0.6), with 1.3-1.6 times the fund's
 volatility, and in all three markets Sell's average was above Hold's. **Limits.** All of section 23's, and one that bears hardest on Sell: the frames hold today's listings
 only, so the companies that failed or were delisted, which come mostly from the bottom of the score (losses, falling
 prices, distress: Campbell, Hilscher and Szilagyi 2008), are missing; that flatters Sell most. The US score itself ran
@@ -1471,3 +1480,58 @@ against its published direction in this sample (section 23: the top fifth −4.1
 here as US Sell ahead of SPY. Nothing is changed for it (AGENTS.md rules 3 and 12); the 预期 lines give these numbers.
 
 Rerun: as section 23 (`frame`, then `run`; the Hold and Sell rows print after the 20, 10 and 5 names).
+
+## 25. Stage 7: what the report says to expect (2026-11-07; backtest/qvm.py)
+
+Four corrections to what the history tells the report, and one comparison; no list rule changed (docs/PLAN.md, stage 7).
+- **Dividend yield missing, not 0.** The month-end snapshots carry no dividends (backtest/panel.py set every stock's to
+  0), so each sector's yields were one value and its percentile depended only on the sector's size (section 23's
+  dividend spreads, CN −5.3% and HK +6.0%, sorted sectors by size: deleted). Now missing, skipped like any missing
+  component (historical dividends aren't recovered). It changed 5% of CN's month-lists, 9% of the US's and 2% of HK's,
+  by one name (two in one US and one HK month); every mean moved 0.1 points or less, a few tail figures up to 1.1 (CN
+  Hold's 10th percentile −25.3% → −26.4%, HK Sell's largest fall −57.5% → −58.1%; sections 23-24 have them).
+- **The family check within sectors**, as the score ranks: each family's top fifth minus its bottom fifth inside each
+  peer group (signals.peers; the small sectors' "全市场" group as one) and month, the groups weighted by their share of
+  the month's stocks (a group with no top or bottom fifth for a family drops out of that one: 0.5% of the US stocks),
+  then the mean over months. Before, the fifths were cut across the whole market. On the same frames the
+  two differ by at most 0.7 points (HK growth +6.6% → +5.9%; CN the score +1.6% → +2.0%); no family changed sign
+  except HK value (0.0% → −0.4%). Section 23 has the figures.
+- **Each held year's own largest fall.** The 预期 line's fall was the overlapping portfolio's (1/12 in each of the last
+  12 monthly lists) over the whole history, which no single buyer holds. Now each month's list held 12 months: its
+  largest fall from a peak at month-end marks, before costs, against the fund's over the same months. The 预期 lines
+  give the median year's and the worst year's, and say they are month-end (a fall inside a month is deeper).
+- **A neutral basket**: each month, the 20 names' sector places (lists.slots, as the buys get them), each sector's money
+  spread equally over every name in it that can be bought (lists.buyable; CN and US ~600 names a month, HK ~220), held
+  12 months with the same costs. The 20 names' lead over the fund = the basket's lead (equal amounts and the places) +
+  the 20 names' lead over the basket (the picks), over the same windows.
+
+| 12 months from each month end, after costs | CN (510300) | US (SPY) | HK (2800) |
+|---|---|---|---|
+| 20 names over the fund (windows ahead) | +2.2% (54%) | +1.5% (54%) | +6.6% (69%) |
+| neutral basket over the fund (windows ahead) | +3.2% (65%) | +3.0% (65%) | −0.1% (39%) |
+| **the picks: 20 names over the basket (windows ahead)** | **−1.0% (36%)** | **−1.5% (43%)** | **+6.8% (75%)** |
+| each held year's largest fall, month-end, median: 20 names (the fund's) | −12.3% (−10.4%) | −8.7% (−8.3%) | −11.0% (−15.0%) |
+| the worst held year's: 20 names (the fund's over the same months; start) | −29.9% (−27.7%; 2021-11) | −26.0% (−19.4%; 2019-05) | −32.9% (−22.6%; 2021-03) |
+| the same for the basket: median; worst (the fund's) | −9.8%; −25.5% (−27.7%) | −9.5%; −25.4% (−19.4%) | −14.8%; −34.6% (−39.6%) |
+| 10 best scores: median; worst held year's fall | −13.3%; −32.2% | −10.3%; −34.4% | −12.5%; −37.5% |
+| 5 best scores: the same | −15.0%; −35.0% | −10.3%; −36.5% | −15.0%; −46.1% |
+
+(Hold and Sell: section 24's table.)
+
+**What it says.** In HK the picks are the lead: the basket only matched the fund (−0.1 points a year), and the 20 names
+beat the basket by 6.8 points, in 75% of windows. In CN and the US it is the other way: the basket beat the funds by 3.2
+and 3.0 points a year, and the 20 names trailed the basket by 1.0 and 1.5 points (ahead in 36% and 43% of windows), so
+in this history all of their lead over the fund came from holding each sector's names in equal amounts, and picking the
+best scores cost a little. That fits the family check: the US score's top fifth trailed its bottom fifth (−4.1%), and
+in CN, where the score's top fifth did lead (+2.0%), the very top did worse than the rest of it (10 best −0.4%, 5 best
+−4.9% over the fund). A buyer's year: in a typical year the list fell 9-12% from a peak at some month end (CN 2 points more
+than the fund, the US about the same, HK less: −11% against −15%); in its worst year 26-33%, 2-10 points more than the
+fund in the same months (CN's and HK's from 2021, the US's over the 2020 crash).
+
+**Limits.** All of sections 23 and 24's. The basket holds hundreds of mid-sized names, where "today's listings only"
+flatters most (the mid caps that failed since aren't in it), so its lead over the funds, and so the picks' shortfall
+against it in CN and the US, are likely overstated; plausible, not tested. The live score has forward E/P, revisions,
+EBIT/EV and the screen, which the history can't run. It decides nothing (AGENTS.md rules 3 and 12: the method changes
+for a bug or new published evidence, not a backtest figure); the report's back pages give it per market.
+
+Rerun: as section 23 (`frame`, then `run`; the basket and the held-year falls print with the 20, 10 and 5 names).

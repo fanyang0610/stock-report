@@ -73,6 +73,7 @@ KINDS = {
     "other": ("其他负面事件", False, None, None),
 }
 STATUS = {"pending": "审核进行中", "unavailable": "审核暂不可用", "no_sources": "审核暂不可用（未取到公告和新闻）"}
+READ = {"filings": "公告", "headlines": "新闻", "passages": "定期报告"}  # a clean review's line names what it read
 
 SYSTEM = """你是上市公司审核员。下面是一只股票的卡片（程序根据公开数据计算）和它的来源，每条有编号：近 90 天的非例行公告标题、
 最新定期报告里程序截取的段落、近 30 天的新闻标题。按固定清单找事实，只依据给出的来源，不推断，不用你自己的知识。
@@ -257,7 +258,7 @@ def review_one(client: httpx.Client, market: str, row: dict, role: str, lines: l
 
 def run(lists: dict, sources: dict, today: date, budget: float | None) -> dict:
     """Review every market's names (lists: market -> rows; sources: market -> gather()'s dict) -> market -> code ->
-    state ({status: done | pending | unavailable | no_sources, findings, note, line}). With a budget, reviews still
+    state ({status: done | pending | unavailable | no_sources, findings, note, line, read}). With a budget, reviews still
     running when it ends are left to finish in their threads (they save their caches) and the rest are cancelled. The
     company lines written (by these reviews or earlier ones) go to the profiles table."""
     states, jobs, started, hits, needs = {}, [], time.monotonic(), 0, {}
@@ -274,11 +275,12 @@ def run(lists: dict, sources: dict, today: date, budget: float | None) -> dict:
                     st[code] = {"status": "no_sources"}
                     continue
                 lines, business = lines_of(src), needs[market].get(code)
+                read = [k for k in READ if src.get(k) is not None]  # passages: the latest report was cut (Sell: not)
                 entry = cached(market, code)
                 if valid(entry, role, ids_of(lines), today, row["name"]) and (not business or "line" in entry):
-                    st[code], hits = entry | {"status": "done"}, hits + 1
+                    st[code], hits = entry | {"status": "done", "read": read}, hits + 1
                     continue
-                st[code] = {"status": "pending"}
+                st[code] = {"status": "pending", "read": read}
                 rank = row["rank"] if pd.notna(row.get("rank")) else 99
                 jobs.append(((ROLES.index(role), rank, list(lists).index(market)), market, row, role, lines, business))
     key = dotenv_values(ROOT / ".env").get("DEEPSEEK_API_KEY")
@@ -297,7 +299,7 @@ def run(lists: dict, sources: dict, today: date, budget: float | None) -> dict:
     for f in done:
         market, code = futures[f]
         try:
-            states[market][code] = f.result() | {"status": "done"}
+            states[market][code] = f.result() | {"status": "done", "read": states[market][code]["read"]}
             ok += 1
         except Exception as e:
             states[market][code] = {"status": "unavailable"}
@@ -342,13 +344,16 @@ def cite(f: dict) -> str:
 
 
 def line(state: dict, found: list[dict]) -> str:
-    """The card's review line: hard red flags, else soft concerns, else the review's status."""
+    """The card's review line: hard red flags, else soft concerns, else the status, or what a clean review read."""
     hard, soft = [f for f in found if f["hard"]], [f for f in found if not f["hard"]]
     if hard:
         return "审核：" + "；".join(cite(f) for f in hard[:2])
     if soft:  # the first one: a card has room for one
         return "市场可能在担心：" + cite(soft[0]) + (f"等 {len(soft)} 条" if len(soft) > 1 else "")
-    return STATUS.get(state.get("status"), "审核未见重大风险") if state else ""  # not reviewed: no line
+    read = [READ[k] for k in READ if k in (state or {}).get("read", ())]  # the sources fetched (run)
+    if not state or state.get("status") in STATUS or not read:  # not reviewed: no line
+        return STATUS.get(state.get("status"), "审核未见重大风险") if state else ""
+    return "近期" + ("、".join(read[:-1]) + "和" + read[-1] if len(read) > 1 else read[0]) + "未见重大风险"
 
 
 def apply(rows: pd.DataFrame, market: str, states: dict | None, confirmed: dict | None = None) -> pd.DataFrame:

@@ -30,11 +30,13 @@ def test_report_dry_run(tmp_path, monkeypatch):
     scored = score(df, "cn", df[["deduct_ttm", "sue"]])
     top = scored.sort_values("score", ascending=False).index[0]
     verdicts.add(top, "veto", "2026-12-31", "测试否决", DAY)
+    fell = {"fall_median": -0.12, "fall_fund_median": -0.10, "fall_worst": -0.30, "fall_worst_fund": -0.28}
     run = {"first": "2019-01", "last": "2025-09", "windows": 81, "fund_drawdown": -0.365, "portfolios": {
-        n: {"excess": 0.025, "beat": 0.63, "worst": -0.18, "worst_fund": -0.20, "worst_excess": -0.28, "drawdown": -0.23}
+        n: {"excess": 0.025, "beat": 0.63, "worst": -0.18, "worst_fund": -0.20, "worst_excess": -0.28, "drawdown": -0.23} | fell
         for n in ("20", "10", "5")}, "ratings": {
-        "hold": {"excess": -0.004, "beat": 0.48, "half": 0.06, "vol": 0.15, "fund_vol": 0.2, "drawdown": -0.2},
-        "sell": {"excess": -0.04, "beat": 0.3, "mean": 0.02, "fund_mean": 0.06, "vol": 0.3, "fund_vol": 0.2, "drawdown": -0.5}}}
+        "hold": {"excess": -0.004, "beat": 0.48, "half": 0.06, "vol": 0.15, "fund_vol": 0.2, "drawdown": -0.2} | fell,
+        "sell": {"excess": -0.04, "beat": 0.3, "mean": 0.02, "fund_mean": 0.06, "vol": 0.3, "fund_vol": 0.2, "drawdown": -0.5}
+        | fell}, "neutral": {"excess": 0.03, "picks": -0.005, "picks_beat": 0.4}}
     (tmp_path / "expect.json").write_text(json.dumps({"cn": run, "us": run}), encoding="utf-8")
 
     out = lists.build(scored, "cn", DAY)
@@ -78,6 +80,10 @@ def test_report_dry_run(tmp_path, monkeypatch):
     us = summary.split("【美股】")[1].split("【港股】")[0]
     assert "预期：历史模拟（简化版）：买入平均每年比标普500基金多赚 2.5%" in us and f"{buys.iloc[0]['code']} " in us
     assert "从美股市值前 800 只里选" in html
+    assert "一般 12%（沪深300ETF 10%），最差 30%（沪深300ETF同期 28%）" in html  # each held year's own fall
+    assert "对照组合用同样的行业名额" in html and "20 只又比对照组合少赚 0.5%" in html  # the neutral basket, back pages
+    need = buys["lot_cost"].max() / 0.05  # one lot of every buy at equal amounts: the dearest lot over its 5%
+    assert f"买齐这 20 只约需 {need / 1e4:,.1f} 万元" in html
     assert not any(w in summary + html for w in ("建议配置", "指数基金", "标普500指数基金", "只买 20 只", "指数权重", "从标普500"))
     assert pdf.stat().st_size > 10_000 and report.newest() == ("2026-10-24", pdf, summary)
     assert sent["ticker"].tolist() == buys["code"].tolist() * 3  # what this text names, in its order

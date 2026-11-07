@@ -21,9 +21,9 @@
                color: rgba(212, 56, 13, 0.08); transform: rotate(-30deg); pointer-events: none; z-index: -1; }
   section.market, section.back { break-before: page; }
   /* page 1 */
-  .todo { margin: 2mm 0 2mm; font-size: 8.9pt; line-height: 1.45; }
+  .todo { margin: 2mm 0 2mm; font-size: 8.9pt; line-height: 1.4; }
   .todo p { margin: 0 0 0.6mm; }
-  .todo .mk { border: 1px solid #dfe2e6; border-left: 4px solid #2f54eb; border-radius: 2px; padding: 2mm 3mm; margin-bottom: 2.5mm;
+  .todo .mk { border: 1px solid #dfe2e6; border-left: 4px solid #2f54eb; border-radius: 2px; padding: 1.6mm 3mm; margin-bottom: 2mm;
               break-inside: avoid; }
   .todo .mk h4 { margin: 0 0 1mm; font-size: 10.5pt; }
   .todo .mk h4 .sub { font-weight: 400; font-size: 8.5pt; margin-left: 2mm; }
@@ -65,7 +65,7 @@
 </head>
 <body>
 {% macro grades(p) %}{% for k, g in p.grades.items() %}<span class="grade g{{ g }}">{{ k[0] }} {{ g or "–" }}</span>{% endfor %}{% endmacro %}
-{% macro rv(p) %}{% if p.review_shown %}<span class="rv-{{ p.review_kind or 'wait' }}">{{ '审核：未见重大风险' if p.review_kind == 'ok' else p.review_shown }}</span>{% endif %}{% endmacro %}
+{% macro rv(p) %}{% if p.review_shown %}<span class="rv-{{ p.review_kind or 'wait' }}">{{ '审核：' if p.review_kind == 'ok' }}{{ p.review_shown }}</span>{% endif %}{% endmacro %}
 {% macro who(p, m) %}<b>{{ p.name }}</b> <span class="muted">{{ p.ticker }}{% if p.name_en %} · {{ p.name_en }}{% endif %}{% if p.sector %} · {{ p.sector }}{% endif %}</span>{% endmacro %}
 {% if r.test %}<div class="watermark">测试数据</div>{% endif %}
 
@@ -103,6 +103,7 @@
 
   <h3>买入<span class="count">{{ m.buys | length }} 只，预计跑赢大盘：从{{ m.field }}里选，每只 {{ m.share or "等额" }}，持有 12 个月</span></h3>
   {% if m.changes %}<p class="small muted changes">与 {{ m.changes.since }} 的名单相比：{% if m.changes.new %}新进 {{ m.changes.new | length }} 只（标「新」）{% else %}没有新进{% endif %}{% if m.changes.gone %}；移出 {{ m.changes.gone | join("、") }}{% endif %}。</p>{% endif %}
+  {% if m.lots %}<p class="small muted">{{ m.lots }}</p>{% endif %}
   {% for p in m.buys %}
   <div class="card buy">
     <div class="top"><span class="rank">{{ p.rank }}</span><span class="who">{{ who(p, m) }}{% if m.changes and p in m.changes.new %}<span class="new">新</span>{% endif %}</span>
@@ -145,7 +146,7 @@
     <div class="top"><span class="rank">{{ p.rank }}</span><span class="who">{{ who(p, m) }}</span>
       <span class="right"><b>{{ p.price | num }}</b> <span class="muted small">{{ p.lot_text }}{% if p.recheck %} · 复查 {{ p.recheck }}{% endif %}</span></span></div>
     {% if p.business %}<div class="line biz small">{{ p.business }}</div>{% endif %}
-    <div class="line">{{ grades(p) }} <span class="lbl">为什么卖出：</span><span class="risk">{{ p.sell_why }}</span>{% if p.review_kind in ('ok', 'wait') %}　<span class="rv-wait small" style="white-space:nowrap">{{ '审核：未见重大风险' if p.review_kind == 'ok' else p.review_shown }}</span>{% endif %}</div>
+    <div class="line">{{ grades(p) }} <span class="lbl">为什么卖出：</span><span class="risk">{{ p.sell_why }}</span>{% if p.review_kind in ('ok', 'wait') %}　<span class="rv-wait small" style="white-space:nowrap">{{ '审核：' if p.review_kind == 'ok' }}{{ p.review_shown }}</span>{% endif %}</div>
     {% if p.review_shown and p.review_kind not in ('ok', 'wait') %}<div class="line small">{{ rv(p) }}</div>{% endif %}
     {% if p.note %}<div class="line small ai">AI 点评：{{ p.note }}</div>{% endif %}
   </div>

@@ -160,8 +160,11 @@ def test_a_soft_concern_only_annotates():
     assert buy["code"] == "00728" and buy["review"].startswith("市场可能在担心：下调指引或业绩下滑")
     assert "removed" not in set(out["list"]) and buy["note"] and not any(ch.isdigit() for ch in buy["note"])
     assert out[out["list"] == "hold"].iloc[0]["review"].startswith("市场可能在担心")  # kept, annotated
-    clean = review.apply(pd.DataFrame([row("601225", "buy", 1, 0.9)]), "cn", states("601225"))
-    assert clean.iloc[0]["review"] == "审核未见重大风险"
+    read = {c: s | {"read": ["filings", "headlines", "passages"]} for c, s in states("601225").items()}
+    clean = review.apply(pd.DataFrame([row("601225", "buy", 1, 0.9)]), "cn", read)
+    assert clean.iloc[0]["review"] == "近期公告、新闻和定期报告未见重大风险"  # says what it read
+    sell = {"601225": {"status": "done", "findings": [], "read": ["filings", "headlines"]}}  # no report cut for a Sell
+    assert review.apply(pd.DataFrame([row("601225", "sell", 1, 0.1)]), "cn", sell).iloc[0]["review"] == "近期公告和新闻未见重大风险"
     pending = review.apply(pd.DataFrame([row("601225", "buy", 1, 0.9)]), "cn", {"601225": {"status": "pending"}})
     assert pending.iloc[0]["review"] == "审核进行中"
 

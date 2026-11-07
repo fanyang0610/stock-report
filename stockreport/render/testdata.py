@@ -23,8 +23,8 @@ def _card(code: str, i: int, data_date: str, unit: str, grades: str, **more) -> 
             "lot_text": f"一手 100 股约 {10_000 + 100 * i:,} {unit}", "why": "测试数据：同行中市盈率低（PE 8.0）；同行中 ROE 高（18%）",
             "weak": "测试数据：近一年股价走弱（-20%）", "risk": "测试数据：负债率 72%", "recheck": "2099-01-01",
             "weakest": "动量 E", "weight": 0.05, "risk_label": "风险", "risk_text": "测试数据：负债率 72%",
-            "sell_why": "测试数据：近一年股价走弱（-20%）；负债率 72%", "review": "审核未见重大风险", "review_kind": "ok",
-            "review_shown": "审核未见重大风险", "note": "测试数据：虚构的点评，只用文字。"} | more
+            "sell_why": "测试数据：近一年股价走弱（-20%）；负债率 72%", "review": "近期公告、新闻和定期报告未见重大风险", "review_kind": "ok",
+            "review_shown": "近期公告、新闻和定期报告未见重大风险", "note": "测试数据：虚构的点评，只用文字。"} | more
 
 
 def test_report(today: date | None = None) -> dict:

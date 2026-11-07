@@ -41,7 +41,7 @@ GUIDE = [  # page 1: how to read it, in five lines
     "<b>三种评级</b>，像券商分析师给股票评级一样只看股票本身，不看任何人的持仓：<b>买入</b> = 预计跑赢大盘；<b>持有</b> = 评分居中，"
     "不偏涨也不偏跌，股价较稳；<b>卖出</b> = 预计跑输大盘（大盘涨时它也可能涨，只是涨得少）。评级看 12 个月，名单每天按最新数据更新。",
     "<b>买入 20 只</b>从整个市场按评分选，各行业的只数按它在市场里的分量分配，每只买相同金额、持有 12 个月；<b>持有 10 只</b>是大公司里"
-    "评分居中、过去一年每日涨跌最小的（10 只合起来历史上比基金波动小、跌得少，大盘涨得多时落后；单只仍可能大涨大跌）；<b>卖出 10 只</b>"
+    "评分居中、过去一年每日涨跌最小的（10 只合起来历史上比基金波动小，大盘涨得多时落后；单只仍可能大涨大跌）；<b>卖出 10 只</b>"
     "是大公司里评分最低的（每个行业最多 2 只）。",
     "<b>评级 A–E</b>：价值（价格相对利润和资产贵不贵）、质量（赚钱能力和稳定性）、成长（营收和利润在不在增长）、动量（股价和分析师预期在不在"
     "变好），都和同行业比：A 是同行最好的五分之一，E 是最差的五分之一。<b>风险</b>是亏损、负债率 70% 以上或半年跌超 30%；没有这些"
@@ -92,10 +92,11 @@ def expect(market: str) -> dict:
         return {"line": none, "short": none, "rated": "", "hold": none, "sell": none, "detail": [EVIDENCE[market]]}
     e, n20 = runs[market], runs[market]["portfolios"]["20"]
     more = lambda x: f"{'多' if x >= 0 else '少'}赚 {abs(x):.1%}"
+    fell = lambda r: (f"持有的一年里从高点的最大跌幅（按月末价格），一般 {-r['fall_median']:.0%}（{fund} {-r['fall_fund_median']:.0%}），"
+                      f"最差 {-r['fall_worst']:.0%}（{fund}同期 {-r['fall_worst_fund']:.0%}）")
     line = (f"按历史模拟（简化版方法：历史数据里没有分析师预测、EBIT/EV 和困境筛选），过去每月建仓、持有一年的 {e['windows']} 个 12 "
             f"个月里：平均比{fund}{more(n20['excess'])}，{n20['beat']:.0%} 跑赢；最差的一个 {n20['worst']:+.0%}（{fund}同期 "
-            f"{n20['worst_fund']:+.0%}）；期间最大跌幅 {-n20['drawdown']:.0%}（{fund} {-e['fund_drawdown']:.0%}）。"
-            "模拟偏乐观，不是保证。")
+            f"{n20['worst_fund']:+.0%}）；{fell(n20)}。模拟偏乐观，不是保证。")
     short = (f"历史模拟（简化版）：买入平均每年比{fund}{more(n20['excess'])}（{n20['beat']:.0%} 的时候跑赢，最差一年 "
              f"{n20['worst']:+.0%}，基金同期 {n20['worst_fund']:+.0%}）。")
     hold = sell = "历史模拟尚未运行。"
@@ -103,25 +104,42 @@ def expect(market: str) -> dict:
     if r := e.get("ratings"):
         h, x = r["hold"], r["sell"]
         hold = (f"历史模拟（简化版）里每月的持有 10 只拿 12 个月：平均比{fund}{more(h['excess'])}；股价波动是{fund}的 "
-                f"{h['vol'] / h['fund_vol']:.1f} 倍，期间最大跌幅 {-h['drawdown']:.0%}（{fund} {-e['fund_drawdown']:.0%}）。"
-                "涨跌通常都比大盘小，大盘涨得多时会落后。")
+                f"{h['vol'] / h['fund_vol']:.1f} 倍；{fell(h)}。10 只合起来每月的涨跌通常比大盘小，大盘涨得多时会落后。")
         sell = (f"历史模拟（简化版）里每月的卖出 10 只拿 12 个月：{1 - x['beat']:.0%} 的时候跑输{fund}，平均{more(x['excess'])}"
-                f"（它们自己平均 {x['mean']:+.1%}，{fund} {x['fund_mean']:+.1%}）；波动是{fund}的 {x['vol'] / x['fund_vol']:.1f} 倍，"
-                f"最大跌幅 {-x['drawdown']:.0%}。跑输不等于下跌。模拟里没有已退市的公司，而退市多发生在亏损、股价大跌的公司，"
+                f"（它们自己平均 {x['mean']:+.1%}，{fund} {x['fund_mean']:+.1%}）；波动是{fund}的 {x['vol'] / x['fund_vol']:.1f} 倍；"
+                f"{fell(x)}。跑输不等于下跌。模拟里没有已退市的公司，而退市多发生在亏损、股价大跌的公司，"
                 "即评分低的一端，所以卖出这一段的模拟最偏乐观。")
         rated = f"持有{more(h['excess'])}、波动小于基金；卖出 {1 - x['beat']:.0%} 的时候跑输、平均{more(x['excess'])}。"
     detail = [f"模拟回测：{e['first']} 至 {e['last']} 每月建仓的 {e['windows']} 个 12 个月，扣交易成本。只买 10 只 / 5 只：最差的 12 个月"
               "相对基金 " + " / ".join(f"{e['portfolios'][n]['worst_excess']:+.0%}" for n in ("10", "5")) +
-              f"（20 只 {n20['worst_excess']:+.0%}），名单越短结果越分散。",
+              f"（20 只 {n20['worst_excess']:+.0%}），名单越短结果越分散。每月建仓、同时持有 12 批的组合，整段历史里从高点的最大跌幅 "
+              f"{-n20['drawdown']:.0%}（{fund} {-e['fund_drawdown']:.0%}）。",
               ("历史只含今天仍上市的公司（A 股的财务数字还是后来修订过的版本），模拟结果偏乐观" if market == "cn" else
                "历史只含今天仍上市的公司，模拟结果偏乐观") + "；模拟的 12 个月里没有分析师预测，也没有 EBIT、有息负债和现金的历史，"
               "评分不含预期 E/P、预测调整和 EBIT/EV，也没有财务困境和应计利润筛选" +
               ("；行业份额用今天的自由流通比例近似。" if market != "us" else "。")]
+    if nb := e.get("neutral"):
+        detail.append(f"20 只比{fund}{more(n20['excess'])}，拆开看：对照组合用同样的行业名额，把每个行业里所有可买的股票等额持有，"
+                      f"平均比{fund}{more(nb['excess'])}，这是等额持有和行业名额的作用；20 只又比对照组合{more(nb['picks'])}"
+                      f"（{nb['picks_beat']:.0%} 的时候领先），这是选股的作用。")
     backwards = [f"{NAMES[f]}（前五分之一比后五分之一每 12 个月少 {-x:.1%}）"
                  for f, x in ((f, e.get("families", {}).get(f"f_{f}", 0)) for f in NAMES) if x <= -0.0005]
     if backwards:
         detail.append(f"这段历史里{'、'.join(backwards)}与已发表研究的方向相反；已发表研究的样本长得多，方法不变。")
     return {"line": line, "short": short, "rated": rated, "hold": hold, "sell": sell, "detail": detail + [EVIDENCE[market]]}
+
+
+def lot_money(buys: list[dict], unit: str) -> str:
+    """The money one board lot of every buy takes at equal amounts: the largest lot cost over its share of the money.
+    Arithmetic, not advice."""
+    known = [b for b in buys if b.get("lot_cost") and b.get("weight")]
+    if not known:
+        return ""
+    top = max(known, key=lambda b: b["lot_cost"] / b["weight"])
+    need, missing = top["lot_cost"] / top["weight"], len(buys) - len(known)
+    return (f"每只金额相等、每只至少一手，买齐这 {len(buys)} 只约需 {need / 1e4:,.{1 if need >= 1e5 else 2}f} 万{unit}（一手最贵的是 "
+            f"{top['short']}，约 {top['lot_cost']:,.0f} {unit}）" + (f"，另有 {missing} 只一手股数未知、未计入" if missing else "")
+            + "。这只是算术，不是建议投入的金额。")
 
 
 def business(market: str, code: str, table: pd.DataFrame) -> str:
@@ -178,7 +196,7 @@ def card(r: dict, market: str, table: pd.DataFrame) -> dict:
         "weakest": f"{NAMES[weakest]} {r[f'g_{weakest}']}" if weakest else "",
         "risk_label": label, "risk_text": risk_text, "sell_why": sell_why,
         "review_kind": ("hard" if review_text.startswith(("审核：", "数据存疑")) else "soft" if review_text.startswith("市场可能在担心")
-                        else "ok" if review_text == "审核未见重大风险" else "wait" if review_text else ""),
+                        else "ok" if review_text.endswith("未见重大风险") else "wait" if review_text else ""),
         "review_shown": "" if dup else review_text}
 
 
@@ -221,7 +239,8 @@ def section(market: str, rows: pd.DataFrame, day: str, today: date, failed: list
             "share": f"{cards['buy'][0]['weight']:.0%}" if cards["buy"] and cards["buy"][0].get("weight") else "",
             "stale": (f"今日未能更新，沿用 {day} 的名单" if day != today.isoformat() else
                       f"今日部分数据获取失败（{'、'.join(failed)}），沿用上次的缓存数据" if failed else ""),
-            "buys": cards["buy"], "holds": cards["hold"], "sells": cards["sell"], "vetoes": cards["veto"],
+            "buys": cards["buy"], "lots": lot_money(cards["buy"], unit), "holds": cards["hold"], "sells": cards["sell"],
+            "vetoes": cards["veto"],
             "removed": cards["removed"],
             "changes": changes(market, today.isoformat(), cards["buy"], log, table), "review": review_status(cards)}
 

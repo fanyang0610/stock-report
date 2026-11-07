@@ -259,6 +259,49 @@
     last good lists; nothing was sent: data/sent.csv is unchanged since 11-03). Fixed the same day
     (__main__.build_market): a market whose daily prices couldn't be updated isn't built, so its newest earlier lists
     stand, with their date (the report's 今日未能更新，沿用 … 的名单); tests/test_build.py.
+- Stage 7 (what the report says to expect): done 2026-11-08. No list rule changed; the history (BACKTEST.md sections
+  23-25) and the report's words did.
+  - The history's dividend yield is missing, not 0 (backtest/panel.py; qvm.prepare for the cached snapshots): a 0 for
+    every stock made each sector's yield percentile one value, so section 23's dividend spreads (CN −5.3%, HK +6.0%)
+    only sorted sectors by size; deleted. It changed 5% of CN's month-lists, 9% of the US's and 2% of HK's, by one name
+    (two in one US and one HK month); every mean moved 0.1 points or less (20 names over the fund CN +2.2% (54%), US
+    +1.5% (54%), HK +6.6% (69%)), a few tail figures up to 1.1 (CN Hold's 10th percentile −25.3% → −26.4%).
+  - The family check cuts its fifths within each peer group and month, the groups weighted by their share of the
+    month's stocks: at most 0.7 points from the market-wide fifths (HK growth +6.6% → +5.9%, CN the score +1.6% →
+    +2.0%); US quality −9.6%, the score −4.1%.
+  - Each held year's own largest fall at month-end marks against the fund's over the same months, in the Buy, Hold and
+    Sell 预期 lines: the 20 names' median year CN −12% (fund −10%), US −9% (−8%), HK −11% (−15%), the worst −30% (−28%),
+    −26% (−19%), −33% (−23%). The overlapping portfolio's fall (−36%, −23%, −40%) moved to the back pages.
+  - The neutral basket (the same places, every name of the sector that can be bought, equal amounts): over the fund CN
+    +3.2%, US +3.0%, HK −0.1%; the 20 names over it CN −1.0% (ahead in 36% of windows), US −1.5% (43%), HK +6.8% (75%).
+    In this history CN's and the US's lead came from the equal amounts and the places and picking cost a little; HK's
+    is the picks. The basket's hundreds of mid-sized names are where "today's listings only" flatters most. It decides
+    nothing (rules 3 and 12); the back pages say it per market.
+  - A clean review's line says what it read: 近期公告、新闻和定期报告未见重大风险 (46 cards on 11-07), or 近期公告和新闻…
+    where the latest report wasn't cut (27: the Sell names, and Buy or Hold names whose report waits for the day's
+    quota, such as Alphabet's).
+  - One line a market on the money one lot of every buy takes at equal amounts: CN 89.6 万元 (中际旭创), US 2.85 万美元
+    (ASML, US$1,425 a share), HK 86.0 万港元 (长飞光纤光缆) on the lists the report shows (the stage's brief had
+    HK$834k and US$12.6k).
+  - Page 1's spacing tightened: on 11-07 its guide spilled two lines onto a second page (a removal and 7 gone names in
+    two markets). Re-rendered after `review` (147 names in 17 s, 0 failed): 19 pages, the summary 3,454 bytes; nothing
+    sent. 113 tests; app Python 5,542 lines (5,518).
+  - The fresh-context stage review confirmed the basket's places and field the buys' own in every month (weights sum to
+    1), each held year's fall on the list's own month-end path before costs with the returns unchanged, the split exact
+    (the 20 names over the fund = the basket's lead + the picks', the same windows), the review line true to the sources
+    on all 73 clean cards, the lot figures, and no rule chosen on a result or for a name. Its findings, fixed: page 1's
+    guide still said the Hold 10 "跌得少", which the held-year falls don't bear out in the US and HK (gone; "Lists");
+    "every figure 0.1 points, one name" (a few tail figures moved up to 1.1, two names in two months), BACKTEST's HK
+    mean (+12.1%), the done date; a review state without its sources claimed all three (now 审核未见重大风险);
+    review.py at 404 lines (400); the final PDF's pages read again. Answered, unchanged: 定期报告 is named where code cut
+    no passage (29 of 46: the report was searched for the hard-flag topics and none was found) and where the US "report"
+    was a 40-F cover document (RY, TRP: passages.py's limit, a follow-up); the family check's pooled small sectors and
+    the groups without a fifth (0.5% of US stocks) are written in qvm.families and BACKTEST.
+  - Found on the way, not this stage's: 科达制造 left CN Buy on a hard 持续经营疑虑或债务违约 flag quoting
+    "关于法院受理子公司破产清算的公告", a subsidiary's liquidation (its 9-month profit +66%): going_concern has no
+    subsidiary test, as management has (review.KINDS). Recommended: a going_concern quote naming a subsidiary
+    (子公司/附属/subsidiary) is a soft concern, not a hard flag (still on the card, no removal); a review-rule change for
+    its own session.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -567,7 +610,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
     and HK Hold and 8 of the 10 CN Holds had a higher 1-year volatility than their index), or that it holds its price
     over a year: daily volatility misses a steady slide (中国旺旺 −46% in a year at 29%), which the card's 风险 line names
     when the fall is 30%+ in 6 months. So the report words Hold as 评分居中、不偏涨也不偏跌、股价较稳, not "in line with
-    the market", and says the 10 together moved less and fell less than the fund but lagged strong markets.
+    the market", and says the 10 together moved less than the fund but lagged strong markets (stage 7: "fell less"
+  went, as each held year's fall doesn't bear it out in the US and HK: US median −8.9% against SPY's −8.3%).
   - Why the 400 largest and 2 a sector, as Sell: names an investor is likely to know or hold, and the steadiest prices
     cluster in a few sectors (banks, utilities); why not the screen: a name likely to fail, or with the largest
     accruals, isn't expected to be stable.
@@ -598,13 +642,16 @@ momentum drive the score (fixed in stage 1 after the stage review).
   Sell. A ratio is worded by its side of the peers' median (同行中市盈率低 / 高), cash backing, momentum, the SUE,
   the revisions and the growth figures by their sign (the revisions as the estimate's 3-month change).
 - From stage 2: the review's line (审核：… for a hard red flag, 市场可能在担心 … with its quoted source, or
-  审核未见重大风险 / 审核进行中 / 审核暂不可用) and the AI note (one sentence, words only). Stage 4: a soft concern shows the
+  审核进行中 / 审核暂不可用; a clean review says what it read, stage 7: 近期公告、新闻和定期报告未见重大风险, or 近期公告和新闻…
+  for a name whose latest report wasn't cut: a Sell name, or one still waiting for its report to be read) and the AI note (one sentence, words only). Stage 4: a soft concern shows the
   first one found, with 等 N 条 when there are more (a card has room for one; the rule and the findings are unchanged).
 - Each market section opens with its 预期 line: from the history run, the 20-name portfolio's average 12-month return
-  over the index fund, the share of 12-month windows it beat the fund, its worst 12 months and its largest fall against
-  the fund's, marked as simulated; the details and the published evidence are on the back pages (stage 4). Stage 5:
-  under the Hold heading the Hold 10's average over the fund, their volatility against the fund's and their largest
-  fall; under the Sell heading the share of windows the Sell 10 trailed the fund, their average over it, their own
+  over the index fund, the share of 12-month windows it beat the fund, its worst 12 months and each held year's own
+  largest fall from a peak at month-end marks (the median year's and the worst year's, against the fund's over the same
+  months; stage 7: before, the overlapping portfolio's over the whole history, which no single buyer holds; now on the
+  back pages), marked as simulated; the details and the published evidence are on the back pages (stage 4). Stage 5:
+  under the Hold heading the Hold 10's average over the fund, their volatility against the fund's and their held-year
+  falls; under the Sell heading the share of windows the Sell 10 trailed the fund, their average over it, their own
   average return and that the history leaves out delisted companies, which flatters Sell most (BACKTEST.md section
   24).
 
@@ -615,14 +662,17 @@ momentum drive the score (fixed in stage 1 after the stage review).
   today (data/sent.csv; counts, and the names gone when 8 or fewer), the 10 Hold and the 10 Sell names, the 预期 line in
   one sentence for all three; then a five-line guide (the three ratings in plain words, relative to the market and
   without anyone's portfolio; the three lists; the grades in words; the review; no guarantee).
-- Market pages: the 预期 line in plain words, then each buy's card (rank, name, ticker, sector, price, one-lot cost,
-  re-check date; the business line; the grades; 为什么买; 风险; the review's finding, "审核：未见重大风险" on the risk line;
-  the AI note), 新 on a name new since the last report; 审核剔除 and your vetoes; then Hold and Sell, each opening with
+- Market pages: the 预期 line in plain words; the money one board lot of every buy takes at equal amounts (stage 7:
+  the dearest lot over its share of the money, 5%: on 2026-11-07 CN 89.6 万元 for 中际旭创's, US 2.85 万美元 for
+  ASML's, HK 86.0 万港元 for 长飞光纤光缆's; arithmetic, worded as not advice); then each buy's card (rank, name, ticker,
+  sector, price, one-lot cost, re-check date; the business line; the grades; 为什么买; 风险; the review's finding,
+  "审核：近期公告、新闻和定期报告未见重大风险" on the risk line; the AI note), 新 on a name new since the last report; 审核剔除 and your vetoes; then Hold and Sell, each opening with
   its 预期 line, as cards with the same fields (为什么持有, 为什么卖出; stage 5).
   US cards are named by Eastmoney's Chinese short name (美光科技), with the English name beside it.
 - Back pages: how the score and the lists are built, the three ratings, the review rules, where the words come from,
-  the 预期 details (the 10 and 5 name ranges, the history's limits, families running against the research) and the
-  published evidence.
+  the 预期 details (the 10 and 5 name ranges, the overlapping portfolio's largest fall, the neutral basket's split of
+  the lead into the picks and the equal amounts with the places (stage 7), the history's limits, families running
+  against the research) and the published evidence.
 - The business line (verified 2026-11-01; all 200 names of the day found, CN 72, HK 62, US 66):
   - CN: Eastmoney's F10 company table RPT_F10_BASIC_ORGINFO, MAIN_BUSINESS (主营业务, often a short list of products:
     卫星化学 "(聚)丙烯、丙烯酸及酯、乙二醇…的生产和销售"); HK: RPT_HKF10_INFO_ORGPROFILE, MAIN_BUSINESS ("主要从事保险业务");
@@ -674,6 +724,12 @@ momentum drive the score (fixed in stage 1 after the stage review).
 - Stage 5: each month's Hold and Sell 10 by the live rules (lists.holds, without that month's buys; lists.sells), held
   12 months the same way, with their volatility and largest fall against the fund's (BACKTEST.md section 24). Without
   the screen's inputs in the history, Hold isn't screened there.
+- Stage 7: the snapshots carry no dividends, so the history's dividend yield is missing, not 0 (a 0 for every stock
+  made its percentile one value per sector); the family check cuts its fifths within each peer group and month,
+  weighted by the groups' share of the month's stocks; each month's list's own largest fall over its 12 months
+  (month-end marks) against the fund's over the same months; a neutral basket (the same sector places, every name in
+  the sector that can be bought, equal amounts within it) to split the 20 names' lead into the picks and the equal
+  amounts with the places (BACKTEST.md section 25). It decides nothing.
 - The CN frames are point-in-time by report date but hold only companies still listed (Eastmoney drops delisted ones),
   with restated 扣非 figures; US and HK hold today's listings. So every market's numbers are flattered, and the report
   says so (corrected in stage 1: this line said CN had delisted names).
@@ -790,7 +846,7 @@ build makes no DeepSeek calls.
   logit, the list's places, picks, screen and equal amounts, the Hold and Sell lists) and the parsers, on small saved samples:
   catches calculation and parsing bugs.
 - **The data cross-checks** (built): a stock whose figures disagree with the second source is dropped (rule 5).
-- **The history run's family check:** a family running strongly against its published direction over the whole sample
+- **The history run's family check** (fifths within sectors, stage 7): a family running strongly against its published direction over the whole sample
   in a market sends me looking for a data or definition bug. If none is found, the family stays (the published evidence
   is far longer than ours), and the report says so.
 - **The history run's portfolio numbers:** they fill the report's 预期 line. They don't decide whether the report ships.
@@ -918,7 +974,7 @@ build makes no DeepSeek calls.
      each changed buy is explained; a full `run`; the history run again (BACKTEST.md sections 23-24) and its 预期
      numbers; the fresh-context stage review has run and its findings are fixed or answered; this plan's status is
      updated and the work is committed on main.
-7. **What the report says to expect** (planned, not started): the history's dividend yield as missing, not 0 (the
+7. **What the report says to expect** (done 2026-11-08; Status): the history's dividend yield as missing, not 0 (the
    snapshots carry none, so section 23's dividend spreads only sorted sectors by their size); the family check within
    sectors; each held year's own largest fall against the fund's over the same months (the 预期 line's fall is now the
    12 overlapping cohorts'); a neutral basket (the same sector places, every eligible name, equal amounts) to show how

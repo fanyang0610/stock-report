@@ -3,7 +3,10 @@ list (stockreport.score, stockreport.lists) on every month-end snapshot (backtes
 and its 10 and 5 highest scores held 12 months after a round trip of costs against the index fund with dividends (SPY,
 2800.HK, 510300.SS), and each family's top fifth against its bottom fifth. It fills the report's 预期 line
 (data/history/expect.json) and catches bugs; it decides nothing else. Stage 5: each month's Hold and Sell 10 too
-(lists.holds, lists.sells: the live rules), held the same way, with how far each stays from the fund.
+(lists.holds, lists.sells: the live rules), held the same way, with how far each stays from the fund. Stage 7: each
+held year's own largest fall, and a neutral basket (the 20 names' sector places, every name that can be bought in the
+sector, equal amounts within it) to split the 20 names' lead over the fund into the picks and the places with equal
+amounts.
 - Portfolios: the app's buy rule each month (lists.positions: each sector's places by its share of the free-float
   value, its best scores, equal amounts, the screen) on the whole snapshot (the 800 largest; HK all that pass the
   floors). Free float then: CN market value × today's CSI 300 float factor (the median outside it; float_factors), HK
@@ -13,6 +16,10 @@ and its 10 and 5 highest scores held 12 months after a round trip of costs again
   and the screen doesn't run; the long-run components come from the annual reports public by each date.
 - The largest fall: the Jegadeesh-Titman portfolio, 1/12 of the money in each of the last 12 cohorts, each month's
   return the cohorts' average (cost spread as 1/12 of a round trip a month), against the fund over the same months.
+  And each held year's own: a cohort's largest fall from a peak within its 12 months at month-end marks, before costs,
+  against the fund's over the same months (what one buyer of that month's list saw; the 预期 line's figure).
+- The snapshots carry no dividends, so the history's dividend yield is missing (skipped like any missing component),
+  not 0: a 0 for every stock made its percentile one value per sector, which sorted sectors by their size.
 - Snapshots built before stage 1 carry inputs winsorized at 2/98% (ROE, debt, 12-1 momentum, growth: ties at the
   extremes) and dropped stocks without growth figures; US gross profit has no Yahoo fill here; all three hold today's
   listings (Eastmoney drops delisted A-shares), and CN 扣非 figures are Eastmoney's latest (restated) ones under the
@@ -39,7 +46,7 @@ from stockreport.fetch import eastmoney, sec, swclass, yahoo
 from stockreport.score import score
 
 SIZES, HOLD = (20, 10, 5), 12
-KEEP = ["name", "sector", "financial", "country", "mcap_rank", "mcap", "float_value", "price", "score", "distress", "vol_1y",
+KEEP = ["name", "sector", "peers", "financial", "country", "mcap_rank", "mcap", "float_value", "price", "score", "distress", "vol_1y",
         "f_value", "f_quality", "f_growth", "f_momentum"]
 EXPECT = history.HISTORY / "expect.json"
 
@@ -79,6 +86,7 @@ def prepare(s: pd.DataFrame, market: str, m: str, ytd: pd.DataFrame | None) -> p
         s["financial"] = universe.us_financial(s["industry_raw"], sec.load_ciks().reindex(s.index))
         pref = history.us_preferred(s, day)[["pref_share", "pref_div_share"]]
         s = s.join(pref).fillna({"pref_share": 0.0, "pref_div_share": 0.0})
+    s["div_yield"] = np.nan  # no dividend history: missing, not 0 (snapshots cached before stage 7 hold 0)
     return s
 
 
@@ -176,21 +184,52 @@ def largest(picks: dict[str, pd.Series], n: int) -> dict[str, pd.Series]:
     return {d: w.iloc[:n] for d, w in picks.items()}
 
 
+def neutral(f: pd.DataFrame, market: str) -> dict[str, pd.Series]:
+    """Each month's neutral basket: the 20 names' sector places (lists.slots, as lists.positions gives them), each
+    sector's money spread equally over every name in it that can be bought (lists.buyable): the list without the
+    picking."""
+    out, n = {}, CONFIG["lists"]["buys"]
+    for d, g in f.groupby("date"):
+        g = g.set_index("code")
+        field = g[lists.buyable(g, market)]
+        count = field["sector"].value_counts()
+        k = lists.slots(g.groupby("sector")["float_value"].sum(), n, count)
+        w = field["sector"].map(k / n / count)
+        out[d] = w[w > 0]
+    return out
+
+
 def drawdown(monthly: pd.Series) -> float:
     curve = (1 + monthly).cumprod()
     return float((curve / curve.cummax() - 1).min())
 
 
+def fall(path: np.ndarray) -> float:
+    """The largest fall from a peak of a growth path from 1 (month-end marks)."""
+    curve = np.r_[1.0, path]
+    return float((curve / np.maximum.accumulate(curve) - 1).min())
+
+
+def falls(w: pd.DataFrame) -> dict:
+    """Each held year's own largest fall: the median year's and the fund's median, the worst year's and the fund's over
+    the same months."""
+    worst = w["fall"].idxmin()
+    return {"fall_median": w["fall"].median(), "fall_fund_median": w["fund_fall"].median(),
+            "fall_worst": w.at[worst, "fall"], "fall_worst_fund": w.at[worst, "fund_fall"], "fall_worst_start": worst}
+
+
 def evaluate(paths: Paths, picks: dict[str, pd.Series], cost: float) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
-    """Per cohort with 12 months: its return and the fund's; the overlapping portfolio's monthly returns and the fund's."""
+    """Per cohort with 12 months: its return and the fund's, its own largest fall and the fund's over the same months;
+    the overlapping portfolio's monthly returns and the fund's."""
     windows, cohort_ret, fund_ret = [], {}, {}
     for d, weights in picks.items():
         keys, port, fund = paths.growth(d, weights)
         if not keys:
             continue
-        port = port * (1 - cost)
         if len(keys) == HOLD and np.isfinite(fund[-1]):
-            windows.append({"date": d, "ret": port[-1] - 1, "fund": fund[-1] - 1})
+            windows.append({"date": d, "ret": port[-1] * (1 - cost) - 1, "fund": fund[-1] - 1, "fall": fall(port),
+                            "fund_fall": fall(fund)})
+        port = port * (1 - cost)
         prev_p, prev_f = np.r_[1 - cost, port[:-1]], np.r_[1.0, fund[:-1]]
         cohort_ret[d] = pd.Series(port / prev_p - 1, keys)
         fund_ret[d] = pd.Series(fund / prev_f - 1, keys)
@@ -203,18 +242,31 @@ def evaluate(paths: Paths, picks: dict[str, pd.Series], cost: float) -> tuple[pd
 
 
 def families(f: pd.DataFrame) -> pd.DataFrame:
-    """Each family's (and the score's) top fifth minus bottom fifth on the mean 12-month return, per sub-period."""
+    """Each family's (and the score's) top fifth minus bottom fifth on the mean 12-month return, within each peer group
+    (signals.peers: the sector, financials apart; the small sectors' "全市场" group as one) and date, as the score
+    ranks; the groups averaged with fixed weights, each its share of the date's stocks (a group with no top or bottom
+    fifth for a family, rare, drops out of that family's mean), so no sector's size or level of return enters the
+    spread; then per sub-period."""
     f = f[f["ret_12m"].notna()]
     per = np.select([f["date"].between(*p) for p in PERIODS.values()], list(PERIODS), "")
-    rows = {}
+    by, rows = [f["date"], f["peers"]], {}
+    size = f.groupby(by).size()
     for col in ("f_value", "f_quality", "f_growth", "f_momentum", "score"):
-        pct = f.groupby("date")[col].rank(pct=True)
-        spread = (f[pct > 0.8].groupby("date")["ret_12m"].mean() - f[pct <= 0.2].groupby("date")["ret_12m"].mean())
+        pct = f.groupby(by)[col].rank(pct=True)
+        top, bottom = (f[m].groupby([f["date"][m], f["peers"][m]])["ret_12m"].mean() for m in (pct > 0.8, pct <= 0.2))
+        gap = (top - bottom).dropna()
+        weight = size.reindex(gap.index)
+        spread = (gap * weight).groupby(level=0).sum() / weight.groupby(level=0).sum()
         p = pd.Series(per, f.index).groupby(f["date"]).first().reindex(spread.index)
         rows[col] = {"all": spread.mean()} | {k: spread[p == k].mean() for k in PERIODS}
     t = pd.DataFrame(rows).T
     t["sub-periods positive"] = (t[list(PERIODS)] > 0).sum(axis=1)
     return t
+
+
+def said(r: dict) -> str:
+    return (f"held year's own largest fall: median {r['fall_median']:.1%} (fund {r['fall_fund_median']:.1%}), worst "
+            f"{r['fall_worst']:.1%} from {r['fall_worst_start']} (fund {r['fall_worst_fund']:.1%} over the same months)")
 
 
 def run_market(market: str) -> None:
@@ -232,7 +284,7 @@ def run_market(market: str) -> None:
         worst = w["ret"].idxmin()
         r = {"excess": ex.mean(), "beat": (ex > 0).mean(), "worst": w.at[worst, "ret"], "worst_fund": w.at[worst, "fund"],
              "worst_excess": ex.min(), "best_excess": ex.max(), "p10": ex.quantile(0.1), "p90": ex.quantile(0.9),
-             "drawdown": drawdown(monthly), "mean": w["ret"].mean(), "fund_mean": w["fund"].mean()}
+             "drawdown": drawdown(monthly), "mean": w["ret"].mean(), "fund_mean": w["fund"].mean()} | falls(w)
         per = pd.Series(np.select([pd.Series(w.index).between(*p) for p in PERIODS.values()], list(PERIODS), ""), w.index)
         r["periods"] = {k: ex[per == k].mean() for k in PERIODS if (per == k).any()}
         result[str(n)] = r
@@ -240,21 +292,29 @@ def run_market(market: str) -> None:
               f"{r['fund_mean']:+.1%}: excess {r['excess']:+.1%}, beat {r['beat']:.0%}, 10th/90th pct {r['p10']:+.1%}/"
               f"{r['p90']:+.1%}, worst excess {r['worst_excess']:+.1%}; worst 12 months {r['worst']:+.1%} (fund {r['worst_fund']:+.1%}, "
               f"{worst}); largest fall {r['drawdown']:.1%} (fund {drawdown(fund):.1%}, {monthly.index[0]}..{monthly.index[-1]}); "
-              "by sub-period " + ", ".join(f"{k} {v:+.1%}" for k, v in r["periods"].items()))
+              "by sub-period " + ", ".join(f"{k} {v:+.1%}" for k, v in r["periods"].items()) + "; " + said(r))
         if n == 20:
-            first, last_month, fund_dd, n_windows = w.index[0][:7], w.index[-1][:7], drawdown(fund), len(w)
+            first, last_month, fund_dd, n_windows, w20 = w.index[0][:7], w.index[-1][:7], drawdown(fund), len(w), w
+    w, monthly, fund = evaluate(paths, neutral(f, market), cost)
+    ex, picks = w["ret"] - w["fund"], (w20["ret"] - w["ret"]).dropna()
+    basket = {"excess": ex.mean(), "beat": (ex > 0).mean(), "mean": w["ret"].mean(), "picks": picks.mean(),
+              "picks_beat": (picks > 0).mean(), "drawdown": drawdown(monthly)} | falls(w)
+    print(f"-- neutral basket (the 20 names' places, every name that can be bought, equal amounts in a sector): "
+          f"12-month return {basket['mean']:+.1%}, over the fund {basket['excess']:+.1%} (ahead {basket['beat']:.0%}); "
+          f"the 20 names over it {basket['picks']:+.1%} (ahead {basket['picks_beat']:.0%}); largest fall "
+          f"{basket['drawdown']:.1%}; {said(basket)}")
     result_ratings = {}
     for kind, picks in ratings(f, market).items():
         w, monthly, fund = evaluate(paths, picks, cost)
         ex = w["ret"] - w["fund"]
         r = {"excess": ex.mean(), "beat": (ex > 0).mean(), "half": ex.abs().median(), "p10": ex.quantile(0.1),
              "p90": ex.quantile(0.9), "worst": w["ret"].min(), "mean": w["ret"].mean(), "fund_mean": w["fund"].mean(),
-             "vol": monthly.std() * np.sqrt(12), "fund_vol": fund.std() * np.sqrt(12), "drawdown": drawdown(monthly)}
+             "vol": monthly.std() * np.sqrt(12), "fund_vol": fund.std() * np.sqrt(12), "drawdown": drawdown(monthly)} | falls(w)
         result_ratings[kind] = r
         print(f"-- {kind} 10: {len(w)} windows; 12-month return {r['mean']:+.1%} vs fund {r['fund_mean']:+.1%}: excess "
               f"{r['excess']:+.1%}, ahead {r['beat']:.0%}, half within {r['half']:.1%} of the fund, 10th/90th pct "
               f"{r['p10']:+.1%}/{r['p90']:+.1%}; worst 12 months {r['worst']:+.1%}; volatility {r['vol']:.1%} (fund "
-              f"{r['fund_vol']:.1%}); largest fall {r['drawdown']:.1%} (fund {drawdown(fund):.1%})")
+              f"{r['fund_vol']:.1%}); largest fall {r['drawdown']:.1%} (fund {drawdown(fund):.1%}); {said(r)}")
     last = lists20[dates[-1]]
     names = f[f["date"] == dates[-1]].set_index("code")["name"]
     print(f"-- {dates[-1]} portfolio: " + ", ".join(f"{c} {names[c]} {x:.1%}" for c, x in last.items()))
@@ -264,7 +324,7 @@ def run_market(market: str) -> None:
           f"weight in them {np.mean([lists20[d][lists20[d].index.isin(top[d])].sum() for d in dates]):.0%}")
     runs = json.loads(EXPECT.read_text(encoding="utf-8")) if EXPECT.exists() else {}
     runs[market] = {"first": first, "last": last_month, "windows": n_windows, "fund_drawdown": fund_dd, "portfolios": result,
-                    "ratings": result_ratings, "families": {k: v["all"] for k, v in t.T.to_dict().items()}}
+                    "ratings": result_ratings, "neutral": basket, "families": {k: v["all"] for k, v in t.T.to_dict().items()}}
     EXPECT.write_text(json.dumps(runs, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
 
 

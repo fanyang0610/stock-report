@@ -206,7 +206,7 @@ def cn_snapshot(day: str, px: CNPrices, res: pd.DataFrame, bal: pd.DataFrame, va
                                        "gross_margin", "rev_yoy", "np_yoy", "eps_deduct_ttm"]))
     b = bal[bal["avail"] < day].sort_values("period").groupby("code")["debt_ratio"].last()
     df["debt_ratio"] = b.reindex(df.index) / 100
-    df["dps_ttm"] = 0.0  # dividends only move v1's reference RI value; returns include them
+    df["dps_ttm"] = np.nan  # no dividend history here: the yield is missing, not 0 (returns include dividends)
     cons = ["analysts", "eps_e1", "eps_e2", "eps_e3"]
     df = df.join(consensus[cons] if consensus is not None else pd.DataFrame(index=df.index, columns=cons, dtype=float))
     df["analysts"] = df["analysts"].fillna(0)
@@ -323,7 +323,7 @@ def us_snapshot(month: str, mon: Monthly, today_snap: pd.DataFrame, books: pd.Da
     df = df.join(mon.metrics(month, df.index))
     df = df.sort_values("mcap", ascending=False).head(CONFIG["universe"]["top_n"]).copy()
     df["mcap_rank"] = np.arange(1, len(df) + 1)
-    df["dps_ttm"], df["analysts"] = 0.0, 0.0
+    df["dps_ttm"], df["analysts"] = np.nan, 0.0  # no dividend history: missing
     df[["eps_e1", "eps_e2", "eps_e3"]] = np.nan
     df = universe.ratios(df)
     df["industry"] = df["industry_raw"]
@@ -358,7 +358,7 @@ def hk_snapshot(month: str, mon: Monthly, today_snap: pd.DataFrame, res: pd.Data
     df["gross_margin"], df["debt_ratio"] = df["gross_margin"] / 100, df["debt_ratio"] / 100
     df["cash_conv"] = (df["ocf"] / df["np"]).where(df["np"] > 0)
     df["rev_growth"], df["np_growth"] = df["rev_yoy"] / 100, df["np_yoy"] / 100
-    df["dps_ttm"], df["analysts"] = 0.0, 0.0
+    df["dps_ttm"], df["analysts"] = np.nan, 0.0  # no dividend history: missing
     df[["eps_e0", "eps_e1", "eps_e2", "eps_e3"]] = np.nan
     df = universe.ratios(df.assign(notice_date=None))
     df["price_date"] = month
