@@ -256,7 +256,9 @@
   - Found on the way, not this stage's: the 06:30 build met Yahoo HTTP 403s, so its US closes stayed a day old while
     Nasdaq's listing price was fresh, and "listing price vs Yahoo closes differ >1%" dropped 469 of 800 names; the US
     lists of that morning's report came from the other 329 (rule 4 wants a market that can't be built to show its
-    last good lists; nothing was sent: data/sent.csv is unchanged since 11-03). A follow-up.
+    last good lists; nothing was sent: data/sent.csv is unchanged since 11-03). Fixed the same day
+    (__main__.build_market): a market whose daily prices couldn't be updated isn't built, so its newest earlier lists
+    stand, with their date (the report's 今日未能更新，沿用 … 的名单); tests/test_build.py.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a

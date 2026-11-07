@@ -51,9 +51,14 @@ def scored(market: str, today: date) -> tuple[pd.DataFrame, dict]:
 
 
 def build_market(market: str, today: date) -> None:
-    """Fetch (failed steps keep their cache), score and list one market -> its lists CSV and snapshot."""
+    """Fetch (failed steps keep their cache), score and list one market -> its lists CSV and snapshot. A market whose
+    daily prices couldn't be updated isn't built: its newest earlier lists stand, with their date (AGENTS.md rule 4).
+    Its day-old closes against the fresh quote would drop every stock that moved over 1% (2026-11-07 06:30, Yahoo HTTP
+    403s: 469 of the US 800), and the lists would come from the rest."""
     failed = fetch_market(market, today)
     report.save_failed(today, market, failed)
+    if "prices" in failed:
+        raise RuntimeError(f"{market.upper()} daily prices not updated; the report keeps the newest earlier lists")
     df, info = scored(market, today)
     out_lists = lists.build(df, market, today)
     try:  # the results review's sources and passages (no DeepSeek: the review runs when you ask for a report)
