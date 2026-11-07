@@ -297,11 +297,12 @@
     no passage (29 of 46: the report was searched for the hard-flag topics and none was found) and where the US "report"
     was a 40-F cover document (RY, TRP: passages.py's limit, a follow-up); the family check's pooled small sectors and
     the groups without a fifth (0.5% of US stocks) are written in qvm.families and BACKTEST.
-  - Found on the way, not this stage's: 科达制造 left CN Buy on a hard 持续经营疑虑或债务违约 flag quoting
-    "关于法院受理子公司破产清算的公告", a subsidiary's liquidation (its 9-month profit +66%): going_concern has no
-    subsidiary test, as management has (review.KINDS). Recommended: a going_concern quote naming a subsidiary
-    (子公司/附属/subsidiary) is a soft concern, not a hard flag (still on the card, no removal); a review-rule change for
-    its own session.
+  - Found on the way and fixed after the stage, at your word ("fix here"): 科达制造 left CN Buy on a hard
+    持续经营疑虑或债务违约 flag quoting "关于法院受理子公司破产清算的公告", a subsidiary's liquidation (its 9-month profit
+    +66%); going_concern had no subsidiary test, as management has. Now such a quote is a soft concern ("Results
+    review"; review.SUBSIDIARY, tests/test_review.py). Of the cached reviews only 科达制造's changed: reviewed again, it
+    is back in CN Buy (浙江鼎力 back on the bench), its card showing the liquidation as 市场可能在担心; the report
+    rebuilt (18 pages, the summary 3,366 bytes); nothing sent. review.py 400 lines.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -793,6 +794,11 @@ build makes no DeepSeek calls.
     - a hard kind has to name its subject in the quote: an investigation names 立案, 调查 or the like; an audit flag a
       non-standard opinion or the auditor resigning (not any director); a takeover 要约, 私有化, a tender offer... Else it
       is a soft concern;
+    - a going-concern quote about a subsidiary alone (子公司, 附属公司, subsidiary; not 公司及子公司 or "the Company and
+      its subsidiaries") is a soft concern (其他负面事件), on the card but not removing the name (2026-11-08, stage 7's
+      review: 科达制造 left CN Buy on "关于法院受理子公司破产清算的公告" while its 9-month profit rose 66%). A group's
+      subsidiary going under isn't the group failing, as a subsidiary's executive leaving isn't a CEO change (the
+      management rule below); the checklist's going_concern is the company's own doubt, default or bankruptcy;
     - hard red flags come only from the company's own filings; from a headline the same finding is a soft concern
       (市场可能在担心). Issuers in all three markets must disclose these events themselves (立案告知书, 退市风险警示,
       要约收购报告书, 违约公告; HKEX inside information; 8-K items), while headlines are often about another company

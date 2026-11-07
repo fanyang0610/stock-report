@@ -31,10 +31,11 @@ log = logging.getLogger(__name__)
 CFG = CONFIG["review"]
 CACHE = DATA / "review"
 ROLES = ("buy", "hold", "sell", "next", "hold_next")  # the review's order: what the cards show first, then the benches
-# A suspension or delisting of another security of the company (preferred shares, bonds, convertibles) isn't the stock's;
-# nor is a bare SEC delisting or deregistration form, which doesn't say which security (often notes redeemed or matured)
+# Another security's suspension or delisting isn't the stock's, nor is a bare SEC form (which security? often notes)
 OTHER_SECURITY = r"优先股|優先股|债券|債券|可转债|可轉債|转债|轉債|票据|票據|preferred|bond|notes due|warrant|25-NSE|15-12[BG]"
 SEC_BARE = re.compile(r"(25-NSE|15-12[BG])\b")  # those forms' titles are left out of the sources
+SUBSIDIARY = (re.compile(r"子公司|附属公司|附屬公司|subsidiar", re.I),  # a going-concern quote about one alone: soft
+              re.compile(r"(公司|集团|集團|本行)(及|和|与|與|以及)其?(全资|全資|控股|下属|下屬)?(子公司|附属|附屬)|and (its|their) subsid", re.I))
 DENIAL = re.compile(r"不存在|未发现|未發現|没有|沒有|并无|並無|无任何|無任何|no substantial doubt|not (been )?subject|"
                     r"no (material )?(investigation|proceeding)|\bnone of\b|subject to any", re.I)
 # kind -> (words, hard red flag, what the quote must name for the kind to stand, what it mustn't). A finding whose quote
@@ -178,8 +179,7 @@ def ask(client: httpx.Client, content: str) -> dict:
                 "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": content}]})
             resp.raise_for_status()
             text = resp.json()["choices"][0]["message"]["content"].strip().removeprefix("```json").removesuffix("```")
-            answer = json.loads(text)
-            if isinstance(answer, dict):
+            if isinstance(answer := json.loads(text), dict):
                 return answer
             err = ValueError("not a JSON object")
         except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
@@ -219,6 +219,8 @@ def verify(answer: dict, lines: list[dict]) -> tuple[list[dict], int, int]:
             if must and not re.search(must, raw, re.I):
                 kind, altered = "other", altered + 1
             hard = KINDS[kind][1] and src["type"] == "公告"
+        if hard and kind == "going_concern" and SUBSIDIARY[0].search(raw) and not SUBSIDIARY[1].search(raw):
+            kind, hard, altered = "other", False, altered + 1  # a subsidiary's insolvency isn't the company's
         if (kind, quote) not in seen:
             seen.add((kind, quote))
             found.append({"kind": kind, "words": KINDS[kind][0], "hard": hard, "quote": raw, "date": src["date"],
@@ -315,8 +317,7 @@ def save_lines(states: dict, needs: dict) -> dict:
     """The company lines the reviews wrote, for the names still without one, into the profiles table (once per market,
     here: the review threads don't write the table)."""
     for market, st in states.items():
-        got = {c: s["line"] for c, s in st.items() if c in needs.get(market, {}) and s.get("line") is not None}
-        if got:
+        if got := {c: s["line"] for c, s in st.items() if c in needs.get(market, {}) and s.get("line") is not None}:
             profiles.save_lines(market, got)
     return states
 
@@ -384,8 +385,7 @@ def apply(rows: pd.DataFrame, market: str, states: dict | None, confirmed: dict 
             free = [n for n in bench if not blocked(n["code"])]
             replace = next((n for n in free if n["sector"] == b["sector"]), free[0] if free else None)
             bench = [n for n in bench if n is not replace]
-            removed.append(b | {"list": "removed", "from": kind,
-                                "reason": cite(why),
+            removed.append(b | {"list": "removed", "from": kind, "reason": cite(why),
                                 "status": f"由 {replace['code']} {replace['name']} 替换" if replace else "候补已用完"})
             keep += [replace | {"replaces": b["code"]}] if replace else []
         keep = pd.DataFrame(keep).assign(list=kind) if keep else pd.DataFrame(columns=rows.columns)

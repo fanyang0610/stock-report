@@ -52,6 +52,10 @@ def test_a_hard_flag_must_name_its_subject():
     assert not check("investigation", resign)[0]["hard"] and not check("audit", resign)[0]["hard"]  # no subject named
     assert check("management", resign) == []  # an ordinary director: routine
     assert one("audit", "关于会计师事务所辞任的公告")[0]["hard"]
+    sub = one("going_concern", "科达制造股份有限公司关于法院受理子公司破产清算的公告")[0]  # a subsidiary's liquidation
+    assert not sub["hard"] and sub["kind"] == "other"  # on the card as a concern; the company isn't removed
+    assert one("going_concern", "关于公司及子公司部分债务逾期的公告")[0]["hard"]  # the company's own debts too
+    assert one("going_concern", "关于公司股票可能被终止上市暨重整的风险提示公告")[0]["hard"]
     assert not one("takeover", "关于吸收合并全资子公司的公告")[0]["hard"]  # the company absorbing its own subsidiary
     assert one("takeover", "关于收到私有化要约暨预计于年底前完成的提示性公告")[0]["hard"]  # a live offer
     assert verified("cn", "688585")[0] == []  # a sponsor's supervision report on 上纬新材's completed tender offer
