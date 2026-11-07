@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from stockreport import deepdive, deliver, lists, report, track, verdicts
+from stockreport import deliver, lists, report, track, verdicts
 from stockreport.render import text_summary
 from stockreport.render.testdata import test_report as fake_report
 from stockreport.score import score
@@ -23,7 +23,7 @@ def test_report_dry_run(tmp_path, monkeypatch):
     for module, attr, path in ((verdicts, "PATH", "verdicts.csv"),
                                (track, "PICKS_LOG", "picks.csv"), (track, "SENT_LOG", "sent.csv"),
                                (report, "REPORTS", "reports"),
-                               (report, "EXPECT", "expect.json"), (deepdive, "CACHE", "deepdive")):
+                               (report, "EXPECT", "expect.json")):
         monkeypatch.setattr(module, attr, tmp_path / path)
     monkeypatch.setattr(verdicts, "periods", lambda m: pd.Series(dtype=str))
     df = pd.read_csv(SAMPLES / "cn_universe_sample.csv", dtype={"code": str, "period": str}).set_index("code")

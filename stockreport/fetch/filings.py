@@ -1,4 +1,4 @@
-"""Filings for the results review and the deep-dive lane: a stock's non-routine filings of the last 90 days (CNINFO,
+"""Filings for the results review and its periodic-report passages: a stock's non-routine filings of the last 90 days (CNINFO,
 HKEXnews, SEC's filing list), its latest periodic report (CN: CNINFO annual, half-year and quarterly reports; HK:
 HKEXnews annual, interim and quarterly reports in English; US: the newest 10-K, 10-Q, 20-F or 40-F) and the text of
 any filing. Documents are read in memory and never stored."""

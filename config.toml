@@ -80,11 +80,9 @@ units_ratio = 20              # consensus EPS this many times off the trailing E
 basis_ratio = 2               # this year's consensus this far from the trailing EPS: adjusted vs GAAP (counted only)
 drift = { value = 0.05, profit = 0.05, book = 0.05, consensus = 0.2 }  # day-over-day alarms
 
-[deepdive]                    # deep-dive lane (AGENTS.md rule 3; deepdive.py), after the results review
-per_day = 3                   # new filings read per market a day (cached filings are reused at no cost)
-max_chars = 80000             # filing text sent to DeepSeek: all of it if shorter, else windows around keywords
-window = [1500, 2500]         # characters before / after each keyword
+[passages]                    # periodic-report passages the review reads (passages.py; code cuts them, no DeepSeek)
+per_day = 15                  # new filings read per market a day (cached filings are reused at no cost)
+max_chars = 6000              # passage text per name: windows around the hard-flag keywords
+window = [300, 700]           # characters before / after each keyword
 workers = 3
-one_off_share = 0.3           # non-recurring items this share of the period's profit: a soft concern (one-off gain)
-data_gap = 0.2                # the report's net profit this far off the card's figure: data_suspect (PLAN.md)
 keep_days = 400               # cached filings older than this are deleted

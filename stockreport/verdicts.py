@@ -1,6 +1,6 @@
 """Your verdicts (AGENTS.md rule 3): `verdict <code> veto|confirm --until D --reason "..."` appends to data/verdicts.csv.
 A veto keeps a name out of the Buy and Hold lists (lists.build); a confirm keeps a name as the lists have it when the
-results review would remove a Buy or Hold name on a hard red flag or data_suspect (review.apply), and its card says so;
+results review would remove a Buy or Hold name on a hard red flag (review.apply), and its card says so;
 never a number. It ends at its date or when the stock reports a period newer than the snapshot's it was given on."""
 
 import re

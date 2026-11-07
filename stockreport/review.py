@@ -1,12 +1,15 @@
-"""Results review (PLAN.md, "Results review"; stage 2), only when you ask for a report. The build gathers each name's
-sources without DeepSeek (gather(): non-routine filings of the last 90 days, fetch/filings.recent, and headlines of
-the last 30, fetch/news). On request DeepSeek reads them at temperature 0 against a fixed checklist, JSON out; every
-finding quotes one of those lines and code checks the quote (quotes.py), and a hard red flag must also name its
-subject in the quote (KINDS) without denying it (deepdive.DENIAL). The names on the cards are reviewed first, in their
-order (the 20 Buy, the 10 Hold, the 10 Sell), then the benches (the next name of each sector held, the next Hold
-names), `workers` calls at a time within `budget` seconds; each review is cached per
-stock (data/review/<market>/<code>.json) and redone only for a name new to its list or renamed, a new filing or headline, or a
-review over `keep_days` old. apply() turns the findings (and the deep-dive lane's, deepdive.py) into the lists."""
+"""Results review (PLAN.md, "Results review"; stage 2): the project's one DeepSeek step, only when you ask for a
+report. The build gathers each name's sources without DeepSeek (gather(): non-routine filings of the last 90 days,
+fetch/filings.recent; headlines of the last 30, fetch/news; passages code cut from the latest periodic report,
+passages.py). On request DeepSeek reads them with the card, one call per name at temperature 0 against a fixed
+checklist, JSON out. It screens: every finding quotes one of those lines and code checks the quote (quotes.py); a hard
+red flag must also name its subject in the quote (KINDS) without denying it (DENIAL), and from a passage say it
+plainly (passages.strict). It comments: the note, and the company's line where the business text needs one
+(notes.line). The names on the cards are reviewed first, in their order (the 20 Buy, the 10 Hold, the 10 Sell), then
+the benches (the next name of each sector held, the next Hold names), `workers` calls at a time within `budget`
+seconds; each review is cached per stock (data/review/<market>/<code>.json) and redone only for a name new to its
+list or renamed, a new filing, passage or headline, a line still missing, or a review over `keep_days` old. apply()
+turns the findings into the lists."""
 
 import json
 import logging
@@ -19,9 +22,9 @@ import httpx
 import pandas as pd
 from dotenv import dotenv_values
 
-from stockreport import deepdive, notes, quotes
+from stockreport import notes, passages, quotes
 from stockreport.config import CONFIG, DATA, REPORTS, ROOT
-from stockreport.fetch import filings, news
+from stockreport.fetch import filings, news, profiles
 from stockreport.score import DIGITS
 
 log = logging.getLogger(__name__)
@@ -32,6 +35,8 @@ ROLES = ("buy", "hold", "sell", "next", "hold_next")  # the review's order: what
 # nor is a bare SEC delisting or deregistration form, which doesn't say which security (often notes redeemed or matured)
 OTHER_SECURITY = r"优先股|優先股|债券|債券|可转债|可轉債|转债|轉債|票据|票據|preferred|bond|notes due|warrant|25-NSE|15-12[BG]"
 SEC_BARE = re.compile(r"(25-NSE|15-12[BG])\b")  # those forms' titles are left out of the sources
+DENIAL = re.compile(r"不存在|未发现|未發現|没有|沒有|并无|並無|无任何|無任何|no substantial doubt|not (been )?subject|"
+                    r"no (material )?(investigation|proceeding)|\bnone of\b|subject to any", re.I)
 # kind -> (words, hard red flag, what the quote must name for the kind to stand, what it mustn't). A finding whose quote
 # names what it mustn't is dropped (another security's suspension, an offer already done, a subsidiary's executive); a
 # hard kind whose quote doesn't name its subject is a soft concern ("other"); a management concern that names no chair,
@@ -69,8 +74,8 @@ KINDS = {
 }
 STATUS = {"pending": "审核进行中", "unavailable": "审核暂不可用", "no_sources": "审核暂不可用（未取到公告和新闻）"}
 
-SYSTEM = """你是上市公司审核员。下面是一只股票的卡片（程序根据公开数据计算）和它近 90 天的非例行公告标题、近 30 天的新闻标题，每条有编号。
-按固定清单找事实，只依据给出的标题，不推断，不用你自己的知识。
+SYSTEM = """你是上市公司审核员。下面是一只股票的卡片（程序根据公开数据计算）和它的来源，每条有编号：近 90 天的非例行公告标题、
+最新定期报告里程序截取的段落、近 30 天的新闻标题。按固定清单找事实，只依据给出的来源，不推断，不用你自己的知识。
 硬风险（kind）：
 - investigation：监管机构对公司或其控股股东、实际控制人立案调查，认定欺诈或财务造假，或 SEC 的 Wells notice；
 - audit：非标准审计意见（保留、否定、无法表示意见），或审计师辞任；
@@ -83,19 +88,22 @@ SYSTEM = """你是上市公司审核员。下面是一只股票的卡片（程�
 management 董事长、总经理（CEO）、财务总监（CFO）离职，或公司高管被调查；litigation 重大诉讼或仲裁；
 one_off 利润主要来自一次性收益（出售资产、公允价值变动、补贴等收益；减值等一次性损失不算）；other 其他明确的负面事件。
 规则：
-1. 每条 finding 的 quote 必须从编号为 source 的那条标题里逐字复制：整条标题，或其中说明这件事的完整短语（至少 6 个字），不得改写、翻译、拼接或补字。
+1. 每条 finding 的 quote 必须从编号为 source 的那条来源里逐字复制：整条标题，或其中说明这件事的完整短语或句子（至少 6 个字），不得改写、翻译、拼接或补字。
 2. 只列与本公司有关的事；只讲整个市场或其他公司的标题不算，行业新闻只能算 downturn。同一件事只列一次，没有就输出空列表。
+   定期报告段落里的例行说明不算：标准无保留审计意见、不存在持续经营疑虑、日常经营中常见的诉讼和调查说明、本公司收购别人、已完成或已终止的交易。
 3. 不算风险的例行事项：董事会决议、股东大会、权益分派、回购和增持、业绩说明会，普通董事、监事、独立董事、董秘、证券代表的变动
    （美股 8-K 的 Director or officer change 没说明是董事长、CEO、CFO 的也算例行），股东或高管的减持计划，以及利好消息。
 4. note：一句中文，不超过 40 个字，用文字说明这只股票为什么在这个名单上、最需要注意什么（参考卡片和 findings）；
    不得出现任何数字，不写价格、目标价或预测，也不写买入、卖出或持有之类的建议（评级由程序给出）。
-只输出 JSON：{"findings": [{"kind": "", "source": 1, "quote": ""}], "note": ""}"""
+5. line：只在给出「公司业务介绍」时填写：把介绍写成一句简短的中文，说明这家公司主要做什么，不超过 25 个字，可以省略地区和细项；
+   只用介绍里已有的内容，不加评价，不写任何数字，不写公司名称。没有介绍时留空。
+只输出 JSON：{"findings": [{"kind": "", "source": 1, "quote": ""}], "note": "", "line": ""}"""
 
 
 def gather(market: str, rows: pd.DataFrame, today: date, day: str | None = None) -> dict:
     """Each reviewed name's sources as of today -> reports/<day: the lists' date>/<market>_sources.json: {code:
-    {filings, headlines}}, either None when its fetch failed. Filing searches run a few at a time (HKEXnews takes
-    3-6 s each), headlines one at a time."""
+    {filings, headlines, passages}}, filings or headlines None when its fetch failed, passages None when there are none
+    yet (passages.update). Filing searches run a few at a time (HKEXnews takes 3-6 s each), headlines one at a time."""
     started, codes = time.monotonic(), list(dict.fromkeys(rows.loc[rows["list"].isin(ROLES), "code"]))
     filings.ids(market)  # the code -> filing id table, once before the threads
     http = news.client(market)
@@ -114,6 +122,13 @@ def gather(market: str, rows: pd.DataFrame, today: date, day: str | None = None)
 
     with ThreadPoolExecutor(CFG["filing_workers"]) as fp, ThreadPoolExecutor(1) as hp:
         out = {c: {"filings": f, "headlines": h} for c, f, h in zip(codes, fp.map(filed, codes), hp.map(heard, codes))}
+    try:
+        read = passages.update(market, rows, today)
+    except Exception:
+        log.exception("%s periodic-report passages failed; the review reads titles and headlines", market.upper())
+        read = {}
+    for code, src in out.items():
+        src["passages"] = read.get(code)
     path = REPORTS / (day or today.isoformat()) / f"{market}_sources.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
@@ -129,22 +144,26 @@ def load_sources(market: str, day: str) -> dict:
 
 
 def lines_of(src: dict) -> list[dict]:
-    """The numbered source lines DeepSeek reads: the newest filings (bare SEC delisting forms left out), then the
-    newest headlines."""
+    """The numbered source lines DeepSeek reads: the newest filings (bare SEC delisting forms left out), the passages
+    of the latest periodic report (doc: its title), then the newest headlines."""
     filed = [{"type": "公告", "date": f["date"], "title": f["title"], "kind": f["kind"]}
              for f in (src.get("filings") or []) if not SEC_BARE.match(f["title"])][:CFG["max_filings"]]
-    return filed + [{"type": "新闻", "date": h["date"], "title": h["title"]} for h in src.get("headlines") or []]
+    doc = src.get("passages") or {}
+    cut = [{"type": "定期报告", "date": doc["date"], "title": p, "doc": doc["title"]} for p in doc.get("passages") or []]
+    return filed + cut + [{"type": "新闻", "date": h["date"], "title": h["title"]} for h in src.get("headlines") or []]
 
 
 def ids_of(lines: list[dict]) -> list[str]:
-    return [f"{x['date']} {x['title']}" for x in lines]
+    return [f"{x['date']} {x.get('doc') or x['title']}" for x in lines]
 
 
-def prompt(row: dict, market: str, role: str, lines: list[dict]) -> str:
+def prompt(row: dict, market: str, role: str, lines: list[dict], business: str | None = None) -> str:
     from stockreport.events import KINDS as FILING_KINDS
-    numbered = [f"[{i}] {x['date']} {x['type']}{'（' + FILING_KINDS.get(x.get('kind'), '其他') + '）' if x['type'] == '公告' else ''}："
-                f"{x['title']}" for i, x in enumerate(lines, 1)]
-    return notes.card(row, market, role) + "\n来源：\n" + ("\n".join(numbered) or "（无）")
+    label = lambda x: {"公告": f"公告（{FILING_KINDS.get(x.get('kind'), '其他')}）",
+                       "定期报告": f"定期报告（{x.get('doc')}）段落"}.get(x["type"], x["type"])
+    numbered = [f"[{i}] {x['date']} {label(x)}：{x['title']}" for i, x in enumerate(lines, 1)]
+    return notes.card(row, market, role) + (f"\n公司业务介绍：{business}" if business else "") + "\n来源：\n" + \
+        ("\n".join(numbered) or "（无）")
 
 
 def ask(client: httpx.Client, content: str) -> dict:
@@ -169,8 +188,9 @@ def ask(client: httpx.Client, content: str) -> dict:
 
 def verify(answer: dict, lines: list[dict]) -> tuple[list[dict], int, int]:
     """The findings whose quotes are in a source line (the cited one first; a short title quoted whole counts), each
-    checked against its kind (KINDS), hard only from a filing; how many were rejected (quote not in any source); and how
-    many code dropped or changed (the note, written alongside them, is then not shown)."""
+    checked against its kind (KINDS; from a passage passages.strict), hard only from a filing; how many were rejected
+    (quote not in any source); and how many code dropped or changed (the note, written alongside them, is then not
+    shown)."""
     texts, found, rejected, altered, seen = [quotes.norm(x["title"]) for x in lines], [], 0, 0, set()
     for f in answer.get("findings") or []:
         if not isinstance(f, dict) or not f.get("quote"):
@@ -184,16 +204,24 @@ def verify(answer: dict, lines: list[dict]) -> tuple[list[dict], int, int]:
             continue
         kind = f.get("kind") if f.get("kind") in KINDS else "other"
         raw, (_, hard, must, mustnt), src = " ".join(str(f["quote"]).split()), KINDS[kind], lines[at]
-        if hard and deepdive.DENIAL.search(raw) or mustnt and re.search(mustnt, raw, re.I) \
+        if hard and DENIAL.search(raw) or mustnt and re.search(mustnt, raw, re.I) \
                 or kind == "management" and not re.search(must, raw, re.I):
             altered += 1  # a denial, another security, an offer done, a routine change: no finding about the stock
             continue
-        if must and not re.search(must, raw, re.I):
-            kind, altered = "other", altered + 1
+        if src["type"] == "定期报告":  # a passage: a hard kind only when the quote says it plainly
+            plain, hard = passages.strict(kind, raw)
+            if plain is None:
+                altered += 1  # a standard opinion, a going-concern note, the company buying another, a deal done
+                continue
+            kind, altered = plain, altered + (plain != kind)
+        else:
+            if must and not re.search(must, raw, re.I):
+                kind, altered = "other", altered + 1
+            hard = KINDS[kind][1] and src["type"] == "公告"
         if (kind, quote) not in seen:
             seen.add((kind, quote))
-            found.append({"kind": kind, "words": KINDS[kind][0], "hard": KINDS[kind][1] and src["type"] == "公告",
-                          "quote": raw, "date": src["date"], "type": src["type"]})
+            found.append({"kind": kind, "words": KINDS[kind][0], "hard": hard, "quote": raw, "date": src["date"],
+                          "type": src.get("doc") or src["type"]})
     return found, rejected, altered
 
 
@@ -209,12 +237,16 @@ def valid(entry: dict | None, role: str, ids: list[str], today: date, name: str)
         and (today - date.fromisoformat(entry["date"])).days <= CFG["keep_days"]
 
 
-def review_one(client: httpx.Client, market: str, row: dict, role: str, lines: list[dict], today: date) -> dict:
-    """One name's review, saved to its cache file (written whole, so a reader never sees half of one)."""
-    answer = ask(client, prompt(row, market, role, lines))
+def review_one(client: httpx.Client, market: str, row: dict, role: str, lines: list[dict], today: date,
+               business: str | None = None) -> dict:
+    """One name's review, saved to its cache file (written whole, so a reader never sees half of one); with the
+    business text, also the company's line ('' when dropped)."""
+    answer = ask(client, prompt(row, market, role, lines, business))
     findings, rejected, altered = verify(answer, lines)
     entry = {"date": today.isoformat(), "role": role, "name": row["name"], "sources": ids_of(lines), "findings": findings,
              "rejected": rejected, "note": "" if rejected or altered else notes.words_only(answer.get("note"))}
+    if business:
+        entry["line"] = notes.line(answer.get("line"))
     path = CACHE / market / f"{row['code']}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(f".{time.monotonic_ns()}.tmp")
@@ -225,11 +257,14 @@ def review_one(client: httpx.Client, market: str, row: dict, role: str, lines: l
 
 def run(lists: dict, sources: dict, today: date, budget: float | None) -> dict:
     """Review every market's names (lists: market -> rows; sources: market -> gather()'s dict) -> market -> code ->
-    state ({status: done | pending | unavailable | no_sources, findings, note}). With a budget, reviews still running
-    when it ends are left to finish in their threads (they save their caches) and the rest are cancelled."""
-    states, jobs, started, hits = {}, [], time.monotonic(), 0
+    state ({status: done | pending | unavailable | no_sources, findings, note, line}). With a budget, reviews still
+    running when it ends are left to finish in their threads (they save their caches) and the rest are cancelled. The
+    company lines written (by these reviews or earlier ones) go to the profiles table."""
+    states, jobs, started, hits, needs = {}, [], time.monotonic(), 0, {}
     for market, rows in lists.items():
-        st = states.setdefault(market, {})
+        st, table = states.setdefault(market, {}), profiles.load(market)
+        needs[market] = {c: table.at[c, "source"] for c in table.index[table["line"].isna()]
+                         if notes.needs_line(market, table.at[c, "source"])}
         for role in ROLES:
             for row in rows[rows["list"] == role].to_dict("records"):
                 code, src = row["code"], sources.get(market, {}).get(row["code"])
@@ -238,25 +273,25 @@ def run(lists: dict, sources: dict, today: date, budget: float | None) -> dict:
                 if not src or (src["filings"] is None and src["headlines"] is None):
                     st[code] = {"status": "no_sources"}
                     continue
-                lines = lines_of(src)
+                lines, business = lines_of(src), needs[market].get(code)
                 entry = cached(market, code)
-                if valid(entry, role, ids_of(lines), today, row["name"]):
+                if valid(entry, role, ids_of(lines), today, row["name"]) and (not business or "line" in entry):
                     st[code], hits = entry | {"status": "done"}, hits + 1
                     continue
                 st[code] = {"status": "pending"}
                 rank = row["rank"] if pd.notna(row.get("rank")) else 99
-                jobs.append(((ROLES.index(role), rank, list(lists).index(market)), market, row, role, lines))
+                jobs.append(((ROLES.index(role), rank, list(lists).index(market)), market, row, role, lines, business))
     key = dotenv_values(ROOT / ".env").get("DEEPSEEK_API_KEY")
     if jobs and not key:
         log.warning("DEEPSEEK_API_KEY is missing from .env: no results review")
     if not jobs or not key:
         log.info("review: %d cached, %d to review%s", hits, len(jobs), "" if key or not jobs else " (no DeepSeek key)")
-        return mark(states, "unavailable")
+        return save_lines(mark(states, "unavailable"), needs)
     client = httpx.Client(base_url=CONFIG["notes"]["base_url"], timeout=CFG["timeout"],
                           headers={"Authorization": f"Bearer {key}"})
     pool = ThreadPoolExecutor(CFG["workers"])
-    futures = {pool.submit(review_one, client, m, row, role, lines, today): (m, row["code"])
-               for _, m, row, role, lines in sorted(jobs, key=lambda j: j[0])}
+    futures = {pool.submit(review_one, client, m, row, role, lines, today, business): (m, row["code"])
+               for _, m, row, role, lines, business in sorted(jobs, key=lambda j: j[0])}
     done, _ = wait(futures, timeout=budget)
     ok, failed = 0, 0
     for f in done:
@@ -271,7 +306,17 @@ def run(lists: dict, sources: dict, today: date, budget: float | None) -> dict:
     pool.shutdown(wait=budget is None, cancel_futures=True)
     log.info("review: %d cached, %d reviewed, %d failed, %d left after %.0fs", hits, ok, failed,
              len(jobs) - ok - failed, time.monotonic() - started)
-    return mark(states, "unavailable") if failed and not ok else states
+    return save_lines(mark(states, "unavailable") if failed and not ok else states, needs)
+
+
+def save_lines(states: dict, needs: dict) -> dict:
+    """The company lines the reviews wrote, for the names still without one, into the profiles table (once per market,
+    here: the review threads don't write the table)."""
+    for market, st in states.items():
+        got = {c: s["line"] for c, s in st.items() if c in needs.get(market, {}) and s.get("line") is not None}
+        if got:
+            profiles.save_lines(market, got)
+    return states
 
 
 def mark(states: dict, status: str) -> dict:
@@ -293,40 +338,36 @@ def stats(states: dict) -> str:
 
 def cite(f: dict) -> str:
     quote = f["quote"] if len(f["quote"]) <= 60 else f["quote"][:60] + "…"
-    return f"{f['words']}（{f['date']} {f['type'].replace(f['date'], '').strip()}：「{quote}」）"  # a deep dive's type has the date
+    return f"{f['words']}（{f['date']} {f['type'].replace(f['date'], '').strip()}：「{quote}」）"  # a passage's type, 10-Q 2026-10-30, has the date
 
 
 def line(state: dict, found: list[dict]) -> str:
-    """The card's review line: hard red flags, else data_suspect, else soft concerns, else the review's status."""
-    hard, odd = [f for f in found if f["hard"]], [f for f in found if f.get("suspect")]
-    soft = [f for f in found if not f["hard"] and not f.get("suspect")]
+    """The card's review line: hard red flags, else soft concerns, else the review's status."""
+    hard, soft = [f for f in found if f["hard"]], [f for f in found if not f["hard"]]
     if hard:
         return "审核：" + "；".join(cite(f) for f in hard[:2])
-    if odd:
-        return f"数据存疑：{odd[0]['words']}（{odd[0]['date']} {odd[0]['type']}）"
     if soft:  # the first one: a card has room for one
         return "市场可能在担心：" + cite(soft[0]) + (f"等 {len(soft)} 条" if len(soft) > 1 else "")
     return STATUS.get(state.get("status"), "审核未见重大风险") if state else ""  # not reviewed: no line
 
 
-def apply(rows: pd.DataFrame, market: str, states: dict | None, deep: dict, confirmed: dict | None = None) -> pd.DataFrame:
-    """The lists after the review (states: code -> state; deep: code -> deep-dive findings; confirmed: code -> your
-    confirm verdict in force). A Buy or Hold name with a hard red flag or data_suspect is removed (list 'removed', with
-    the reason and the list it came from) and the next name of its bench not blocked takes its place (of its sector
-    first, else the next; its 'replaces' names the removed one); the buys get equal amounts again. Sell names keep
-    their place, the finding on their card. Your confirm keeps a name as the lists have it, and its card says so.
-    Every row gets its review line and AI note. Without states (the build), only the bench rows are dropped."""
+def apply(rows: pd.DataFrame, market: str, states: dict | None, confirmed: dict | None = None) -> pd.DataFrame:
+    """The lists after the review (states: code -> state; confirmed: code -> your confirm verdict in force). A Buy or
+    Hold name with a hard red flag is removed (list 'removed', with the reason and the list it came from) and the next
+    name of its bench not blocked takes its place (of its sector first, else the next; its 'replaces' names the removed
+    one); the buys get equal amounts again. Sell names keep their place, the finding on their card. Your confirm keeps
+    a name as the lists have it, and its card says so. Every row gets its review line and AI note. Without states (the
+    build), only the bench rows are dropped."""
     rows, confirmed = rows.assign(review="", note="", replaces=None), confirmed or {}
     if states is None:
         return rows[~rows["list"].isin(["next", "hold_next"])]
-    found = {c: list(states.get(c, {}).get("findings") or []) + list(deep.get(c, [])) for c in rows["code"]}
+    found = {c: list(states.get(c, {}).get("findings") or []) for c in rows["code"]}
     for i, r in rows.iterrows():
         rows.at[i, "review"] = line(states.get(r["code"], {}), found[r["code"]])
-        if (v := confirmed.get(r["code"])) and rows.at[i, "review"].startswith(("审核：", "数据存疑")):
+        if (v := confirmed.get(r["code"])) and rows.at[i, "review"].startswith("审核："):
             rows.at[i, "review"] += f"（你已确认，至 {v['until']}：{v['reason']}）"
-        # the note was written without the deep dive's findings, so it isn't shown beside them (it could deny one)
-        rows.at[i, "note"] = "" if deep.get(r["code"]) else states.get(r["code"], {}).get("note") or ""
-    blocked = lambda c: None if c in confirmed else next((f for f in found[c] if f["hard"] or f.get("suspect")), None)
+        rows.at[i, "note"] = states.get(r["code"], {}).get("note") or ""
+    blocked = lambda c: None if c in confirmed else next((f for f in found[c] if f["hard"]), None)
     out = []
     for kind, reserve in (("buy", "next"), ("hold", "hold_next")):
         bench = rows[rows["list"] == reserve].sort_values("rank").to_dict("records")
@@ -339,7 +380,7 @@ def apply(rows: pd.DataFrame, market: str, states: dict | None, deep: dict, conf
             replace = next((n for n in free if n["sector"] == b["sector"]), free[0] if free else None)
             bench = [n for n in bench if n is not replace]
             removed.append(b | {"list": "removed", "from": kind,
-                                "reason": ("数据存疑：" + why["words"]) if why.get("suspect") else cite(why),
+                                "reason": cite(why),
                                 "status": f"由 {replace['code']} {replace['name']} 替换" if replace else "候补已用完"})
             keep += [replace | {"replaces": b["code"]}] if replace else []
         keep = pd.DataFrame(keep).assign(list=kind) if keep else pd.DataFrame(columns=rows.columns)

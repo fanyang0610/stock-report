@@ -188,6 +188,25 @@
   in this build: the subcommand's parser shadowed the send function (fixed). The keyword reply is report.fresh
   (review within 20 s, build) then the text, then the PDF: two messages (listener.reply), 11.4 s before sending on
   2026-11-01; WeChat's two sends took ~3 s in past replies.
+- One AI step, and nothing needs Claude Code (2026-11-07; your words: "make sure every step on this project can run
+  without AI assistance except only one step that using deepseek to screen and comments on the final report", then
+  "i can close claude code completely and still run the project, just putting the AI part rely on deepseek token and
+  ensure the quality ... i dont want to reduce project quality"). Checked: launchd runs the 06:30 `run` and the
+  listener with the project's own Python and no step calls Claude. DeepSeek was called in three places (the review,
+  a company-line pass, the deep dives' questionnaire); now only in the review, one call per name that screens and
+  comments ("Results review"). The deep dives' hard flags are kept as passages code cuts from the latest periodic
+  report (passages.py), read in that call for every Buy and Hold name and bench (3 reports a market a day before);
+  their AI-read profit check and non-recurring share went (rule 2: the AI reads no number; the check never found a
+  fault); the company line comes back in the same call (notes.line). Filled on 2026-11-07: CN 51 reports (6 with a
+  passage, once every CN report's board pledge 不存在任何虚假记载 was left out of the keywords), US 43 (29), HK 46 (25);
+  median 0 / 2,026 / 1,054 characters. The review that afternoon met a DeepSeek outage (120 of 165 calls failed with
+  HTTP 500s or timeouts, a two-word prompt too; no failure earlier this month): the report went out marked
+  审核暂不可用 for those names, as built. The 45 done: no hard flag; soft concerns from passages (ARCC's derivative
+  suits in its 10-Q; 华安证券's lawsuit it won, read as litigation: a soft note's noise); 7 new US lines, all kept.
+  A name whose sources all failed has no review call, so no new line that day (its card shows the source text).
+  README says what runs when and how to refresh the 预期 numbers by hand. App Python 5,459 lines (5,707); 107 tests.
+  Not done, at your word ("deepseek is crashed ... wrap it up now"): the review's cold timing with passages on the
+  keyword path (DeepSeek still down), and the fresh-context review (stopped before it reported).
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -491,7 +510,7 @@ momentum drive the score (fixed in stage 1 after the stage review).
   in the market's score and its 1-year volatility) on a Hold, 为什么卖出 (the weakest components and the risks) on a
   Sell. A ratio is worded by its side of the peers' median (同行中市盈率低 / 高), cash backing, momentum, the SUE,
   the revisions and the growth figures by their sign (the revisions as the estimate's 3-month change).
-- From stage 2: the review's line (审核：… for a hard red flag, 数据存疑：…, 市场可能在担心 … with its quoted source, or
+- From stage 2: the review's line (审核：… for a hard red flag, 市场可能在担心 … with its quoted source, or
   审核未见重大风险 / 审核进行中 / 审核暂不可用) and the AI note (one sentence, words only). Stage 4: a soft concern shows the
   first one found, with 等 N 条 when there are more (a card has room for one; the rule and the findings are unchanged).
 - Each market section opens with its 预期 line: from the history run, the 20-name portfolio's average 12-month return
@@ -527,9 +546,10 @@ momentum drive the score (fixed in stage 1 after the stage review).
     quoteSummary assetProfile longBusinessSummary opens with what the company does ("Sandisk Corporation develops,
     manufactures, and sells data storage devices..."): its first sentences, up to 400 characters (one call a name, with
     the crumb). Eastmoney's US table gives the Chinese short names.
-  - One Chinese line for a US text or a longer CN/HK one, by DeepSeek in the `review` step (notes.lines): temperature 0,
-    only the text in, ~25 characters asked, kept only when it is Chinese and has no figure (notes.FIGURE), cached per
-    company. Why not cut the long CN/HK text: the stage review found a cut at 50 characters misled on 10 of 25 lines
+  - One Chinese line for a US text or a longer CN/HK one, by DeepSeek in the review's own call for the name (since
+    2026-11-07; a separate call per company before): the text is given as 公司业务介绍 beside the card, ~25 characters
+    asked from that text only, kept only when it is Chinese and has no figure (notes.line, notes.FIGURE), saved in the
+    profiles table once written. A cached review is redone while the company still needs a line. Why not cut the long CN/HK text: the stage review found a cut at 50 characters misled on 10 of 25 lines
     (通威股份 read as a feed maker, its polysilicon and solar cells cut off; 中国国航 "主要由航空客运。"). Until the
     review has run, or without DeepSeek, a card shows the source's first sentence (cut with … past 50 characters; US in
     English, past 150).
@@ -572,10 +592,15 @@ momentum drive the score (fixed in stage 1 after the stage review).
   says so (corrected in stage 1: this line said CN had delisted names).
 
 ### Results review (stage 2; only when you ask for a report)
+The project's one AI step (2026-11-07, your words: "i can close claude code completely and still run the project,
+just putting the AI part rely on deepseek token and ensure the quality"). Everything before it is code and runs
+unattended (launchd: the 06:30 `run`, the keyword listener); without DeepSeek the report still goes out, marked
+审核暂不可用.
 The numbers can't see a fraud investigation, a going-concern doubt, an agreed takeover, or a story the market is
-worried about. DeepSeek reads the stock's non-routine filings of the last 90 days (CNINFO, HKEXnews, SEC) and free
-headlines, at temperature 0 with a fixed checklist and JSON out; every finding quotes its source and code checks the
-quote (quotes.py). It never changes a number (rule 2). It reviews what the cards show first, in their order (every
+worried about. DeepSeek reads the stock's non-routine filings of the last 90 days (CNINFO, HKEXnews, SEC), the
+passages code cut from its latest periodic report, and free headlines, at temperature 0 with a fixed checklist and
+JSON out, one call per name; every finding quotes its source and code checks the quote (quotes.py). It never reads,
+writes or changes a number (rule 2). The same call writes the note and the company line ("Report"). It reviews what the cards show first, in their order (every
 market's 20 Buy names, then the 10 Hold, then the 10 Sell; stage 5, small point (a) of the last review), then the
 benches (the next name of each sector held, the next 5 Hold names), up to 10 calls at a time, within a 20-second
 budget; each review is cached per stock and redone only
@@ -594,12 +619,13 @@ build makes no DeepSeek calls.
 - **Soft concerns only annotate** (an industry downturn, a lost customer, a guidance cut, management leaving,
   litigation, a one-off gain): the card says 市场可能在担心 …. Cheap stocks carry bad news by
   nature, and that is where value pays off on average.
-- **Data check:** a latest filing that contradicts a card's figure by 20%+ drops the name as data_suspect, and the next
-  one takes its place (rule 5).
+- **Data check:** by code, not the review: every valuation input is compared with a second source (crosscheck.py), and
+  a stock whose figures disagree is dropped (rule 5). The deep dives' AI-read profit check was removed on 2026-11-07:
+  in 18 reports it compared 8, 7 agreed within 0.3% and the 8th was its own unit misread; nothing since.
 - The review can't be backtested (an LLM reading old news knows what happened next), so its powers stay this narrow; the
   scoreboard follows each removed name against the name that replaced it.
-- **How it is built** (stage 2; review.py, deepdive.py):
-  - Sources, gathered by the build with no DeepSeek (~30 s a market; reports/<date>/<market>_sources.json): each name's
+- **How it is built** (stage 2; review.py, passages.py):
+  - Sources, gathered by the build with no DeepSeek (~60 s a market; reports/<date>/<market>_sources.json): each name's
     filings of the last 90 days from a per-stock query (CNINFO, HKEXnews' title search, SEC's filing list), routine ones
     dropped by the filing rules (events.classify), the newest 20; and headlines of the last 30 days, the newest 15.
     Per-stock queries rather than the old market-wide event feed, which only held the days the build ran (10 back;
@@ -644,31 +670,33 @@ build makes no DeepSeek calls.
     date or the next report period: a Buy or Hold name stays, and the card says 你已确认 with your reason. A veto
     keeps a name off the Buy and Hold lists.
   - Cached per stock (data/review/<market>/<code>.json); the keyword reply waits `budget` (20 s), then sends what is
-    done, and a background `review` finishes the rest and the day's deep dives. `review` runs it all without a limit.
+    done, and a background `review` finishes the rest. `review` runs it all without a limit.
     The AI note is dropped if it holds a figure (a digit, or one in characters like 三成), so every number on a card
     comes from code, and when code rejected, dropped or changed any finding the note was written with, so it never
-    names a concern the card doesn't show. Stage 4: nor is it shown beside a deep dive's findings, which it was written
-    without (CF's note said no negative event next to the FTC investigation its 10-Q names), and it gives no buy, sell
-    or hold advice (a status is code's).
-  - Deep dives (the lane of rule 3): the latest periodic report of the buys, their bench and the Hold names, read once
-    per filing, at most 3 new filings per market a day, after the review. The data check compares the report's net
-    profit to shareholders for the card's period (the period end quoted in the report, '30 June' or '30th June'; CN:
-    else its standard title) with the card's figure: CN and HK year to date (HK in the reporting currency), US the year's
-    profit from a 10-K (10-Qs are year to date, the card's figure trailing 12 months, so they aren't compared). It reads
-    only a row that says it is the shareholders' profit (归属于…股东 or 所有者, 權益持有人應佔, attributable to,
-    shareholders of...), not a consolidated row, the minorities' or the profit after deducting non-recurring items (扣非).
-    So the US check runs only on a 10-K's attributable row, which is rare; US figures come from the same XBRL filings,
-    so it matters least there. A table row's unit line must state the scale or the base unit (单位：元, in millions,
-    RMB'000; 'RMB' alone could be RMB'000). Any figure of the row within 20% passes (a row holds the quarter and the year
-    to date, or this year and last); a gap that is a power of ten is a unit misread of the row, not our data (a fault
-    that size fails the second-source cross-checks). The same reading gives the hard flags of a non-standard audit
-    opinion, a going-concern doubt, an investigation opened or a fraud finding (立案, a Wells notice, an SEC subpoena or
-    the Division of Enforcement, 欺诈, 虚假记载, 造假; legal-proceedings boilerplate such as "in the ordinary course" and
-    denials are not), an offer price, and an agreed sale of the company not yet completed (the quote must name the
-    company as the one acquired: "acquire ... the Company", "Company shareholders will receive", 被吸收合并, 协议安排;
-    not one it is buying, nor a completed or terminated deal; filing titles rarely name the deal, so it is found in the
-    report's text), and the soft concern of non-recurring items at 30%+ of the period's profit (a
-    quote naming the profit after deducting them is that profit, and is skipped).
+    names a concern the card doesn't show. Stage 4: it gives no buy, sell or hold advice (a status is code's). (A note
+    is no longer written without the periodic report: the passages are in its call since 2026-11-07, which ends stage
+    4's CF case, a note denying the FTC investigation its 10-Q names.)
+  - Periodic-report passages (2026-11-07; passages.py; the deep-dive lane of 2026-10-26..11-07 before them): filing
+    titles rarely name an agreed sale of the company, a non-standard audit opinion, a going-concern doubt or an
+    investigation stated in a report (Kenvue's pending sale to Kimberly-Clark, for 0.14625 of its shares plus $3.50, is
+    only in its 10-Q; the deep dives found it on 2026-11-01). The build reads the latest periodic report (CN annual,
+    half-year and quarterly reports; HK's in English; US 10-K, 10-Q, 20-F, 40-F) of the Buy and Hold names and their
+    benches, at most 15 new filings per market a day, cached per filing (data/passages/), and code cuts the text around
+    the hard-flag words (passages.KEYWORDS: 300 characters before and 700 after the first two hits of each, 6,000 at
+    most; 1-3,000 characters a report on 2026-11-07, 2-9 s a report). They are numbered source lines in the review's
+    call. A hard red flag quoted from a passage must say it plainly (passages.strict, the deep dives' rules): a
+    non-standard opinion and not a standard one; a going-concern doubt, not a mention; an investigation opened (立案, a
+    Wells notice, an SEC subpoena or the Division of Enforcement, 欺诈, 虚假记载, 造假), else a soft concern, and
+    legal-proceedings boilerplate ("in the ordinary course") never hard; a sale of the company itself ("acquire ... the
+    Company", "Company shareholders will receive", 被吸收合并, 协议安排, 私有化), not one it is buying, nor one completed
+    or terminated. Other hard kinds from a passage are soft (their filings' titles carry them). Denials are dropped as
+    for titles.
+  - Why the deep dives' own DeepSeek pass went (2026-11-07): one AI step, and no quality lost. Its hard flags are kept
+    (above), now for every Buy and Hold name and bench rather than 3 reports a market a day; in 36 reports read
+    (2026-10-25..11-01) it found one hard flag (Kenvue, kept by the passages) and two soft concerns (CF's FTC inquiry,
+    世纪华通's 2024 penalty), which the review reads in the same passages. Removed with it: the AI-read profit
+    check (see Data check) and the non-recurring share of profit, a number read by the AI (rule 2); the review's
+    one_off concern still comes from titles and headlines.
 
 ## Checks, and what each one decides
 - **pytest** on the score math (peer percentiles, families, SUE, revisions, the long-run components, the distress
@@ -800,7 +828,8 @@ build makes no DeepSeek calls.
 - The event feed's filing rules (events.py), which classify the review's filings. Removed on 2026-10-26, unused since
   stage 2: the feed's market-wide fetch (every build read the latest days' filings of all three markets into
   data/events/, and nothing read the rows), its abnormal-move labels and the old per-stock title fetchers in cninfo.py,
-  hkex.py and sec.py. The deep-dive lane with its quote checks; the verdicts (veto or confirm with an expiry).
+  hkex.py and sec.py. The deep-dive lane's hard-flag rules (now passages.strict) and its quote check; the verdicts
+  (veto or confirm with an expiry).
 - The DeepSeek notes (folded into the results review); WeChat and PDF delivery; the scoreboard.
 
 ## Sources for the method
@@ -860,7 +889,7 @@ Wurgler, "Benchmarks as limits to arbitrage: understanding the low-volatility an
 - After each run, log the total size of data/ + reports/. If it exceeds 2 GB, add a warning line to the report footer.
 - Cleanup only ever deletes inside this project's data/, reports/ and logs/ folders.
 - Phase 6 estimate (2026-10-17): price files ~33 MB (rolling 385 days), snapshots ~1 MB a day × 400 = ~400 MB, reports ~1.7 MB a day × 90 = ~150 MB, raw ~3 MB a day × 7 = ~20 MB; steady state ~0.6 GB of the 2 GB limit.
-- Phase 11: data/deepdive/<market>/ keeps the verified facts per filing read (a few KB each, at most 9 a day, deleted after 400 days); filing documents are read in memory and never stored; data/verdicts.csv is tiny.
+- Phase 11, since 2026-11-07: data/passages/<market>/ keeps the passages cut from each periodic report read (a few KB each, at most 45 a day, deleted after 400 days; data/deepdive/ before); filing documents are read in memory and never stored; data/verdicts.csv is tiny.
 - History tables (Phase 7, data/history/, kept; cleanup doesn't touch them), for valuations v2/v3 and the backtest:
   - Phase 13: us_frames (SEC frames, every filer's revenue, net income and equity per calendar year 2009-2025, 2.1 MB; new years once, the last two again every 30 days), us_sic (SEC SIC code per filer with $100m+ revenue and per candidate, from the submissions files, once each), cn_sw (申万 classification change history, weekly), cn_annual back to 2009 (was 2015). Backtest only: data/backtest/us_quarterly.csv.gz (every US 10-Q/10-K period by filing date, 878 companies, 1.3 MB; companyfacts read once each and not stored); us_annual also carries R&D from that read (not refreshed).
   - us_annual: one row per company and fiscal year since 2015: revenue, gross and operating profit, net income (also to common and from continuing operations), operating cash flow, capex, dividends paid, diluted shares, equity, preferred, assets, liabilities, shares, in the reporting currency, with the first filing date. From the companyfacts files the weekly SEC fetch reads anyway; Yahoo for the companies SEC has none for (Sundays, every 90 days).

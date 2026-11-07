@@ -1,7 +1,8 @@
-"""Results review (PLAN.md, "Results review") on saved sources: real non-routine filing titles and headlines of six
-names (2026-10-25) and DeepSeek's real answers to the checklist. A quote not in its source is rejected; a hard red
-flag removes a Buy or Hold name (the next name of its bench takes its place) and is only noted on a Sell name; a soft
-concern only annotates; the review's order, the cache, the budget and the parsers of the sources."""
+"""Results review (PLAN.md, "Results review"), the one DeepSeek step, on saved sources: real non-routine filing titles
+and headlines of six names (2026-10-25) and DeepSeek's real answers to the checklist, and a passage of Kenvue's 10-Q. A
+quote not in its source is rejected; a hard red flag removes a Buy or Hold name (the next name of its bench takes its
+place) and is only noted on a Sell name; a soft concern only annotates; the company line comes back in the same call;
+the review's order, the cache, the budget and the parsers of the sources."""
 
 import json
 import time
@@ -11,9 +12,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from stockreport import review
+from stockreport import notes, passages, review
 from stockreport.events import classify
-from stockreport.fetch import filings, news
+from stockreport.fetch import filings, news, profiles
 
 SAMPLES = Path(__file__).parent / "data"
 DAY = date(2026, 10, 25)
@@ -65,6 +66,50 @@ def test_a_hard_flag_must_name_its_subject():
     assert not one("investigation", "70后浙商大佬、祥源文旅实控人两度遭证监会立案", heard)[0]["hard"]  # a headline: soft
 
 
+def test_a_passage_of_the_periodic_report_is_a_source():
+    """Kenvue's pending sale is only in its 10-Q's text: quoted from the passage code cut, it is a hard red flag; a
+    legal note is a soft concern at most."""
+    cut = passages.cut((SAMPLES / "filing_us_kvue_sample.txt").read_text(encoding="utf-8"))
+    note = "We are subject to various investigations, claims and legal proceedings in the ordinary course of business."
+    src = {"filings": [], "headlines": [{"date": "2026-11-01", "title": "Kenvue shares edge higher"}],
+           "passages": {"title": "10-Q 2026-10-30", "date": "2026-10-30", "passages": cut + [note]}}
+    lines = review.lines_of(src)
+    assert [x["type"] for x in lines] == ["定期报告", "定期报告", "新闻"]
+    assert review.ids_of(lines)[:2] == ["2026-10-30 10-Q 2026-10-30"] * 2  # the cache is redone for a new filing
+    assert "[1] 2026-10-30 定期报告（10-Q 2026-10-30）段落：" in review.prompt(row("KVUE", "buy", 1, 0.9), "us", "buy", lines)
+    sale = "Company shareholders will receive 1) 0.14625 shares of K-C common stock"
+    found, rejected, altered = review.verify({"findings": [
+        {"kind": "takeover", "source": 1, "quote": sale},
+        {"kind": "investigation", "source": 2, "quote": "subject to various investigations, claims and legal proceedings"},
+        {"kind": "takeover", "source": 1, "quote": "the Company will acquire all of the outstanding shares of Kenvue"}]}, lines)
+    assert [(f["kind"], f["hard"], f["type"]) for f in found] == [("takeover", True, "10-Q 2026-10-30"),
+                                                                  ("other", False, "10-Q 2026-10-30")]
+    assert rejected == 1 and altered == 1  # a made-up quote; the legal note turned soft
+    assert review.line({}, found).startswith("审核：被收购或私有化（协议已签署、尚未完成）（2026-10-30 10-Q：「Company")
+
+
+def test_the_company_line_comes_with_the_review(tmp_path, monkeypatch):
+    """A US name's business text goes into its one review call and the line comes back with the note; the next review
+    request is warm; a line with a figure or in English is dropped (the card shows the source)."""
+    monkeypatch.setattr(review, "CACHE", tmp_path / "review")
+    monkeypatch.setattr(profiles, "PATH", str(tmp_path / "{}_profiles.csv.gz"))
+    monkeypatch.setattr(review, "dotenv_values", lambda p: {"DEEPSEEK_API_KEY": "test"})
+    pd.DataFrame({"code": ["MU"], "name_cn": ["美光科技"], "line": [None], "fetched": ["2026-10-20"], "source": [
+        "Micron Technology, Inc. designs, develops, manufactures, and sells memory and storage products worldwide."]}
+                 ).to_csv(tmp_path / "us_profiles.csv.gz", index=False, compression="gzip")
+    asked = []
+    monkeypatch.setattr(review, "ask", lambda client, content: asked.append(content) or
+                        {"findings": [], "note": "存储芯片景气向上，估值仍低", "line": "设计、制造和销售存储芯片"})
+    lists = {"us": pd.DataFrame([row("MU", "buy", 1, 0.9)])}
+    sources = {"us": {"MU": {"filings": [], "headlines": [{"date": "2026-10-20", "title": "Micron beats estimates"}]}}}
+    st = review.run(lists, sources, DAY, budget=None)["us"]["MU"]
+    assert len(asked) == 1 and "公司业务介绍：Micron Technology, Inc. designs" in asked[0]
+    assert st["line"] == "设计、制造和销售存储芯片" and profiles.load("us").at["MU", "line"] == "设计、制造和销售存储芯片"
+    assert review.run(lists, sources, DAY, budget=None)["us"]["MU"]["status"] == "done" and len(asked) == 1  # warm
+    assert notes.line("年营收超千亿元的存储芯片厂商") == "" and notes.line("Memory chips") == ""
+    assert notes.line("「设计和制造存储芯片」") == "设计和制造存储芯片"
+
+
 def row(code: str, lst: str, rank, score: float, **kw) -> dict:
     return {"list": lst, "code": code, "name": code, "rank": rank, "score": score, "sector": "s", "status": None,
             "reason": None, "weight": 0.05, "vol_1y": 0.2} | kw
@@ -87,8 +132,8 @@ def test_a_hard_flag_removes_a_buy_or_a_hold_and_is_noted_on_a_sell_name():
                          row("H3", "hold_next", 3, 0.5, vol_1y=0.19, sector="u"), row("H4", "hold_next", 4, 0.5, vol_1y=0.18),
                          row("600576", "sell", 1, 0.10)])
     st = states("601225", "600576", "601009", "688585", "00728")
-    hard = verified("cn", "600576")[0]  # a Hold name with the same finding, from a deep dive
-    out = review.apply(rows, "cn", st, {"H1": hard})
+    st["H1"] = st["600576"]  # a Hold name with the same finding
+    out = review.apply(rows, "cn", st)
     buys = out[out["list"] == "buy"]
     assert set(buys["code"]) == {"601225", "601009", "00728"} and buys["rank"].tolist() == [1, 2, 3]
     assert buys.set_index("code").at["00728", "replaces"] == "600576"  # its sector's next name; the scoreboard pairs them
@@ -102,8 +147,7 @@ def test_a_hard_flag_removes_a_buy_or_a_hold_and_is_noted_on_a_sell_name():
     sell = out[out["list"] == "sell"].iloc[0]
     assert sell["review"].startswith("审核：监管立案调查或欺诈认定") and len(out[out["list"] == "sell"]) == 1
     assert not {"next", "hold_next"} & set(out["list"])
-    mine = review.apply(rows, "cn", st, {"H1": hard}, confirmed={c: {"until": "2026-12-31", "reason": "已读公告"}
-                                                                for c in ("600576", "H1")})
+    mine = review.apply(rows, "cn", st, confirmed={c: {"until": "2026-12-31", "reason": "已读公告"} for c in ("600576", "H1")})
     assert "600576" in set(mine.loc[mine["list"] == "buy", "code"]) and "removed" not in set(mine["list"])
     kept = mine[(mine["list"] == "hold") & (mine["code"] == "H1")].iloc[0]
     assert kept["review"].endswith("（你已确认，至 2026-12-31：已读公告）")
@@ -111,24 +155,15 @@ def test_a_hard_flag_removes_a_buy_or_a_hold_and_is_noted_on_a_sell_name():
 
 def test_a_soft_concern_only_annotates():
     rows = pd.DataFrame([row("00728", "buy", 1, 0.9), row("02650", "next", 2, 0.8), row("00728", "hold", 1, 0.5)])
-    out = review.apply(rows, "hk", states("00728", "02650"), {})
+    out = review.apply(rows, "hk", states("00728", "02650"))
     buy = out[out["list"] == "buy"].iloc[0]
     assert buy["code"] == "00728" and buy["review"].startswith("市场可能在担心：下调指引或业绩下滑")
     assert "removed" not in set(out["list"]) and buy["note"] and not any(ch.isdigit() for ch in buy["note"])
     assert out[out["list"] == "hold"].iloc[0]["review"].startswith("市场可能在担心")  # kept, annotated
-    clean = review.apply(pd.DataFrame([row("601225", "buy", 1, 0.9)]), "cn", states("601225"), {})
+    clean = review.apply(pd.DataFrame([row("601225", "buy", 1, 0.9)]), "cn", states("601225"))
     assert clean.iloc[0]["review"] == "审核未见重大风险"
-    pending = review.apply(pd.DataFrame([row("601225", "buy", 1, 0.9)]), "cn", {"601225": {"status": "pending"}}, {})
+    pending = review.apply(pd.DataFrame([row("601225", "buy", 1, 0.9)]), "cn", {"601225": {"status": "pending"}})
     assert pending.iloc[0]["review"] == "审核进行中"
-
-
-def test_data_suspect_removes_a_buy():
-    rows = pd.DataFrame([row("601225", "buy", 1, 0.9), row("601009", "next", 2, 0.8)])
-    odd = {"601225": [{"kind": "data_suspect", "words": "最新报告的归母净利润 1.00 亿与卡片所用数据 2.00 亿相差 50%",
-                       "hard": False, "suspect": True, "quote": "x", "date": "2026-08-20", "type": "2026年半年度报告"}]}
-    out = review.apply(rows, "cn", states("601225", "601009"), odd)
-    assert out[out["list"] == "buy"]["code"].tolist() == ["601009"]
-    assert out[out["list"] == "removed"].iloc[0]["reason"].startswith("数据存疑：最新报告的归母净利润")
 
 
 def test_cache_is_redone_for_a_new_source_a_new_list_a_new_name_or_after_seven_days():

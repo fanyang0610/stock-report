@@ -1,19 +1,13 @@
-"""AI notes (PLAN.md, "Results review" and "Cards"): the card text DeepSeek reads in the results review, and the note
-it writes back. The note is words only (rule 2): one with any digit is dropped, so a number on a card always comes
-from code and data. lines() writes one Chinese line on what a company does from the text code fetched (PLAN.md,
-"Report"), words only too."""
+"""AI notes (PLAN.md, "Results review" and "Cards"): the card text DeepSeek reads in the results review, and the words
+it writes back in that same call: the note, and one Chinese line on what a company does from the text code fetched
+(PLAN.md, "Report"). Both are words only (rule 2): a note with any figure is dropped, so a number on a card always
+comes from code and data, and so is a line."""
 
-import logging
 import re
-from concurrent.futures import ThreadPoolExecutor
 
-import httpx
 import pandas as pd
 
-from stockreport.config import CONFIG
 from stockreport.fetch import profiles
-
-log = logging.getLogger(__name__)
 
 MARKET_NAMES = {"cn": "A股", "us": "美股", "hk": "港股"}
 NOTE_MAX = 40  # width in Chinese characters; digits, Latin letters and ASCII symbols count half
@@ -64,40 +58,16 @@ def words_only(text) -> str:
     return "" if FIGURE.search(text) else shorten(text, NOTE_MAX)
 
 
-LINE = ("把用户给的公司业务介绍（中文或英文）写成一句简短的中文，说明这家公司主要做什么，不超过 25 个字，可以省略地区和细项。"
-        "只用介绍里已有的内容，不加评价，不写任何数字，不写公司名称。只输出这句中文。")
 SHORT = 50  # a CN/HK business sentence this wide is shown as the source writes it; a longer one, and US's, get a line
 
 
 def needs_line(market: str, source) -> bool:
+    """A US text (English) or a CN/HK one too long to show as written gets a line from the review."""
     return isinstance(source, str) and bool(source) and (market == "us" or width(profiles.first(source)) > SHORT)
 
 
-def lines(client: httpx.Client, workers: int = 10) -> int:
-    """One Chinese line per company whose business text is English (US) or too long to show (CN/HK), and has no line
-    yet: one DeepSeek call each (temperature 0, only that text in), kept only in Chinese and without a figure (FIGURE),
-    else marked dropped and the card shows the source cut to size. A failed call is asked again at the next review.
-    Returns the lines kept."""
-    def one(text: str) -> str | None:
-        try:
-            resp = client.post("/chat/completions", json={
-                "model": CONFIG["notes"]["model"], "temperature": 0, "thinking": {"type": "disabled"},
-                "max_tokens": 120, "messages": [{"role": "system", "content": LINE}, {"role": "user", "content": text}]})
-            resp.raise_for_status()
-            line = " ".join(resp.json()["choices"][0]["message"]["content"].split()).strip("「」\"“”")
-        except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as e:
-            log.warning("business line: %s", e)
-            return None
-        return shorten(line, SHORT) if re.search(r"[\u4e00-\u9fff]", line) and not FIGURE.search(line) else ""
-
-    kept = 0
-    for market in MARKET_NAMES:
-        table = profiles.load(market)
-        todo = table[table["line"].isna() & table["source"].map(lambda x: needs_line(market, x))]
-        with ThreadPoolExecutor(workers) as pool:
-            got = dict(zip(todo.index, pool.map(one, todo["source"])))
-        if got:
-            profiles.save_lines(market, got)
-        kept += sum(bool(x) for x in got.values())
-        log.info("%s business lines: %d of %d", market.upper(), sum(bool(x) for x in got.values()), len(got))
-    return kept
+def line(text) -> str:
+    """The company line as kept: Chinese, without a figure (FIGURE), at most SHORT wide; else '' (the card shows the
+    source cut to size)."""
+    text = " ".join(str(text or "").split()).strip("「」\"“”")
+    return shorten(text, SHORT) if re.search(r"[\u4e00-\u9fff]", text) and not FIGURE.search(text) else ""

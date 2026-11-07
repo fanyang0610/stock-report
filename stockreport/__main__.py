@@ -8,12 +8,10 @@ import time
 from datetime import date
 from pathlib import Path
 
-import httpx
 import numpy as np
 import pandas as pd
-from dotenv import dotenv_values
 
-from stockreport import crosscheck, deepdive, deliver, history, lists, notes, report, review, signals, track, verdicts
+from stockreport import crosscheck, deliver, history, lists, report, review, signals, track, verdicts
 from stockreport.cleanup import cleanup
 from stockreport.config import CONFIG, DATA, REPORTS, ROOT, setup_logging
 from stockreport.fetch import eastmoney, profiles
@@ -58,7 +56,7 @@ def build_market(market: str, today: date) -> None:
     report.save_failed(today, market, failed)
     df, info = scored(market, today)
     out_lists = lists.build(df, market, today)
-    try:  # the results review's sources (no DeepSeek: the review runs when you ask for a report)
+    try:  # the results review's sources and passages (no DeepSeek: the review runs when you ask for a report)
         review.gather(market, out_lists, today)
     except Exception:
         log.exception("%s review sources failed; the review shows 审核暂不可用 for this market", market.upper())
@@ -117,8 +115,8 @@ def run(markets: list[str]) -> int:
 
 def review_all(background: bool) -> int:
     """The results review without a time limit (after a keyword reply, `--background`: what its budget left): sources
-    gathered for any lists without them, every name reviewed, the day's deep dives read; then, unless in the
-    background, the report written and summed up. One at a time (data/review.lock)."""
+    gathered for any lists without them, every name reviewed; then, unless in the background, the report written and
+    summed up. One at a time (data/review.lock)."""
     started, today = time.monotonic(), date.today()
     lock = open(DATA / "review.lock", "w")
     try:
@@ -137,15 +135,6 @@ def review_all(background: bool) -> int:
             except Exception:
                 log.exception("%s company profiles failed", market.upper())
     states = review.run(lists, sources, today, None)
-    key = dotenv_values(ROOT / ".env").get("DEEPSEEK_API_KEY")
-    if key:
-        client = httpx.Client(base_url=CONFIG["notes"]["base_url"], timeout=300, headers={"Authorization": f"Bearer {key}"})
-        notes.lines(client)
-        for market, rows in lists.items():
-            try:
-                deepdive.run(market, rows, today, client)
-            except Exception:
-                log.exception("%s deep dives failed", market.upper())
     if background:
         log.info("background review done in %.0fs", time.monotonic() - started)
         return 0
@@ -230,8 +219,8 @@ def main(argv: list[str] | None = None) -> int:
     run_p = sub.add_parser("run", help="fetch, score, list and write the report (PDF + text summary)")
     run_p.add_argument("--market", choices=["cn", "us", "hk"], help="one market (default: all three)")
     sub.add_parser("track", help="average return of past lists vs each market's index")
-    rev = sub.add_parser("review", help="the results review of the newest lists (DeepSeek, no time limit), the day's "
-                                        "deep dives, then the report")
+    rev = sub.add_parser("review", help="the results review of the newest lists (the one DeepSeek step, no time "
+                                        "limit), then the report")
     rev.add_argument("--background", action="store_true", help="finish what a keyword reply's budget left; no report")
     verdict = sub.add_parser("verdict", help="your veto or confirm for a stock (no arguments: list those in force)")
     verdict.add_argument("code", nargs="?", help="ticker, e.g. 600519, 00700 or AAPL")

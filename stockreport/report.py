@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from stockreport import deepdive, deliver, review, track, verdicts
+from stockreport import deliver, review, track, verdicts
 from stockreport.cleanup import size_of
 from stockreport.config import CONFIG, DATA, REPORTS
 from stockreport.fetch import profiles
@@ -46,7 +46,8 @@ GUIDE = [  # page 1: how to read it, in five lines
     "<b>评级 A–E</b>：价值（价格相对利润和资产贵不贵）、质量（赚钱能力和稳定性）、成长（营收和利润在不在增长）、动量（股价和分析师预期在不在"
     "变好），都和同行业比：A 是同行最好的五分之一，E 是最差的五分之一。<b>风险</b>是亏损、负债率 70% 以上或半年跌超 30%；没有这些"
     "时写<b>短板</b>，即和同行比最弱的一项。",
-    "<b>审核</b>：DeepSeek 读每只股票近期的公告和新闻，引文由程序核对；有硬风险的买入和持有会被换掉，卖出名单上的只做标注。",
+    "<b>审核</b>：DeepSeek 读每只股票近期的公告、最新定期报告的相关段落和新闻，引文由程序核对；有硬风险的买入和持有会被换掉，"
+    "卖出名单上的只做标注。这是唯一用 AI 的一步，其余全部由程序完成。",
     "<b>不是保证</b>：这类方法平均每年跑赢指数几个百分点，但约 4 成年份跑输。历史模拟只含今天仍上市的公司，退市的差公司不在里面，"
     "对卖出名单最偏乐观。所有数字来自程序和公开数据，不构成投资建议。",
 ]
@@ -65,12 +66,13 @@ METHOD = [  # the back pages
      "每日涨跌（波动率）最小的 10 只（每个行业最多 2 只，不含买入和候补，也不含可能陷入财务困境或应计利润最大的）：评分不偏向涨也不偏向跌，"
      "过去波动小的股票以后波动通常也小。波动小说的是每天的涨跌，不是一年的涨跌：缓慢而持续的下跌也可能波动小，卡片上的「风险」会写出半年"
      "跌超 30%。卖出 = 市值前 400 里评分最低的 10 只，每个行业最多 2 只。复查日都是 12 个月后，即评级的期限；名单每天更新，评级可能提前改变。"),
-    ("审核（你请求报告时进行）", "DeepSeek 读每只股票近 90 天的非例行公告和近 30 天的新闻标题，每条结论都引用原文，由程序核对引文确实出自"
-     "该标题。硬风险（监管立案调查或欺诈认定、非标审计意见或审计师辞任、持续经营疑虑或债务违约、退市/ST/停牌、已签署尚未完成的被收购"
-     "或私有化（现金或换股）、制裁）只认公司自己的公告：买入和持有被剔除（由同行业的下一名替补，没有则由下一名，列在「审核剔除」），卖出"
-     "只标注；软风险只标注「市场可能在担心」。最新定期报告的归母净利润与卡片所用数据相差 20% 以上时标「数据存疑」，同样剔除。"),
+    ("审核（你请求报告时进行，唯一用 AI 的一步）", "DeepSeek 读每只股票近 90 天的非例行公告标题、程序从最新定期报告里截取的相关段落"
+     "（审计意见、持续经营、立案调查、公司被收购）和近 30 天的新闻标题，每条结论都引用原文，由程序核对引文确实出自该来源。硬风险（监管"
+     "立案调查或欺诈认定、非标审计意见或审计师辞任、持续经营疑虑或债务违约、退市/ST/停牌、已签署尚未完成的被收购或私有化（现金或换股）、"
+     "制裁）只认公司自己的公告和定期报告：买入和持有被剔除（由同行业的下一名替补，没有则由下一名，列在「审核剔除」），卖出只标注；软风险"
+     "只标注「市场可能在担心」。数据本身由程序和第二个数据源核对，AI 不读也不改任何数字。"),
     ("文字从哪里来", "所有数字都来自程序和公开数据。AI 点评只用文字，不含数字。公司业务：A 股、港股取自东方财富的公司资料（主营业务），"
-     "美股取自雅虎财经的公司简介，由 DeepSeek 译成一句中文（不含数字；没有译文时显示英文原句）。"),
+     "美股取自雅虎财经的公司简介，审核时由 DeepSeek 写成一句中文（不含数字；没有时显示原句）。"),
 ]
 COMMON = ("公开的因子组合平均每年跑赢指数几个百分点，但约 4 成年份跑输（AAII 实盘组合 55% 的滚动年份跑赢）；"
           "证据针对整个组合，只买其中几只结果更分散。任何名单都不保证收益。")
@@ -123,7 +125,7 @@ def expect(market: str) -> dict:
 
 
 def business(market: str, code: str, table: pd.DataFrame) -> str:
-    """What the company does, in one line: the review's line (notes.lines: a US text, or a long CN/HK one), else the
+    """What the company does, in one line: the review's line (notes.line: a US text, or a long CN/HK one), else the
     source's first sentence (CN/HK as written, cut with … past notes.SHORT; US in English, cut past 150 characters)."""
     if code not in table.index:
         return ""
@@ -260,10 +262,9 @@ def build(today: date, states: dict | None = None) -> tuple[Path, str, pd.DataFr
         if not path:
             continue
         rows = read_lists(path)
-        deep = deepdive.results(market, rows) if states is not None else {}
         period = rows.drop_duplicates("code").set_index("code")["period"] if "period" in rows else pd.Series(dtype=str)
         confirmed = {c: v for c, v in verdicts.active(market, today, period).items() if v["verdict"] == "confirm"}
-        rows = review.apply(rows, market, None if states is None else states.get(market, {}), deep, confirmed)
+        rows = review.apply(rows, market, None if states is None else states.get(market, {}), confirmed)
         if path.parent.name == today.isoformat():  # the scoreboard follows removed names against their replacements
             replacing = rows[rows["list"].isin(["buy", "hold"]) & rows["replaces"].notna()].assign(list="replacement")
             logged[market] = pd.concat([rows[rows["list"].isin(["buy", "hold", "sell", "removed"])], replacing]).rename(

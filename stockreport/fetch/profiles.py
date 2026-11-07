@@ -2,7 +2,7 @@
 market for the lists' names (CN 主营业务, RPT_F10_BASIC_ORGINFO; HK 主营业务, RPT_HKF10_INFO_ORGPROFILE; the profile where
 either is blank) and, for US, Eastmoney's Chinese short name (RPT_USF10_INFO_ORGPROFILE) and the opening of Yahoo's
 business summary (assetProfile), which says what the company does, while Eastmoney's US profiles often open with where
-and when it was incorporated. The review writes one Chinese line from a US text or a long CN/HK one (notes.lines).
+and when it was incorporated. The review writes one Chinese line from a US text or a long CN/HK one (notes.line).
 Kept in data/fundamentals/<market>_profiles.csv.gz (source: the text as fetched, up to SOURCE_MAX characters; line: the
 review's line), fetched again after REFRESH days."""
 
