@@ -13,6 +13,7 @@ import pandas as pd
 from stockreport import crosscheck
 from stockreport.config import CONFIG, DATA
 from stockreport.fetch import eastmoney, frames, hkex, index, nasdaq, sec, swclass, tdx, yahoo
+from stockreport.signals import forward, fy_end
 
 log = logging.getLogger(__name__)
 A_SHARE = re.compile(r"^(60[0-5]\d{3}|68[89]\d{3}|00[0-3]\d{3}|30[01]\d{3})$")
@@ -21,6 +22,7 @@ CN_FINANCIAL = ["银行", "非银金融"]  # 申万 level 1: banks, brokers, ins
 # The score's financials (PLAN.md, "How each ingredient is built"): banks, insurers, brokers and other lenders, whose
 # balance sheet is the product. US: SEC SIC 6000-6199 (credit institutions) and 6300-6399 (insurance carriers) too.
 US_SIC = [(6000, 6199), (6300, 6399)]
+CONSENSUS = ["analysts", "e1_year", "eps_e1", "eps_e2", "eps_e3"]  # CN and US: three estimate years
 
 
 def us_financial(industry: pd.Series, cik: pd.Series) -> pd.Series:
@@ -82,8 +84,8 @@ def cn_float(mcap: pd.Series, weights: pd.Series, since: pd.Series | None = None
 def yahoo_balance(df: pd.DataFrame, market: str, quote: str) -> pd.DataFrame:
     """Yahoo's trailing EBIT and latest debt, cash (with short-term investments), minorities and liabilities in the
     quote currency (fetch/yahoo.py), EV = market value + debt + minorities − cash, and the latest fiscal year's scaled
-    total accruals (sta, the buys' screen); a balance item Yahoo doesn't list counts as 0, a missing EBIT leaves EBIT/EV
-    out (rule 5)."""
+    total accruals (sta, the buys' screen). A debt or minorities line Yahoo doesn't list is none (PLAN.md, EBIT/EV);
+    without a cash line the balance sheet wasn't read: no EBIT or no cash leaves EBIT/EV out (rule 5)."""
     path = yahoo.gaps_path(market)
     y = pd.read_csv(path, dtype={"code": str}).drop_duplicates("code", keep="last").set_index("code") \
         if path.exists() else pd.DataFrame(columns=["yahoo", "currency"])
@@ -93,18 +95,18 @@ def yahoo_balance(df: pd.DataFrame, market: str, quote: str) -> pd.DataFrame:
     rate = (fx.get(quote, np.nan) / y["currency"].map(fx)).where(y["currency"] != quote, 1.0)
     items = y[["debt", "cash", "minority", "liabilities"]].mul(rate, axis=0)
     have = y["ebit_ttm"].notna()
-    ev = df["mcap"] + (items["debt"].fillna(0) + items["minority"].fillna(0) - items["cash"].fillna(0)).where(have)
+    ev = df["mcap"] + (items["debt"].fillna(0) + items["minority"].fillna(0) - items["cash"]).where(have)
     return df.assign(ebit=y["ebit_ttm"] * rate, ev=ev, cash=items["cash"].where(have), liab_y=items["liabilities"],
                      sta=y["sta"])
 
 
 def estimates(df: pd.DataFrame, table: pd.DataFrame, per_unit: pd.Series) -> pd.DataFrame:
     """Next year's consensus EPS now and 90 days ago (est_now, est_90; Yahoo's +1y) in the quote currency
-    (`per_unit`: quote-currency units per estimate-currency unit, per stock) and its analyst count (est_n). Yahoo shows
-    0 where it has no 90-day-old figure (yahoo.parse_trend): missing, also in tables saved before that was known."""
+    (`per_unit`: quote-currency units per estimate-currency unit, per stock), its analyst count (est_n) and fiscal year
+    (rev_year). Yahoo shows 0 where it has no 90-day-old figure (yahoo.parse_trend): missing."""
     t = table.reindex(df.index)
     return df.assign(est_now=t["eps_e2"] * per_unit, est_90=t["eps_e2_90"].replace(0, np.nan) * per_unit,
-                     est_n=t["analysts"].fillna(0))
+                     est_n=t["analysts"].fillna(0), rev_year=fy_end(t["e1_year"]).dt.year + 1)
 
 
 def trading_days(prices: pd.DataFrame) -> np.ndarray:
@@ -192,7 +194,7 @@ def ratios(df: pd.DataFrame) -> pd.DataFrame:
     df["div_yield"] = df["dps_ttm"] / df["price"]
     payout = (df["dps_ttm"] / df["eps_ttm"]).where(df["eps_ttm"] > 0, 0).clip(0, 1)
     df["retention"] = 1 - payout
-    df["fwd_pe"] = (df["price"] / df["eps_e2"]).where(df["eps_e2"] > 0)  # on next year's consensus EPS
+    df["fwd_pe"] = (df["price"] / df["eps_ntm"]).where(df["eps_ntm"] > 0) if "eps_ntm" in df else np.nan  # signals.forward
     df["fwd_growth"] = (df["eps_e3"] / df["eps_e1"]).where((df["eps_e1"] > 0) & (df["eps_e3"] > 0)) ** 0.5 - 1
     return df
 
@@ -240,8 +242,7 @@ def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
     balance = load_results("balance").dropna(subset=["debt_ratio"]).sort_values("period")
     df["debt_ratio"] = balance.groupby("code")["debt_ratio"].last().reindex(df.index) / 100
     df["dps_ttm"] = dividends(DATA / "fundamentals" / "cn_dividends.csv.gz", today).reindex(df.index).fillna(0)
-    df = ratios(join_consensus(df, DATA / "fundamentals" / "cn_consensus.csv.gz",
-                               ["analysts", "e1_year", "eps_e1", "eps_e2", "eps_e3"]))
+    df = ratios(forward(join_consensus(df, DATA / "fundamentals" / "cn_consensus.csv.gz", CONSENSUS), today))
     df["rev_growth"] = df["rev_yoy"] / 100
     df["np_growth"] = df["np_yoy"] / 100
     df["gross_margin"] = df["gross_margin"] / 100
@@ -316,9 +317,9 @@ def build_us(today: date) -> tuple[pd.DataFrame, dict]:
     df["cash_conv"] = (df["ocf_ttm"] / df["np_ttm"]).where(df["np_ttm"] > 0)
     df["rev_growth"], df["np_growth"] = df["rev_yoy"], df["np_yoy"]
     df["dps_ttm"] = dividends(Path(str(yahoo.DIVIDENDS).format("us")), today).reindex(df.index).fillna(0)
-    df = ratios(join_consensus(df, nasdaq.CONSENSUS, ["analysts", "e1_year", "eps_e1", "eps_e2", "eps_e3"]))
+    df = ratios(forward(join_consensus(df, nasdaq.CONSENSUS, CONSENSUS), today))
     trend = pd.read_csv(yahoo.US_TREND, dtype={"code": str}).set_index("code") if yahoo.US_TREND.exists() else \
-        pd.DataFrame(columns=["eps_e2", "eps_e2_90", "analysts", "currency"])
+        pd.DataFrame(columns=["e1_year", "eps_e2", "eps_e2_90", "analysts", "currency"])
     df = estimates(df, trend, 1 / trend["currency"].map(yahoo.load_fx()).reindex(df.index))
     df = yahoo_balance(df, "us", "USD").assign(float_value=df["mcap"])  # US float ≈ total value by sector (PLAN.md, "Lists")
 
@@ -372,7 +373,7 @@ def build_hk(today: date) -> tuple[pd.DataFrame, dict]:
     df["dps_ttm"] = dividends(Path(str(yahoo.DIVIDENDS).format("hk")), today).reindex(df.index).fillna(0)
     est, fx = ["eps_e0", "eps_e1", "eps_e2", "eps_e2_90"], yahoo.load_fx()
     cons[est] = cons[est].mul(cons["currency"].map(fx["HKD"] / fx), axis=0)
-    df = ratios(df.join(cons[["analysts", "e1_year"] + est]).assign(eps_e3=np.nan, notice_date=None))  # no filing dates
+    df = ratios(forward(df.join(cons[["analysts", "e1_year"] + est]).assign(eps_e3=np.nan, notice_date=None), today))
     df = estimates(df, cons, 1.0)  # already in HKD
     listed = pd.read_csv(yahoo.HK_SHARES, dtype={"code": str}).drop_duplicates("code").set_index("code")["shares_class"] \
         if yahoo.HK_SHARES.exists() else pd.Series(dtype=float)

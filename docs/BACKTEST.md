@@ -1364,26 +1364,37 @@ value at the CSI file's date, not today's; docs/PLAN.md, "Lists"): +4.3% (63%) �
 (`frame cn`), the family check unchanged. All three frames rebuilt on 2026-11-02 evening for section 24 (each stock's
 volatility kept): CN and US identical; HK's float factors came from that day's newer snapshot, which moved HK's 2019-20
 from +10.0 to +9.8, the 10 best +5.1% (57%) → +5.2% (56%) and the 5 best +3.9% → +4.1%; the 20 names' +5.5% (68%)
-held (5.50 → 5.47). The table has the new figures.
+held (5.50 → 5.47). Run again 2026-11-07 after stage 6 (docs/PLAN.md, "The score": the long-run figures on total
+assets in every market, the 8-year ROA and the 5-year profit growth over assets; CN's annual 扣非 the amount each report
+states, from 2009; HK's annual figures in the reporting currency; the history has no forward E/P or EBIT/EV, so the
+stage's other two changes don't reach it), the frames rebuilt with the newest snapshot's float factors (11-07; on 11-02
+a newer snapshot moved HK's 20 names by 0.03 points). Over the fund: CN +3.8% (65%) → +2.2% (53%), US +1.9% (53%) →
++1.5% (54%), HK +5.5% (68%) → +6.6% (69%). A first version of the stage (ROE kept, a year without positive equity
+counted as −50%) gave CN +4.4% (67%) and HK +5.8% (72%); it was replaced for the fault docs/PLAN.md describes, not for
+these numbers. The family check: CN quality +1.9% → +1.5%, growth +0.4% → 0.0%, the score +1.8% → +1.6%; US growth
+−1.5% → −1.6%, the score −4.1% → −4.3%; HK quality −2.9% → −1.1%, the score +5.3% → +6.2%; the rest within 0.1 points.
+The component spreads in the paragraph below are the 11-01 run's, not redone; the dividend yield's are void (the
+snapshots carry no dividends: every stock's yield is 0, so its percentile is one value a sector and its spread sorts
+sectors by their size; stage 7). The table has the new figures.
 
 | 12 months from each month end, after costs | CN (510300) | US (SPY) | HK (2800) |
 |---|---|---|---|
 | windows | 81 (2019-01..2025-09) | 93 (2018-01..2025-09) | 108 (2016-10..2025-09) |
-| 20 names: mean return / the fund's | +10.4% / +6.6% | +17.8% / +15.9% | +11.0% / +5.5% |
-| over the fund (windows ahead) | **+3.8% (65%)** | **+1.9% (53%)** | **+5.5% (68%)** |
+| 20 names: mean return / the fund's | +8.8% / +6.6% | +17.3% / +15.9% | +12.2% / +5.5% |
+| over the fund (windows ahead) | **+2.2% (53%)** | **+1.5% (54%)** | **+6.6% (69%)** |
 | section 22's (the index-weighted list) | +7.2% (67%) | −1.3% (32%) | +3.3% (58%) |
-| 10th / 90th percentile over the fund | −8.8% / +16.7% | −9.3% / +12.9% | −6.0% / +18.6% |
-| worst 12 months (the fund's; start) | −27.0% (−20.4%; 2021-09) | −18.0% (−10.6%; 2021-06) | −32.4% (−24.5%; 2021-04) |
-| largest fall, overlapping portfolio (the fund's) | −34.9% (−36.5%) | −23.3% (−23.9%) | −41.1% (−47.2%) |
-| over the fund by sub-period: 2019-20 / 2021-22 / 2023 / 2024-26 | +2.2 / +1.9 / −0.9 / +10.3 | −1.4 / +1.5 / +8.5 / +7.2 | +9.8 / +3.4 / +15.4 / +3.7 |
-| 10 best scores: over the fund, ahead, worst against the fund | +1.4%, 44%, −25.7% | +2.3%, 53%, −25.1% | +5.2%, 56%, −20.0% |
-| 5 best scores: the same | −3.6%, 44%, −37.3% | +2.9%, 55%, −31.9% | +4.1%, 54%, −35.7% |
-| the market's 10 largest held, per list (their share of the money) | 0.4 (2%) | 1.4 (7%) | 2.6 (13%) |
+| 10th / 90th percentile over the fund | −9.4% / +15.8% | −8.5% / +11.2% | −7.2% / +22.0% |
+| worst 12 months (the fund's; start) | −25.3% (−27.3%; 2021-10) | −16.3% (−10.6%; 2021-06) | −30.2% (−20.3%; 2021-03) |
+| largest fall, overlapping portfolio (the fund's) | −35.5% (−36.5%) | −23.3% (−23.9%) | −40.3% (−47.2%) |
+| over the fund by sub-period: 2019-20 / 2021-22 / 2023 / 2024-26 | +1.2 / +0.7 / −1.0 / +6.9 | −1.4 / +1.1 / +7.1 / +6.4 | +12.0 / +4.6 / +11.9 / +7.1 |
+| 10 best scores: over the fund, ahead, worst against the fund | −0.5%, 31%, −27.2% | +2.1%, 53%, −25.1% | +5.7%, 60%, −20.0% |
+| 5 best scores: the same | −4.8%, 40%, −34.3% | +3.0%, 56%, −31.9% | +6.4%, 55%, −23.2% |
+| the market's 10 largest held, per list (their share of the money) | 0.3 (1%) | 1.4 (7%) | 2.5 (13%) |
 
 **The family check** (top fifth minus bottom fifth within sectors, mean 12-month return; sub-periods positive of 4): CN
-value +0.3% (2), quality +1.9% (3), growth +0.4% (2), momentum (SUE) +2.2% (2), the score +1.8% (3); US value +2.6% (3),
-quality −9.8% (0), growth −1.5% (2), momentum −1.7% (2), the score −4.1% (1); HK value 0.0% (3), quality −2.9% (2),
-growth +6.7% (2), momentum +7.9% (4), the score +5.3% (3). By component, US: low volatility −14.5%, margin stability
+value +0.3% (2), quality +1.5% (3), growth 0.0% (2), momentum (SUE) +2.2% (2), the score +1.6% (3); US value +2.6% (3),
+quality −9.8% (0), growth −1.6% (2), momentum −1.7% (2), the score −4.3% (1); HK value 0.0% (3), quality −1.1% (2),
+growth +6.6% (3), momentum +7.9% (4), the score +6.2% (3) (stage 6's figures). By component (the 11-01 run), US: low volatility −14.5%, margin stability
 −9.7%, 5-year profit growth −8.7%, 8-year ROA −8.3%, E/P −4.9%, S/P +7.1%, B/P +4.4%; CN: low volatility +1.9%,
 dividend yield −5.3%; HK: dividend yield +6.0%, revenue growth +6.8%, margin stability −11.0%. US quality runs well
 against its published direction (section 22: −1.5% without the new parts). I looked for a bug and found none: the
@@ -1397,15 +1408,16 @@ too; quality-minus-junk in 24 countries), so the family stays, and the report's 
 against it.
 
 **What it says.** Picking each sector's best scores from the whole market in equal amounts puts the US list ahead of
-SPY in this history (+1.9 points a year, ahead in 53% of windows; section 22: −1.3, 32%), with SPY's largest fall
+SPY in this history (+1.5 points a year, ahead in 54% of windows; section 22: −1.3, 32%), with SPY's largest fall
 (−23% against −24%), despite US quality running backwards here: the value and growth families and the sector places
-carry it. CN's lead is smaller than section 22's (+3.8 against +7.2) because the list no longer holds 中际旭创 at up to
-10% (section 22's 2024-26 lead was mostly that one name); it is now spread (2024-26 +10.3). HK's is larger (+5.5,
-ahead in 68%): the list holds the best of the large and mid caps rather than the index's large financials and telecoms.
-The lists hold few of the market's 10 largest companies (CN 0.4, US 1.4, HK 2.6 a month) and their worst 12 months are
-6-8 points worse than the funds', the cost of 20 names in equal amounts; the largest falls stay at or below the funds'.
-Fewer names widen the range: the worst 12 months against the fund go from −17% (20 names) to −26% (10) and −37% (5) in
-CN, from −13% to −25% and −32% in the US, and in HK −20% for 20 and for 10 names, −36% for 5.
+carry it. CN's lead is smaller than section 22's (+2.2 against +7.2)
+because the list no longer holds 中际旭创 at up to 10% (section 22's 2024-26 lead was mostly that one name); it is now
+spread (2024-26 +6.9). HK's is larger (+6.6, ahead in 69%): the list holds the best of the large and mid caps rather
+than the index's large financials and telecoms. The lists hold few of the market's 10 largest companies (CN 0.3, US
+1.4, HK 2.5 a month); their worst 12 months were 6 (US) and 10 (HK) points worse than the funds' and in CN 2 points
+better, the cost of 20 names in equal amounts; the largest falls stay at or below the funds'. Fewer names widen the
+range in CN and the US: the worst 12 months against the fund go from −17% (20 names) to −27% (10) and −34% (5) in CN,
+from −15% to −25% and −32% in the US; in HK −22% for 20, −20% for 10, −23% for 5.
 
 **Limits.** All of sections 21 and 22's (today's listings only; CN's restated 扣非 figures under the first notice date;
 the float factors are today's, applied to every month; the HK frames have no turnover floor), plus: the HK frames have
@@ -1425,32 +1437,33 @@ not that month's buys or their bench (Quantitative Value's screen has no inputs 
 amounts, held 12 months after a round trip of costs, against the fund, as the buys. The rules were fixed in the code
 (lists.holds, config.toml) before this run and written into docs/PLAN.md ("Lists") after it, unchanged; the stage
 review then had the buys' bench left out of Hold too (a name can't be both), which moved only HK's Hold (−2.3% →
-−2.2%). These numbers fill the 预期 lines and decide nothing.
+−2.2%). These numbers fill the 预期 lines and decide nothing. Run again 2026-11-07 on stage 6's frames (section 23):
+Hold CN −1.0% → −0.8%, US −6.2% → −6.4%, HK −2.2% → −1.8%; Sell CN +1.4% → +3.0%, US +1.5% → +1.7%, HK −0.5% → +0.7%.
 
 | 12 months from each month end, after costs | CN (510300) | US (SPY) | HK (2800) |
 |---|---|---|---|
 | windows | 81 (2019-01..2025-09) | 93 (2018-01..2025-09) | 108 (2016-10..2025-09) |
-| Hold 10: mean return / the fund's | +5.6% / +6.6% | +9.7% / +15.9% | +3.3% / +5.5% |
-| Hold over the fund (windows ahead) | **−1.0% (51%)** | **−6.2% (37%)** | **−2.2% (43%)** |
-| Hold: half the windows within this of the fund | 17.2% | 11.1% | 9.8% |
-| Hold: 10th / 90th percentile over the fund | −27.4% / +22.9% | −20.0% / +10.2% | −18.3% / +15.9% |
-| Hold: volatility, overlapping portfolio (the fund's) | 14.4% (18.9%) | 13.6% (16.4%) | 15.0% (21.5%) |
-| Hold: worst 12 months; largest fall (the fund's) | −20.7%; −16.5% (−36.5%) | −13.2%; −19.2% (−23.9%) | −31.1%; −36.4% (−47.2%) |
-| Sell 10: mean return / the fund's | +8.0% / +6.6% | +17.4% / +15.9% | +5.0% / +5.5% |
-| Sell over the fund (windows behind) | **+1.4% (57%)** | **+1.5% (57%)** | **−0.5% (63%)** |
-| Sell: 10th / 90th percentile over the fund | −19.4% / +22.6% | −16.5% / +24.2% | −31.6% / +32.6% |
-| Sell: volatility (the fund's) | 27.3% (18.9%) | 22.0% (16.4%) | 33.2% (21.5%) |
-| Sell: worst 12 months; largest fall | −28.3%; −44.1% | −23.3%; −27.8% | −46.7%; −54.2% |
+| Hold 10: mean return / the fund's | +5.8% / +6.6% | +9.4% / +15.9% | +3.7% / +5.5% |
+| Hold over the fund (windows ahead) | **−0.8% (53%)** | **−6.4% (35%)** | **−1.8% (44%)** |
+| Hold: half the windows within this of the fund | 15.1% | 12.3% | 9.7% |
+| Hold: 10th / 90th percentile over the fund | −25.3% / +22.0% | −20.8% / +11.4% | −17.6% / +15.3% |
+| Hold: volatility, overlapping portfolio (the fund's) | 13.8% (18.9%) | 13.7% (16.4%) | 14.0% (21.5%) |
+| Hold: worst 12 months; largest fall (the fund's) | −21.6%; −15.5% (−36.5%) | −13.2%; −19.2% (−23.9%) | −35.6%; −36.6% (−47.2%) |
+| Sell 10: mean return / the fund's | +9.6% / +6.6% | +17.5% / +15.9% | +6.2% / +5.5% |
+| Sell over the fund (windows behind) | **+3.0% (52%)** | **+1.7% (55%)** | **+0.7% (61%)** |
+| Sell: 10th / 90th percentile over the fund | −19.5% / +21.8% | −17.1% / +26.6% | −28.1% / +41.0% |
+| Sell: volatility (the fund's) | 28.1% (18.9%) | 21.9% (16.4%) | 34.0% (21.5%) |
+| Sell: worst 12 months; largest fall | −33.5%; −44.9% | −22.6%; −27.8% | −50.9%; −57.5% |
 
 **What it says.** As a list of 10, Hold is the stable one: its volatility was 0.7-0.8 times the fund's and its
-largest fall much smaller in CN (−17% against −37%) and HK (−36% against −47%). It trailed the fund in these mostly
-rising years, most in the US (−6.2 points a year: steady names in a decade led by high-volatility technology, as
+largest fall much smaller in CN (−16% against −37%) and HK (−37% against −47%). It trailed the fund in these mostly
+rising years, most in the US (−6.4 points a year: steady names in a decade led by high-volatility technology, as
 section 23's US quality family showed). It doesn't track the fund: half its 12-month windows were more than 10-17
 points away from it, since low-volatility stocks move less than the market both ways. Single names are another
 matter: on 2026-11-02 every US Hold (16-23%) and HK Hold (19-29%) and 8 of the 10 CN Holds had a higher 1-year
 volatility than their index, and a steady slide can have a low daily volatility (中国旺旺 fell from HK$5.32 to 2.88 in a
-year at 29%). Sell trailed the fund in most windows (57-63%), but on
-average only in HK (−0.5); in CN and the US it was ahead on average (+1.4, +1.5), with 1.3-1.5 times the fund's
+year at 29%). Sell trailed the fund in most windows (52-61%), but on
+average in none of the three (CN +3.0, US +1.7, HK +0.7), with 1.3-1.6 times the fund's
 volatility, and in all three markets Sell's average was above Hold's. **Limits.** All of section 23's, and one that bears hardest on Sell: the frames hold today's listings
 only, so the companies that failed or were delisted, which come mostly from the bottom of the score (losses, falling
 prices, distress: Campbell, Hilscher and Szilagyi 2008), are missing; that flatters Sell most. The US score itself ran

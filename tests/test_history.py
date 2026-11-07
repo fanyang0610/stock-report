@@ -5,6 +5,7 @@ import os
 from datetime import date
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -113,3 +114,42 @@ def test_us_preferred_uses_one_fiscal_year(tmp_path, monkeypatch):
     assert p.at["MET", "pref_div_share"] == pytest.approx((3379 - 3173) / 3379, rel=1e-3)
     assert p.at["XPF", "pref_div_share"] == pytest.approx(0.1) and not p.at["XPF", "pref_unknown"]  # a year older
     assert p.at["XPU", "pref_div_share"] == 0 and p.at["XPU", "pref_unknown"]  # preferred, no figure within 2 years
+
+
+def test_cn_years_take_the_stated_deduct_and_assets(tmp_path, monkeypatch):
+    # 中国船舶 2022 (Eastmoney, 2026-11-07): 扣非 EPS ÷ EPS rebuilt a CNY 0.17bn loss; the report states 2.75bn.
+    from stockreport import history
+    pd.DataFrame({"code": "600150", "period": ["2021-12-31", "2022-12-31", "2023-12-31"],
+                  "notice_date": ["2022-03-30", "2023-03-30", "2024-03-29"], "eps": [0.04, 0.0386, 0.66],
+                  "eps_deduct": [-0.3, -0.0004, 0.5], "np": [1.8e8, 1.72e8, 2.95e9], "revenue": 1.0e11,
+                  "bps": [8.0, 8.1, 8.8], "ocfps": 1.0, "gross_margin": 10.0, "roe": [0.5, 0.4, 7.0]}
+                 ).to_csv(tmp_path / "cn_annual.csv.gz", index=False, compression="gzip")
+    pd.DataFrame({"code": "600150", "period": ["2022-09-30", "2022-12-31", "2023-12-31"],
+                  "notice_date": ["2022-10-28", "2023-03-31", "2024-03-29"], "deduct": [-2.0e9, -2.748e9, 2.3e9],
+                  "assets": [None, 1.626e11, 1.70e11]}).to_csv(tmp_path / "cn_deduct.csv.gz", index=False, compression="gzip")
+    monkeypatch.setattr(history, "HISTORY", tmp_path)
+    y = history.cn_years().set_index("year")
+    assert y.loc[2022, "core"] == -2.748e9 and y.loc[2022, "avail"] == "2023-03-31"  # the later of the two notices
+    assert y.loc[2022, "roa"] == pytest.approx(-2.748e9 / 1.626e11)
+    assert np.isnan(y.loc[2021, "core"]) and np.isnan(y.loc[2021, "roa"])  # no stated amounts: none
+
+
+def test_hk_years_in_the_reporting_currency(tmp_path, monkeypatch):
+    # Eastmoney's HK figures are CNY at each period's rate: back to USD at each year's rate, so HSBC's 5-year profit
+    # growth isn't the yuan's move; ROA is profit to shareholders over total assets.
+    from stockreport import history
+    pd.DataFrame({"code": "00005", "period": ["2020-12-31", "2025-12-31"], "start": ["2020-01-01", "2025-01-01"],
+                  "date_type": "1", "revenue": [3.5e11, 4.6e11], "np": [2.54e10, 1.48e11], "eps": [1.24, 8.50],
+                  "bps": [66.3, 72.8], "shares": 1.7135e10, "ocf": 1.0e11, "gross_margin": None, "roe": [2.0, 11.0],
+                  "assets": [1.92e13, 2.36e13]}).to_csv(tmp_path / "hk_results.csv.gz", index=False, compression="gzip")
+    pd.DataFrame({"code": ["00005"], "report_currency": ["USD"]}).to_csv(tmp_path / "cons.csv", index=False)
+    pd.DataFrame({"currency": "USD", "date": ["2020-12-31", "2025-12-31"], "close": [6.52, 7.1]}
+                 ).to_csv(tmp_path / "fx.csv", index=False)
+    monkeypatch.setattr(history, "HISTORY", tmp_path)
+    monkeypatch.setattr(yahoo, "CONSENSUS", tmp_path / "cons.csv")
+    monkeypatch.setattr(yahoo, "FX_CNY", tmp_path / "fx.csv")
+    y = history.hk_years().set_index("year")
+    assert y.loc[2025, "core"] == pytest.approx(1.48e11 / 7.1) and y.loc[2020, "core"] == pytest.approx(2.54e10 / 6.52)
+    assert y.loc[2020, "assets"] == pytest.approx(1.92e13 / 6.52) and y.loc[2025, "roa"] == pytest.approx(1.48e11 / 2.36e13)
+    pd.DataFrame({"code": ["00005"], "report_currency": [None]}).to_csv(tmp_path / "cons.csv", index=False)
+    assert history.hk_years()["core"].isna().all()  # no known reporting currency: no figures

@@ -216,22 +216,30 @@ def update_yield() -> None:
 CN_ANNUAL, CN_VALUATION = HISTORY / "cn_annual.csv.gz", HISTORY / "cn_valuation.csv.gz"
 CN_FORECASTS, CN_DEDUCT = HISTORY / "cn_forecasts.csv.gz", HISTORY / "cn_deduct.csv.gz"
 DEDUCT_FIELDS = {"SECURITY_CODE": "code", "NOTICE_DATE": "notice_date", "KCFJCXSYJLR": "deduct"}
+ANNUAL_FIELDS = DEDUCT_FIELDS | {"TOTAL_ASSETS_PK": "assets"}  # fiscal years: total assets, for the long-run ROA
 
 
 def deduct_table(rows: list[dict], period: str) -> pd.DataFrame:
-    df = pd.DataFrame(rows, columns=list(DEDUCT_FIELDS)).rename(columns=DEDUCT_FIELDS)
+    fields = ANNUAL_FIELDS if period.endswith("12-31") else DEDUCT_FIELDS
+    df = pd.DataFrame(rows, columns=list(fields)).rename(columns=fields)
     return df.assign(notice_date=df["notice_date"].str[:10], period=period)
 
 
 def update_cn_deduct(today: date) -> None:
-    """Year-to-date 扣非 net profit (CNY) of every A-share for every quarter since 2015, from 主要财务指标
-    (RPT_F10_FINANCE_MAINFINADATA, with the first notice date): E/P and the SUE (PLAN.md, the score). 业绩报表
-    has 扣非 EPS only in half-year and annual reports. Each quarter once; one still reporting daily."""
+    """Year-to-date 扣非 net profit (CNY) of every A-share for every quarter since 2015 and every fiscal year since
+    2009, from 主要财务指标 (RPT_F10_FINANCE_MAINFINADATA, with the first notice date): E/P and the SUE (PLAN.md, the
+    score), and with each fiscal year's total assets the long-run figures (history.cn_years; 8 years back from the
+    history run's first years). 业绩报表 has 扣非 EPS only in half-year and annual reports. Each period once; one still
+    reporting daily; the fiscal years once more for a table saved before they carried total assets."""
     have, fresh = periods_in(CN_DEDUCT), not needs_refresh(CN_DEDUCT, today, True)
-    for period in reversed(quarter_ends(today, 4 * (today.year - 2015) + 4)):
+    if have and "assets" not in pd.read_csv(CN_DEDUCT, nrows=0).columns:
+        have = {p for p in have if not p.endswith("12-31")}
+    for period in reversed(quarter_ends(today, 4 * (today.year - 2009) + 4)):
         p = period.isoformat()
-        if p >= "2015" and (p not in have or (is_open(period, today) and not fresh)):
-            rows = datacenter("RPT_F10_FINANCE_MAINFINADATA", f"(REPORT_DATE='{p}'){A_SHARES}", ",".join(DEDUCT_FIELDS))
+        wanted = p >= "2015" or (p >= "2009" and p.endswith("12-31"))
+        if wanted and (p not in have or (is_open(period, today) and not fresh)):
+            fields = ANNUAL_FIELDS if p.endswith("12-31") else DEDUCT_FIELDS
+            rows = datacenter("RPT_F10_FINANCE_MAINFINADATA", f"(REPORT_DATE='{p}'){A_SHARES}", ",".join(fields))
             merge(CN_DEDUCT, deduct_table(rows, p), ["code", "period"])  # each quarter as it comes: the first run is ~17 min
             log.info("cn 扣非 %s: %d rows", p, len(rows))
 VALUATION_FIELDS = {"SECURITY_CODE": "code", "TRADE_DATE": "trade_date", "CLOSE_PRICE": "close",
@@ -298,7 +306,7 @@ HK_FIELDS = {"SECURITY_CODE": "code", "REPORT_DATE": "period", "START_DATE": "st
              "OPERATE_INCOME": "revenue", "HOLDER_PROFIT": "np", "OPERATE_INCOME_YOY": "rev_yoy",
              "HOLDER_PROFIT_YOY": "np_yoy", "GROSS_PROFIT_RATIO": "gross_margin", "BPS": "bps",
              "NETCASH_OPERATE": "ocf", "DEBT_ASSET_RATIO": "debt_ratio", "ISSUED_COMMON_SHARES": "shares",
-             "BASIC_EPS": "eps", "ROE_AVG": "roe",
+             "BASIC_EPS": "eps", "ROE_AVG": "roe", "TOTAL_ASSETS": "assets",
              "TOTAL_MARKET_CAP": "mcap_em", "PE_TTM": "pe_ttm_em", "PB_TTM": "pb_ttm_em"}
 HK_CURRENT = ["mcap_em", "pe_ttm_em", "pb_ttm_em"]  # today's values on every row: not history
 
@@ -338,11 +346,12 @@ def update_hk_fundamentals(today: date) -> None:
 
 def update_hk_history(today: date) -> None:
     """Main indicators of every HK company since 2015 (amounts in CNY, as in the weekly table): fetched
-    once, then topped up from the weekly table whenever it is newer, with no extra calls."""
-    if not HK_HISTORY.exists():
+    once (again for a table saved before it carried total assets, merged in: companies Eastmoney no longer lists
+    keep their rows), then topped up from the weekly table whenever it is newer, with no extra calls."""
+    if not HK_HISTORY.exists() or "assets" not in pd.read_csv(HK_HISTORY, nrows=0).columns:
         df = hk_results(datacenter("RPT_HKF10_FN_MAININDICATOR", "(REPORT_DATE>='2015-01-01')", ",".join(HK_FIELDS),
                                    sort="SECURITY_CODE,REPORT_DATE", sort_type="1,1", max_pages=400))
-        write(df.drop(columns=HK_CURRENT), HK_HISTORY)
+        merge(HK_HISTORY, df.drop(columns=HK_CURRENT), ["code", "period", "date_type"])
         log.info("hk history: %d rows for %d companies", len(df), df["code"].nunique())
         return
     if HK_RESULTS.stat().st_mtime <= HK_HISTORY.stat().st_mtime:

@@ -29,15 +29,21 @@ def read(name: str) -> pd.DataFrame:
 
 
 def cn_years() -> pd.DataFrame:
-    """CN fiscal years on 扣非 profit: ROE = weighted ROE × 扣非 EPS / EPS; public on the notice date."""
+    """CN fiscal years on 扣非 profit and total assets, the amounts each annual report states (CN_DEDUCT's year to date
+    at December 31 and its total assets), public when both tables have them; roa = 扣非 profit ÷ total assets. Never
+    rebuilt from per-share figures: 扣非 EPS ÷ EPS was over 10% off in a fifth of the years (中国船舶 2022: a CNY 0.17bn
+    loss for a 2.75bn one), and the book per share × profit ÷ EPS took EPS restated for later bonus shares (CATL 2022:
+    CNY 288bn for its ~164bn). A year without the amounts has none (rule 5)."""
     a = read("cn_annual")
-    a = a[a["period"].str.endswith("12-31")]
-    core = (a["eps_deduct"] / a["eps"]).where(a["eps"] > 0).clip(-1, 1.5).fillna(1)
-    shares = a["np"] / a["eps"].where(a["eps"].abs() > 0.005)
-    return pd.DataFrame({"code": a["code"], "year": a["period"].str[:4].astype(int), "roe": a["roe"] / 100 * core,
-                         "core": a["np"] * core, "ni": a["np"], "rev": a["revenue"], "ocf": a["ocfps"] * shares,
-                         "gm": a["gross_margin"] / 100, "fcf": np.nan, "avail": a["notice_date"].fillna(""),
-                         "book": a["bps"] * shares})
+    a = a[a["period"].str.endswith("12-31")].drop_duplicates(["code", "period"], keep="last")
+    d = read("cn_deduct").rename(columns={"notice_date": "deduct_notice"})
+    d = d[d["period"].str.endswith("12-31")].reindex(columns=["code", "period", "deduct_notice", "deduct", "assets"])
+    a = a.merge(d, on=["code", "period"], how="left")
+    notice, later = a["notice_date"].fillna(""), a["deduct_notice"].fillna("")
+    assets = a["assets"].where(a["assets"] > 0)
+    return pd.DataFrame({"code": a["code"], "year": a["period"].str[:4].astype(int), "core": a["deduct"], "ni": a["np"],
+                         "rev": a["revenue"], "gm": a["gross_margin"] / 100, "avail": np.where(later > notice, later, notice),
+                         "assets": assets, "roa": a["deduct"] / assets})
 
 
 def us_annual(today: date | None = None) -> pd.DataFrame:
@@ -59,10 +65,11 @@ def us_years() -> pd.DataFrame:
     eq = a["equity"] - a["pref"].fillna(0)
     prev = eq.groupby(a["code"]).shift(1)
     roe = (core / ((eq + prev) / 2).where(prev > 0, eq)).where(eq > 0)
+    assets = a["assets"].where(a["assets"] > 0)
     return pd.DataFrame({"code": a["code"], "year": a["year"], "roe": roe, "core": core, "ni": a["ni"],
                          "rev": a["revenue"], "ocf": a["ocf"], "gm": a["gp"] / a["revenue"],
                          "fcf": a["ocf"] - a["capex"].fillna(0), "avail": a["avail"],
-                         "roa": core / a["assets"].where(a["assets"] > 0), "book": eq})
+                         "assets": assets, "roa": core / assets, "book": eq})
 
 
 def hk_results() -> pd.DataFrame:
@@ -74,14 +81,23 @@ def hk_results() -> pd.DataFrame:
 
 
 def hk_years() -> pd.DataFrame:
-    """HK fiscal years (Eastmoney amounts in CNY; only ratios are used): ROE_AVG, else profit / book."""
+    """HK fiscal years in each company's reporting currency (Yahoo's, as the universe's HK figures): Eastmoney gives
+    every amount in CNY at its period's rate, so each goes back at that rate (yahoo.cny_per) and a change over the
+    years isn't an exchange-rate move; without a known currency or rate, none. roa = profit to shareholders ÷ total
+    assets, as the US."""
+    from stockreport.fetch import yahoo
     fy = hk_results()
     fy = fy[fy["date_type"] == "001"].assign(year=lambda d: d["period"].str[:4].astype(int))
     fy = fy.drop_duplicates(["code", "year"], keep="last")
-    roe = (fy["roe"] / 100).fillna(fy["np"] / (fy["bps"] * fy["shares"]).where(fy["bps"] > 0))
-    return pd.DataFrame({"code": fy["code"], "year": fy["year"], "roe": roe, "core": fy["np"], "ni": fy["np"],
-                         "rev": fy["revenue"], "ocf": fy["ocf"], "gm": fy["gross_margin"] / 100, "fcf": np.nan,
-                         "avail": fy["avail"], "book": fy["bps"] * fy["shares"]})
+    cons = pd.read_csv(yahoo.CONSENSUS, dtype={"code": str}) if yahoo.CONSENSUS.exists() else \
+        pd.DataFrame(columns=["code", "report_currency"])
+    currency = fy["code"].map(cons.dropna(subset=["report_currency"]).drop_duplicates("code", keep="last")
+                              .set_index("code")["report_currency"])
+    rate = yahoo.cny_per(currency.fillna("").astype(str), fy["period"]).where(currency.notna())  # "": no rate
+    assets = (fy["assets"] if "assets" in fy else pd.Series(np.nan, index=fy.index)).where(lambda x: x > 0) / rate
+    return pd.DataFrame({"code": fy["code"], "year": fy["year"], "core": fy["np"] / rate, "ni": fy["np"] / rate,
+                         "rev": fy["revenue"] / rate, "gm": fy["gross_margin"] / 100, "avail": fy["avail"],
+                         "assets": assets, "roa": fy["np"] / rate / assets})
 
 
 YEARS = {"cn": cn_years, "us": us_years, "hk": hk_years}

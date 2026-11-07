@@ -207,6 +207,56 @@
   README says what runs when and how to refresh the 预期 numbers by hand. App Python 5,459 lines (5,707); 107 tests.
   Not done, at your word ("deepseek is crashed ... wrap it up now"): the review's cold timing with passages on the
   keyword path (DeepSeek still down), and the fresh-context review (stopped before it reported).
+- Stage 6 (correct the score's inputs): done 2026-11-07. You gave me an outside review (Codex's, of the 2026-11-02
+  checkout) to judge; each claim was checked against the current code and data before anything changed.
+  - Taken, as "The score" says: CN annual 扣非 from the stated amount (the rebuild was over 10% off in 22% of the
+    years); the long-run figures on total assets in every market, the 8-year ROA and the 5-year profit growth over
+    assets (a return on the book broke on small and negative books: HK losses over pre-listing negative books read as
+    high returns, 京东物流's 8-year figure 47.9%, now −4.2%, 快手's 45.7%, now −23.4%, Wynn Macau's 66%, now −1.0%;
+    US growth over a book shrunk by buybacks reached 296% for Seagate and 12,740% for Ubiquiti; CN's past books took
+    EPS restated for later bonus shares); HK annual figures in the reporting currency (the yuan's 7% from 2020 to 2025
+    was in every HKD and USD reporter's growth); forward E/P on the next 12 months (Micron's "next year" was the fiscal
+    year to August 2028); the card names the fiscal year revised. Data fetched once: CN fiscal years 2009-2025 with
+    total assets, the HK history with total assets (merged, so companies Eastmoney no longer lists keep their rows),
+    the CNY rates for 12 years.
+  - Checked and not taken: that HK past books used the wrong share count (Eastmoney's HK book per share is the year's
+    equity over today's count, so the book was right; my own first fix took that year's count, caught when 邮储银行's
+    8-year ROE went from 10% to 15%, and reverted); that a missing debt line is a missing value (every scored name
+    without one is debt-free; only a missing cash line now leaves EBIT/EV out: HK 02583); that a fiscal year's roll
+    reads as a revision (both dates are already the same year).
+  - Already gone: the replacement and holding-policy faults (no holdings since stage 5), one-off profits through the
+    deep dives (removed 11-07; per-company amounts would break rules 2 and 3). For stages 7 and 8 ("Stages"): the
+    history's dividend yield, its risk figure, a neutral basket, the review line's wording, the money one lot of each
+    buy takes; the forward scorecard. Not taken: earnings normalized over a cycle and places by industry (no recipe
+    borrowed here does either; the US list's three memory and storage makers on 11-07, Micron, Sandisk and Western
+    Digital, are each the sector's best scores, with the risk that brings), a parent-and-subsidiary screen (no free
+    ownership data; HK holds both PCCW and its subsidiary HKT).
+  - What it changes, the same 2026-11-07 snapshots scored by the code before and after: buys CN 6 (广发证券, 生益科技,
+    新奥股份, 中远海控, 东鹏饮料, 艾力斯 → 燕京啤酒, 沪电股份, 上港集团, 川投能源, 华安证券, 药明康德; ROA doesn't reward
+    leverage: 东鹏饮料's 8-year ROE 37% is an ROA of 14%), US 4 (Equinor, Expedia, NetApp, Seagate → HF Sinclair,
+    Alphabet, UMC, Yum China; Expedia's and Seagate's growth had stood on small books), HK 4 (香港交易所, 永利澳门, 农业银行,
+    先声药业 → 晶苑国际, 药明康德, 国泰海通, 华泰证券); Hold CN 3, US 3, HK 4; Sell CN 3, US 1, HK 0. No name lost the 8-year
+    figure; the 5-year growth now covers CN 792 of 794 names (777), US 733 of 789 (701), HK 369 of 406 (353).
+  - The history (BACKTEST.md sections 23-24): the 20 names over the fund CN +3.8% (65%) → +2.2% (53%), US +1.9% (53%) →
+    +1.5% (54%), HK +5.5% (68%) → +6.6% (69%); the family check within 1.8 points (HK quality −2.9% → −1.1%). It
+    decides nothing (rules 3 and 12): a first version (ROE with a −50% floor) gave CN +4.4% and was replaced for its
+    fault. `run` (06:30's lists rebuilt; 384 s, no fetch failures): CN 794, US 789, HK 406 scored; the PDF and a
+    3,366-byte summary; nothing sent. 112 tests; app Python 5,513 lines (5,460).
+  - The fresh-context stage review confirmed the 扣非 join point-in-time (both notice dates agree in every fiscal year)
+    and the quarterly TTM and SUE unchanged by the added years, the HK conversion and its book-per-share reading
+    (Tencent 2017, HSBC 2020), the 12-month weights for December, August and March year ends and for a year ended but
+    not reported, the US untouched by the floor, no rule for a named stock, and BACKTEST's figures. Its findings: (1)
+    the −50% floor fell mostly on profitable HK pre-listing years (古茗, 布鲁可), while CN left such years out:
+    replaced by ROA as above; (2) four figures in this entry didn't match the outputs (HK names losing the 8-year
+    figure, the floor's year counts, a ratio range, 艾力斯's cause): rewritten with the ROA version; (3) CN's analyst
+    count is the rating institutions, not a count per year: worded so ("Forward E/P"). Answered, unchanged: 中国太平's
+    P/E of 1.9 on 2025's investment gains and Tesla's next-12-months P/E on Nasdaq's lower FY2027 estimate (the
+    consensus as the sources give it); 五粮液 a Hold while its 2027 consensus fell 31% in 91 days (the revision is in
+    its score, not on a Hold card; after the ROA change it is no longer a Hold).
+  - Found on the way, not this stage's: the 06:30 build met Yahoo HTTP 403s, so its US closes stayed a day old while
+    Nasdaq's listing price was fresh, and "listing price vs Yahoo closes differ >1%" dropped 469 of 800 names; the US
+    lists of that morning's report came from the other 329 (rule 4 wants a market that can't be built to show its
+    last good lists; nothing was sent: data/sent.csv is unchanged since 11-03). A follow-up.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -271,8 +321,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
 | Family | CN | HK | US |
 |---|---|---|---|
 | 价值 Value | E/P on 扣非 TTM, forward E/P, B/P, S/P, EBIT/EV, dividend yield | E/P, forward E/P, B/P, S/P, EBIT/EV, dividend yield | the same |
-| 质量 Quality | ROE, cash backing, debt ÷ assets, 8-year ROE, margin stability, low volatility | the same as CN | gross profit ÷ assets, cash backing, liabilities ÷ assets, 8-year ROA, margin stability, low volatility |
-| 成长 Growth | revenue growth, profit growth, 5-year profit growth over book | the same | the same |
+| 质量 Quality | ROE, cash backing, debt ÷ assets, 8-year ROA, margin stability, low volatility | the same as CN | gross profit ÷ assets, cash backing, liabilities ÷ assets, 8-year ROA, margin stability, low volatility |
+| 成长 Growth | revenue growth, profit growth, 5-year profit growth over assets | the same | the same |
 | 动量 Momentum | earnings momentum (SUE), revisions | 12-1-month price return, revisions | 12-1-month price return, revisions |
 
 - **Why four families (stage 3's redo).** You named Seeking Alpha's quant grades, Alpha Architect's Quantitative Value,
@@ -291,9 +341,13 @@ momentum drive the score (fixed in stage 1 after the stage review).
     the best single value measure in US data 1964-2011, as did Loughran and Wellman 2011), and it is in ValueRank
     because it counts the debt E/P ignores: on 2026-11-01 GM's P/E is ~7 but its EV/EBIT ~33 with GM Financial's
     $129bn of debt. From Yahoo's fundamentals timeseries in all three markets (trailing EBIT, the latest total debt,
-    cash with short-term investments, minorities, in the reporting currency, turned into the quote currency); a debt,
-    cash or minorities line Yahoo doesn't list counts as 0; no EBIT (a stale or missing series): skipped. Not for
-    financials (their debt is their product). Coverage: see Status.
+    cash with short-term investments, minorities, in the reporting currency, turned into the quote currency). Yahoo
+    lists no debt or minorities line where there is none, so a missing one counts as 0 (stage 6 checked: on 2026-11-07
+    the scored names without a debt line were Arista, Franco-Nevada, Intuitive Surgical, Monster, Nextracker, United
+    Therapeutics, 同花顺, 大全能源 and three more A-shares, all debt-free; Apple, Microsoft, Alphabet, NVIDIA and Meta have
+    no minorities line); a missing cash line means the balance sheet wasn't read (every company holds cash; HK 02583's
+    record had no cash, debt or liabilities) and, like a missing EBIT, leaves EBIT/EV out. Not for financials (their
+    debt is their product). Coverage: see Status.
   - **Dividend yield** (stage 3's redo): cash dividends with ex-dates in the last 365 days over the price (0 for a
     non-payer). In ValueRank, and the first sort of 中证红利低波 (50 high-yield, low-volatility A-shares, yield-weighted)
     and 恒生港股通红利低波 (HK, net-yield-weighted): a cash yield is hard to fake, which matters most in CN and HK.
@@ -301,9 +355,26 @@ momentum drive the score (fixed in stage 1 after the stage review).
   countries), cash backing = −(net profit − operating cash flow) ÷ revenue (Sloan 1996), and balance-sheet strength
   (lower debt is better; not for financials, whose leverage is their business). Stage 3's redo adds:
   - **8-year profitability** (Gray and Carlisle's franchise power: 8-year averages of ROA and return on capital): the
-    average yearly ROA (US, profit to common ÷ assets: buybacks leave US books too small for ROE) or ROE (CN 扣非 ROE,
-    HK ROE; the CN and HK tables have no yearly assets) of the last 8 fiscal years public by the date, at least 5,
-    each year clipped to −50%..150%. A year of high profit doesn't make a franchise; eight do.
+    average yearly ROA, the year's profit ÷ its total assets (CN 扣非 profit, US profit to common, HK profit to
+    shareholders), of the last 8 fiscal years public by the date, at least 5, each year clipped to −50%..150%. A year
+    of high profit doesn't make a franchise; eight do. Stage 6 (history.py, signals.long_run):
+    - On assets in every market. Until stage 6 CN and HK took ROE, their tables being thought to have no yearly
+      assets; they have them (主要财务指标's TOTAL_ASSETS_PK, the HK main indicators' TOTAL_ASSETS). A return on the
+      book breaks where the book is small or negative: from buybacks and payouts (why the US took ROA), or from
+      preferred shares booked as liabilities before a listing (common among recent HK listings: 古茗, 快手, 京东物流).
+      Eastmoney's ROE divides by the book whatever its sign, so Wynn Macau's 2020-22 losses entered at +470% (clipped
+      to 150%), +69% and +54%, and PCCW's 2025 loss at +140%. A first fix counted a year without positive equity as
+      −50%; the fresh-context review found it fell mostly on profitable pre-listing years in HK (古茗, 布鲁可) while CN
+      left such years out. ROA has a figure for every year with assets, whatever the book.
+    - CN takes the 扣非 amount and the total assets each annual report states (主要财务指标, by its notice date; since
+      2009), no longer profit × 扣非 EPS ÷ EPS, clipped and set to 1 where EPS wasn't positive: that rebuild was over
+      10% off in 22% of the fiscal years and over 50% off in 8% (中国船舶 2022: a CNY 0.17bn loss for the 2.75bn the
+      report states; 中际旭创 2023: 2.98bn for 2.12bn). A year without the stated amounts has no figure (rule 5).
+    - HK's annual figures are in the company's reporting currency: Eastmoney gives every amount in CNY at its
+      period's rate, so the 5-year profit growth below mixed the yuan's moves into a company's growth (an HKD or USD
+      reporter's profit grew 7% from the end of 2020 to the end of 2025 on the rate alone: CNY 6.52 → 7.00 a dollar).
+      Each year goes back at its period's rate (Yahoo's daily <CUR>CNY=X, kept from October 2014), the same conversion
+      the universe's HK figures use; a company without a known reporting currency has none.
   - **Margin stability** (franchise power's second half): the mean gross margin of those years over its standard
     deviation, at least 5 years; not for financials. Gray and Carlisle take the better of margin stability and margin
     growth; growth is in its own family here.
@@ -314,9 +385,12 @@ momentum drive the score (fixed in stage 1 after the stage review).
   - revenue growth and profit growth: the latest report against a year earlier (CN and HK year to date, from 业绩报表
     and the HK main indicators; US trailing 12 months). Revenue surprises are followed by drift (Jegadeesh and Livnat
     2006); one year only, as 5-year past sales growth predicts lower returns (Lakonishok, Shleifer and Vishny 1994);
-  - 5-year profit growth over book: the latest fiscal year's profit minus that of 5 years before, over the book 5 years
-    before (quality-minus-junk's growth in ROE; CN 扣非 profit, US profit to common, HK profit to shareholders). From
-    the annual reports public by the date; the book 5 years before must be positive.
+  - 5-year profit growth over assets: the latest fiscal year's profit minus that of 5 years before, over the total
+    assets 5 years before (quality-minus-junk's growth in ROA, one of its growth measures; CN 扣非 profit, US profit to
+    common, HK profit to shareholders), from the annual reports public by the date. Over the book until stage 6 (its
+    growth in ROE): CN's past book was the book per share × profit ÷ EPS, an EPS 业绩报表 restates for later bonus
+    shares while the book per share stays as reported (CATL 2022: CNY 288bn for its ~164bn), and a book can be small
+    or negative (above); assets have neither fault, and the 8-year figure is on assets too.
   - Analysts' forecast growth is left out: stocks with the highest forecast growth have done worse (La Porta 1996), and
     forward E/P already uses next year's estimate.
 - **Momentum:** the 12-1-month price return in the US and HK. In CN the price trend hasn't paid over 20 years (Jansen,
@@ -325,10 +399,19 @@ momentum drive the score (fixed in stage 1 after the stage review).
   divided by the standard deviation of that change over the preceding 8 quarters, from the notice date. Stockopedia's own
   momentum rank mixes price and earnings momentum, so this stays within the method. HK's evidence on price momentum is
   mixed rather than negative, so it keeps the standard definition.
-- **Forward E/P (stage 3):** next fiscal year's consensus EPS over the price, at least 3 analysts (CN Eastmoney's
-  研报一致预期, US Nasdaq's consensus, HK Yahoo's). The predicted E/P is the largest part of the earnings yield in MSCI's
-  Barra equity models, whose value factor MSCI's multi-factor indexes use; it judges a fast-growing company on the
-  profit analysts expect next year, not only the last 12 months (on 2026-10-26 NVIDIA's trailing P/E was 26, next year's 13).
+- **Forward E/P (stage 3):** the consensus EPS for the next 12 months over the price, at least 3 analysts (CN
+  Eastmoney's 研报一致预期, US Nasdaq's consensus, HK Yahoo's). The predicted E/P is the largest part of the earnings
+  yield in MSCI's Barra equity models, whose value factor MSCI's multi-factor indexes use; it judges a fast-growing
+  company on the profit analysts expect, not only the last 12 months (on 2026-10-26 NVIDIA's trailing P/E was 26, next
+  year's 13). The next 12 months (stage 6; universe.forward), as I/B/E/S and FactSet build their 12-month forward
+  EPS: this fiscal year's estimate and next year's, each weighted by the share of the next 12 months its fiscal year
+  covers; once this year has ended (its report still to come), next year's alone, which ends within 12 months (HK's
+  table has no third year). Until stage 6 it was next year's estimate alone, whose horizon ran from 13 months (a
+  December year end in November) to 25: in November 2026 Micron's "next year" was its fiscal year to August 2028, and
+  175 of the ~1,080 US names with estimates had one 14-25 months out. The card says 未来 12 个月 PE. The analyst count
+  is as before: next year's estimates in the US and HK, which also covers this year (an analyst who estimates next
+  year estimates this one: on 2026-11-07 every A-share with 3+ brokers on 2027 had at least as many on 2026); in CN
+  the consensus table's count of rating institutions (RATING_ORG_NUM), not a count per year.
 - **Revisions (stage 3):** next fiscal year's consensus EPS now minus 91 days ago, over the price: the price-scaled
   change in the consensus of Chan, Jegadeesh and Lakonishok (1996), who find revisions predict returns apart from price
   momentum, over the 3-month window of S&P DJI's Asian study (7 markets including China and Hong Kong, 2005-2016: in
@@ -341,13 +424,15 @@ momentum drive the score (fixed in stage 1 after the stage review).
   before a bonus-share ex-date (送转, common in June) is divided by 1 + the bonus ratio, so a 10-for-10 doesn't read
   as a halving. Next year: the year after the first fiscal year without an annual report. The up-minus-down ratio
   (S&P DJI's second measure) needs each analyst's revisions over 3 months, which Yahoo gives only for 30 days; one
-  definition in all three markets instead.
+  definition in all three markets instead. Both dates are the same fiscal year in every market (Yahoo's trend keeps
+  the +1y year; CN's brokers are filtered by the year), so a year's roll is never read as a revision; the card names
+  the year revised (分析师 3 个月上调 2028 财年盈利预测: Micron's).
 - No weights are fitted and nothing is chosen on our backtest.
 - **How each ingredient is built** (stage 1; stockreport/signals.py):
   - Percentiles are taken over the whole scored universe (the 800 largest after the filters); the three lists then
     take their own size cuts.
-  - CN 扣非 comes from 主要财务指标 (year-to-date 扣非 net profit as an amount, each quarter since 2015, by its first
-    notice date), because 业绩报表 has 扣非 EPS only in half-year and annual reports. E/P = 扣非 TTM profit ÷ market value
+  - CN 扣非 comes from 主要财务指标 (year-to-date 扣非 net profit as an amount, each quarter since 2015 and each fiscal
+    year since 2009 for the long-run figures, by its first notice date), because 业绩报表 has 扣非 EPS only in half-year and annual reports. E/P = 扣非 TTM profit ÷ market value
     (reported profit for the ~1% without it). The SUE uses amounts, not per-share figures, so bonus shares (送转) don't
     read as a fall, and needs at least 6 of the last 8 year-on-year changes (the usual minimum in the SUE literature).
   - The score's financials are banks, insurers, brokers and other lenders, whose balance sheet is the product: CN 申万
@@ -821,6 +906,27 @@ build makes no DeepSeek calls.
      reads badly; the Hold and Sell history is in BACKTEST.md and the 预期 line; the fresh-context stage review has
      run and its findings are fixed or answered; this plan's status and AGENTS.md are updated and the work is
      committed on main.
+6. **Correct the score's inputs** (your OK of 2026-11-07, "Start Stage A", after my reading of an outside review of
+   the 2026-11-02 checkout: what it got right, what was already gone or handled, what breaks the rules; Status).
+   - CN annual 扣非 from the amount each report states; the long-run figures on total assets in every market (8-year
+     ROA, 5-year profit growth over assets); HK annual figures in the reporting currency; forward E/P on the next 12
+     months, the card naming the fiscal year revised; EBIT/EV only with a cash line ("The score").
+   - Not changed: the families, the weights, the lists' rules, the review.
+   - Done when: pytest passes, with tests for each; the lists before and after on the same snapshots are compared and
+     each changed buy is explained; a full `run`; the history run again (BACKTEST.md sections 23-24) and its 预期
+     numbers; the fresh-context stage review has run and its findings are fixed or answered; this plan's status is
+     updated and the work is committed on main.
+7. **What the report says to expect** (planned, not started): the history's dividend yield as missing, not 0 (the
+   snapshots carry none, so section 23's dividend spreads only sorted sectors by their size); the family check within
+   sectors; each held year's own largest fall against the fund's over the same months (the 预期 line's fall is now the
+   12 overlapping cohorts'); a neutral basket (the same sector places, every eligible name, equal amounts) to show how
+   much of the lead over the fund is the picks and how much the equal amounts and places; the review line says what it
+   read (公告、新闻、定期报告摘录); one line a market with the money one lot of each buy takes.
+8. **A forward scorecard that answers the goal** (planned): the first report of each month starts a cohort (20 Buy, 10
+   Hold, 10 Sell) held 12 months from the next close after the report, against the funds with dividends (SPY,
+   2800.HK, 510300); each cohort's month-end value kept as observed, so the price cleanup can't erase it; a suspended
+   name stays unresolved rather than flat. `track` today compares picks with dividends against price indexes, stops at
+   3 months and pools every day's list. It touches track.py and the price fetch only.
 
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
@@ -927,7 +1033,8 @@ Wurgler, "Benchmarks as limits to arbitrage: understanding the low-volatility an
   - 扣非 net profit per quarter (stage 1, verified 2026-10-24): Eastmoney datacenter 主要财务指标
     RPT_F10_FINANCE_MAINFINADATA filtered by REPORT_DATE and the A-share types: KCFJCXSYJLR (year-to-date 扣非 net
     profit, CNY) with the first NOTICE_DATE, ~6,500 rows a quarter back to 2015 (99.4% filled for 2026-06-30), ~22 s a
-    quarter. data/history/cn_deduct.csv.gz (2.6 MB, 2015-03..), each quarter once, the open one daily.
+    quarter. data/history/cn_deduct.csv.gz (2.9 MB, 2015-03.., and each December 31 from 2009: stage 6, the
+    long-run figures' annual 扣非, ~3,000-5,400 rows a year), each period once, the open one daily.
   - Announcements: CNINFO. Phase 11: the same query without a stock gives the whole market per day (Method 14); periodic reports by category (category_ndbg_szsh, _bndbg_, _yjdbg_, _sjdbg_); PDFs at static.cninfo.com.cn, text by pypdf (most read; some A+H issuers' PDFs have fonts without a Unicode map).
   - Second source for the quotes (Phase 12, verified 2026-10-19): Tencent qt.gtimg.cn, 60 codes per call, GBK, fields split by ~: 3 price, 4 previous close, 30 time (YYYYMMDDhhmmss), 39 PE-TTM, 45 total market value (100m CNY; 44 is the float value), 46 P/B, 73 total shares. Daily for the 1,200 largest A-shares (20 calls, ~1 s); 1,197 answered. Price, market value and shares matched Eastmoney's quote table exactly for all 800 of the universe.
   - 申万 industries for daily use (Phase 13, verified 2026-10-19): swsresearch.com's change-history file (codes only; the 31 level-1 names of the 2021 scheme are fixed), weekly with curl (its certificate chain isn't in Python's trust store); every one of the 791 CN stocks matched, and Eastmoney's BOARD_NAME (the 申万 level 2 name) maps to one level 1 for all but 5 names.
@@ -991,7 +1098,8 @@ Wurgler, "Benchmarks as limits to arbitrage: understanding the low-volatility an
     read with zipfile and ElementTree; no Excel package): stock code, category, board lot (it also lists short-sell eligibility,
     unused: the old stage 3's 可做空 label was dropped). 2,817 equities; weekly into data/fundamentals/hk_lots.csv.gz.
   - Headlines: HKEXnews titleSearchServlet.do with the stockId from activestock_sehk_c.json. Phase 11: stockId -1 with a one-day range returns all of a day's filings in one call (rowRange 5000); t1code 40000 (lang en) lists a stock's annual and interim reports.
-  - FX: Yahoo "<CUR>=X" for HKD and the reporting and estimate currencies (CNY, USD, SGD, JPY, EUR...), and ~900 days of daily "<CUR>CNY=X" closes for the period-end rates.
+  - FX: Yahoo "<CUR>=X" for HKD and the reporting and estimate currencies (CNY, USD, SGD, JPY, EUR...), and 12 years of daily "<CUR>CNY=X" closes for the period-end rates (900 days until stage 6; the HK annual history
+    goes back to 2015; data/fx_cny.csv.gz, ~280 KB, rewritten with each HK fetch).
 - FX, only needed when a company reports in a different currency from the one it trades in: ECB rates via api.frankfurter.dev.
 - Legacy references (read only), all under ~/Developer/EquitySignalsClawbot-legacy/:
   - Sources/EquitySignalsClawbotCore/PublicUniverse.swift (around line 1310, the Eastmoney list call)

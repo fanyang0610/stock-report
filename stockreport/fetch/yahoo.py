@@ -289,8 +289,8 @@ def update_us_trend(today: date, codes: list[str]) -> None:
     upsert_each(US_TREND, crumb_http, us_trend, stale(US_TREND, codes, today), today, 2, "us estimate trend")
 
 
-def update_cny_rates(currencies: set[str], days: int = 900) -> None:
-    """Daily CNY per unit of each currency for the last `days` days ('<CUR>CNY=X' closes)."""
+def update_cny_rates(currencies: set[str], days: int = (HISTORY_YEARS + 1) * 366) -> None:
+    """Daily CNY per unit of each currency for the last `days` days ('<CUR>CNY=X' closes; history.hk_years: 2015..)."""
     client, frames = make_http(), []
     for cur in sorted(set(currencies) - {"CNY"}):
         res = client.get(URL.format(symbol=f"{cur}CNY=X"), params={"period1": int(time.time()) - days * 86400,

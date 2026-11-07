@@ -12,10 +12,10 @@ from stockreport.config import CONFIG
 from stockreport.signals import FAMILIES, components, distress, peer_rank, peers, percentiles
 
 NAMES = {"value": "价值", "quality": "质量", "growth": "成长", "momentum": "动量"}
-SIGNED = {"cash", "mom", "sue", "rev", "rg", "pg", "roe5"}  # worded by the figure's sign; the rest by the peers' median
+SIGNED = {"cash", "mom", "sue", "rev", "rg", "pg", "roa5"}  # worded by the figure's sign; the rest by the peers' median
 WORDS = {  # component -> (good, bad, the figure shown)
     "ep": ("市盈率低", "市盈率高", lambda x: f"PE {1 / x:.1f}" if x > 0 else "亏损"),
-    "fep": ("预期市盈率低", "预期市盈率高", lambda x: f"明年 PE {1 / x:.1f}" if x > 0 else "明年预期亏损"),
+    "fep": ("预期市盈率低", "预期市盈率高", lambda x: f"未来 12 个月 PE {1 / x:.1f}" if x > 0 else "未来 12 个月预期亏损"),
     "bp": ("市净率低", "市净率高", lambda x: f"PB {1 / x:.2f}"),
     "sp": ("市销率低", "市销率高", lambda x: f"PS {1 / x:.2f}"),
     "roe": ("ROE 高", "ROE 低", lambda x: f"{x:.0%}"),
@@ -24,15 +24,15 @@ WORDS = {  # component -> (good, bad, the figure shown)
     "debt": ("负债率低", "负债率高", lambda x: f"{x:.0%}"),
     "mom": ("近一年股价走强", "近一年股价走弱", lambda x: f"{x:+.0%}"),
     "sue": ("最新季度扣非利润好于往年同期", "最新季度扣非利润差于往年同期", lambda x: f"SUE {x:+.1f}"),
-    "rev": ("分析师 3 个月上调明年盈利预测", "分析师 3 个月下调明年盈利预测", lambda x: f"相当于股价的 {x:+.1%}"),
+    "rev": ("分析师 3 个月上调{}盈利预测", "分析师 3 个月下调{}盈利预测", lambda x: f"相当于股价的 {x:+.1%}"),  # the year: phrase
     "ev": ("企业价值/息税前利润低", "企业价值/息税前利润高", lambda x: f"EV/EBIT {1 / x:.1f}" if x > 0 else "EBIT 为负"),
     "dy": ("股息率高", "股息率低", lambda x: f"{x:.1%}"),
-    "prof8": ("8 年平均回报率高", "8 年平均回报率低", lambda x: f"{x:.0%}"),
+    "prof8": ("8 年平均资产回报率高", "8 年平均资产回报率低", lambda x: f"{x:.0%}"),
     "gm8": ("毛利率多年稳定", "毛利率多年波动大", lambda x: f"均值/标准差 {x:.1f}"),
     "vol": ("股价波动小", "股价波动大", lambda x: f"年化 {x:.0%}"),
     "rg": ("营收同比增长", "营收同比下降", lambda x: f"{x:+.0%}"),
     "pg": ("利润同比增长", "利润同比下降", lambda x: f"{x:+.0%}"),
-    "roe5": ("5 年利润增长", "5 年利润下降", lambda x: f"相当于 5 年前净资产的 {x:+.0%}"),
+    "roa5": ("5 年利润增长", "5 年利润下降", lambda x: f"相当于 5 年前总资产的 {x:+.0%}"),
 }
 
 
@@ -87,7 +87,9 @@ def phrase(row: pd.Series, c: str, market: str) -> str:
     change = row["est_now"] / row["est_90"] - 1 if key == "rev" and row.get("est_90", 0) > 0 else None
     figure = fmt(x) if change is None else f"{change:+.1%}" if abs(change) < 0.1 else f"{change:+.0%}"
     words = good if reads_well(row, c, market) else bad
-    peers = "" if key in SIGNED or str(row.get("peers", "")).startswith("全市场") else "同行中" + " " * words[0].isascii()
+    if key == "rev":  # the fiscal year revised (universe.estimates, __main__.scored): Micron's next year is FY2028
+        words = words.format(f" {int(row['rev_year'])} 财年" if pd.notna(row.get("rev_year")) else "下一财年")
+    peers ="" if key in SIGNED or str(row.get("peers", "")).startswith("全市场") else "同行中" + " " * words[0].isascii()
     text = f"{peers}{words}（{figure}）"
     return text.replace("市盈率", "扣非市盈率") if market == "cn" and c == "ep" else text
 

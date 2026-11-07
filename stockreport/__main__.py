@@ -43,7 +43,7 @@ def scored(market: str, today: date) -> tuple[pd.DataFrame, dict]:
             bonus = pd.read_csv(eastmoney.DIVIDENDS, dtype={"code": str, "ex_date": str}).reindex(
                 columns=["code", "ex_date", "bonus"])
             year = universe["period"].str[:4].astype(int) + np.where(universe["period"].str.endswith("12-31"), 2, 1)
-            universe = universe.join(signals.cn_revisions(reports, bonus, year, today.isoformat()))
+            universe = universe.join(signals.cn_revisions(reports, bonus, year, today.isoformat())).assign(rev_year=year)
     if market == "us":
         pref = history.us_preferred(universe, today)[["pref_share", "pref_div_share"]]
         universe = universe.join(pref).fillna({"pref_share": 0.0, "pref_div_share": 0.0})

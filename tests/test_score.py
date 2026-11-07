@@ -13,7 +13,7 @@ from stockreport import universe as uni
 from stockreport.fetch import frames
 from stockreport.config import CONFIG
 from stockreport.score import grade, phrase, ranked, score
-from stockreport.signals import CHS, cn_deduct, cn_revisions, distress, long_run, quarters
+from stockreport.signals import CHS, cn_deduct, cn_revisions, distress, forward, long_run, quarters
 
 DAY = date(2026, 10, 24)
 
@@ -120,10 +120,24 @@ def test_peers_are_the_sector_and_a_small_sector_ranks_with_the_market():
 
 
 def test_forward_ep_and_revisions_need_three_estimates():
-    s = score(universe(eps_e2=2.0, analysts=[2] + [5] * 9, est_now=1.2, est_90=1.0, est_n=[5, 2] + [3] * 8), "hk")
+    s = score(universe(eps_ntm=2.0, analysts=[2] + [5] * 9, est_now=1.2, est_90=1.0, est_n=[5, 2] + [3] * 8,
+                       rev_year=2028), "hk")
     assert np.isnan(s.loc["C0", "c_fep"]) and s.loc["C1", "c_fep"] == pytest.approx(0.2)  # 2.0 ÷ the price 10
     assert np.isnan(s.loc["C1", "c_rev"]) and s.loc["C0", "c_rev"] == pytest.approx(0.02)  # (1.2 − 1.0) ÷ 10
-    assert phrase(s.loc["C0"], "rev", "hk") == "分析师 3 个月上调明年盈利预测（+20%）"
+    assert phrase(s.loc["C0"], "rev", "hk") == "分析师 3 个月上调 2028 财年盈利预测（+20%）"  # the year revised
+    assert phrase(s.loc["C1"], "fep", "hk") == "预期市盈率低（未来 12 个月 PE 5.0）"  # 5 a sector: against the market
+
+
+def test_forward_eps_weighs_this_and_next_fiscal_year_by_the_next_12_months():
+    df = pd.DataFrame({"e1_year": ["2027-08", "2026", "2026.0", "2026-09", None, "2027-06"],
+                       "eps_e1": [175.0, 1.0, 1.0, np.nan, 1.0, np.nan], "eps_e2": [211.0, 2.0, 2.0, 3.0, 2.0, 4.0]})
+    f = forward(df, date(2026, 11, 5))["eps_ntm"]
+    mu = (pd.Timestamp("2027-08-31") - pd.Timestamp("2026-11-05")).days / 365.25  # Micron: ~10 months of FY2027 left
+    assert f[0] == pytest.approx(mu * 175 + (1 - mu) * 211)
+    cn = 56 / 365.25  # a December year end: 56 days of 2026 left
+    assert f[1] == pytest.approx(cn * 1 + (1 - cn) * 2) and f[2] == pytest.approx(f[1])  # the year read as a float too
+    assert f[3] == 3.0  # this year ended in September, its report still to come: next year's alone
+    assert np.isnan(f[4]) and np.isnan(f[5])  # no fiscal year; this year's estimate missing while it runs
 
 
 def test_cn_revisions_take_each_brokers_latest_estimate_and_undo_bonus_shares():
@@ -215,13 +229,32 @@ def test_distress_logit_weighs_campbell_hilscher_szilagyi_with_winsorized_inputs
 
 
 def test_long_run_takes_the_years_public_by_the_day():
-    years = pd.DataFrame({"code": "A", "year": range(2015, 2026), "roe": [0.1] * 10 + [0.3], "core": range(10, 21),
-                          "book": 100.0, "gm": [0.4, 0.5] * 5 + [0.45], "avail": [f"{y + 1}-03-31" for y in range(2015, 2026)]})
+    years = pd.DataFrame({"code": "A", "year": range(2015, 2026), "roa": [0.1] * 10 + [0.3], "core": range(10, 21),
+                          "assets": 100.0, "gm": [0.4, 0.5] * 5 + [0.45], "avail": [f"{y + 1}-03-31" for y in range(2015, 2026)]})
     lr = long_run(years, "2026-03-30").loc["A"]  # FY2025 not yet public: 2017-2024
     assert lr["prof8"] == pytest.approx(0.1) and lr["gm8"] == pytest.approx(0.45 / pd.Series([0.4, 0.5] * 4).std())
-    assert lr["roe5"] == pytest.approx((19 - 14) / 100)  # FY2024 against FY2019, over FY2019's book
+    assert lr["roa5"] == pytest.approx((19 - 14) / 100)  # FY2024 against FY2019, over FY2019's assets
     assert long_run(years, "2026-03-31").loc["A", "prof8"] == pytest.approx((0.1 * 7 + 0.3) / 8)
     assert long_run(years[years["year"] >= 2022], "2026-03-31").isna().all(axis=None)  # 4 years: too few
+
+
+def test_long_run_is_on_assets_whatever_the_book():
+    # Wynn Macau-like: losses on a negative book read as a high ROE; on assets they are losses, and the years stay in
+    years = pd.DataFrame({"code": "W", "year": range(2018, 2026), "core": [5, 4, -6, -4, -7, 1, 3, 1.5],
+                          "assets": [40, 40, 35, 33, 32, 30, 28, 28.0], "gm": 0.5, "avail": "2026-04-30"})
+    lr = long_run(years.assign(roa=years["core"] / years["assets"]), "2026-05-01").loc["W"]
+    assert lr["prof8"] == pytest.approx((years["core"] / years["assets"]).mean()) and lr["prof8"] < 0
+    assert lr["roa5"] == pytest.approx((1.5 - (-6)) / 35)  # FY2025 against FY2020, over FY2020's assets
+
+
+def test_ev_needs_the_cash_line_and_a_missing_debt_line_is_no_debt(tmp_path, monkeypatch):
+    pd.DataFrame({"code": ["A", "B", "C"], "yahoo": "ok", "currency": "USD", "ebit_ttm": 10.0, "debt": [30.0, None, 30.0],
+                  "cash": [20.0, 20.0, None], "minority": [5.0, None, None], "liabilities": 50.0, "sta": 0.0}
+                 ).to_csv(tmp_path / "gaps.csv", index=False)
+    monkeypatch.setattr(uni.yahoo, "gaps_path", lambda market: tmp_path / "gaps.csv")
+    monkeypatch.setattr(uni.yahoo, "load_fx", lambda: pd.Series({"USD": 1.0}))
+    b = uni.yahoo_balance(pd.DataFrame({"mcap": 100.0}, index=["A", "B", "C"]), "us", "USD")
+    assert b["ev"].tolist()[:2] == [115.0, 80.0] and np.isnan(b.loc["C", "ev"])  # C: the balance sheet wasn't read
 
 
 def rated(n: int = 100) -> pd.DataFrame:
