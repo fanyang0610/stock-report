@@ -395,6 +395,15 @@
   and 负债率高); only its 9th place would pass to Intel. A rule dropping the years before a fall in assets or revenue
   would also drop the record of companies that simply shrank, the ones Sell is for; disposals reported as
   discontinued are already out (core is continuing operations: 97 US names had some). No change.
+- Single-stock research adopted 2026-11-08 ("Single-stock research"; stages 9-12). Your request: a sell-side research
+  report for any stock sent over WeChat, in all three markets, with a method per type of company, cross-checked with
+  the screening, and DeepSeek reading each message. Your decisions on the draft (docs/RESEARCH-PLAN.md, merged here, not
+  committed): "I can give you the okay for everything you suggested": AGENTS.md's Goal and rules 2, 3 and 6 changed
+  (DeepSeek in three places: the router, the results review, the research report's words; ~9,500 lines of app
+  Python); the exact keywords stay as a no-AI shortcut; follow-up questions about a report come later. Your one
+  correction: the skills are ported into the program (code and stored DeepSeek prompts), not left as Claude-only
+  tools. Changed from the draft at adoption: one company per message, not three, as the bot fails on a burst of more
+  than 3-4 messages. Stage 9 next.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -431,6 +440,9 @@
 - **Honest expectations.** Published factor portfolios have beaten their index by a few percent a year on average, have
   lost to it in roughly 4 years out of 10 (AAII's real-money portfolio: beat the index in 55% of rolling years), and
   their edge shrank after publication (McLean-Pontiff: about −58%). No list is a guarantee; the report says so.
+- **Single-stock research** (adopted 2026-11-08; "Single-stock research"): on any other message, a router reads
+  it, and for a company in CN, the US or HK a sell-side research report comes back: an acknowledgement, the text, the
+  PDF, with a rating against the same index fund over the same 12 months, so it can be set beside the screening's.
 
 ## The method
 
@@ -950,6 +962,234 @@ build makes no DeepSeek calls.
     check (see Data check) and the non-recurring share of profit, a number read by the AI (rule 2); the review's
     one_off concern still comes from titles and headlines.
 
+## Single-stock research (stages 9-12; adopted 2026-11-08)
+Your words (2026-11-08): for each single stock sent over WeChat, "the project shall work the way a sell-side analyst
+does, to provide a detailed sell side equity research report, with investment thesis and perspective on the outlook";
+free data only; borrow mature methods and your skills rather than build from zero; a method per market, industry or
+type of company where needed; cross-check the rating with the daily screening and explain a large difference; DeepSeek
+reads each message to tell a screening request from a stock, and asks when the text is vague. The draft you approved
+was docs/RESEARCH-PLAN.md (not committed), merged here.
+
+### What it delivers
+| You send | The bot does |
+|---|---|
+| 股票报告 / stock report (exactly, as today) | The daily screening report, unchanged: no AI call, within 30 s |
+| 600519 · 0700 · AAPL · 贵州茅台 (an exact code or full name) | Research report, no AI call needed to read the message |
+| 茅台 · 腾讯 · nvidia · "how is tencent doing" · テンセント · 宁德 | DeepSeek reads it, code confirms the company against the official listings, research report |
+| 平安 | Asks: "你指的是哪一家？1 中国平安 (601318 / 2318.HK) 2 平安银行 (000001)"; a reply of "1" or a name answers it |
+| 比亚迪 | One report on the company, covering its A share (002594) and H share (1211.HK): one analysis, a price, target and rating per listing, the A/H premium |
+| 茅台和五粮液 | The first company, and a line asking you to send the other on its own (below) |
+| 沪深300怎么样 / 比特币 / 字节跳动 / a fund or ETF | Says what it can't do (index, crypto, unlisted company, fund) and what it can |
+| 你好 / ? / something unclear | Says what it can do and asks what you'd like |
+
+- A research reply is three messages: an acknowledgement within ~10 s (收到：贵州茅台 600519，报告约 3 分钟后发出), the
+  text summary (at most 4,000 bytes), the PDF. One company per message: the bot fails on a burst of more than 3-4
+  messages ("Decisions kept from the old plan"), and a second report would be two more. Target, measured in stage 11:
+  2-4 minutes on a first request; seconds when the company was done today and nothing new has been filed.
+- The PDF, in Chinese, plain words, the decision first (~10-14 pages):
+  1. the decision: rating, target price, price, expected 12-month return against the market's, a one-line conclusion,
+     3 investment points, 3 key risks, the comparison with the daily screening, a key-data box (value, 52-week range,
+     P/E, P/B, dividend yield, the street's consensus rating and target);
+  2. what the company does: business and segments, revenue by product and region (CN Eastmoney 主营构成; US and HK
+     from filings), its place in its industry;
+  3. industry and competitors: peers of the same market and industry side by side (growth, margins, returns,
+     valuation); the industry's valuation against its own history;
+  4. the thesis: bull case, bear case, our view; what today's price assumes (reverse DCF: "the price assumes revenue
+     grows X% a year for 5 years") against the consensus and against how often companies of that size grew so fast;
+  5. financial analysis: 8-10 years of revenue, margins, return on capital, cash conversion, debt; accounting quality
+     (Beneish M-score, Piotroski F-score, Altman Z, accruals, receivables and inventory against revenue, goodwill);
+     market flags: CN 存贷双高, pledges, 商誉, 解禁 and 减持; HK placements and dilution, auditor changes; US
+     stock-based pay, the non-GAAP to GAAP gap, insider selling;
+  6. forecast: 3 years of revenue, operating profit, net profit, EPS and free cash flow, ours against the consensus;
+  7. valuation and target: each method's value and weight, the DCF's assumptions, a sensitivity grid (discount rate ×
+     long-run growth), P/E or P/B bands against the stock's own history, bear / base / bull values;
+  8. catalysts and calendar: next results date, lock-up expiries, dividends, management's outlook (quoted);
+  9. risks, and what would change our view;
+  10. management and governance: changes at the top, insider and holder trades, pledges, buybacks, dividend policy,
+      red flags from the filings (the results review's rules);
+  11. money flows and sentiment: trend against the index, volatility, beta; CN margin financing, 股东户数, 龙虎榜,
+      机构调研; HK Southbound holdings, short selling; US short interest; analysts' rating changes;
+  12. against the daily screening (below);
+  13. back pages: method, sources and their dates, limits, what the rating means and how often such ratings are
+      right, the disclaimer (generated research for your own use, not investment advice).
+- Reports are in Chinese whatever language the message is in, like the daily report.
+
+### The router (stage 12)
+Layers, so the screening keyword keeps working when DeepSeek is slow or down (as on 2026-11-07's afternoon):
+- **1, no AI:** the exact keywords (listener.is_keyword) send the screening report as today.
+- **2, no AI:** an exact code or exact full name that matches one company goes to research.
+- **3, DeepSeek** (the fast model, JSON out, temperature 0): the rest. It returns the intent (screening / research /
+  reply to a pending question / help / unsupported / unclear), the company mentions with its guessed names and
+  tickers, and a question when one is needed. Its guesses are hints: code confirms each company against the official
+  listings (CNINFO's A-share list, HKEX's list of securities, SEC's ticker file) and Eastmoney's search box API
+  (searchapi suggest/get, type 14; probed 2026-11-08: 茅台 → 600519, tencent → 00700, 比亚迪 → 002594, 01211 and
+  比亚迪电子 00285, 平安 → 平安银行 and 中国平安; "nvidia" returned ETFs and a German line, not NVDA, which SEC's list and
+  the hint catch). Only ordinary shares listed in CN, HK or the US are kept (no ETFs, warrants, futures, OTC or
+  foreign lines), and one issuer's listings are grouped (Eastmoney's ORG_CODE, as the screening's issuer dedupe).
+- **4, ask:** several companies fit, none does, or the text is vague: one short numbered question, open 30 minutes
+  (data/state.json), answered by "1" or a name without AI.
+- Research runs in the background (like the background `review`), so the listener keeps polling; requests queue; one
+  company is never built twice at once; every message and decision is logged without secrets; only your recipient's
+  messages are read (deliver.poll, as today). With DeepSeek down, layers 1, 2 and 4 still work, and a research report
+  goes out with its numbers and its AI sections marked 暂不可用.
+
+### Data (stage 9; free only)
+| Data | CN | HK | US |
+|---|---|---|---|
+| Statements, 10+ years | Eastmoney F10 (as the history tables) | Eastmoney HK, Yahoo timeseries | SEC companyfacts |
+| Segments | Eastmoney 主营构成 (RPT_F10_FN_MAINOP; probed: 茅台酒 / 系列酒, 国内 / 国外) | annual report text | 10-K text |
+| Consensus forecasts, ratings, targets | Eastmoney 盈利预测 (RPT_WEB_RESPREDICT; probed: 茅台 42 institutions, EPS to 2028), broker reports (reportapi) | Yahoo earnings trend, targets, recommendations | Nasdaq analyst API, Yahoo |
+| Filings and full reports | CNINFO | HKEXnews | EDGAR (10-K, 10-Q, 8-K, Form 4) |
+| Price, index, FX, rates | Tencent, 通达信, ChinaBond | Yahoo, HKGB | Yahoo, FRED |
+| News | Eastmoney | Eastmoney | Yahoo RSS |
+| Flows and holders | 融资融券, 股东户数, 解禁, 质押, 增减持, 机构调研, 龙虎榜 (a-stock-data's endpoints) | Southbound holdings, HKEX short selling | Nasdaq short interest, Form 4 |
+| Valuation inputs | Damodaran's datasets, refreshed each January and July: equity risk premium by country, industry betas, margins, sales-to-capital and cost of capital (US, China and global files), the rating and default-spread table | same | same |
+
+A stock outside the screening's universe (small, illiquid, newly listed, 北交所) is fetched on demand, and the report
+says why the screening doesn't cover it. Per-stock data is cached (data/research/<market>/<code>/, small extracted
+tables; raw files under the Storage rules), checked against a second source where the screening's cross-checks have
+one (financial-data's rule).
+
+### The method
+#### Code computes every number, DeepSeek writes the words
+DeepSeek gets a fact sheet: every figure computed by code under a key (`rev_cagr_5y`). Its prose writes the key where
+a figure goes and code fills in the value. Code rejects any written figure that is neither a key nor present in the
+source line it cites, so a product name (C919, 3nm) passes and an invented "增长 30%" doesn't. The company's own words,
+numbers included, may appear as quotes with their source, checked verbatim; they never feed a calculation. The rating
+and the target price are code's: DeepSeek is told them and can't change them.
+
+#### Which playbook: the company's type (code, from data; Damodaran's playbook by life cycle and business)
+| Type | Spotted by | Valuation | Stressed |
+|---|---|---|---|
+| Ordinary profitable business | default | DCF 50%, multiples (own history and peers) 50% | returns on capital, cash conversion |
+| Fast grower | revenue growth well above its market's norm, profitable or near | DCF with margins converging 60%, EV/Sales and PEG against peers 40% | the reverse DCF and the base rate |
+| Loss-making with revenue | operating loss | DCF to an industry target margin 50%, EV/Sales 50% | cash runway, path to profit |
+| Pre-revenue (biotech) | almost no revenue; CN "-U", HK "-B" | 不评级: a pipeline can't be valued from free data | cash runway, dilution |
+| Bank | industry | excess-return model on book equity, justified P/B = (ROE − g)/(COE − g), P/B against history | NIM, bad loans, provisions, capital |
+| Insurer | industry | the same book-equity models (embedded value isn't reliably free; said so) | solvency, combined ratio, investment yield |
+| Broker / asset manager | industry | P/B against ROE over a cycle (8-year average ROE) | dependence on market turnover |
+| Cyclical (materials, energy, shipping, chemicals, memory chips) | industry and a volatile margin history | earnings at the cycle's average margin, mid-cycle P/E and EV/EBIT, P/B against ROE | where in the cycle it stands |
+| Utility / high-dividend mature | industry and payout history | two-stage dividend discount 50%, DCF 25%, yield against history and bonds 25% | payout cover, regulation |
+| REIT | listing type | dividend discount and P/FFO against history (no free NAV) | occupancy, leverage, rates |
+| Holding company / conglomerate | industry | P/B against its own history and a DCF (no reliable free segment values for a sum of the parts; said so) | the discount's history |
+
+The exact tests (growth "well above the norm", "volatile" margins) are fixed in stage 10 from published definitions,
+written here with their reasons, never chosen on an outcome.
+
+#### Forecast (code)
+- Years 1-2: the consensus (revenue and EPS), the best free forecast at that horizon and known to run optimistic, its
+  long-term growth more so (La Porta 1996; Chan, Karceski and Lakonishok 2003). With no consensus (small caps), the
+  company's own trend faded toward the market's base rate.
+- Years 3-10: growth fades to the long-run rate, no higher than the risk-free rate (Damodaran); margins move from
+  today's toward the company's own 8-year median (mature) or the industry's (young or loss-making); reinvestment by its
+  sales-to-capital ratio.
+- Base rates: how often companies of a similar size in the same market grew as fast as the forecast says, from our own
+  8-17 years of annual history per market (Mauboussin and Callahan's base-rate idea; today's listings only, which the
+  report says).
+
+#### Valuation and target price (code)
+- DCF (FCFF, 10 years, the structure of Damodaran's "simple Ginzu"): the market's risk-free rate (ChinaBond 10y, US
+  Treasury 10y, HK government bond) plus Damodaran's country equity risk premium times a bottom-up industry beta
+  relevered for the company's debt; debt cost from the interest-cover rating table; the long-run return on capital
+  fades to the cost of capital, except that a company whose returns stayed above it through its whole history keeps
+  part of that edge (Morningstar's quantitative moat idea, measured from data).
+- Multiples: P/E, EV/EBIT, P/B or P/S as the type uses, against the stock's own 5-10-year range and its peers' median,
+  applied to next year's consensus.
+- The target: the methods weighted as the type says, rolled forward 12 months at the cost of equity less the dividend;
+  bear / base / bull values from moving growth and margins by the analysts' spread or the company's own history; a
+  sensitivity grid.
+- The street's target and rating are shown for comparison only and never feed ours; the report says where and why ours
+  differs.
+
+#### Rating (code)
+- Expected 12-month excess return = (target − price + next year's dividend) ÷ price − the market's expected return
+  (risk-free + equity risk premium): the same benchmark (the index fund) and horizon (12 months) as the screening's
+  ratings, so the two compare.
+- 买入 at +10% or more, 卖出 at −10% or worse, 持有 between; the band widens to ±15 / 20 / 25% as valuation uncertainty
+  rises (the bear-to-bull spread, the methods' disagreement, earnings volatility, analysts' disagreement, measured by
+  code). Borrowed: Morningstar's uncertainty-scaled star bands, and Chinese brokers' regulated standard (a rating
+  against the 沪深300 over 6-12 months).
+- 不评级 / 评级暂停, as sell-side desks do: a pending takeover suspends the rating (the price follows the deal; its terms
+  shown); a non-standard audit opinion, a fraud investigation or a going-concern doubt gives no target (the accounts
+  can't carry a valuation). The results review's hard red flags and quote checks are reused as they are.
+
+#### The analysis in words (DeepSeek, quote-checked)
+- Sources code gives it: the latest annual report's business, MD&A/outlook and risk sections, cut by their standard
+  headings (CN CSRC format: 管理层讨论与分析, 核心竞争力, 未来发展展望, 可能面对的风险; US 10-K Items 1, 1A, 7; HK annual
+  reports' Chairman's Statement, MD&A and Prospects); the latest results release (US 8-K Ex-99.1); 12 months of
+  non-routine filing titles; 90 days of headlines; 6 months of broker report titles (they carry the brokers' theses:
+  "业绩超预期，海外加速"); 互动易 / e互动 Q&A (CN); the fact sheet.
+- Calls, in the shape of TradingAgents and FinRobot: (1) business, industry and moat, every claim citing a source
+  line; (2) the bull case and (3) the bear case, written separately from the same facts, so the report isn't
+  one-sided (LLMs, like sell-side analysts, lean positive); (4) thesis, outlook, catalysts, risks, "what would change
+  our view" and the explanation against the screening, given code's rating and list of drivers. (1)-(3) in parallel.
+- Model: DeepSeek's stronger model for the writing, the fast one for the router; stage 11 measures both and keeps the
+  stronger unless the fast one reads as well (save tokens, never cut quality). Cost measured in stage 11 (expected a
+  few cents to a few jiao a report).
+- Filings and headlines are outside text: DeepSeek has no tools, answers in JSON, its quotes are checked, and its words
+  can't move a number or the rating, so injected text can't change a result.
+
+#### Against the daily screening
+- The screening's view of the stock: its rating if it is on the day's lists; else its place in the market's score
+  (top fifth 偏多, bottom fifth 偏空, else 中性) with its four family grades (the snapshot's f_* and g_*); or "not in the
+  screening's universe" with the reason.
+- Agreement, by code: 一致, 部分一致 (one step apart: a short line), 相反 (Buy against Sell or 偏空, or the reverse: a
+  paragraph, on page 1).
+- Code names the drivers, from how the two are built: momentum and revisions weigh in the screening and not in a
+  valuation; the screening ranks within the sector and research against the whole market (a cheap name in an
+  expensive sector); trailing and next-year figures against 10 years of cash flows (fast growers look expensive on a
+  screen); normalized against current earnings (cyclicals at a peak or trough); news or filings the numbers can't see
+  (the review's flags). DeepSeek writes the paragraph from that list, figures filled by code. The report says what each
+  is for: the screening is a basket that works on average across 20 names; research is one name's view, with more
+  information and more single-name error. How to combine them is yours (rule 4).
+- The other way: a name on the day's lists with a research report in the last 30 days that disagrees gets one line on
+  its card (个股报告（11-05）：持有，与本榜不同，原因见该报告).
+
+#### Track record
+- Each research report is logged (date, price, target, rating, expected return); `track` adds a section: after 12
+  months, each rating's return against the index fund, and how often the target was reached. The LLM part can't be
+  backtested (it would know what happened next), so this forward record is the evidence, as for the screening.
+- The back page sets expectations: analysts' 12-month targets are met at the 12-month mark only about 4 times in 10
+  (Bradshaw, Brown and Huang 2013); a rating is a structured view, not a promise.
+
+#### Your skills, ported into the program (your words, 2026-11-08: "program them into the project, so they're not skills anymore")
+Each skill's data and calculation steps become Python; its questions and judgments become DeepSeek prompts stored in
+the project, checked like the review's (quotes verified, figures as keys); a step that asks the AI for a number (an
+intrinsic value, a score, a growth estimate) becomes code (rule 2). What doesn't move is Claude's open-ended research
+(choosing what to search next, browsing, reading dozens of documents): code gathers a fixed, wide bundle instead. A
+later option, if the bundle proves too narrow: DeepSeek calling the project's own fetchers (function calling, capped).
+
+| Skill | Becomes code | Becomes a DeepSeek prompt | Report section |
+|---|---|---|---|
+| a-stock-data | already runnable Python: flows, holders, 解禁, 质押, 增减持, 机构调研, broker reports, adapted into fetch modules | — | 3, 5, 10, 11 |
+| financial-data | its two-source cross-validation rules (crosscheck.py already uses its 5% rule) | — | all figures |
+| quality-screen | its 7 elimination indicators, a pass/fail table | — | 5 |
+| investment-checklist | numeric items (returns, debt, cash conversion, price) | judgment items (understandable business, honest management, durable advantage) | 4, 5, 10 |
+| investment-research (Buffett / Munger / 段永平 / 李录) | owner earnings, returns on capital, valuation (under rule 2) | each master's questions on business quality, moat, management and price | 2, 4 |
+| investment-team | — | its four parallel roles, as the parallel calls (business, bull, bear, thesis) | 4 |
+| earnings-review | the latest results against last year and the consensus | reading the results release and MD&A | 6, 8 |
+| management-deep-dive | changes at the top, insider and holder trades, pledges, buybacks, dividends | track record and capital allocation, from filings | 10 |
+| industry-research | peers table, the industry's valuation history | industry chain and competition, from report sections and broker titles | 3 |
+| news-pulse | spotting an unusual price move and gathering the news and filings around it | why it moved, with quotes | 8, 11 |
+| income-investment | payout ratio, dividend cover by free cash flow, dividend record, yield against history | dividend policy, quoted | 5, 7 |
+| era-alpha | its numeric tests for high-growth core companies, in the fast-grower type | its qualitative verification questions | 4 |
+| thesis-tracker, thesis-drift | a later stage: re-check a report's "what would change our view" when new results come out | a real change of facts against a change of wording | follow-up |
+| deep-company-series, wechat-article, dyp-ask, portfolio-review, private-company-research, bottleneck-hunter | not used: long articles, a persona Q&A, portfolio management (rule 4), unlisted companies, supply-chain bets | | |
+
+The skills are synced from claude.ai, not files in this project: the table maps them from their descriptions, and each
+is read in full in the stage that ports it (stage 9 the code parts, stage 11 the prompts), the table corrected if a
+skill turns out different. The quality to expect is DeepSeek's on a fixed bundle, not Claude's on open research; stage
+11's reports are where that is judged.
+
+#### Limits the report states
+- Years 1-2 lean on the street's consensus (no free source forecasts better); what the report adds is discipline:
+  growth faded to base rates, several methods per type, an uncertainty-scaled rating, the bear case, accounting checks,
+  the reverse DCF.
+- Free data can't value insurers' embedded value, conglomerates' parts, drug pipelines or property NAV; the report
+  says so rather than fake them, and pre-revenue biotech is 不评级.
+- Follow-up questions about a delivered report ("为什么是卖出？", "和五粮液比呢") are a later stage, with
+  thesis-tracker's re-checks (your decision, 2026-11-08); until then the router treats them as unclear and asks.
+
 ## Checks, and what each one decides
 - **pytest** on the score math (peer percentiles, families, SUE, revisions, the long-run components, the distress
   logit, the list's places, picks, screen and equal amounts, the Hold and Sell lists) and the parsers, on small saved samples:
@@ -1101,7 +1341,29 @@ build makes no DeepSeek calls.
    cohort's first close, the month-end values, an unresolved name and the basket's weights on small samples; a first
    cohort exists and `track` prints it; the fresh-context stage review has run and its findings are fixed or answered;
    this plan's status is updated and the work is committed on main.
-
+9. **Research: data and facts** ("Single-stock research"; next). Per-stock data for each market, fetched on demand and
+   cached, cross-checked as the screening's are; the fact sheet (history, ratios, accounting checks, flows, consensus,
+   peers, the screening's view); Damodaran's datasets; the skills' code parts, each skill read in full first; name
+   resolution's listings (CNINFO, HKEX, SEC, Eastmoney's search) as data, used by stage 12. `research CODE --facts`.
+   Done when: pytest passes, with parser tests on small saved samples; a fixed test set of 12 companies builds clean
+   fact sheets whose key figures agree with a second source (贵州茅台, 招商银行, 中国神华, 恒瑞医药, Apple, JPMorgan,
+   Micron, Realty Income, a loss-making grower, 腾讯, 中国平安 A+H, 领展); the fresh-context stage review has run and its
+   findings are fixed or answered; this plan's status is updated and the work is committed on main.
+10. **Research: valuation and rating.** The type tests, DCF and reverse DCF, multiples, the bank and insurer models,
+    the dividend discount, normalized earnings, scenarios, uncertainty, target and rating. Done when: pytest passes on
+    the math (a DCF checked against Damodaran's own spreadsheet example, justified P/B, the M-score and F-score on a
+    saved sample); the 12 companies have targets and ratings, each sanity-checked against common sense, the street
+    and the news, gaps explained and never tuned; the stage review; status; committed.
+11. **Research: writing, cross-check and report.** Section cutting per market, the four DeepSeek calls with key filling
+    and quote checks (the skills' prompt parts), the comparison with the screening, the PDF template with SVG charts,
+    the text summary; time and cost measured, the stronger and the fast model compared. `research CODE` writes the PDF.
+    Done when: the 12 reports read well to me and to the stage reviewer and every number traces to code; a cold report
+    takes under ~4 minutes; the end-to-end dry run covers one report from saved data; status; committed.
+12. **Research: the WeChat router and the record.** The four layers, name resolution and issuer groups, the pending
+    question, the background queue and the acknowledgement; the daily card's research line; the research log and
+    `track`'s section; README. Done when: ~40 test messages route correctly with DeepSeek mocked and once live
+    (Chinese, English, Japanese, codes, partial names, typos, A+H, vague, unsupported, two names); the stage review;
+    then, with your OK (rule 9), the listener is restarted and one test round-trip goes out; status; committed.
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
 - The backtest snapshots and the stage-1 harness (index funds, costs, month-end frames).
@@ -1139,10 +1401,22 @@ definitions in their research disclosures (Overweight / Neutral / Underweight ag
 analyst's coverage over 6-12 months; Overweight / Equal-weight / Underweight against the industry coverage over 12-18
 months); Blitz and van Vliet, "The volatility effect: lower risk without lower return" (JPM 2007); Baker, Bradley and
 Wurgler, "Benchmarks as limits to arbitrage: understanding the low-volatility anomaly" (FAJ 2011).
+Single-stock research (2026-11-08): Damodaran, "Investment Valuation" (3rd ed., Wiley 2012), his "simple Ginzu" FCFF
+spreadsheet and datasets (pages.stern.nyu.edu/~adamodar: country risk premiums, industry betas, margins,
+sales-to-capital, the rating and spread table); Mauboussin and Callahan, "The Base Rate Book" (Credit Suisse 2016) and
+Mauboussin and Rappaport, "Expectations Investing" (reverse DCF); Morningstar's equity research methodology (fair value
+uncertainty and star bands; the quantitative moat); the Securities Association of China's rating standard in brokers'
+disclosures (against the 沪深300 over 6-12 months); the CFA Institute Research Challenge report format; FinRobot (Zhou
+et al., arXiv 2411.08804); FinRpt (arXiv 2511.07322); TradingAgents (Xiao et al., arXiv 2412.20138) and
+TradingAgents-CN (github.com/hsliuping/TradingAgents-CN); Beneish, "The detection of earnings manipulation" (FAJ 1999);
+Piotroski, "Value investing" (JAR 2000); Altman (JF 1968) and his emerging-market score; Bradshaw, Brown and Huang, "Do
+sell-side analysts exhibit differential target price forecasting ability?" (RAST 2013); La Porta (JF 1996); Chan,
+Karceski and Lakonishok, "The level and persistence of growth rates" (JF 2003).
 
 ## Decisions kept from the old plan
 - Python 3.12 + uv. The old Swift project is archived read-only at ~/Developer/EquitySignalsClawbot-legacy.
 - Delivery is 2 messages per keyword: a text summary (at most 4,000 bytes) + a PDF.
+- A research request is 3 messages (an acknowledgement, the text, the PDF), one company per message (2026-11-08).
 - WeChat bot limits seen in practice:
   - It can only reply after I've messaged it recently; sends failed 9–12 h after my last message.
   - A burst of more than about 3–4 messages fails.

@@ -158,6 +158,6 @@ in a push wins. Preview locally with `bash .github/release.sh --dry-run`.
 ## Maintaining
 
 - Rules for changes are in [AGENTS.md](AGENTS.md): free data only, numbers from code never from the AI, keep the app
-  under ~6,000 lines with files under 400, one stage per session.
+  under ~9,500 lines with files under 400, one stage per session.
 - Storage: raw downloads are temporary, only small extracted tables are kept, and `cleanup` runs after every build.
 - Secrets stay in `.env`; never print, log or commit them.
