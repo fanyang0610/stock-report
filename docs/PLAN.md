@@ -300,7 +300,7 @@
   - Found on the way and fixed after the stage, at your word ("fix here"): 科达制造 left CN Buy on a hard
     持续经营疑虑或债务违约 flag quoting "关于法院受理子公司破产清算的公告", a subsidiary's liquidation (its 9-month profit
     +66%); going_concern had no subsidiary test, as management has. Now such a quote is a soft concern ("Results
-    review"; review.SUBSIDIARY, tests/test_review.py). Of the cached reviews only 科达制造's changed: reviewed again, it
+    review"; quotes.SUBSIDIARY since 2026-11-08, tests/test_review.py). Of the cached reviews only 科达制造's changed: reviewed again, it
     is back in CN Buy (浙江鼎力 back on the bench), its card showing the liquidation as 市场可能在担心; the report
     rebuilt (18 pages, the summary 3,366 bytes); nothing sent. review.py 400 lines.
 - Stage 8 (a forward scorecard that answers the goal): done 2026-11-08. track.py rewritten; the price fetch keeps the
@@ -374,6 +374,15 @@
     flag quoting an adverse opinion that is on its internal control, not on its accounts (the same overreach as
     科达制造's); GE Aerospace's Sell rank rests on the conglomerate's 8-year ROA and 5-year growth from before the
     spin-off.
+- After stage 8, at your word ("Do this task here"): FMX's hard flag. It left US Buy on 11-08 (MNST in its place) on
+  "expressed an adverse opinion thereon" from its 20-F, the auditor's reference to its report on internal control; the
+  opinion on its accounts was clean. An opinion on internal control is now a soft concern ("Results review";
+  quotes.about, which also holds the subsidiary test, so review.py stays at 399 lines). Of the cached reviews only
+  FMX's had a hard audit or going-concern flag; only it was reviewed again (one DeepSeek call): back in US Buy, its card
+  showing 市场可能在担心：内部控制被出具非标准意见, MNST back on the bench; 11-08's report re-rendered with `review`;
+  nothing sent. No fresh-context review for a rule this size, at your word on tokens; the tests cover FMX's own
+  passage, an HK qualified opinion and CN opinions on the accounts and on internal control. 120 tests; app Python 5,788
+  lines.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -870,6 +879,17 @@ build makes no DeepSeek calls.
       review: 科达制造 left CN Buy on "关于法院受理子公司破产清算的公告" while its 9-month profit rose 66%). A group's
       subsidiary going under isn't the group failing, as a subsidiary's executive leaving isn't a CEO change (the
       management rule below); the checklist's going_concern is the company's own doubt, default or bankruptcy;
+    - an audit opinion on internal control (a SOX 404 adverse opinion: a material weakness; a 内部控制审计报告's 否定意见)
+      rather than on the accounts is a soft concern, 内部控制被出具非标准意见 (2026-11-08, stage 8's review: FMX left US
+      Buy on "expressed an adverse opinion thereon", which its 20-F's auditor's report says of its report on internal
+      control; its accounts' opinion was clean). The hard flag is for a qualified or adverse opinion on the accounts, a
+      disclaimer, or the auditor resigning: the accounts can't be relied on. A material weakness says a control failed,
+      and the US studies find a small price reaction to it, not a collapse (Beneish, Billings and Hodder 2008; Hammersley,
+      Myers and Shakespeare 2008); in CN its consequence, the 其他风险警示 (ST) the exchanges impose for a 否定意见 on
+      internal control, comes as its own announcement and is a hard flag (delisting). What the opinion is on: the
+      subject named right after the opinion word (否定意见的内部控制审计报告; adverse opinion on internal control), else
+      the nearest one before it in its sentence, read from the source line the quote was cut from; none named counts as
+      the accounts (quotes.about, with the subsidiary test);
     - hard red flags come only from the company's own filings; from a headline the same finding is a soft concern
       (市场可能在担心). Issuers in all three markets must disclose these events themselves (立案告知书, 退市风险警示,
       要约收购报告书, 违约公告; HKEX inside information; 8-K items), while headlines are often about another company

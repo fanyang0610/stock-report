@@ -26,6 +26,34 @@ def verified(market: str, code: str, answer: dict | None = None) -> tuple[list[d
     return review.verify(answer or ANSWERS[code], review.lines_of(SOURCES[market][code]))
 
 
+def test_an_opinion_on_internal_control_is_soft():
+    """An adverse opinion on internal control (a material weakness) is a soft concern; a non-standard opinion on the
+    accounts stays a hard red flag. FMX's 20-F (2026-04-24), as cut: its auditor's report on the accounts refers to the
+    adverse opinion of its report on internal control."""
+    fmx = ("We also have audited, in accordance with the standards of the Public Company Accounting Oversight Board "
+           "(United States) (PCAOB), the Company's internal control over financial reporting as of December 31, 2025, "
+           "based on criteria established in Internal Control-Integrated Framework issued by the Committee of Sponsoring "
+           "Organizations of the Treadway Commission (2013 Framework) and our report dated April 24, 2026, expressed an "
+           "adverse opinion thereon. Basis for Opinion These consolidated financial statements are the responsibility "
+           "of the Company's management.")
+    hk = ("In our opinion, except for the possible effects of the matter described in the Basis for Qualified Opinion "
+          "section of our report, the consolidated financial statements give a true and fair view.")
+    cn = "会计师事务所对公司2025年度财务报表出具了保留意见的审计报告，对内部控制出具了否定意见的审计报告。"
+    cut = lambda text: [{"type": "定期报告", "date": "2026-04-24", "title": text, "doc": "20-F 2026-04-24"}]
+    filed = lambda title: [{"type": "公告", "date": "2026-04-30", "title": title}]
+    check = lambda quote, lines: [(f["kind"], f["hard"]) for f in review.verify(
+        {"findings": [{"kind": "audit", "source": 1, "quote": quote}]}, lines)[0]]
+    assert check("expressed an adverse opinion thereon", cut(fmx)) == [("control", False)]
+    assert review.KINDS["control"][0] == "内部控制被出具非标准意见"  # what the card says
+    assert check("Basis for Qualified Opinion", cut(hk)) == [("audit", True)]
+    assert check("出具了保留意见的审计报告", cut(cn)) == [("audit", True)]  # on the accounts
+    assert check("对内部控制出具了否定意见的审计报告", cut(cn)) == [("control", False)]
+    assert check("关于2025年度内部控制审计报告被出具否定意见的公告", filed("关于2025年度内部控制审计报告被出具否定意见的公告")) \
+        == [("control", False)]  # the ST that follows in CN has its own announcement, a hard flag
+    assert check("关于公司2025年度财务报告被出具保留意见的公告", filed("关于公司2025年度财务报告被出具保留意见的公告")) \
+        == [("audit", True)]
+
+
 def test_quotes_are_checked_against_their_sources():
     found, rejected, _ = verified("cn", "600576")  # 祥源文旅: its actual controller is under a CSRC investigation
     assert rejected == 0 and [(f["kind"], f["hard"], f["type"]) for f in found] == [

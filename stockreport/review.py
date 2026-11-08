@@ -34,8 +34,6 @@ ROLES = ("buy", "hold", "sell", "next", "hold_next")  # the review's order: what
 # Another security's suspension or delisting isn't the stock's, nor is a bare SEC form (which security? often notes)
 OTHER_SECURITY = r"优先股|優先股|债券|債券|可转债|可轉債|转债|轉債|票据|票據|preferred|bond|notes due|warrant|25-NSE|15-12[BG]"
 SEC_BARE = re.compile(r"(25-NSE|15-12[BG])\b")  # those forms' titles are left out of the sources
-SUBSIDIARY = (re.compile(r"子公司|附属公司|附屬公司|subsidiar", re.I),  # a going-concern quote about one alone: soft
-              re.compile(r"(公司|集团|集團|本行)(及|和|与|與|以及)其?(全资|全資|控股|下属|下屬)?(子公司|附属|附屬)|and (its|their) subsid", re.I))
 DENIAL = re.compile(r"不存在|未发现|未發現|没有|沒有|并无|並無|无任何|無任何|no substantial doubt|not (been )?subject|"
                     r"no (material )?(investigation|proceeding)|\bnone of\b|subject to any", re.I)
 # kind -> (words, hard red flag, what the quote must name for the kind to stand, what it mustn't). A finding whose quote
@@ -50,6 +48,7 @@ KINDS = {
               r"保留意见|保留意見|否定意见|否定意見|无法表示意见|無法表示意見|qualified opinion|adverse opinion|disclaimer of opinion|"
               r"(会计师事务所|會計師事務所|审计机构|審計機構|审计师|審計師|核数师|核數師|auditor|accountant).{0,12}"
               r"(辞任|辭任|辞职|辭職|resign)", None),
+    "control": ("内部控制被出具非标准意见", False, None, None),  # an audit finding on internal control (quotes.about)
     "going_concern": ("持续经营疑虑或债务违约", True,
                       r"持续经营|持續經營|重大不确定|违约|違約|逾期|未能按期|无法兑付|清盘|清盤|破产|破產|重整|going concern|"
                       r"substantial doubt|default|bankrupt|Chapter 11|receivership|winding.up", None),
@@ -219,8 +218,8 @@ def verify(answer: dict, lines: list[dict]) -> tuple[list[dict], int, int]:
             if must and not re.search(must, raw, re.I):
                 kind, altered = "other", altered + 1
             hard = KINDS[kind][1] and src["type"] == "公告"
-        if hard and kind == "going_concern" and SUBSIDIARY[0].search(raw) and not SUBSIDIARY[1].search(raw):
-            kind, hard, altered = "other", False, altered + 1  # a subsidiary's insolvency isn't the company's
+        if hard and (real := quotes.about(kind, raw, src["title"])) != kind:  # a subsidiary's insolvency isn't the
+            kind, hard, altered = real, False, altered + 1  # company's; an opinion on internal control isn't on the accounts
         if (kind, quote) not in seen:
             seen.add((kind, quote))
             found.append({"kind": kind, "words": KINDS[kind][0], "hard": hard, "quote": raw, "date": src["date"],
