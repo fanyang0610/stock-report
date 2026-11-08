@@ -347,8 +347,10 @@
   - Storage, at your word ("have a mechanism to clean up unnecessary cache and data"): snapshots and reports are kept
     30 days, not 400 and 90 ("Storage and cleanup": ~1.8 GB at steady state before, ~1.1 GB now); the backtest's one
     snapshot copied out of cleanup's way (panel.today_snapshot read data/snapshots/2026-10-18, which retention would
-    have deleted). Not deleted without your OK: the old engines' outputs in data/backtest (255 MB) and data/events and
-    data/deepdive (0.5 MB), which nothing reads.
+    have deleted). Deleted at your OK ("Yes, delete them", 2026-11-08): the old engines' outputs in data/backtest that
+    nothing current reads (s1_* from stage1.py, stage1_fix.py and stage1_hold.py; s3_* from the stage-3 scripts removed
+    in stage 1; 15 files, 262 MB; `stage1 frame` rebuilds s1_*), and data/events and data/deepdive (0.5 MB, their
+    features removed). data/ + reports/ 791 MB after.
   - Found on the way: re-rendering a report with report.build alone drops the day's review and rewrites picks.csv's
     rows for the day; 11-08's was restored with `review` (cached, 1 s; the summary byte-identical to the morning's).
   - Tests (tests/test_track.py): the first close, the marks due, the month-firsts, month-end values with a dividend, an
@@ -1166,9 +1168,9 @@ Wurgler, "Benchmarks as limits to arbitrage: understanding the low-volatility an
 - Phase 6 estimate (2026-10-17): price files ~33 MB (rolling 385 days), snapshots ~1 MB a day × 400 = ~400 MB, reports ~1.7 MB a day × 90 = ~150 MB, raw ~3 MB a day × 7 = ~20 MB; steady state ~0.6 GB of the 2 GB limit.
 - Measured 2026-11-08 (stage 8): data/ + reports/ 1.0 GB, of which data/backtest 869 MB (cleanup doesn't touch it),
   history 21, prices 33, snapshots 18 (16 days), reports 36 (16 days). Snapshots and reports had grown to ~1.4 and ~3
-  MB a day, so the old periods would have settled near 1.8 GB; at 30 days ~1.1 GB, and ~0.85 GB without the old
-  engines' outputs in data/backtest that nothing reads now (s1_*, s3_*: 255 MB; stage1.py's and the removed stage-3
-  scripts'; rebuildable).
+  MB a day, so the old periods would have settled near 1.8 GB; at 30 days ~1.1 GB. The old engines' outputs in
+  data/backtest that nothing reads (s1_*, s3_*: 262 MB) and data/events and data/deepdive were deleted at your OK the
+  same day: 791 MB after (data/backtest 620), ~0.85 GB at steady state.
 - Phase 11, since 2026-11-07: data/passages/<market>/ keeps the passages cut from each periodic report read (a few KB each, at most 45 a day, deleted after 400 days; data/deepdive/ before); filing documents are read in memory and never stored; data/verdicts.csv is tiny.
 - History tables (Phase 7, data/history/, kept; cleanup doesn't touch them), for valuations v2/v3 and the backtest:
   - Phase 13: us_frames (SEC frames, every filer's revenue, net income and equity per calendar year 2009-2025, 2.1 MB; new years once, the last two again every 30 days), us_sic (SEC SIC code per filer with $100m+ revenue and per candidate, from the submissions files, once each), cn_sw (申万 classification change history, weekly), cn_annual back to 2009 (was 2015). Backtest only: data/backtest/us_quarterly.csv.gz (every US 10-Q/10-K period by filing date, 878 companies, 1.3 MB; companyfacts read once each and not stored); us_annual also carries R&D from that read (not refreshed).
