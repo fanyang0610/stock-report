@@ -385,6 +385,16 @@
   nothing sent. No fresh-context review for a rule this size, at your word on tokens; the tests cover FMX's own
   passage, an HK qualified opinion and CN opinions on the accounts and on internal control. 120 tests; app Python 5,788
   lines.
+- Checked 2026-11-08, at your word, not taken: a spin-off parent scored on its pre-spin-off history (stage 8's review:
+  GE Aerospace, US Sell 9th, its 8-year ROA 1.3% and 5-year growth from GE's conglomerate years: 2018's $22bn charge,
+  a 2020 base of $256bn in assets against $130bn now). Not a fault: the figures are the filer's own as reported, and
+  the published recipes (Gray and Carlisle's 8-year returns, quality-minus-junk's 5-year growth) take each firm's
+  reported history the same way. Nor what rates it: on the same snapshot, with no long-run figure at all, GE ranks 740
+  of 789 instead of 758, on today's figures (liabilities 86% of assets with GE's insurance run-off, gross profit 12% of
+  assets, the bottom tenth of its peers, little cash backing, a high price, weak momentum: the card's 同行中毛利/总资产低
+  and 负债率高); only its 9th place would pass to Intel. A rule dropping the years before a fall in assets or revenue
+  would also drop the record of companies that simply shrank, the ones Sell is for; disposals reported as
+  discontinued are already out (core is continuing operations: 97 US names had some). No change.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
