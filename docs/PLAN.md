@@ -404,6 +404,44 @@
   correction: the skills are ported into the program (code and stored DeepSeek prompts), not left as Claude-only
   tools. Changed from the draft at adoption: one company per message, not three, as the bot fails on a burst of more
   than 3-4 messages. Stage 9 next.
+- Stage 9 (research: data and facts): done 2026-11-08. stockreport/research/ (1,802 lines in 10 files; the app 7,608 of
+  ~9,500): per-market fetchers (cn.py, us.py, hk.py), Yahoo and Tencent for every market (sources.py), Damodaran's
+  datasets and company list (damodaran.py), the listings for stage 12 (listings.py: CNINFO, HKEX, SEC with Eastmoney's
+  ORG_CODE; 524 issuers with more than one line), the accounting checks and the skills' numeric tests (checks.py), the
+  sheet's arithmetic (sheet.py), and `research CODE --facts` (facts.py), all as "Data (stage 9)" and the skills table
+  describe. The 12 companies (茅台, 招商银行, 中国神华, 恒瑞医药, AAPL, JPM, MU, Realty Income, SNOW as the loss-making grower,
+  腾讯, 中国平安 601318 and 02318, 领展) build; on the latest fiscal year both sources report, revenue, profit, equity,
+  operating cash flow and total assets agree with Yahoo within 1%, and today's price and market value with Tencent's
+  quote, except: 招商银行's revenue 1.6% (within 5%); Ping An's revenue 12% (A) and 19% (H), an insurer's revenue each
+  source defines its own way (kept, labelled "definition", as crosscheck.py already treats financials' revenue); China
+  Shenhua's 2025 equity and assets 20% and 30% (Eastmoney's restated comparatives): financial-data's rule now acts,
+  that year's balance sheet is left out of every ratio and check, and the sheet says the trailing figures may mix
+  restated quarters with the year as filed; Link has Yahoo as its only source for statements (Eastmoney has none for
+  HK REITs; its price and value agree with Tencent's). P/E and P/B match Tencent's own (茅台 22.1 / 6.70, 神华 19.3, 恒瑞
+  37.7, 招商银行 7.1 / 0.91); Ping An's A P/E 10.0 is its H's 8.3 times the 20.6% A premium, after its Q3 2026 profit fell
+  to CNY 4.1bn. 茅台's beta of 0.10 to the CSI 300 is real: over the last year its daily correlation with the index in
+  通达信's packages is -0.02. A first request takes 25-40 s of data (五粮液 40 s, NVIDIA 25 s), seconds when cached; the
+  first of each half-year adds Damodaran's download (~1 min). Tests: tests/test_research_checks.py (Beneish M, Piotroski
+  F, Altman Z and Z'', TTM, quarters, share bases, dividends, the cross-check, filing titles) and
+  tests/test_research_parsers.py (CN, HK, US, Yahoo, Nasdaq, Damodaran and listings on samples saved 2026-11-08).
+  The fresh-context stage review (one; the fixes checked by rebuilding the 12 and the tests, not by a second review)
+  found, all fixed: Shenhua's mixed vintages (every year scaled to its 2026 share count, payout 82.5% for 75.6%; a
+  "restated" label that rested on an update date Eastmoney stamps on every year-end, Moutai's too: removed, the rule
+  above instead); US trailing pretax profit, interest, capex and depreciation taken from the last 10-K (now the same
+  trailing months as revenue) and shares from it (now the latest filing's cover: market values agree with Tencent's);
+  JPM's preferred shares missed (more concepts); ROE on equity with preferred and perpetuals (招商银行 2025 12.0%; on
+  common equity now, 14.0%); per-share history on mixed share bases (EPS now profit over today's-basis shares); HK share counts
+  (Eastmoney's ISSUED_COMMON_SHARES repeats today's count: now profit over basic EPS, Tencent 9.53bn in 2021 to 9.08bn)
+  and HK dividends in HKD by calendar year (now in the reporting currency at each ex-date's rate; an A+H issuer's from
+  its A line's 分红: Ping An H 10 raises, no cut); 茅台's 拆出资金 (CNY 99bn of its finance arm's interbank lending) left
+  out of cash (in now: EV/EBIT 14.2, was 15.5); banks', insurers' and REITs' meaningless ratios left in the history;
+  consensus sources side by side without their basis (now labelled, with the gap: SNOW Nasdaq -1.42 against Yahoo's
+  adjusted +2.22); a failed refresh silently using an old cache (now logged, and every input's date is on the sheet).
+  Answered, not changed: Eastmoney's search box is a per-message query, not a list to store, so stage 12 calls it; the
+  "definition" label covers only banks' and insurers' revenue; the regional-sample fallback (fewer than 10 firms) is
+  general, not for a name. Not built (said under "Data (stage 9)"): HK Southbound holdings and short selling, US and HK
+  segments (stage 11, from filings), US and HK industry valuation history. Line budgets so the app stays near 9,500:
+  stage 10 at most 750 lines, stage 11 800, stage 12 340.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1045,6 +1083,24 @@ Layers, so the screening keyword keeps working when DeepSeek is slow or down (as
 | Flows and holders | 融资融券, 股东户数, 解禁, 质押, 增减持, 机构调研, 龙虎榜 (a-stock-data's endpoints) | Southbound holdings, HKEX short selling | Nasdaq short interest, Form 4 |
 | Valuation inputs | Damodaran's datasets, refreshed each January and July: equity risk premium by country, industry betas, margins, sales-to-capital and cost of capital (US, China and global files), the rating and default-spread table | same | same |
 
+As built in stage 9 (2026-11-08; stockreport/research): CN statements from Eastmoney's F10 tables for every report
+since listing, in the general, bank, insurer or broker layout by ORG_TYPE (banks' bad loans, provisions, capital and
+margin and insurers' solvency from the main indicators). Eastmoney overwrites each row with later reports' restated
+comparatives (China Shenhua's 2025 year-end assets CNY 904bn after a same-control acquisition, against the annual
+report's 628bn; its 2025 quarters restated by the 2026 ones, while the 2025 year stays as filed), and its TOTAL_SHARE
+repeats today's count on every year: per-year shares come from 股本 with later bonus shares (送转) undone. HK statements from
+Eastmoney's HK F10 tables (annual, interim and quarterly), whose amounts are CNY at each period end's rate for every
+company (SHKP's FY2026 profit CNY 18.61bn = HKD 21.43bn x 0.8686): converted back at that rate. No Eastmoney statements
+for HK REITs (Link): Yahoo's 5 annual years are the only source, said on the sheet. US from SEC companyfacts with the
+concepts the accounting checks need. The second source of the reported figures is Yahoo's annual series in all three
+markets; of the price and market value, Tencent's quote (qt.gtimg.cn answers for CN, HK and US). Not found free and
+verified: HK Southbound holdings and HKEX short selling (Eastmoney's tables answered no data; HKEX's page is a form);
+US and HK segments come from the filings' text in stage 11. Damodaran's company list (indname.xls) classifies 12,301 CN,
+HK and US listings into his industries, so the industry's beta, margins and sales-to-capital need no hand-made map
+(his China region holds the HK-listed Chinese companies; a regional average over fewer than 10 firms gives way to the
+global one: China's REITs have none). The CSI 300 fund (510300) is CN's index for beta and relative returns (Yahoo's
+index bars have no volume).
+
 A stock outside the screening's universe (small, illiquid, newly listed, 北交所) is fetched on demand, and the report
 says why the screening doesn't cover it. Per-stock data is cached (data/research/<market>/<code>/, small extracted
 tables; raw files under the Storage rules), checked against a second source where the screening's cross-checks have
@@ -1161,18 +1217,18 @@ later option, if the bundle proves too narrow: DeepSeek calling the project's ow
 
 | Skill | Becomes code | Becomes a DeepSeek prompt | Report section |
 |---|---|---|---|
-| a-stock-data | already runnable Python: flows, holders, 解禁, 质押, 增减持, 机构调研, broker reports, adapted into fetch modules | — | 3, 5, 10, 11 |
-| financial-data | its two-source cross-validation rules (crosscheck.py already uses its 5% rule) | — | all figures |
-| quality-screen | its 7 elimination indicators, a pass/fail table | — | 5 |
-| investment-checklist | numeric items (returns, debt, cash conversion, price) | judgment items (understandable business, honest management, durable advantage) | 4, 5, 10 |
-| investment-research (Buffett / Munger / 段永平 / 李录) | owner earnings, returns on capital, valuation (under rule 2) | each master's questions on business quality, moat, management and price | 2, 4 |
+| a-stock-data | its endpoints as fetch code (research/cn.py): 融资融券, 股东户数, 解禁, 质押, 增减持, 回购, 龙虎榜, 机构调研, 分红, broker reports, under its Eastmoney rate rules; its valuation formulas (PEG, years to digest a P/E to 30x) | — | 3, 5, 10, 11 |
+| financial-data | its two-source rule on every key figure (within 1% agree, 1-5% differ, above 5% the filing decides; research/sheet.crosscheck), forward-adjusted price history | — | all figures |
+| quality-screen | its 7 elimination indicators and exemptions A and B (research/checks.py); exemption C needs a judgment of the business model (membership, platform, high turnover): a stage 11 prompt | — | 5 |
+| investment-checklist | gate 2's five numbers (5-year ROE, gross margin, free cash flow against profit, capex against operating cash flow, debt against profit) with its stars, the quick veto (3 years of negative free cash flow), gate 5's multiples against their own history | judgment items (understandable business, honest management, durable advantage) | 4, 5, 10 |
+| investment-research (Buffett / Munger / 段永平 / 李录) | stage 9: market value checked as price x shares against a second source, the multiples, net cash, returns on capital; stage 10: the reverse DCF, three scenarios and its terminal P/E = (1 - g/ROIC)/(r - g) with r and g in one currency and r - g at least 5 points, discrete risks as scenarios, never in r (it has no owner-earnings formula; read 2026-11-08) | each master's questions on business quality, moat, management and price | 2, 4 |
 | investment-team | — | its four parallel roles, as the parallel calls (business, bull, bear, thesis) | 4 |
-| earnings-review | the latest results against last year and the consensus | reading the results release and MD&A | 6, 8 |
-| management-deep-dive | changes at the top, insider and holder trades, pledges, buybacks, dividends | track record and capital allocation, from filings | 10 |
-| industry-research | peers table, the industry's valuation history | industry chain and competition, from report sections and broker titles | 3 |
-| news-pulse | spotting an unusual price move and gathering the news and filings around it | why it moved, with quotes | 8, 11 |
-| income-investment | payout ratio, dividend cover by free cash flow, dividend record, yield against history | dividend policy, quoted | 5, 7 |
-| era-alpha | its numeric tests for high-growth core companies, in the fast-grower type | its qualitative verification questions | 4 |
+| earnings-review | the latest period against a year earlier, and its anomaly signals: receivables or inventory growing faster than revenue, cash flow below profit and widening, capex intensity, non-recurring profit (CN); the consensus surprise from Yahoo's earnings history (US, HK) | reading the results release and MD&A | 6, 8 |
+| management-deep-dive | holder and insider trades (CN 增减持; US Nasdaq's Form 4 summary; Yahoo's insider activity), pledges, buybacks, dividends, director and auditor changes counted from 12 months of filing titles | track record and capital allocation, from filings | 10 |
+| industry-research | peers table from the day's snapshot (same industry, nearest in value, the group's medians), the industry's valuation history (CN, from the half-year valuation table; US and HK in stage 10 if the method needs it) | industry chain and competition, from report sections and broker titles | 3 |
+| news-pulse | its trigger lines (a day of 5%, or 10% in a week, in the last 90 days) with the index's move the same days; the filings and headlines around them in stage 11 | why it moved, with quotes | 8, 11 |
+| income-investment | dividends per share by year (CN undone for bonus shares), raises / holds / cuts, 5-year growth, profit and free-cash-flow payout, years uncovered, the yield against its own 5-year average; its sector measures (REIT FFO, bank capital) where free data has them | dividend policy, quoted | 5, 7 |
+| era-alpha | growth over the last quarters (CN, HK quarterly reporters) and years, growth with cash, the gross margin's direction, forward items (contract liabilities, inventory, construction in progress), P/E against its own mean + 3 standard deviations | its qualitative verification questions | 4 |
 | thesis-tracker, thesis-drift | a later stage: re-check a report's "what would change our view" when new results come out | a real change of facts against a change of wording | follow-up |
 | deep-company-series, wechat-article, dyp-ask, portfolio-review, private-company-research, bottleneck-hunter | not used: long articles, a persona Q&A, portfolio management (rule 4), unlisted companies, supply-chain bets | | |
 
@@ -1341,7 +1397,7 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
    cohort's first close, the month-end values, an unresolved name and the basket's weights on small samples; a first
    cohort exists and `track` prints it; the fresh-context stage review has run and its findings are fixed or answered;
    this plan's status is updated and the work is committed on main.
-9. **Research: data and facts** ("Single-stock research"; next). Per-stock data for each market, fetched on demand and
+9. **Research: data and facts** ("Single-stock research"; done 2026-11-08, Status). Per-stock data for each market, fetched on demand and
    cached, cross-checked as the screening's are; the fact sheet (history, ratios, accounting checks, flows, consensus,
    peers, the screening's view); Damodaran's datasets; the skills' code parts, each skill read in full first; name
    resolution's listings (CNINFO, HKEX, SEC, Eastmoney's search) as data, used by stage 12. `research CODE --facts`.
@@ -1455,6 +1511,11 @@ Karceski and Lakonishok, "The level and persistence of growth rates" (JF 2003).
   MB a day, so the old periods would have settled near 1.8 GB; at 30 days ~1.1 GB. The old engines' outputs in
   data/backtest that nothing reads (s1_*, s3_*: 262 MB) and data/events and data/deepdive were deleted at your OK the
   same day: 791 MB after (data/backtest 620), ~0.85 GB at steady state.
+- Stage 9 (research): data/research/<market>/<code>/ keeps one stock's extracted tables and its fact sheet (~140-320
+  KB; statements, consensus and filing titles reused 7 days, prices, quotes and flows 1 day); a folder not touched for
+  400 days is deleted by `cleanup`. data/research/damodaran (~140 KB, refreshed after each January and July update) and
+  listings.csv.gz (~330 KB, weekly). SEC companyfacts and Damodaran's 22 MB company list are parsed in memory, never
+  stored.
 - Phase 11, since 2026-11-07: data/passages/<market>/ keeps the passages cut from each periodic report read (a few KB each, at most 45 a day, deleted after 400 days; data/deepdive/ before); filing documents are read in memory and never stored; data/verdicts.csv is tiny.
 - History tables (Phase 7, data/history/, kept; cleanup doesn't touch them), for valuations v2/v3 and the backtest:
   - Phase 13: us_frames (SEC frames, every filer's revenue, net income and equity per calendar year 2009-2025, 2.1 MB; new years once, the last two again every 30 days), us_sic (SEC SIC code per filer with $100m+ revenue and per candidate, from the submissions files, once each), cn_sw (申万 classification change history, weekly), cn_annual back to 2009 (was 2015). Backtest only: data/backtest/us_quarterly.csv.gz (every US 10-Q/10-K period by filing date, 878 companies, 1.3 MB; companyfacts read once each and not stored); us_annual also carries R&D from that read (not refreshed).

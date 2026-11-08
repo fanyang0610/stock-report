@@ -44,8 +44,14 @@ big_fall = -0.3               # a 6-month return at or below this is a key risk 
 fundamentals_refresh_days = 7
 quarters_kept = 7             # report periods fetched for trailing-12-month numbers
 
+[research]                    # single-stock research (PLAN.md, "Single-stock research"; stockreport/research)
+statements = 7                # days a stock's statements, consensus and listings are reused (new filings come weekly)
+daily = 0                     # prices, quotes and flows: refetched each day
+peers = 8                     # peers shown: the same industry in the day's snapshot, nearest in market value
+
 [retention]                   # days (PLAN.md, "Storage and cleanup")
 raw = 7
+research = 400                # a stock's folder under data/research not touched for this long is deleted
 snapshots = 30                # read: the newest earlier one (drift alarms), the cohort's day (the scorecard's basket)
 reports = 30                  # read: each market's newest lists (data/picks.csv keeps every list)
 logs = 30

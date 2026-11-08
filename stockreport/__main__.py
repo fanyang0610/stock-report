@@ -236,6 +236,9 @@ def main(argv: list[str] | None = None) -> int:
     verdict.add_argument("action", nargs="?", choices=["veto", "confirm"])
     verdict.add_argument("--until", help="last day it applies, YYYY-MM-DD (it also ends at the next report)")
     verdict.add_argument("--reason", default="", help="why, in a few words (shown on the report)")
+    research = sub.add_parser("research", help="single-stock research (stage 9: the fact sheet)")
+    research.add_argument("code", help="ticker, e.g. 600519, 00700 or AAPL")
+    research.add_argument("--facts", action="store_true", help="write the fact sheet (data/research/<market>/<code>/facts.json)")
     clean = sub.add_parser("cleanup", help="apply the storage retention periods")
     clean.add_argument("--dry-run", action="store_true", help="only list what would be deleted")
     args = parser.parse_args(argv)
@@ -257,6 +260,14 @@ def main(argv: list[str] | None = None) -> int:
         if not args.action or not args.until:
             parser.error("verdict needs a code, veto|confirm and --until")
         print(verdicts.add(args.code, args.action, args.until, args.reason, date.today()))
+        return 0
+    if args.command == "research":
+        if not args.facts:
+            parser.error("the research PDF comes in stage 11; use --facts for the fact sheet")
+        setup_logging()
+        from stockreport.research import facts
+        market = facts.market_of(args.code)
+        print(facts.show(facts.build(market, args.code)))
         return 0
     if args.command == "cleanup":
         cleanup(dry_run=args.dry_run)

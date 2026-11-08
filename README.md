@@ -79,6 +79,7 @@ uv run python -m stockreport send                 # review, then send to WeChat 
 uv run python -m stockreport track                # scorecard: each month's picks vs the index fund
 uv run python -m stockreport verdict              # list your verdicts in force
 uv run python -m stockreport verdict 600519 veto --until 2026-12-31 --reason "..."   # keep a name off Buy and Hold
+uv run python -m stockreport research 600519 --facts   # one stock's fact sheet -> data/research/<market>/<code>/facts.json
 uv run python -m stockreport cleanup --dry-run    # what retention would delete, and disk use
 node bridge/wechat.mjs status                     # is the bot's reply window open?
 uv run pytest

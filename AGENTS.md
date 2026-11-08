@@ -23,7 +23,7 @@ bridge/wechat.mjs is the WeChat helper (Node). data/ is the daily cache and repo
 5. Missing or inconsistent data: drop the stock and take the next one. Never invent data or hard-code tickers into the picks.
 6. Keep it small: no frameworks, "gates", "contracts", ledgers, hashes, attestations or handoff documents. Target under 9,500 lines of app Python (stockreport/; 6,000 before the research module), with files under 400 lines. Ask before adding a dependency.
 7. Tests: pytest for the scoring and valuation math and the parsers (using small saved samples), plus one end-to-end dry run. Nothing more.
-8. One stage per session. Before reporting a stage done, run the stage-reviewer agent (.claude/agents/stage-reviewer.md) with fresh context and include its answers. When the stage's "done when" is met, update the status in docs/PLAN.md, commit, then stop and report in 10 lines or fewer.
+8. One stage per session. Before reporting a stage done, run the stage-reviewer agent (.claude/agents/stage-reviewer.md) with fresh context and include its answers; it runs on Sonnet (its `model:` line, to save tokens), so don't override its model when calling it. When the stage's "done when" is met, update the status in docs/PLAN.md, commit, then stop and report in 10 lines or fewer.
 9. Ask me before: sending any WeChat message, creating or pushing to GitHub repos, installing launchd jobs, or adding any paid service.
 10. Never print, log or commit secrets from .env.
 11. If something is ambiguous or a stage can't be done as written, stop and ask. Don't build workarounds. Investment-method choices are the agent's to make from published evidence, with the reason written in docs/PLAN.md: don't hand the user choices they can't judge, and don't call something the user's goal unless they said it.
@@ -36,7 +36,7 @@ uv run python -m stockreport run [--market cn|us|hk]                # fetch + sc
 uv run python -m stockreport review                                 # results review (DeepSeek), then the PDF
 uv run python -m stockreport send [--test]                          # text summary + PDF to WeChat (reviewed first)
 uv run python -m stockreport listen                                 # listener (launchd): keywords now, the router from stage 12
-uv run python -m stockreport research CODE [--facts]                # single-stock research report (stages 9-11; not built yet)
+uv run python -m stockreport research CODE --facts                  # single-stock fact sheet (stage 9); the report PDF comes in stage 11
 uv run python -m stockreport track                                  # performance scorecard
 uv run python -m stockreport verdict [CODE veto|confirm --until D --reason "..."]  # your verdicts (no args: list)
 uv run python -m stockreport cleanup [--dry-run]                    # apply storage retention

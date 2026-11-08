@@ -1,5 +1,5 @@
 """Storage retention (PLAN.md Method section 11). Only ever deletes dated entries inside
-data/raw, data/snapshots, reports and logs."""
+data/raw, data/snapshots, reports and logs, and research folders (data/research/<market>/<code>) not used for a while."""
 
 import logging
 import shutil
@@ -24,12 +24,18 @@ def expired(today: date) -> list[Path]:
                          (REPORTS, keep["reports"]), (LOGS, keep["logs"])):
         cutoff = (today - timedelta(days=days)).isoformat()
         out += [p for p in sorted(folder.glob("????-??-??*")) if p.name[:10] < cutoff]
+    cutoff = (today - timedelta(days=keep["research"])).isoformat()
+    for stock in sorted((DATA / "research").glob("[a-z][a-z]/*")):  # by its newest file: the last time it was built
+        newest = max((f.stat().st_mtime for f in stock.iterdir()), default=0)
+        if stock.is_dir() and date.fromtimestamp(newest).isoformat() < cutoff:
+            out.append(stock)
     return out
 
 
 def cleanup(dry_run: bool = False, today: date | None = None) -> int:
     """Delete (or list) expired data; returns the total size of data/ + reports/ afterwards."""
-    allowed = [(DATA / "raw").resolve(), (DATA / "snapshots").resolve(), REPORTS.resolve(), LOGS.resolve()]
+    allowed = [(DATA / "raw").resolve(), (DATA / "snapshots").resolve(), REPORTS.resolve(), LOGS.resolve()] + [
+        (DATA / "research" / m).resolve() for m in ("cn", "us", "hk")]
     freed = 0
     for path in expired(today or date.today()):
         if path.resolve().parent not in allowed:

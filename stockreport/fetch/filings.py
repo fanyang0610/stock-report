@@ -119,9 +119,10 @@ def listing_moved(body: str) -> bool:
     return bool(item) and bool(MOVED.search(item.group(1))) and not FAILED.search(item.group(1))
 
 
-def recent(market: str, code: str, today: date, days: int) -> list[dict]:
+def recent(market: str, code: str, today: date, days: int, routine: bool = False) -> list[dict]:
     """A stock's non-routine filings of the last `days` days, newest first: {date, kind, title, url}, classified by
-    the filing rules (events.classify). None when the stock has no filing id."""
+    the filing rules (events.classify); with `routine`, the routine ones too (research reads director and auditor
+    changes from their titles). None when the stock has no filing id."""
     from stockreport.events import classify
     sid, start, http = ids(market).get(code), today - timedelta(days=days), client(market)
     if sid is None:
@@ -154,7 +155,7 @@ def recent(market: str, code: str, today: date, days: int) -> list[dict]:
     out, seen = [], set()
     for r in rows:
         kind = classify(market, r)
-        if kind != "routine" and (r["date"], r["title"]) not in seen:
+        if (routine or kind != "routine") and (r["date"], r["title"]) not in seen:
             seen.add((r["date"], r["title"]))
             out.append({"date": r["date"], "kind": kind, "title": r["title"], "url": r["url"]})
     return sorted(out, key=lambda r: r["date"], reverse=True)
