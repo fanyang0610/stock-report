@@ -303,6 +303,77 @@
     review"; review.SUBSIDIARY, tests/test_review.py). Of the cached reviews only 科达制造's changed: reviewed again, it
     is back in CN Buy (浙江鼎力 back on the bench), its card showing the liquidation as 市场可能在担心; the report
     rebuilt (18 pages, the summary 3,366 bytes); nothing sent. review.py 400 lines.
+- Stage 8 (a forward scorecard that answers the goal): done 2026-11-08. track.py rewritten; the price fetch keeps the
+  funds and the cohorts' names; one line on each market page.
+  - The record is data/picks.csv, not data/sent.csv: picks.csv holds every report's three ratings with their prices
+    (each day's last build, so the review's removals when a review ran), sent.csv only the buys and only on the days
+    you asked: with it a month you didn't ask would have no cohort, and Hold and Sell never one.
+  - Cohorts: each market's first report of each month, recorded the day after (the day's last build may still change
+    its lists) in data/cohorts.csv.gz: the Buy, Hold and Sell names, equal amounts within each; the fund; the 对照组合
+    from the day's snapshot (lists.buyable and lists.slots, as backtest/qvm.neutral: each sector's places spread equally
+    over all its names that can be bought). Held 12 months from the first close after the report's day (a Saturday
+    report starts at Monday's close, a Monday report at Tuesday's: the cohort is the day's last build, which an evening
+    review may change after that day's close).
+  - The funds with dividends: SPY and 2800.HK from Yahoo's adjusted closes like every US and HK price; 510300 from the
+    通达信 packages (kept beside the CSI 300), whose prev-close the exchange lowers by each distribution: on 2026-01-19,
+    its ex-date, the prev-close was 4.736 against the 4.859 close before (a 0.123 distribution), so the day's return
+    is +0.04% (close 4.738), as on Yahoo's adjusted close.
+  - Month-end marks in data/cohort_marks.csv: each group's value at each month's last close after the start and at the
+    12-month close, written once a later close is in, never recomputed, with the cohort's first close, so the price
+    files' 385-day window can't move or erase them; both files are written whole and swapped in. A name with no price
+    that day, or one with neither a trade nor a price change (a suspended name shows its last close with volume 0;
+    volume alone won't do, as Yahoo gives every HK row volume 0 on half days such as 12-24 and 12-31) is left out of its
+    group's value and counted as unresolved, with its growth to its last close kept beside the mark; it counts again
+    once it trades, its return running from its last close. A mark with an unresolved name waits for 5 later closes, so
+    a name a failed Yahoo fetch missed is filled in first (each fetch reaches 10 days back). A name that delists stays
+    unresolved, so it is out of every later mark and the 12-month value, as the stage asked ("unresolved rather than
+    flat"); the line says how many, and its last-close growth is kept should a later stage value it. tracked() keeps
+    the funds and the last 13 months' cohort names priced.
+  - The first cohort is 2026-11-07's lists, not 11-01's: the first report of November built with the score as it
+    stands (stage 6's inputs, rebuilt that evening); 11-01 had no Hold list, and 11-01..11-05 came before stage 6's
+    corrections. Recorded for all three markets: Buy 20, Hold 10, Sell 10; the 对照组合 CN 617 names, US 652, HK 199,
+    its places the buys' in every sector. Its first close is Monday 11-09's; the first marks come with December's first
+    close. (11-08's lists, from Sunday's weekly data at the same price date, differ in the US by 5 buys, 5 Hold and 3
+    Sell names; by the rule November's cohort is 11-07's.) Its CN Buy holds 科达制造: 11-07's report was re-rendered on
+    11-08 at 07:01 with the subsidiary going-concern fix, which rewrote picks.csv's 11-07 rows (the evening review had
+    removed it on the false flag, 浙江鼎力 in its place). Kept, as the report of that day now reads; since then a report
+    re-rendered for a past day no longer rewrites that day's rows (report.build logs picks only for today).
+  - `track` prints each cohort's marks against the fund and the 对照组合 and its value at the newest close (shown, not
+    kept); `run` records new cohorts and marks before the report. The report's market page carries one 实盘记录 line
+    under the 预期 box, in every report: its figures change once a month, and one report a month would miss the days
+    you ask. Before the first mark it says when the numbers come; after, Buy against the fund and the 对照组合, Hold and
+    Sell against the fund (Sell trailing is the rating being right), the average over cohorts and how many led, and the
+    distinct names left out; a figure missing that month is left out of the line. The WeChat summary is unchanged.
+  - Storage, at your word ("have a mechanism to clean up unnecessary cache and data"): snapshots and reports are kept
+    30 days, not 400 and 90 ("Storage and cleanup": ~1.8 GB at steady state before, ~1.1 GB now); the backtest's one
+    snapshot copied out of cleanup's way (panel.today_snapshot read data/snapshots/2026-10-18, which retention would
+    have deleted). Not deleted without your OK: the old engines' outputs in data/backtest (255 MB) and data/events and
+    data/deepdive (0.5 MB), which nothing reads.
+  - Found on the way: re-rendering a report with report.build alone drops the day's review and rewrites picks.csv's
+    rows for the day; 11-08's was restored with `review` (cached, 1 s; the summary byte-identical to the morning's).
+  - Tests (tests/test_track.py): the first close, the marks due, the month-firsts, month-end values with a dividend, an
+    unresolved name and its return, a half day's volume 0, the wait before a mark with an unresolved name, the
+    对照组合's weights with a partnership, and marks kept when the price file rolls on; the report line without a missing
+    figure; the 通达信 sample keeps 510300; the dry run no longer reads the real scorecard files. 119 tests; app Python
+    5,755 lines (5,542).
+  - The fresh-context stage review confirmed the record and the month-first rule, START chosen before any result, the
+    first close for morning and evening builds and across holidays, the marks once a later close is in and never
+    redone, dividends in all three funds (SPY's past year +10.9% against the S&P 500's +9.8%, 2800 −4.5% against the
+    Hang Seng's −7.6%), suspended names chained from their last close, the 对照组合 rebuilt from the snapshot to the same
+    weights (summing to 1, its places the buys' in every sector, every buy inside it), and nothing reading snapshots or
+    reports older than 30 days. Its findings, fixed: (1) HK half days give volume 0 to every row, so 12-31's HK mark
+    would have left out Buy, Hold, Sell and the fund for good and broken the line through January (a name now counts
+    as traded with a trade or a price change); (2) the line left "分别、。" for a missing figure, counted cohorts without
+    one and the same name in two cohorts (now left out, counted over the cohorts with both, distinct names); (4) a mark
+    could be taken from a partial Yahoo fetch (the 5-close wait); (5) re-rendering a past day rewrote its record (the
+    guard above; 11-07's case kept and written); (6) an evening review after the report day's close could change a
+    cohort that started at that close (the first close is now the day after); (7) the two kept files written in place
+    (swapped in whole); (8) the 510300 figure (+2.6% was the distribution), the report folders (16 days), the market
+    order in `track`, a "done when" for this stage. Answered: (3) delisted names stay unresolved, as the stage asked,
+    with their last-close growth kept (above). Outside this stage, as follow-ups: FMX left US Buy on 11-08 on a hard
+    flag quoting an adverse opinion that is on its internal control, not on its accounts (the same overreach as
+    科达制造's); GE Aerospace's Sell rank rests on the conglomerate's 8-year ROA and 5-year growth from before the
+    spin-off.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -858,9 +929,12 @@ build makes no DeepSeek calls.
 - **The history run's portfolio numbers:** they fill the report's 预期 line. They don't decide whether the report ships.
 - **The fresh-eyes review** at the end of each stage (.claude/agents/stage-reviewer.md): catches what I missed, and
   spot-checks a few Buy, Hold and Sell names against their filings and news for common sense.
-- **The live scoreboard** (`track`): each month's portfolio against the index fund (equal amounts), shown in the report
-  once a month;
-  it catches live data faults and builds the method's own record. It never holds anything up.
+- **The live scorecard** (`track`, stage 8): the first report of each month starts a cohort per market (its 20 Buy, 10
+  Hold and 10 Sell, equal amounts within each), held 12 months against the index fund with dividends and the 对照组合
+  (the same sector places, every name that can be bought); month-end values kept as observed (data/cohort_marks.csv).
+  One line on each market page (实盘记录, figures that change once a month); `track` prints every cohort. It catches
+  live data faults and builds the method's own record, where the history can't (forward E/P, revisions, EBIT/EV and the
+  screen; today's listings only). It decides nothing on its own and never holds anything up.
 
 ## How decisions are made
 - Investment-method choices are mine to make from published evidence, each with its reason written here. You are asked
@@ -986,11 +1060,15 @@ build makes no DeepSeek calls.
    12 overlapping cohorts'); a neutral basket (the same sector places, every eligible name, equal amounts) to show how
    much of the lead over the fund is the picks and how much the equal amounts and places; the review line says what it
    read (公告、新闻、定期报告摘录); one line a market with the money one lot of each buy takes.
-8. **A forward scorecard that answers the goal** (planned): the first report of each month starts a cohort (20 Buy, 10
-   Hold, 10 Sell) held 12 months from the next close after the report, against the funds with dividends (SPY,
-   2800.HK, 510300); each cohort's month-end value kept as observed, so the price cleanup can't erase it; a suspended
-   name stays unresolved rather than flat. `track` today compares picks with dividends against price indexes, stops at
-   3 months and pools every day's list. It touches track.py and the price fetch only.
+8. **A forward scorecard that answers the goal** (done 2026-11-08; Status): the first report of each month starts a
+   cohort (20 Buy, 10 Hold, 10 Sell, and the 对照组合 of stage 7) held 12 months from the next close after the report,
+   against the funds with dividends (SPY, 2800.HK, 510300); each cohort's month-end value kept as observed, so the price
+   cleanup can't erase it; a suspended name stays unresolved rather than flat. Replaced: `track`'s picks with dividends
+   against price indexes, stopped at 3 months, every day's list pooled. With it, at your word (2026-11-08), retention
+   cut to what the build and the scorecard read ("Storage and cleanup"). Done when: pytest passes, with tests for the
+   cohort's first close, the month-end values, an unresolved name and the basket's weights on small samples; a first
+   cohort exists and `track` prints it; the fresh-context stage review has run and its findings are fixed or answered;
+   this plan's status is updated and the work is committed on main.
 
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
@@ -1051,14 +1129,26 @@ Wurgler, "Benchmarks as limits to arbitrage: understanding the low-volatility an
   - Large per-company files (e.g. SEC companyfacts JSON, several MB each) are deleted at the end of the run that fetched them.
   - Everything else under data/raw/ is deleted after 7 days.
 - Price history: one compressed file per market (data/prices/<market>.csv.gz), updated incrementally with the latest day. No daily full re-download, and raw kline responses aren't kept.
-- Daily snapshot: data/snapshots/<date>/<market>.csv.gz with the computed metrics and scores per stock (a few hundred KB). Kept 400 days, for tracking and later method checks.
-- Reports: reports/<date>/ (PDF, summary, picks CSV) kept 90 days. data/picks.csv is tiny and kept forever.
+- Daily snapshot: data/snapshots/<date>/<market>.csv.gz with the computed metrics and scores per stock (~1.4 MB a day
+  for the three). Kept 30 days (400 until stage 8): code reads only the newest earlier one (drift alarms, verdicts) and a
+  cohort's day, the day after it (the scorecard's 对照组合); the backtest's one (2026-10-18, US and HK) is copied to
+  data/backtest/today_snap_<market>.csv.gz.
+- Reports: reports/<date>/ (PDF, summary, lists CSVs, review sources; ~3 MB a day) kept 30 days (90 until stage 8): code
+  reads each market's newest lists. data/picks.csv (every report's three ratings) is tiny and kept forever.
+- The scorecard (stage 8): data/cohorts.csv.gz (each month's cohort: the three ratings, the fund, the 对照组合's names and
+  weights; ~9 KB a month) and data/cohort_marks.csv (each group's month-end values, a few KB a year), kept forever,
+  outside cleanup's folders.
 - Logs: kept 30 days.
 - All retention periods are config values.
 - `cleanup` runs automatically at the end of every `run`. `cleanup --dry-run` lists what would be deleted and the space it would free.
 - After each run, log the total size of data/ + reports/. If it exceeds 2 GB, add a warning line to the report footer.
 - Cleanup only ever deletes inside this project's data/, reports/ and logs/ folders.
 - Phase 6 estimate (2026-10-17): price files ~33 MB (rolling 385 days), snapshots ~1 MB a day × 400 = ~400 MB, reports ~1.7 MB a day × 90 = ~150 MB, raw ~3 MB a day × 7 = ~20 MB; steady state ~0.6 GB of the 2 GB limit.
+- Measured 2026-11-08 (stage 8): data/ + reports/ 1.0 GB, of which data/backtest 869 MB (cleanup doesn't touch it),
+  history 21, prices 33, snapshots 18 (16 days), reports 36 (16 days). Snapshots and reports had grown to ~1.4 and ~3
+  MB a day, so the old periods would have settled near 1.8 GB; at 30 days ~1.1 GB, and ~0.85 GB without the old
+  engines' outputs in data/backtest that nothing reads now (s1_*, s3_*: 255 MB; stage1.py's and the removed stage-3
+  scripts'; rebuildable).
 - Phase 11, since 2026-11-07: data/passages/<market>/ keeps the passages cut from each periodic report read (a few KB each, at most 45 a day, deleted after 400 days; data/deepdive/ before); filing documents are read in memory and never stored; data/verdicts.csv is tiny.
 - History tables (Phase 7, data/history/, kept; cleanup doesn't touch them), for valuations v2/v3 and the backtest:
   - Phase 13: us_frames (SEC frames, every filer's revenue, net income and equity per calendar year 2009-2025, 2.1 MB; new years once, the last two again every 30 days), us_sic (SEC SIC code per filer with $100m+ revenue and per candidate, from the submissions files, once each), cn_sw (申万 classification change history, weekly), cn_annual back to 2009 (was 2015). Backtest only: data/backtest/us_quarterly.csv.gz (every US 10-Q/10-K period by filing date, 878 companies, 1.3 MB; companyfacts read once each and not stored); us_annual also carries R&D from that read (not refreshed).

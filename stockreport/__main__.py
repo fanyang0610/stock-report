@@ -110,6 +110,10 @@ def run(markets: list[str]) -> int:
         except Exception:
             log.exception("%s build failed; the report shows its newest earlier lists", market.upper())
             crashed.append(market)
+    try:  # the scorecard's new cohorts and month-end marks (never stops the report)
+        track.update(today, track.loaders())
+    except Exception:
+        log.exception("scorecard update failed")
     pdf, summary, _ = report.build(today)
     print(f"Wrote {pdf.relative_to(ROOT)} ({pdf.stat().st_size // 1024} KB) and summary.txt "
           f"({len(summary.encode('utf-8'))} bytes)")
@@ -223,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
     fetch.add_argument("--market", choices=["cn", "us", "hk"], required=True)
     run_p = sub.add_parser("run", help="fetch, score, list and write the report (PDF + text summary)")
     run_p.add_argument("--market", choices=["cn", "us", "hk"], help="one market (default: all three)")
-    sub.add_parser("track", help="average return of past lists vs each market's index")
+    sub.add_parser("track", help="each month's cohort against the index fund and the neutral basket")
     rev = sub.add_parser("review", help="the results review of the newest lists (the one DeepSeek step, no time "
                                         "limit), then the report")
     rev.add_argument("--background", action="store_true", help="finish what a keyword reply's budget left; no report")

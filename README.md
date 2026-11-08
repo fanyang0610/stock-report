@@ -35,7 +35,7 @@ uv run python -m stockreport fetch --market cn   # update data/ (first run backf
 uv run python -m stockreport run                 # CN, US and HK: fetch, score, lists -> reports/<date>/report.pdf + summary.txt
 uv run python -m stockreport run --market us     # one market, then the report (other markets: their newest lists)
 uv run python -m stockreport review              # the results review (DeepSeek), then the reviewed PDF + summary
-uv run python -m stockreport track               # average return of past lists (data/picks.csv) vs each market's index
+uv run python -m stockreport track               # each month's cohort vs the index fund (with dividends) and the 对照组合
 uv run python -m stockreport send                # review, then send the text + PDF (asks first); --test sends fake data
 uv run python -m stockreport listen              # answer the keyword for ~55 s (launchd restarts it 10 s after it ends)
 uv run python -m stockreport verdict 600519 veto --until 2026-12-31 --reason "..."  # keep a name off Buy and Hold

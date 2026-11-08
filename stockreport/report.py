@@ -200,6 +200,43 @@ def card(r: dict, market: str, table: pd.DataFrame) -> dict:
         "review_shown": "" if dup else review_text}
 
 
+def live(market: str) -> str:
+    """The live scorecard in one line (track.py), or "" if it fails: it never stops the report."""
+    try:
+        return live_line(market, track.load_cohorts(), *track.standing(track.load_marks(), market))
+    except Exception:
+        log.exception("%s scorecard line failed", market.upper())
+        return ""
+
+
+def live_line(market: str, cohorts: pd.DataFrame, t: pd.DataFrame, gone: int) -> str:
+    """Each cohort's newest month-end mark: Buy against the fund and the 对照组合, Hold and Sell against the fund (the
+    average over the cohorts with both figures); before the first mark, when it comes."""
+    fund, mine = MARKETS[market][3], cohorts.loc[cohorts["market"] == market, "cohort"]
+    if mine.empty:
+        return ""
+    if t.empty:
+        return (f"实盘记录：从 {mine.min()} 起，每月第一份报告的名单各持有 12 个月，按月末收盘价（含股息）和{fund}、对照组合比，"
+                f"第一个月末之后有数字。")
+
+    def vs(a: str, b: str, name: str, word: str = "领先", note: str = "") -> str:
+        d = (t[a] - t[b]).dropna() if {a, b} <= set(t.columns) else pd.Series(dtype=float)
+        if d.empty:
+            return ""
+        count = f"{len(d)} 批中 {int((d < 0 if word == '跑输' else d > 0).sum())} 批{word}" if len(d) > 1 else ""
+        why = "；".join(x for x in (count, note) if x)
+        return f"{name}{'多' if d.mean() >= 0 else '少'}赚 {abs(d.mean()):.1%}" + (f"（{why}）" if why else "")
+
+    months = f"{t['months'].min():.1f}" + (f"-{t['months'].max():.1f}" if len(t) > 1 else "")
+    parts = [p for p in (vs("buy", "fund", f"买入比{fund}"), vs("buy", "basket", "比对照组合")) if p]
+    rest = [p for p in (vs("hold", "fund", f"持有比{fund}"),
+                        vs("sell", "fund", f"卖出比{fund}", "跑输", "卖出跑输才算判断对")) if p]
+    text = (f"实盘记录（月末收盘价，含股息）：{len(t)} 批名单，已持有 {months} 个月"
+            + "".join(f"；{p}" for p in ["，".join(parts)] + rest if p) + "。")
+    return (text + (f"停牌或退市的 {gone} 只未计入。" if gone else "") + ("各批平均。" if len(t) > 1 else "")) \
+        if parts or rest else ""
+
+
 def save_failed(today: date, market: str, failed: list[str]) -> None:
     """Remember a market's failed fetch steps for the day's report (an empty list clears them)."""
     path = REPORTS / today.isoformat() / "fetch_failed.json"
@@ -233,7 +270,7 @@ def section(market: str, rows: pd.DataFrame, day: str, today: date, failed: list
     for p in cards["removed"]:  # the name that took its place, as the cards name it
         p["replaced_by"] = next((b["short"] for b in cards[p.get("from") or "buy"] if b.get("replaces") == p["ticker"]), "")
     return {"code": market.upper(), "name": name, "short": name.split()[0], "currency": currency, "unit": unit, "day": day,
-            "expect": expect(market), "field": FIELD[market],
+            "expect": expect(market), "live": live(market), "field": FIELD[market],
             "data_date": max((c["price_date"] for c in cards["buy"] if c["price_date"]), default=day),
             "recheck": cards["buy"][0]["recheck"] if cards["buy"] else "",
             "share": f"{cards['buy'][0]['weight']:.0%}" if cards["buy"] and cards["buy"][0].get("weight") else "",
@@ -291,7 +328,7 @@ def build(today: date, states: dict | None = None) -> tuple[Path, str, pd.DataFr
         markets.append(section(market, rows, path.parent.name, today, failed.get(market, []), sent))
     if not markets:
         raise SystemExit(f"no lists CSV in {REPORTS}; run `run` first")
-    if logged:
+    if logged and today == date.today():  # a past day's record isn't rewritten by re-rendering its report
         track.log_picks(today, logged)
     size_gb = (size_of(DATA) + size_of(REPORTS)) / 1e9
     report = {"title": "股票报告", "date": today.isoformat(), "markets": markets, "guide": GUIDE, "method": METHOD,

@@ -371,7 +371,8 @@ def hk_snapshot(month: str, mon: Monthly, today_snap: pd.DataFrame, res: pd.Data
 def today_snapshot(market: str) -> pd.DataFrame:
     """Names, industries (today's) and listed share counts of today's candidates (US: every listed name
     in the screener with monthly prices; HK: the snapshot's names plus the HK list)."""
-    snap = pd.read_csv(DATA / "snapshots" / "2026-10-18" / f"{market}.csv.gz", dtype={"code": str}).set_index("code")
+    # the app's 2026-10-18 snapshot, copied where the app's cleanup can't reach (it keeps snapshots 30 days)
+    snap = pd.read_csv(BT / f"today_snap_{market}.csv.gz", dtype={"code": str}).set_index("code")
     if market == "us":
         lst = nasdaq.load_list().drop_duplicates("code").set_index("code")
         lst = lst[lst["last"] > 0]

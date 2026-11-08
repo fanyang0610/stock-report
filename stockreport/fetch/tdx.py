@@ -1,6 +1,7 @@
 """通达信 official daily packages (www.tdx.com.cn): one zip per trading day with every SH/SZ
 security's close, exchange prev-close (ex-rights adjusted), volume and turnover. The zip is parsed
-in memory and never stored; only A-share rows (plus the CSI 300 index) are kept."""
+in memory and never stored; only A-share rows (plus the CSI 300 index and the scorecard's fund, 510300, whose
+prev-close the exchange lowers by each distribution: its close / prev-close returns include them) are kept."""
 
 import io
 import logging
@@ -18,7 +19,7 @@ log = logging.getLogger(__name__)
 URL = "https://www.tdx.com.cn/products/data/data/g4day/{ymd}.zip"
 PATH = DATA / "prices" / "cn.csv.gz"
 A_SHARE = {"sh": re.compile(r"^(60[0-5]|68[89])\d{3}$"), "sz": re.compile(r"^(00[0-3]|30[01])\d{3}$")}
-INDEXES = {("sh", "000300"): "CSI300"}
+INDEXES = {("sh", "000300"): "CSI300", ("sh", "510300"): "510300"}
 http = Http(min_interval=0.3, timeout=90)
 
 

@@ -13,10 +13,10 @@ from stockreport.universe import finish, ttm
 SAMPLES = Path(__file__).parent / "data"
 
 
-def test_tdx_package_keeps_a_shares_and_csi300():
-    # Cut from the real 2026-10-16 package: 5 A-shares, the CSI 300 index and an ETF (510300).
+def test_tdx_package_keeps_a_shares_csi300_and_the_fund():
+    # Cut from the real 2026-10-16 package: 5 A-shares, the CSI 300 index and the scorecard's fund (510300).
     df = parse_package((SAMPLES / "tdx_20261016_sample.zip").read_bytes(), "20261016", min_rows=1)
-    assert sorted(df["code"]) == ["000001", "300750", "600519", "601398", "688981", "CSI300"]
+    assert sorted(df["code"]) == ["000001", "300750", "510300", "600519", "601398", "688981", "CSI300"]
     icbc = df.set_index("code").loc["601398"]
     assert (icbc["date"], icbc["close"], icbc["prev_close"]) == ("2026-10-16", 8.48, 8.5)
     assert icbc["amount"] == pytest.approx(2723358570.0)  # same turnover as Eastmoney reports

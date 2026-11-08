@@ -22,9 +22,11 @@ DAY = date(2026, 10, 24)
 def test_report_dry_run(tmp_path, monkeypatch):
     for module, attr, path in ((verdicts, "PATH", "verdicts.csv"),
                                (track, "PICKS_LOG", "picks.csv"), (track, "SENT_LOG", "sent.csv"),
+                               (track, "COHORTS", "cohorts.csv.gz"), (track, "MARKS", "marks.csv"),
                                (report, "REPORTS", "reports"),
                                (report, "EXPECT", "expect.json")):
         monkeypatch.setattr(module, attr, tmp_path / path)
+    monkeypatch.setattr(report, "date", type("Day", (date,), {"today": staticmethod(lambda: DAY)}))  # built on its day
     monkeypatch.setattr(verdicts, "periods", lambda m: pd.Series(dtype=str))
     df = pd.read_csv(SAMPLES / "cn_universe_sample.csv", dtype={"code": str, "period": str}).set_index("code")
     scored = score(df, "cn", df[["deduct_ttm", "sue"]])
@@ -135,3 +137,14 @@ def test_summary_fits():
             if report_ is usual and market != "【美股】":
                 assert "持有 10 只：" in part and "卖出 10 只：" in part
         assert summary.splitlines()[-1].startswith("每家公司做什么") and "审核剔除：A股 " in summary
+
+
+def test_live_line_leaves_out_missing_figures():
+    """A group without a value that month (every name unresolved) drops out of the line; nothing half-written."""
+    cohorts = pd.DataFrame({"market": ["hk"], "cohort": ["2026-11-07"]})
+    t = pd.DataFrame({"cohort": ["2026-11-07"], "start": ["2026-11-09"], "mark": ["2026-12-31"], "months": [1.7],
+                      "buy": [0.03], "hold": [float("nan")], "sell": [-0.03], "basket": [0.01], "fund": [0.005]})
+    line = report.live_line("hk", cohorts, t, 1)
+    assert "持有比" not in line and "、。" not in line and "比对照组合多赚 2.0%" in line and "停牌或退市的 1 只" in line
+    assert report.live_line("hk", cohorts, t.assign(buy=float("nan"), sell=float("nan")), 0) == ""
+    assert "第一个月末之后" in report.live_line("hk", cohorts, pd.DataFrame(), 0)

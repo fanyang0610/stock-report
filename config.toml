@@ -44,10 +44,10 @@ big_fall = -0.3               # a 6-month return at or below this is a key risk 
 fundamentals_refresh_days = 7
 quarters_kept = 7             # report periods fetched for trailing-12-month numbers
 
-[retention]                   # days
+[retention]                   # days (PLAN.md, "Storage and cleanup")
 raw = 7
-snapshots = 400
-reports = 90
+snapshots = 30                # read: the newest earlier one (drift alarms), the cohort's day (the scorecard's basket)
+reports = 30                  # read: each market's newest lists (data/picks.csv keeps every list)
 logs = 30
 
 [storage]
