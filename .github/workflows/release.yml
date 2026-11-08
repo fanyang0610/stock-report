@@ -1,0 +1,24 @@
+name: release
+
+# On every push to main, tag a new version when the pushed commits change the app.
+# The rules are in .github/release.sh and README "Versions and releases".
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: bash .github/release.sh
+        env:
+          GH_TOKEN: ${{ github.token }}

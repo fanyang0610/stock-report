@@ -1,7 +1,7 @@
 [project]
 name = "stockreport"
-version = "0.1.0"
-description = "Daily US/HK/CN stock picks from peer-group valuation, delivered over WeChat"
+version = "0.0.0"  # not maintained: the version is the latest git tag (see README "Versions and releases")
+description = "Daily Buy/Hold/Sell stock ratings for China A-shares, US and Hong Kong, delivered over WeChat"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",

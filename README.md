@@ -1,81 +1,163 @@
 # stock-report
 
-Text the WeChat bot "股票报告" / "股票简报" / "stock report" / "stock brief" and get back a short
-text summary plus a PDF: per market (CN, US, HK) three ratings, as a sell-side analyst rates stocks: 20 Buy (the
-buy portfolio: each sector's best scores across the whole liquid market, sector places by free-float share, equal
-amounts), 10 Hold and 10 Sell, ranked on value, quality, growth and momentum (Stockopedia- and Seeking Alpha-style,
-equal family weights, each stock against its sector). Free data only. Method, stages and status:
-[docs/PLAN.md](docs/PLAN.md). Rules for coding agents: [AGENTS.md](AGENTS.md).
+A daily stock-rating report for China A-shares, US and Hong Kong stocks, delivered over WeChat.
 
-## Runs on its own
-Nothing here needs Claude Code: close it and the project keeps running.
-- 06:30 every day, launchd runs `run`: fetch, score, the three lists, the review's sources (filing titles, headlines and
-  the passages code cuts from each listed name's latest periodic report) and an unreviewed PDF. No AI.
-- When you text the keyword, the listener (launchd) runs the results review, then sends the text and the PDF.
-- The results review is the only AI step, on DeepSeek (`DEEPSEEK_API_KEY` in `.env`): one call per listed name that
-  screens (findings that quote a source; code checks each quote, and a hard red flag swaps a Buy or Hold name for the
-  next one) and comments (the AI note and a one-line company description, words only). If DeepSeek is down or the key
-  is missing, the report still goes out, marked 审核暂不可用.
-- By hand, when you want: `verdict` (veto or confirm a name), `track` (the scorecard), and refreshing the 预期
-  (what-to-expect) numbers from the history: `uv run python -m backtest.run build cn|us|hk`, then
-  `uv run python -m backtest.qvm frame cn|us|hk`, then `uv run python -m backtest.qvm run cn|us|hk` (after a daily
-  build; docs/BACKTEST.md section 24).
+Text the bot **股票报告**, **股票简报**, **stock report** or **stock brief** and within about 30 seconds you get two
+messages: a short text summary and a PDF report. For each market the report rates stocks the way a sell-side analyst
+does, without looking at anyone's portfolio:
+
+| Rating | How many | Meaning |
+|---|---|---|
+| 买入 Buy | 20 | Expected to beat the market. Chosen from the whole liquid market, sectors in proportion to the market, equal amounts. |
+| 持有 Hold | 10 | Expected to be roughly stable. |
+| 卖出 Sell | 10 | Expected to lag the market. |
+
+Each stock gets a card: price, grades for value, quality, growth and momentum, why it is on the list, the key risk, the
+cost of one board lot, what the review found, a short AI note and a date to check it again. The report also says what
+each rating's history suggests you should expect.
+
+**The aim is moderate:** beat the market's index fund over the year you hold the names, at about the market's level of
+risk. Published factor portfolios like this one have beaten their index by a few percent a year on average and lost to
+it in roughly 4 years out of 10. No list is a guarantee. **This is not investment advice.**
+
+## How it works
+
+```
+fetch/  ──►  universe  ──►  signals  ──►  score  ──►  lists  ──►  review  ──►  report (PDF + text)  ──►  WeChat
+free data    800 largest    value, quality,  one score   Buy/Hold/  DeepSeek     render/              deliver.py
+per market   liquid stocks  growth, momentum per market  Sell       checks picks
+```
+
+1. **Data.** Free sources only (exchanges, SEC, Eastmoney, Tencent, Yahoo and others), cached in `data/`.
+2. **Score.** Every stock gets one rule-based score: four families (value, quality, growth, momentum) with equal
+   weights, each stock ranked against its own sector. The ingredients come from published research for each market,
+   not from tuning to our own backtest.
+3. **Lists.** The best scores fill the Buy list sector by sector; Hold and Sell follow fixed rules.
+4. **Review.** The only AI step. DeepSeek reads each listed company's recent filings, report passages and headlines and
+   flags problems, each backed by a quote. Code checks every quote; a hard red flag (fraud, insolvency, an agreed sale
+   of the company…) swaps the pick for the next one. The AI writes words only, never numbers. If DeepSeek is
+   unavailable, the report still goes out, marked 审核暂不可用.
+5. **Deliver.** The report is rendered to PDF with headless Chrome and sent through a WeChat bot.
+
+The full method, with the research behind each choice, is in [docs/PLAN.md](docs/PLAN.md).
+
+### Runs on its own
+
+Nothing at runtime needs Claude Code. Two macOS launchd jobs do the work:
+
+- **06:30 daily build** (`run`): fetch, score, lists, the review's sources and an unreviewed PDF. A few minutes on
+  weekdays, ~30 minutes on Sundays (weekly fundamentals).
+- **Keyword listener** (`listen`): when you text the keyword, it runs the review and sends the text and PDF.
 
 ## Setup
-- macOS with Google Chrome (used headless to print the PDF), Node 18+ and [uv](https://docs.astral.sh/uv/).
-- The `cli-wechat-bridge` npm package installed globally at `~/.npm-global/lib/node_modules/`
-  and logged in to the bot (`wechat-setup`).
-- `.env` in the project root (never committed) with at least `EQUITYSIGNALS_WECHAT_RECIPIENT_ID`;
-  later phases also use `DEEPSEEK_API_KEY`, `FRED_API_KEY`, `SEC_USER_AGENT` (name + contact email, required by SEC), `TUSHARE_TOKEN`.
-- `uv sync`
 
-## Commands
-```
-uv run python -m stockreport fetch --market cn   # update data/ (first run backfills ~13 months of prices, ~40 min)
-uv run python -m stockreport run                 # CN, US and HK: fetch, score, lists -> reports/<date>/report.pdf + summary.txt
-uv run python -m stockreport run --market us     # one market, then the report (other markets: their newest lists)
-uv run python -m stockreport review              # the results review (DeepSeek), then the reviewed PDF + summary
-uv run python -m stockreport track               # each month's cohort vs the index fund (with dividends) and the 对照组合
-uv run python -m stockreport send                # review, then send the text + PDF (asks first); --test sends fake data
-uv run python -m stockreport listen              # answer the keyword for ~55 s (launchd restarts it 10 s after it ends)
-uv run python -m stockreport verdict 600519 veto --until 2026-12-31 --reason "..."  # keep a name off Buy and Hold
-uv run python -m stockreport verdict             # list the verdicts in force (they end at their date or the next report)
-uv run python -m stockreport cleanup --dry-run   # what retention would delete, and data/ + reports/ size
-node bridge/wechat.mjs status                    # is the bot's reply window open?
+Requirements: macOS, Google Chrome, Node 18+, [uv](https://docs.astral.sh/uv/).
+
+1. `uv sync`
+2. Install the `cli-wechat-bridge` npm package globally (`~/.npm-global/lib/node_modules/`) and log in to the bot
+   with `wechat-setup`.
+3. Create `.env` in the project root (never committed):
+
+   | Variable | Needed for |
+   |---|---|
+   | `EQUITYSIGNALS_WECHAT_RECIPIENT_ID` | who receives the report |
+   | `DEEPSEEK_API_KEY` | the results review |
+   | `SEC_USER_AGENT` | US filings (your name and contact email, required by SEC) |
+   | `FRED_API_KEY` | US rates |
+
+4. First data load: `uv run python -m stockreport fetch --market cn` (and `us`, `hk`). The first run backfills about
+   13 months of prices and takes ~40 minutes per market.
+5. Install the launchd jobs (below).
+
+## Usage
+
+```bash
+uv run python -m stockreport run                  # all markets: fetch, score, lists -> reports/<date>/
+uv run python -m stockreport run --market us      # one market (others keep their newest lists)
+uv run python -m stockreport review               # results review (DeepSeek), then the reviewed PDF + summary
+uv run python -m stockreport send                 # review, then send to WeChat (asks first); --test sends fake data
+uv run python -m stockreport track                # scorecard: each month's picks vs the index fund
+uv run python -m stockreport verdict              # list your verdicts in force
+uv run python -m stockreport verdict 600519 veto --until 2026-12-31 --reason "..."   # keep a name off Buy and Hold
+uv run python -m stockreport cleanup --dry-run    # what retention would delete, and disk use
+node bridge/wechat.mjs status                     # is the bot's reply window open?
 uv run pytest
 ```
-List sizes, thresholds, retention periods and the DeepSeek model are in `config.toml`.
 
-## Keyword listener (launchd)
-`launchd/com.stockreport.listen.plist` runs `listen` with the project's `.venv` Python: each run polls for ~55 s
-and launchd starts the next one 10 s after it ends, so a keyword waits at most ~15 s. Only one process may poll
-the bot, so stop any other listener on the same bot first. Install / remove:
-```
-cp launchd/com.stockreport.listen.plist ~/Library/LaunchAgents/
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.stockreport.listen.plist
-launchctl bootout gui/$(id -u)/com.stockreport.listen
-```
-Replies are logged in `logs/<date>.log`; crashes land in `logs/launchd-listen.log`.
+The WeChat bot can only reply for a while after you last messaged it: if `status` says it isn't ready, text it first.
+List sizes, thresholds, retention periods and the DeepSeek model are set in [config.toml](config.toml).
 
-## Daily build (launchd)
-`launchd/com.stockreport.daily.plist` runs `run` (all three markets) at 06:30 by the Mac's clock (China
-Standard Time). It never polls the bot, so it runs alongside the listener. Daily runs take a few minutes;
-Sundays (weekly fundamentals and consensus) ~30 min. A run missed while the Mac sleeps starts when it wakes.
-Output goes to `logs/<date>-daily.log`. Install / remove:
-```
-cp launchd/com.stockreport.daily.plist ~/Library/LaunchAgents/
+**Refreshing the "what to expect" numbers** (occasionally, after a daily build):
+`uv run python -m backtest.run build cn|us|hk`, then `uv run python -m backtest.qvm frame cn|us|hk`, then
+`uv run python -m backtest.qvm run cn|us|hk`. Details in [docs/BACKTEST.md](docs/BACKTEST.md), section 24.
+
+### launchd jobs
+
+```bash
+cp launchd/com.stockreport.daily.plist launchd/com.stockreport.listen.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.stockreport.daily.plist
-launchctl bootout gui/$(id -u)/com.stockreport.daily
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.stockreport.listen.plist
 ```
 
-## Layout
-- `stockreport/`: `fetch/` (one module per source) → `universe.py` → `signals.py` → `score.py` → `lists.py` →
-  `report.py` + `render/` (HTML, PDF, text summary); `deliver.py` talks to WeChat; `listener.py` answers the keyword;
-  `track.py` logs the lists and prints the scorecard; `cleanup.py` applies retention; `review.py` is the results review
-  (the one DeepSeek call per name), with `passages.py` (periodic-report passages, cut by code), `notes.py` (the card
-  text it reads, the note and line it writes) and `quotes.py` (the quote checks)
-- `bridge/wechat.mjs`: Node helper with the commands `status`, `poll-messages`, `notify`, `notify-batch`, `send-file`, `send-image`
-- `data/`, `reports/`, `logs/`: caches and outputs (git-ignored)
+Remove with `launchctl bootout gui/$(id -u)/com.stockreport.daily` (or `.listen`). The listener polls for ~55 s and
+launchd restarts it 10 s later, so a keyword waits at most ~15 s; only one process may poll the bot. The daily build
+runs at 06:30 Mac time (China Standard Time); a run missed during sleep starts on wake. Logs: `logs/<date>.log`,
+`logs/<date>-daily.log`, crashes in `logs/launchd-*.log`.
 
-The bot can only reply for a while after you last messaged it, so text it first if `status` says it isn't ready.
-Not investment advice.
+## Project layout
+
+```
+stockreport/          the app (Python, ~5,800 lines)
+  fetch/              one module per data source
+  universe.py         which stocks are scored
+  signals.py          value, quality, growth and momentum ingredients
+  score.py            families, score, grades, card lines
+  lists.py            Buy, Hold, Sell
+  review.py           the results review (DeepSeek), with passages.py, notes.py, quotes.py, events.py, verdicts.py
+  report.py, render/  HTML -> PDF and the text summary
+  deliver.py          WeChat sending; listener.py answers the keyword
+  track.py            scorecard; history.py multi-year tables; crosscheck.py second-source checks; cleanup.py retention
+bridge/wechat.mjs     Node helper for the WeChat bot
+backtest/             backtest harness and data builders (not part of the app)
+launchd/              the two launchd jobs
+tests/                pytest: scoring math, parsers, one end-to-end dry run
+data/ reports/ logs/  caches and outputs (git-ignored, kept under 2 GB)
+```
+
+## Documentation
+
+| File | What it holds |
+|---|---|
+| [docs/PLAN.md](docs/PLAN.md) | The method, the research behind it, the stages and their status. The main reference. |
+| [docs/BACKTEST.md](docs/BACKTEST.md) | Backtest results and the commands that produce them. |
+| [AGENTS.md](AGENTS.md) | Rules for coding agents working on the project (`CLAUDE.md` links to it). |
+| [docs/archive/](docs/archive/) | Earlier plans and reviews (v1–v3 engines, the 2026-10-22 plan). Reference only. |
+
+## Versions and releases
+
+Versions follow `MAJOR.MINOR.PATCH` and live as git tags with notes on the
+[Releases page](https://github.com/fanyang0610/stock-report/releases). `v0.x` are the earlier valuation engines,
+kept as history; `v1.0.0` (2026-11-02) is the first release of the current method.
+
+A GitHub Action ([.github/workflows/release.yml](.github/workflows/release.yml)) runs on every push to `main` and
+releases a new version when the pushed commits change the app. The size of the bump follows how much the change matters
+to what you get:
+
+| Level | When | Example |
+|---|---|---|
+| **major** | The method or the meaning of the ratings changes | a new ranking method; lists rebuilt on a different rule |
+| **minor** | A new capability, or a change to what is bought, held, sold or what the report says to expect | a stage completed; a new score ingredient |
+| **patch** | A fix that keeps the method | a data parsing fix; a review rule corrected |
+| **none** | Nothing the app does changes | docs, tests, backtest scripts |
+
+A commit can state its level with a trailer line `Release: major|minor|patch|none`. Without one, the Action infers it:
+a commit starting "Stage *n*" that changes app files is minor, any other change to app files (`stockreport/`,
+`bridge/`, `launchd/`, `config.toml`, `pyproject.toml`, `uv.lock`) is patch, everything else is none. The largest level
+in a push wins. Preview locally with `bash .github/release.sh --dry-run`.
+
+## Maintaining
+
+- Rules for changes are in [AGENTS.md](AGENTS.md): free data only, numbers from code never from the AI, keep the app
+  under ~6,000 lines with files under 400, one stage per session.
+- Storage: raw downloads are temporary, only small extracted tables are kept, and `cleanup` runs after every build.
+- Secrets stay in `.env`; never print, log or commit them.

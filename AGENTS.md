@@ -26,6 +26,7 @@ bridge/wechat.mjs is the WeChat helper (Node). data/ is the daily cache and repo
 10. Never print, log or commit secrets from .env.
 11. If something is ambiguous or a stage can't be done as written, stop and ask. Don't build workarounds. Investment-method choices are the agent's to make from published evidence, with the reason written in docs/PLAN.md: don't hand the user choices they can't judge, and don't call something the user's goal unless they said it.
 12. Usefulness first: a change is worth doing only if it changes what is bought, held or avoided, or what the report says to expect, or fixes a fault. The method changes only to fix a bug or to follow new published evidence, never because a backtest number or one name looked wrong. No pass/fail gates on shipping and no test whose result would change nothing. Don't do work whose only effect is that results look more plausible or better explained (normalizing medians, outlier labels, plausibility targets).
+13. Releases: end every commit message with a trailer line `Release: major|minor|patch|none`, judged by materiality as README "Versions and releases" defines (major: the method or the ratings' meaning changes; minor: a stage or a change to what is bought, held, sold or what the report says to expect; patch: a fix that keeps the method; none: docs, tests, backtest/). On push to main, .github/workflows/release.yml tags the version and writes the release notes; never tag or release by hand.
 
 ## Commands
 uv run python -m stockreport fetch --market cn|us|hk
