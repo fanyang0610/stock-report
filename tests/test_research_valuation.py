@@ -130,3 +130,25 @@ def test_forecast_paths_follow_the_consensus_then_fade():
     assert p["growth"][2] == pytest.approx(0.1 - 0.08 / 8) and p["margin"][:2] == pytest.approx([0.15, 0.15])
     assert p["margin"][2] == pytest.approx(0.15 + 0.05 / 3) and p["margin"][4:] == pytest.approx([0.2] * 6)
     assert value.paths(f, k, "loss_making", {"eps": [], "revenue": []}, 0.02)["target_margin"] == 0.1  # industry
+
+
+def test_excess_earnings_of_a_cyclical_at_a_peak():
+    # consensus 30 and 20 against a normal 10, at 10%: 20 + 10 / 1.1 from now, a year less from the target date
+    assert rating.excess([30.0, 20.0], 10.0, 0.10, 0) == pytest.approx(20 + 10 / 1.1)
+    assert rating.excess([30.0, 20.0], 10.0, 0.10, 1) == pytest.approx(20 / 1.1 + 10 / 1.21)
+    assert rating.excess([5.0], 10.0, 0.10, 0) == pytest.approx(-5)  # a trough subtracts
+
+
+def test_peer_medians_need_ten_members(monkeypatch):
+    import pandas as pd
+    rows = [{"code": f"C{i}", "industry": "Hardware" if i < 5 else "Software", "sector": "Tech", "pe": 10.0 + i,
+             "ev": 100.0, "revenue_ttm": 50.0, "ebit": 10.0 if i % 2 else -5.0, "fwd_pe": 20.0, "fwd_growth": 0.1}
+            for i in range(30)]
+    monkeypatch.setattr("stockreport.research.sheet.snapshot", lambda market, today: pd.DataFrame(rows))
+    f = {"market": "us", "code": "C0", "peers": {"by": "industry", "group": "Hardware"}}
+    p = value.peer_medians(f, date(2026, 11, 9))
+    assert (p["by"], p["group"], p["count"]) == ("sector", "Tech", 29)  # 5 in its industry: the sector, itself left out
+    assert p["pe"] == pytest.approx(25.0) and p["ev_sales"] == pytest.approx(2.0) and p["peg"] == pytest.approx(2.0)
+    assert p["mature_margin"] == pytest.approx(0.2) and p["profitable"] == 15
+    f["peers"]["group"], f["code"] = "Software", "C10"
+    assert value.peer_medians(f, date(2026, 11, 9))["by"] == "industry"  # 25 in its industry

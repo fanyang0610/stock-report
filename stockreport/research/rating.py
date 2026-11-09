@@ -48,6 +48,9 @@ def methods(f: dict, k: dict, kind: str, cons: dict, today: date, eps_factor: fl
     book, payout, out = v["book_common"], value.payout_5y(f) or f["checks"]["income"].get("payout") or 0.0, {}
     fwd_book = book + eps_ntm * shares * (1 - payout) if book else None
     per = lambda total: max(total, 0.0) / shares / fx
+    window = "median" if kind == "cyclical" else "median_5y"  # a full cycle for a cyclical; else brokers' latest 5 years
+    multiple = lambda key: own[key].get(window) or own[key].get("median")
+    peers = value.peer_medians(f, today)
     if {"dcf", "dcf_normal"} & set(w):
         path = value.paths(f, k, kind, cons | {"eps": eps}, k["g"])
         m = value.history(f, "ebit_margin", 10)
@@ -63,14 +66,13 @@ def methods(f: dict, k: dict, kind: str, cons: dict, today: date, eps_factor: fl
             "roic_term": roic_term, "moat": moat, "terminal_multiple": (1 - k["g"] / max(roic_term, k["stable_cost"])) / (k["stable_cost"] - k["g"]),
             "years": {key: res[key] for key in ("revenue", "ebit", "nopat", "reinvestment", "fcff")},
             "pv_terminal_share": res["pv_terminal"] / res["operating"] if res["operating"] > 0 else None}
-    if "pe_own" in w and own["pe"].get("median") and eps_ntm > 0:
-        out["pe_own"] = {"multiple": own["pe"]["median"], "target": own["pe"]["median"] * eps_ntm / fx}
-    pe_peers = (f.get("peers") or {}).get("median", {}).get("pe")
-    if "pe_peers" in w and pe_peers and eps_ntm > 0:
-        out["pe_peers"] = {"multiple": pe_peers, "target": pe_peers * eps_ntm / fx}
-    if "pb_own" in w and own["pb"].get("median") and fwd_book:
-        out["pb_own"] = {"multiple": own["pb"]["median"], "target": own["pb"]["median"] * fwd_book / shares / fx}
-    peers = value.peer_medians(f, today) if {"evs_peers", "peg_peers"} & set(w) else {}
+    if "pe_own" in w and multiple("pe") and eps_ntm > 0:
+        out["pe_own"] = {"multiple": multiple("pe"), "target": multiple("pe") * eps_ntm / fx}
+    if "pe_peers" in w and peers.get("pe") and not np.isnan(peers["pe"]) and eps_ntm > 0:
+        out["pe_peers"] = {"multiple": peers["pe"], "group": peers["group"], "count": peers["count"],
+                           "target": peers["pe"] * eps_ntm / fx}
+    if "pb_own" in w and multiple("pb") and fwd_book:
+        out["pb_own"] = {"multiple": multiple("pb"), "target": multiple("pb") * fwd_book / shares / fx}
     if "evs_peers" in w and peers.get("ev_sales") and not np.isnan(peers["ev_sales"]):
         rev = cons["ntm_revenue"] or t["revenue"] * (1 + (v.get("eps_growth_consensus") or 0))
         ev = peers["ev_sales"] * rev * eps_factor
@@ -90,7 +92,7 @@ def methods(f: dict, k: dict, kind: str, cons: dict, today: date, eps_factor: fl
         out["ddm"] = {"value": x, "target": x * roll, "dividend": dps, "growth_5y": g1, "growth_stable": gt}
     roe_hist = value.history(f, "roe", 10)
     if "excess_return" in w and book and eps:
-        roe_term = k["stable_cost"]  # Damodaran's stable-growth rule for financial firms: ROE converges to the cost of equity
+        roe_term, moat = value.moat(roe_hist, coe, k["stable_cost"])  # the moat clause, as for the DCF's return on capital
         if shift and len(roe_hist) >= 3:
             roe_term += min(roe_hist.std(), abs(roe_term)) * shift
         roes, b = [], book
@@ -101,20 +103,29 @@ def methods(f: dict, k: dict, kind: str, cons: dict, today: date, eps_factor: fl
         roes += [roes[-1] + (roe_term - roes[-1]) * (i - n) / (dcf.YEARS - n) for i in range(n + 1, dcf.YEARS + 1)]
         res = dcf.excess_return(book, roes, [payout] * dcf.YEARS, dcf.steps(coe, k["stable_cost"]), roe_term, k["stable_cost"], g)
         x = per(res["value"])
-        out["excess_return"] = {"value": x, "target": x * roll, "roe": roes, "roe_term": roe_term,
+        out["excess_return"] = {"value": x, "target": x * roll, "roe": roes, "roe_term": roe_term, "moat": moat,
                                 "payout": payout, "pv_terminal_share": res["pv_terminal"] / res["value"] if res["value"] else None}
     if "pb_roe" in w and book:
         roe = value.history(f, "roe", 10 if kind == "cyclical" else 8).mean()
         if not np.isnan(roe) and roe > g:
             pb = dcf.justified_pb(roe + (min(roe_hist.std(), roe) * shift if shift else 0), coe, g)
-            x = per(pb * book)
-            out["pb_roe"] = {"roe": roe, "pb": pb, "value": x, "target": x * roll}
-    if "pe_normal" in w and own["pe"].get("median"):
+            extra = excess(eps, roe * book / shares, coe, 1)
+            x = max(pb * book / shares + extra, 0.0) / fx
+            out["pb_roe"] = {"roe": roe, "pb": pb, "excess_earnings": extra / fx, "value": x, "target": x * roll}
+    if "pe_normal" in w and multiple("pe"):
         nm = value.history(f, "net_margin", 10).mean()
         if not np.isnan(nm) and nm > 0:
             e = t["revenue"] * nm / shares * eps_factor
-            out["pe_normal"] = {"multiple": own["pe"]["median"], "eps": e, "net_margin": nm, "target": own["pe"]["median"] * e / fx}
+            extra = excess(eps, e, coe, 0)
+            out["pe_normal"] = {"multiple": multiple("pe"), "eps": e, "net_margin": nm, "excess_earnings": extra / fx,
+                                "target": max(multiple("pe") * e + extra, 0.0) / fx}
     return out
+
+
+def excess(eps: list[float], normal: float, cost: float, start: int) -> float:
+    """The consensus years' earnings per share above (or below) normal, discounted from `start` years: residual
+    income that accrues to holders, so a normalized value of a cyclical at a peak (a trough) adds (subtracts) it."""
+    return sum((e - normal) / (1 + cost) ** (i + start) for i, e in enumerate(eps))
 
 
 def weigh(found: dict, kind: str) -> tuple[float | None, dict]:
@@ -203,7 +214,10 @@ def reverse(f: dict, k: dict, kind: str, cons: dict, found: dict) -> dict:
             out["implied_growth_5y"] = dcf.solve(at, price, -0.3, 1.0)
         else:  # growth destroys value when the return on new capital is below its cost
             out["implied_growth_5y"] = dcf.solve(lambda g5: -at(g5), -price, -0.3, 1.0)
-            out["note"] ="the return on new capital is below its cost: faster growth lowers the value"
+            out["note"] = "the return on new capital is below its cost: faster growth lowers the value"
+        at_cost = lambda c: value.dcf_value(f, k, d["path"], d["sales_to_capital"], d["roic_term"], c)[0]
+        shift = dcf.solve(lambda c: -at_cost(c), -price, -0.045, 0.25)  # the cost of capital the price implies
+        out["implied_wacc"] = None if shift is None else k["wacc"] + shift
         if kind == "loss_making":  # the long-run margin the price assumes, the base case's growth
             def margin_at(m):
                 p = d["path"]
@@ -246,6 +260,7 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     path = folder(market, fact_sheet.normal(market, code)) / "facts.json"
     f = load(path) if path.exists() and load(path)["built"][:10] == today.isoformat() else fact_sheet.build(market, code, today)
     k, v = value.implied_floor(f, value.inputs(f), today), f["valuation"]
+    k["mature_margin"] = value.peer_medians(f, today).get("mature_margin")  # the young's target margin (value.paths)
     t = v["ttm"]
     cur_rev = value.convert(yahoo.load_fx(), t["revenue"], k["currency"], TABLE_CURRENCY[market]) if t["revenue"] else None
     norm = base_rates(market, cur_rev or 0, {})["recent_median"] if cur_rev else None  # the last 5-year window's median
@@ -300,7 +315,7 @@ def show(r: dict) -> str:
     lines.append(f"  target {r['target']:.2f} (bear {r['bear']:.2f} / bull {r['bull']:.2f}); expected {pct(r['expected_return'])} vs market "
                  f"{r['market_return']:.1%}: excess {pct(r['excess_return'])}, band ±{u['band']:.0%}")
     rv = r["reverse"]
-    lines.append(f"  reverse: growth {pct(rv.get('implied_growth_5y'))}" + (f", margin {rv['implied_margin']:.1%}" if rv.get("implied_margin") is not None else "") + (f"; implied ROE {rv['implied_roe']:.1%}, implied COE "
+    lines.append(f"  reverse: growth {pct(rv.get('implied_growth_5y'))}" + (f", WACC {rv['implied_wacc']:.1%}" if rv.get("implied_wacc") else "") + (f", margin {rv['implied_margin']:.1%}" if rv.get("implied_margin") is not None else "") + (f"; implied ROE {rv['implied_roe']:.1%}, implied COE "
                  f"{rv['implied_cost_equity']:.1%}" if rv.get("implied_roe") else "") + (f"; dividend growth {pct(rv['implied_dividend_growth_5y'])}"
                  if rv.get("implied_dividend_growth_5y") is not None else "") + f"; base rates {r['base_rates'].get('share_at_least')}")
     lines.append(f"  street: target {s['target']} ({pct(s['upside'])}), ours vs street {pct(s['ours_vs_street'])}, {s['ratings']};"

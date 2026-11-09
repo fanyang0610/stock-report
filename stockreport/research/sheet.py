@@ -122,8 +122,10 @@ def stats(series: pd.Series, now: float | None) -> dict:
     s = s[s > 0]
     if len(s) < 12 or now is None or now <= 0:
         return {"now": now, "months": len(s)}
-    mean, sd = float(s.mean()), float(s.std())
+    mean, sd, recent = float(s.mean()), float(s.std()), series.tail(60).dropna()
+    recent = recent[recent > 0]
     return {"now": now, "months": len(s), "mean": mean, "median": float(s.median()), "sd": sd, "min": float(s.min()), "max": float(s.max()),
+            "median_5y": float(recent.median()) if len(recent) >= 12 else None,
             "pct": float((s < now).mean()), "above_3sd": now > mean + 3 * sd}
 
 

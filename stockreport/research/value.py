@@ -246,8 +246,8 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     own = history(f, "ebit_margin", 8)
     if kind == "cyclical":
         target = history(f, "ebit_margin", 10).mean()
-    elif kind in ("loss_making", "fast_grower") or len(own) < 5 or own.median() <= 0:  # young: its industry's
-        target = k["ind_margin"]
+    elif kind in ("loss_making", "fast_grower") or len(own) < 5 or own.median() <= 0:  # young: mature firms' margin
+        target = k.get("mature_margin") or k["ind_margin"]
     else:
         target = own.median()
     n = len(growth)
@@ -256,7 +256,8 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     margin += [target if t_ >= CONVERGENCE else last + (target - last) * (t_ - n) / (CONVERGENCE - n)
                for t_ in range(n + 1, dcf.YEARS + 1)]
     return {"growth": growth, "margin": margin, "target_margin": target, "consensus_years": n,
-            "margin_source": "10-year average" if kind == "cyclical" else "industry" if target == k["ind_margin"] else "own 8-year median"}
+            "margin_source": "10-year average" if kind == "cyclical" else "profitable peers' median" if target == k.get("mature_margin")
+            else "industry" if target == k["ind_margin"] else "own 8-year median"}
 
 
 def sales_to_capital(f: dict, k: dict) -> tuple[float, str]:
@@ -287,11 +288,23 @@ def dcf_value(f: dict, k: dict, path: dict, s2c: float, roic_term: float, cost_s
 
 
 def peer_medians(f: dict, today: date) -> dict:
-    """The industry group's median EV/Sales and PEG in the day's snapshot (the fact sheet's peers group)."""
+    """The peers' medians in the day's snapshot, the company left out: P/E, EV/Sales, PEG (forward P/E over consensus
+    growth) and the profitable members' operating margin (the mature firms' margin a young company's target takes,
+    Damodaran's advice). The group is the fact sheet's industry when it has at least 10 members (Damodaran's floor for
+    an industry average, damodaran.MIN_FIRMS; Apple's industry is IBM, Dell, HP and Super Micro), else its sector."""
     snap, p = sheet.snapshot(f["market"], today), f.get("peers") or {}
     if snap.empty or not p:
         return {}
-    g = snap[snap[p["by"]] == p["group"]]
+    g, by, group = snap[snap[p["by"]] == p["group"]], p["by"], p["group"]
+    me = snap[snap["code"] == f["code"]]
+    if len(g) < damodaran.MIN_FIRMS and len(me):
+        by, group = "sector", me["sector"].iloc[0]
+        g = snap[snap["sector"] == group]
+    g = g[g["code"] != f["code"]]
     evs = (g["ev"] / g["revenue_ttm"]).where((g["ev"] > 0) & (g["revenue_ttm"] > 0))
     peg = (g["fwd_pe"] / (g["fwd_growth"] * 100)).where((g["fwd_growth"] > 0) & (g["fwd_pe"] > 0))
-    return {"ev_sales": evs.median(), "peg": peg.median(), "count": len(g)}
+    margin = (g["ebit"] / g["revenue_ttm"]).where(g["revenue_ttm"] > 0)
+    profitable = margin[margin > 0]
+    return {"by": by, "group": group, "count": len(g), "pe": g["pe"].where(g["pe"] > 0).median(), "ev_sales": evs.median(),
+            "peg": peg.median(), "profitable": len(profitable),
+            "mature_margin": float(profitable.median()) if len(profitable) >= damodaran.MIN_FIRMS else None}

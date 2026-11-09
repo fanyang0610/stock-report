@@ -445,38 +445,53 @@
   stage 11 ~800, stage 12 ~340.
 - Stage 10 (research: valuation and rating): done 2026-11-09. research/dcf.py (the math), value.py (type, rates,
   forecast), rating.py (methods, target, bear / bull, band, rating, reverse DCF, base rates, sensitivity grid);
-  `research CODE --value` writes valuation.json; ~750 lines (the app ~8,360); the choices with their reasons are "As
+  `research CODE --value` writes valuation.json; ~780 lines (the app ~8,390); the choices with their reasons are "As
   built in stage 10" under "The method". The DCF reproduces Damodaran's simple Ginzu example to the cent (Almarai:
   operating assets 37,517.53, 7.1878 a share) and his cost of capital worksheet (7.0550%); tests also cover the
   excess-return model against the justified P/B, the DDM, the rating band, the forecast paths and the moat (the
-  M-score and F-score tests are stage 9's). The 12 (rating, target against price; the street's mean target; why they
-  differ):
-  - 贵州茅台 买入 1,943 (+34%; street +16%): a 5.3% CNY cost of equity on a 5.8% free-cash-flow yield; the price assumes
-    revenue falls 1% a year. News: baijiu "bottoming", reversal not yet.
-  - 招商银行 买入 56.6 (+32%; +25%), 中国平安 A 持有 66.4 (+22%; +38%), H 买入 74.3 HKD (+40%; +48%), with the floor
-    below (CAPM alone: +56%, +38% 买入, +63%): at its industry's implied cost of equity the excess-return model puts 招商银行
-    at about its price (43 today) and Ping An at 66; P/B sits below its own 10-year median (1.29, 1.12). Ping An's Q3
-    profit fell 93.7% (2026-11-05); the A line's brokers' forecasts spread after it (band 25%: 持有).
-  - 中国神华 持有 42.8 (-12%; +7%): its next dividend at its payout of consensus earnings and a coal beta of 1.26 (cost of
-    equity 8.1%); CPIC just bought 5% of its H shares for the yield.
-  - 恒瑞医药 持有 59.9 (+19%; +42%): DCF 44 against its own median P/E of 65 from 2018-2021.
-  - Apple 卖出 215 (-37%; -1%): the price needs revenue growth of 21% a year for 5 years, reached by 3% of companies of
-    its size (our US table); cost of equity 10.8% (Damodaran's computer-hardware beta 1.34).
-  - JPMorgan 卖出 225 (-33%; +12%): ROE fading to the cost of equity; the price assumes 14.6% for ever. Morningstar has
-    long held JPM above its fair value; headlines call it "pricey".
-  - Micron 卖出 578 (-16%; +135%; the screening's 买入, opposite): cyclical; the DCF counts the consensus boom years
-    (1,083), normalized earnings at its 10-year margin don't (287 and 365); bear 127 / bull 1,090, at the 25% band's
-    edge (-25.4% excess).
+  M-score and F-score tests are stage 9's). The 12 after your review of the street gaps (below): rating, target
+  against price; the street's mean target; ours against it; what the price implies:
+  - 贵州茅台 买入 1,823 (+25%; street +16%; +8%): DCF 2,023 at a 5.3% CNY cost of equity on a 5.8% free-cash-flow yield
+    (the price implies 7.2%), own 5-year P/E 26.9x, 食品饮料's 19.4x. News: baijiu "bottoming", reversal not yet.
+  - 招商银行 持有 47.8 (+12%; +25%; -11%), 中国平安 A 持有 62.0 (+14%; +38%; -18%), H 买入 68.3 HKD (+28%; +48%; -13%):
+    at the industry's implied cost of equity (the floor below) the excess-return model and the own 5-year P/B agree
+    within 3-9%. Ping An's Q3 profit fell 93.7% (2026-11-05); the A line's brokers' forecasts spread after it.
+  - 中国神华 持有 42.8 (-12%; +7%; -18%): dividend discount at its payout of consensus earnings and a coal beta of 1.26
+    (cost of equity 8.1%); its yield against 2021-2025's ~8% average; CPIC just bought 5% of its H shares for the yield.
+  - 恒瑞医药 持有 55.5 (+10%; +42%; -23%): DCF 44; the brokers see licensing-led growth the trailing margins don't show.
+  - Apple 卖出 254 (-26%; -1%; -25%): own 5-year P/E and the technology sector's (31x) give 305; the DCF 203 at a 10.7%
+    cost of capital (Damodaran's hardware beta 1.34; beta 1.0 gives 218); the price implies 8.4%, or revenue growth of
+    21% a year for 5 years, reached by 3% of companies its size.
+  - JPMorgan 持有 302 (-10%; +12%; -19%): ROE keeps half its edge over the cost of equity (the moat clause), own 5-year
+    P/B 1.77 against 2.52 now; the price assumes 14.6% ROE for ever. Headlines call it "pricey".
+  - Micron 持有 787 (+14%; +135%; -51%; the screening's 买入): cyclical; the DCF counts the consensus boom (1,083), the
+    normalized multiples add its two years above normal (605, 673). The street's target needs a ~45% operating margin
+    for good (our DCF at 45%: 1,757); its 10-year average is 25%, its best year before this boom 48%. Bear 291 / bull
+    1,348.
   - Realty Income 持有 57.7 (-2%; +6%); 领展 持有 42.2 (+3%; +11%): dividend models and yields agree within ~10%.
-  - Snowflake 卖出 85.8 (-69%; +59%): its DCF is 0 at its industry's 3.7% margin (Damodaran, US internet software);
-    the price assumes 67%; EV/Sales against peers gives 172.
-  - 腾讯 买入 799 HKD (+90%; +54%): the price assumes revenue shrinking 3% a year; own median P/E 27x (2016-2026)
-    against ~13x now.
-  The pattern: CN and HK names above the street, US names below. It follows from the inputs, as Morningstar's absolute
-  fair values do (Tencent and Chinese banks under, JPM and Apple over): CNY costs of equity of 5-9% against much higher
-  implied ones, US megacaps priced for growth few companies reach. Extra runs: Palantir 卖出 (fast grower), NVIDIA
-  买入 (cyclical), 五粮液 买入, BeiGene 卖出, 君实生物 卖出 (loss-making), 加科思-B 不评级 (pre-revenue).
-  Faults the sanity checks found and fixed: the moat clause extended to banks (招商银行 3.4 times book), the own
+  - Snowflake 卖出 128 (-54%; +59%; -71%): DCF 90 at its 32 profitable software peers' 24% median margin, EV/Sales
+    166; the price implies a 67% long-run margin; even 45% (Microsoft-like) gives 177. The street values it on
+    non-GAAP figures that leave out stock-based pay (34% of revenue); the DCF counts it as a cost (Damodaran).
+  - 腾讯 买入 713 HKD (+70%; +54%; +11%): DCF 730 in CNY at 7.7% (the price implies 10.5%: the market's HKD discount
+    rates on CNY cash flows), own 5-year P/E 16.8x, HK software's 22.8x; the price assumes revenue shrinking 3% a year.
+  Extra runs: Palantir 卖出 (fast grower), NVIDIA 买入 (cyclical, -3% against the street), 五粮液 买入 (+43% against a
+  street at -2%: its DCF assumes margins return to their 8-year median after 2025's collapse), BeiGene 卖出, 君实生物 卖出
+  (loss-making), 加科思-B 不评级 (pre-revenue).
+  Your review of the street gaps (2026-11-09: "your valuation deviants that much from street is definitely not
+  something should easily let it pass"): each name's target was recomputed with one assumption changed at a time
+  (beta, stable growth, the multiples' window, the peer group, the margin target, the cyclical's boom years). Beta
+  and stable growth moved little (Apple 215 -> 218-228); five method faults did, each fixed for every name on its
+  published basis (in "As built"): the own history over 10 years instead of the brokers' 5; a peer median over 4
+  companies (Damodaran's floor for an industry average is 10); a young company's target margin from an industry
+  aggregate loss-makers drag down instead of mature firms' margins; normalized multiples that ignored a cyclical's
+  consensus years; banks exempted from the moat clause because of one name. Ours against the street, before -> after:
+  茅台 +15% -> +8%, 招商银行 +5% -> -11%, 腾讯 +24% -> +11%, Apple -37% -> -25%, JPM -40% -> -19%, Micron -64% -> -51%,
+  Snowflake -80% -> -71%; ratings changed: 招商银行 买入 -> 持有, JPM and Micron 卖出 -> 持有. The two large gaps left
+  are views with their condition stated: Micron (the street capitalizes a margin twice its 10-year average) and
+  Snowflake (no margin a software company has reached supports the price on a GAAP DCF). Our targets sit below the
+  street's on average, as the literature expects (sell-side targets run high: met at the 12-month mark about 4 times
+  in 10, Bradshaw, Brown and Huang 2013).
+  Faults the first sanity checks found and fixed: the moat clause extended to banks (招商银行 3.4 times book), the own
   history's mean (trough P/Es: Micron 38x against an 11x median), a trailing dividend grown in the DDM (五粮液 +138%), a
   negative own median as a margin target (Palantir's, BeiGene's DCF 0), consensus growth measured from today (SNOW +41%
   for +28%), a third consensus year (2-3 analysts), Link's WACC from revaluation-hit profit, the rating table's gaps,
@@ -487,10 +502,8 @@
   paths added), a possible crash with no bear or bull value, the pre-revenue label applied to US names, and PLAN.md
   reasons that led with the name instead of the rule (the cyclical "half" and the income "60%" now marked judgements).
   CN financials' targets rested on the 1.6% CNY yield: your decision (2026-11-09, "Yes, add the floor") added the
-  industry's implied cost of equity as a floor (above; my estimate had said Ping An A stays 买入: it is 持有, its excess
-  +22% inside a 25% band). Answered, not changed: SNOW's DCF of 0 is the published loss-maker convention, shown with the implied margin;
-  Micron's 卖出 is the rule's at the band's edge; own-history P/E is the plan's; Tencent's cross-holdings are in its
-  EBIT already.
+  industry's implied cost of equity as a floor (above). Answered, not changed: a DCF below zero counts as 0 (the
+  published loss-maker convention, shown with the implied margin); Tencent's cross-holdings are in its EBIT already.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1247,9 +1260,10 @@ the plan left open, each a published default:
   rule: CN 0.82%, US 4.07%, HKD 2.89% today), a return on new capital equal to the cost of capital; the moat clause
   (above) keeps half the median edge for a company whose return on capital beat its cost of capital in each of at
   least 8 years (the plan's 8-year window, as for margins and brokers' ROE; "half" is the plan's "part", a judgement).
-  Financial firms: ROE converges to the cost of equity (Damodaran's stable-growth rule for financial firms; the plan
-  puts the moat clause under the DCF only). A first build extended the moat clause to banks, outside the plan; the
-  sanity check found it (招商银行 at 3.4 times book) and it was put back to the plan.
+  Financial firms: ROE converges to the cost of equity (Damodaran's stable-growth rule for financial firms) with the
+  same moat clause on ROE (Morningstar rates banks' moats too). Banks were first exempted from the clause after 招商银行
+  came out at 3.4 times book; the cause was the cost of equity, which the floor below handles, so the exemption went
+  in your review of the street gaps (2026-11-09; the stage reviewer had also called it outcome-driven).
 - CN and HK banks and insurers (your decision, 2026-11-09, after the stage review): the cost of equity is at least the
   industry's implied one (Gebhardt, Lee and Swaminathan 2001's implied cost of capital, in its stable-growth form: each
   member's COE that makes the justified P/B equal its P/B, on next year's consensus ROE, trailing where none; the
@@ -1262,22 +1276,30 @@ the plan left open, each a published default:
   revenue from Yahoo's revenue consensus when its year mapping is unambiguous (Yahoo repeats 0y's end date for +1y on
   AAPL), else growing with the consensus profit; operating income moves with the consensus profit; then growth falls
   in equal steps to the stable rate by year 10 and the margin moves to its target by year 5 (the Ginzu's default). The
-  margin target: a cyclical's 10-year average (normalized after the years the consensus sees), the industry's for the
-  young (the plan's "young or loss-making": a loss-maker, a fast grower, under 5 years of history, or a negative 8-year
-  median, which is no mature record; a first build missed the last two, found on Palantir and BeiGene, whose DCF was
-  0), else the company's 8-year median. Sales to capital: its 5-year median when its
+  margin target: a cyclical's 10-year average (normalized after the years the consensus sees); for the young (the
+  plan's "young or loss-making": a loss-maker, a fast grower, under 5 years of history, or a negative 8-year median,
+  which is no mature record) the margin of the mature firms in its business, Damodaran's advice for a target margin:
+  the median operating margin of its peer group's profitable members in the day's snapshot (at least 10), else his
+  industry margin, an aggregate that loss-makers drag down (US internet software 3.7% against 24% for SNOW's 32
+  profitable software peers); else the company's 8-year median. Sales to capital: its 5-year median when its
   invested capital (equity + debt - cash) is positive in at least 3 of them, else the industry's. No consensus: the
   3-year revenue trend, faded.
 - Multiples: the own history's median (P/E distributions are skewed: trough-year P/Es put Micron's mean at 38x
-  against an 11x median), the peers' median from the day's snapshot (P/E; EV/Sales; PEG as forward P/E over consensus
-  growth), each times the next 12 months' consensus from today: a normal trailing multiple a year from now, so its
-  12-month target directly. Absolute methods' values roll forward 12 months at the cost of equity less the dividend.
+  against an 11x median) over its latest 5 years, the brokers' convention and the low end of the plan's "5-10-year
+  range" (10 years built a full return to an older regime into a 12-month target: Tencent 27x against 17x over 5
+  years and ~13x now), a cyclical's over 10 (a full cycle); the peers' median in the day's snapshot, the company left
+  out (P/E; EV/Sales; PEG as forward P/E over consensus growth), its industry when it has at least 10 members
+  (Damodaran's floor for an industry average, damodaran.MIN_FIRMS) else its sector (Apple's industry was IBM, Dell, HP
+  and Super Micro at 18x); each times the next 12 months' consensus from today: a normal trailing multiple a year
+  from now, so its 12-month target directly. Absolute methods' values roll forward 12 months at the cost of equity less the dividend.
 - Dividends: next year's dividend is the next 12 months' consensus EPS x the 5-year payout (at most 100%), the
   expected dividends of Damodaran's DDM; a first build grew the trailing dividend instead, a departure from his model
   that 五粮液 exposed (its 2025 dividend was 166% of a collapsed profit). A REIT's is the trailing year's. REIT: the dividend yield against its own 5-year average stands in for P/FFO
   history (FFO history isn't free); the bond leg of "yield against history and bonds" waits for a longer yield history.
 - Cyclical: DCF with normalized margins, the own median P/E on normalized EPS (trailing revenue x the 10-year average
-  net margin), justified P/B on the 10-year average ROE, a third each. Broker: justified P/B on the 8-year average ROE
+  net margin), justified P/B on the 10-year average ROE, a third each; the two normalized multiples add the consensus
+  years' earnings above (a trough: below) normal, residual income that accrues to holders (first built without it,
+  they valued Micron as if its next two years earned its 10-year average). Broker: justified P/B on the 8-year average ROE
   and P/B against history.
 - Bear / bull: the first forecast year's analysts' low and high (Yahoo's range around its own mean; CN: the brokers'
   six months of reports, at least 3), and the long-run margin (financials: ROE) one standard deviation of its own 10
@@ -1290,8 +1312,8 @@ the plan left open, each a published default:
   An H are compared at 1.59% + Hong Kong's 5.01%, not the HKD yield's 8.67%.
 - Not in the equity bridge: cross-holdings (their profit is in pretax profit, so in EBIT), employee options, a debt
   concept stage 9 doesn't read (SNOW's convertible notes).
-- Reverse: the years 1-5 revenue growth that makes the DCF equal the price (fading as in the base case); a loss-maker's
-  long-run margin; a financial's implied ROE at our cost of equity and implied cost of equity at next year's ROE; a
+- Reverse: the years 1-5 revenue growth that makes the DCF equal the price (fading as in the base case), and the cost
+  of capital that does; a loss-maker's long-run margin; a financial's implied ROE at our cost of equity and implied cost of equity at next year's ROE; a
   dividend payer's 5-year dividend growth. Base rates: of the companies in the same fifth by revenue in each start year
   of our annual tables (CN 2009-2025, US 2015-2026 in USD, HK 2015-2026), the share whose 5-year revenue growth reached
   the forecast's and the implied rate.
