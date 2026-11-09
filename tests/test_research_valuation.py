@@ -71,6 +71,12 @@ def test_justified_pb_and_excess_return_agree():
     assert r["years"][1]["book"] == pytest.approx(106) and r["years"][0]["excess"] == pytest.approx(3)
 
 
+def test_implied_cost_of_equity_inverts_justified_pb():
+    # a bank at 0.8 times book earning 12% with 1% growth prices a 14.75% cost of equity
+    assert dcf.implied_cost_equity(0.12, 0.8, 0.01) == pytest.approx(0.1475)
+    assert dcf.justified_pb(0.12, dcf.implied_cost_equity(0.12, 0.8, 0.01), 0.01) == pytest.approx(0.8)
+
+
 def test_two_stage_dividend_discount():
     # 2.00 growing 10% for 2 years, then 3% at 8%: 2.2/1.08 + 2.42/1.08^2 + 2.42 x 1.03 / 0.05 / 1.08^2
     assert dcf.ddm(2.0, 0.10, 2, 0.08, 0.03) == pytest.approx(2.2 / 1.08 + 2.42 / 1.08 ** 2 + 49.852 / 1.08 ** 2)

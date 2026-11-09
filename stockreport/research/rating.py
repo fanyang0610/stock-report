@@ -245,7 +245,7 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     today = today or date.today()
     path = folder(market, fact_sheet.normal(market, code)) / "facts.json"
     f = load(path) if path.exists() and load(path)["built"][:10] == today.isoformat() else fact_sheet.build(market, code, today)
-    k, v = value.inputs(f), f["valuation"]
+    k, v = value.implied_floor(f, value.inputs(f), today), f["valuation"]
     t = v["ttm"]
     cur_rev = value.convert(yahoo.load_fx(), t["revenue"], k["currency"], TABLE_CURRENCY[market]) if t["revenue"] else None
     norm = base_rates(market, cur_rev or 0, {})["recent_median"] if cur_rev else None  # the last 5-year window's median
@@ -288,7 +288,8 @@ def show(r: dict) -> str:
     k = r["inputs"]
     lines = [f"{r['name']} {r['code']}: {r['rating']}  price {r['price']:.2f} {r['currency']}  type {r['type']} ({r['type_reason']})",
              f"  rates ({k['currency']}): rf {k['rf']:.2%}  ERP {k['erp']:.2%} ({k['country']})  beta {k['beta']:.2f} ({k['industry']}, "
-             f"{k['region']})  COE {k['cost_equity']:.2%}  WACC {'-' if k['wacc'] is None else f"{k['wacc']:.2%}"}  stable {k['stable_cost']:.2%}  g {k['g']:.2%}"]
+             f"{k['region']})  COE {k['cost_equity']:.2%}" + (f" (industry's implied; CAPM {k['floor']['cost_equity_capm']:.2%})"
+             if (k.get("floor") or {}).get("applied") else "") + f"  WACC {'-' if k['wacc'] is None else f"{k['wacc']:.2%}"}  stable {k['stable_cost']:.2%}  g {k['g']:.2%}"]
     if r.get("target") is None:
         return "\n".join(lines + [f"  {r.get('reason')}"])
     for m, w in r["weights"].items():

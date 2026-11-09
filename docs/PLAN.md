@@ -445,7 +445,7 @@
   stage 11 ~800, stage 12 ~340.
 - Stage 10 (research: valuation and rating): done 2026-11-09. research/dcf.py (the math), value.py (type, rates,
   forecast), rating.py (methods, target, bear / bull, band, rating, reverse DCF, base rates, sensitivity grid);
-  `research CODE --value` writes valuation.json; 724 lines (the app 8,332); the choices with their reasons are "As
+  `research CODE --value` writes valuation.json; ~750 lines (the app ~8,360); the choices with their reasons are "As
   built in stage 10" under "The method". The DCF reproduces Damodaran's simple Ginzu example to the cent (Almarai:
   operating assets 37,517.53, 7.1878 a share) and his cost of capital worksheet (7.0550%); tests also cover the
   excess-return model against the justified P/B, the DDM, the rating band, the forecast paths and the moat (the
@@ -453,10 +453,10 @@
   differ):
   - 贵州茅台 买入 1,943 (+34%; street +16%): a 5.3% CNY cost of equity on a 5.8% free-cash-flow yield; the price assumes
     revenue falls 1% a year. News: baijiu "bottoming", reversal not yet.
-  - 招商银行 买入 66.8 (+56%; +25%) and 中国平安 A 买入 75.2 (+38%; +38%), H 买入 86.8 HKD (+63%; +48%): the price implies
-    a 14.3% / 13.3% / 18.4% cost of equity against our 5.2-5.7% (ChinaBond 1.59% + Damodaran's China premium 5.14% x
-    a beta of 0.7-0.8), and P/B sits below its own 10-year median (1.29, 1.12). Ping An's Q3 profit fell 93.7%
-    (2026-11-05); its consensus may lag; bear 45 / bull 123.
+  - 招商银行 买入 56.6 (+32%; +25%), 中国平安 A 持有 66.4 (+22%; +38%), H 买入 74.3 HKD (+40%; +48%), with the floor
+    below (CAPM alone: +56%, +38% 买入, +63%): at its industry's implied cost of equity the excess-return model puts 招商银行
+    at about its price (43 today) and Ping An at 66; P/B sits below its own 10-year median (1.29, 1.12). Ping An's Q3
+    profit fell 93.7% (2026-11-05); the A line's brokers' forecasts spread after it (band 25%: 持有).
   - 中国神华 持有 42.8 (-12%; +7%): its next dividend at its payout of consensus earnings and a coal beta of 1.26 (cost of
     equity 8.1%); CPIC just bought 5% of its H shares for the yield.
   - 恒瑞医药 持有 59.9 (+19%; +42%): DCF 44 against its own median P/E of 65 from 2018-2021.
@@ -486,9 +486,9 @@
   yield: Ping An H's excess +2 points), test-only Ginzu paths in the app (moved to the test; a test of the production
   paths added), a possible crash with no bear or bull value, the pre-revenue label applied to US names, and PLAN.md
   reasons that led with the name instead of the rule (the cyclical "half" and the income "60%" now marked judgements).
-  Answered, not changed: CN financials' targets rest on the 1.6% CNY yield (said above; recommended to you: a floor at
-  the industry's implied cost of equity, Gebhardt, Lee and Swaminathan 2001, which moves 招商银行 to +31% and Ping An A
-  to +27%, ratings unchanged); SNOW's DCF of 0 is the published loss-maker convention, shown with the implied margin;
+  CN financials' targets rested on the 1.6% CNY yield: your decision (2026-11-09, "Yes, add the floor") added the
+  industry's implied cost of equity as a floor (above; my estimate had said Ping An A stays 买入: it is 持有, its excess
+  +22% inside a 25% band). Answered, not changed: SNOW's DCF of 0 is the published loss-maker convention, shown with the implied margin;
   Micron's 卖出 is the rule's at the band's edge; own-history P/E is the plan's; Tencent's cross-holdings are in its
   EBIT already.
 
@@ -1250,6 +1250,13 @@ the plan left open, each a published default:
   Financial firms: ROE converges to the cost of equity (Damodaran's stable-growth rule for financial firms; the plan
   puts the moat clause under the DCF only). A first build extended the moat clause to banks, outside the plan; the
   sanity check found it (招商银行 at 3.4 times book) and it was put back to the plan.
+- CN and HK banks and insurers (your decision, 2026-11-09, after the stage review): the cost of equity is at least the
+  industry's implied one (Gebhardt, Lee and Swaminathan 2001's implied cost of capital, in its stable-growth form: each
+  member's COE that makes the justified P/B equal its P/B, on next year's consensus ROE, trailing where none; the
+  median of the same industry in the day's snapshot, at least 5 members), the stable cost too, growth 5 points below
+  it; the CAPM figure is kept beside it. On Damodaran's inputs their CNY cost of equity is 5-6% while the market has
+  priced them at 13-18% for years; the floor keeps a 12-month target from assuming that gap closes. Today: banks
+  14.8% (31), CN insurers 12.5% (5), HK insurers 15.3% (11). US banks keep CAPM (JPM 8.2%).
 - Forecast: the consensus windows start where the trailing figures end (a true 12 months' growth; SNOW's first year was
   +41% from today against +28% from its last quarter); two windows (years 1-2: Nasdaq's third year has 2-3 analysts);
   revenue from Yahoo's revenue consensus when its year mapping is unambiguous (Yahoo repeats 0y's end date for +1y on

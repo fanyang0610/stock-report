@@ -37,6 +37,7 @@ MOAT_YEARS = 8
 CONVERGENCE = 5  # the simple Ginzu's default year of margin convergence
 CYCLICAL_SECTORS = {"Materials", "Energy"}  # with these industries: the plan's materials, energy, chemicals, shipping, memory
 CYCLICAL_INDUSTRIES = {"Semiconductor", "Semiconductor Equip", "Shipbuilding & Marine", "Transportation"}
+FLOOR = {"markets": {"cn", "hk"}, "kinds": {"bank", "insurer"}, "peers": 5}  # your decision of 2026-11-09
 PRE_REVENUE = re.compile(r"-[A-Z]*[UB][A-Z]*$")  # HKEX "-B" (chapter 18A biotech), STAR "-U" where a name keeps it (CNINFO drops it)
 WEIGHTS = {  # PLAN.md's type table
     "ordinary": {"dcf": .5, "pe_own": .25, "pe_peers": .25},
@@ -105,6 +106,30 @@ def inputs(f: dict) -> dict:
             "ind_margin": ind.get("op_margin"), "ind_sales_to_capital": ind.get("sales_to_capital"),
             "debt": debt, "cash": 0.0 if fin else (b["cash"] or 0.0), "minority": b["minority"] or 0.0,
             "shares": v["shares"], "fx": v["fx_quote_to_report"], "ebit": ebit}
+
+
+def implied_floor(f: dict, k: dict, today: date) -> dict:
+    """CN and HK banks and insurers: the cost of equity is at least their industry's implied one (Gebhardt, Lee and
+    Swaminathan 2001's implied cost of capital, in its stable-growth form: each member's COE that makes the justified
+    P/B equal its P/B on next year's consensus ROE, trailing where none; the median of the same industry in the day's
+    snapshot, at least 5 members), so a discount the market has priced for years isn't assumed to close within the
+    12 months; the stable cost too, and growth stays 5 points below it. The CAPM figure is kept beside it."""
+    if f["market"] not in FLOOR["markets"] or f["kind"] not in FLOOR["kinds"]:
+        return k
+    snap, p = sheet.snapshot(f["market"], today), f.get("peers") or {}
+    if snap.empty or not p:
+        return k
+    grp = snap[snap[p["by"]] == p["group"]]
+    roe = (grp["eps_e1"] / grp["bps"]).where((grp["eps_e1"] > 0) & (grp["bps"] > 0)).fillna(grp["roe"])
+    r = dcf.implied_cost_equity(roe, grp["pb"], k["g"]).where(grp["pb"] > 0).dropna()
+    floor = {"implied_cost_equity": float(r.median()) if len(r) else None, "members": len(r), "group": p["group"],
+             "cost_equity_capm": k["cost_equity"], "stable_cost_capm": k["stable_cost"]}
+    if len(r) < FLOOR["peers"] or floor["implied_cost_equity"] <= k["cost_equity"]:
+        return k | {"floor": floor | {"applied": False}}
+    c = floor["implied_cost_equity"]
+    stable = max(k["stable_cost"], c)
+    return k | {"cost_equity": c, "wacc": c, "stable_cost": stable, "g": min(k["rf"], stable - GAP),
+                "floor": floor | {"applied": True}}
 
 
 def history(f: dict, key: str, n: int) -> pd.Series:

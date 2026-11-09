@@ -94,6 +94,12 @@ def justified_pb(roe: float, cost_equity: float, g: float) -> float:
     return (roe - g) / (cost_equity - g)
 
 
+def implied_cost_equity(roe, pb, g):
+    """The cost of equity a price implies, the justified P/B solved for COE: g + (ROE - g) / (P/B) (works on numbers
+    and pandas Series)."""
+    return g + (roe - g) / pb
+
+
 def excess_return(book0: float, roe: list[float], payout: list[float], cost: list[float], roe_term: float,
                   cost_term: float, g_term: float) -> dict:
     """Equity value = book + the present value of each year's excess return (ROE - COE) x opening book, book growing
