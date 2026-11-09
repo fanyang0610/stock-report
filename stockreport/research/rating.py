@@ -200,11 +200,13 @@ def flags(f: dict) -> tuple[str | None, str | None]:
     return None, None
 
 
-def reverse(f: dict, k: dict, kind: str, cons: dict, found: dict) -> dict:
-    """What today's price assumes: the revenue growth in years 1-5 (then fading as in the base case) at which the DCF
-    equals the price; for financials the ROE the price implies at our cost of equity, and the cost of equity it implies
-    at the next year's ROE; for dividend payers the 5-year dividend growth."""
-    v, price, out = f["valuation"], f["valuation"]["price"], {}
+def reverse(f: dict, k: dict, kind: str, cons: dict, found: dict, price: float | None = None, margin: bool | None = None) -> dict:
+    """What today's price (or another value per share today: the street's target discounted back 12 months) assumes:
+    the revenue growth in years 1-5 (then fading as in the base case) at which the DCF equals it, and the cost of
+    capital; a loss-maker's long-run margin (with `margin`, any DCF's); for financials the ROE it implies at our cost of
+    equity, and the cost of equity it implies at the next year's ROE; for dividend payers the 5-year dividend growth."""
+    v, out = f["valuation"], {}
+    price, margin = price or v["price"], kind == "loss_making" if margin is None else margin
     d = found.get("dcf") or found.get("dcf_normal")
     if d:
         def at(g5):
@@ -218,7 +220,7 @@ def reverse(f: dict, k: dict, kind: str, cons: dict, found: dict) -> dict:
         at_cost = lambda c: value.dcf_value(f, k, d["path"], d["sales_to_capital"], d["roic_term"], c)[0]
         shift = dcf.solve(lambda c: -at_cost(c), -price, -0.045, 0.25)  # the cost of capital the price implies
         out["implied_wacc"] = None if shift is None else k["wacc"] + shift
-        if kind == "loss_making":  # the long-run margin the price assumes, the base case's growth
+        if margin:  # the long-run margin the price assumes, the base case's growth
             def margin_at(m):
                 p = d["path"]
                 return value.dcf_value(f, k, p | {"margin": [x + (m - p["target_margin"]) * min(i + 1, value.CONVERGENCE)
@@ -227,9 +229,10 @@ def reverse(f: dict, k: dict, kind: str, cons: dict, found: dict) -> dict:
             out["implied_margin"] = dcf.solve(margin_at, price, -0.5, 0.9)
     if kind in FINANCIAL and v["pb"]:
         roe = cons["eps"][0] * k["shares"] / v["book_common"] if cons["eps"] else f["summary"].get("roe_latest")
+        pb = v["pb"] * price / v["price"]
         if roe:
-            out["implied_roe"] = k["g"] + v["pb"] * (k["cost_equity"] - k["g"])
-            out["implied_cost_equity"] = (roe - k["g"]) / v["pb"] + k["g"]
+            out["implied_roe"] = k["g"] + pb * (k["cost_equity"] - k["g"])
+            out["implied_cost_equity"] = (roe - k["g"]) / pb + k["g"]
             out["roe_next"] = roe
     if found.get("ddm"):
         gt, d1 = found["ddm"]["growth_stable"], found["ddm"]["dividend"] * k["fx"]
@@ -283,12 +286,16 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     rev = reverse(f, k, kind, cons, found)
     c = f["consensus"]
     street = c.get("target_mean") or c.get("target_yahoo")
+    roll = 1 + k["cost_equity"] - dividend / v["price"]  # as the absolute methods' targets roll forward
+    needs = reverse(f, k, kind, cons, found, street / roll, margin=True) if street else {}  # what the street's target assumes
     out |= r | {"target": target, "weights": weights, "methods": found, "bear": bear, "bull": bull,
             "market_return": k["market_return"], "dividend_next": dividend, "reverse": rev, "sensitivity": sensitivity(f, k, found),
-            "base_rates": base_rates(market, cur_rev, {"forecast": ours, "implied": rev.get("implied_growth_5y")}) if cur_rev else {},
+            "base_rates": base_rates(market, cur_rev, {"forecast": ours, "implied": rev.get("implied_growth_5y"),
+                                                       "street": needs.get("implied_growth_5y")}) if cur_rev else {},
+            "forecast_growth_5y": ours,
             "street": {"target": street, "upside": street / v["price"] - 1 if street else None, "ours_vs_street":
                        target / street - 1 if street else None, "ratings": c.get("ratings") or c.get("ratings_yahoo"),
-                       "analysts": c.get("analysts")},
+                       "analysts": c.get("analysts"), "implied": needs},
             "screening": {kk: f["screening"].get(kk) for kk in ("rating", "fifth", "score_rank", "universe", "in_universe", "reason")}}
     return finish(out)
 

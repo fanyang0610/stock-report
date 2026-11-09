@@ -232,6 +232,7 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         own = sheet.own_multiples(g["prices"]["monthly"], a, quote_cur, report_cur, g["prices"]["splits"])  # a: today's basis
     own = own.tail(120)
     valuation["own_history"] = {k: sheet.stats(own[k], valuation[{"pe": "pe_ttm", "pb": "pb", "ps": "ps"}[k]]) for k in ("pe", "pb", "ps")}
+    valuation["own_series"] = {"month": list(own["month"]), "pe": list(own["pe"]), "pb": list(own["pb"])}  # the report's band chart
     monthly = g["prices"]["monthly"]
     listed = monthly["listed"].iloc[0] if len(monthly) and "listed" in monthly else None
     listed_years = (today - date.fromisoformat(listed)).days / 365.25 if listed else None

@@ -90,6 +90,32 @@ def filing_id(market: str, url: str) -> str:
     return f"{market}-{parts[-2] if market == 'us' else parts[-1].split('.')[0]}"
 
 
+def read_filing(market: str, code: str, filing: dict, path, today: date) -> None:
+    """Cut one filing's passages into its cache file (nothing written when it can't be fetched)."""
+    started = time.monotonic()
+    try:
+        text = filings.text(market, filing["url"])
+    except Exception as e:
+        log.warning("passages %s %s: %s", market, code, e)
+        return
+    entry = {k: filing[k] for k in ("title", "date", "url")} | {"read": today.isoformat(), "passages": cut(text)}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(entry, ensure_ascii=False, indent=1), encoding="utf-8")
+    log.info("passages %s %s %s: %d, %d of %d chars, %.0fs", market, code, filing["title"], len(entry["passages"]),
+             sum(map(len, entry["passages"])), len(text), time.monotonic() - started)
+
+
+def latest(market: str, code: str, today: date) -> dict | None:
+    """One stock's latest periodic-report passages (the research report's own review), from the same cache."""
+    filing = filings.periodic(market, code, today)
+    if filing is None:
+        return None
+    path = CACHE / market / f"{code}_{filing_id(market, filing['url'])}.json"
+    if not path.exists():
+        read_filing(market, code, filing, path, today)
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+
+
 def update(market: str, rows: pd.DataFrame, today: date) -> dict[str, dict]:
     """Code -> the passages of its latest periodic report ({title, date, passages}), for the names in ROLES; the
     filings not read yet are read first, at most `per_day` per market a day (the rest wait for the next build).
@@ -111,20 +137,8 @@ def update(market: str, rows: pd.DataFrame, today: date) -> dict[str, dict]:
     paths = {c: folder / f"{c}_{filing_id(market, f['url'])}.json" for c, f in found.items()}
     todo = [c for c in codes if c in paths and not paths[c].exists()][:max(0, CFG["per_day"] - read)]
 
-    def work(code):
-        started, filing = time.monotonic(), found[code]
-        try:
-            text = filings.text(market, filing["url"])
-        except Exception as e:
-            log.warning("passages %s %s: %s", market, code, e)
-            return
-        entry = {k: filing[k] for k in ("title", "date", "url")} | {"read": today.isoformat(), "passages": cut(text)}
-        paths[code].write_text(json.dumps(entry, ensure_ascii=False, indent=1), encoding="utf-8")
-        log.info("passages %s %s %s: %d, %d of %d chars, %.0fs", market, code, filing["title"], len(entry["passages"]),
-                 sum(map(len, entry["passages"])), len(text), time.monotonic() - started)
-
     with ThreadPoolExecutor(CFG["workers"]) as pool:
-        list(pool.map(work, todo))
+        list(pool.map(lambda c: read_filing(market, c, found[c], paths[c], today), todo))
     cutoff = time.time() - CFG["keep_days"] * 86400
     for old in folder.glob("*.json"):
         if old.stat().st_mtime < cutoff:

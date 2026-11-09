@@ -36,8 +36,9 @@ uv run python -m stockreport run [--market cn|us|hk]                # fetch + sc
 uv run python -m stockreport review                                 # results review (DeepSeek), then the PDF
 uv run python -m stockreport send [--test]                          # text summary + PDF to WeChat (reviewed first)
 uv run python -m stockreport listen                                 # listener (launchd): keywords now, the router from stage 12
-uv run python -m stockreport research CODE --facts                  # single-stock fact sheet (stage 9); the report PDF comes in stage 11
-uv run python -m stockreport research CODE --value                  # its valuation, target and rating (stage 10): valuation.json
+uv run python -m stockreport research CODE [--model M]              # single-stock research report: PDF and text summary (stage 11)
+uv run python -m stockreport research CODE --facts                  # its fact sheet only (stage 9): facts.json
+uv run python -m stockreport research CODE --value                  # its valuation, target and rating only (stage 10): valuation.json
 uv run python -m stockreport track                                  # performance scorecard
 uv run python -m stockreport verdict [CODE veto|confirm --until D --reason "..."]  # your verdicts (no args: list)
 uv run python -m stockreport cleanup [--dry-run]                    # apply storage retention

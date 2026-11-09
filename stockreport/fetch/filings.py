@@ -17,6 +17,7 @@ log = logging.getLogger(__name__)
 logging.getLogger("pypdf").setLevel(logging.ERROR)  # font warnings on most filings; unreadable text is checked below
 CN_PERIODIC = "category_ndbg_szsh;category_bndbg_szsh;category_yjdbg_szsh;category_sjdbg_szsh"
 US_PERIODIC = ("10-K", "10-Q", "20-F", "40-F")
+US_ANNUAL = ("10-K", "20-F", "40-F")
 SKIP = re.compile(r"摘要|英文|取消|更正|補充|环境|環境|ESG|社會責任|社会责任|Environmental|Sustainab|Supplement", re.I)
 
 
@@ -31,16 +32,18 @@ def ids(market: str) -> dict:
     return {"cn": cninfo.org_ids, "hk": hkex.org_ids, "us": sec.org_ids}[market]()
 
 
-def periodic(market: str, code: str, today: date) -> dict | None:
-    """The newest periodic report of the last 400 days: {id, url, date, title}, or None."""
-    sid, start = ids(market).get(code), today - timedelta(days=400)
+def periodic(market: str, code: str, today: date, annual: bool = False) -> dict | None:
+    """The newest periodic report of the last 400 days (with `annual`, the newest annual report of the last 500):
+    {id, url, date, title}, or None."""
+    sid, start = ids(market).get(code), today - timedelta(days=500 if annual else 400)
     if sid is None:
         return None
     http = client(market)
     if market == "cn":
         found = http.post(cninfo.QUERY_URL, data={
             "stock": f"{code},{sid}", "tabName": "fulltext", "pageSize": 30, "pageNum": 1,
-            "column": "sse" if code.startswith("6") else "szse", "category": CN_PERIODIC, "plate": "",
+            "column": "sse" if code.startswith("6") else "szse", "category": "category_ndbg_szsh" if annual else CN_PERIODIC,
+            "plate": "",
             "seDate": f"{start}~{today}", "searchkey": "", "secid": "", "trade": "", "sortName": "", "sortType": "",
             "isHLtitle": "false"}).json().get("announcements") or []
         for a in found:
@@ -56,14 +59,15 @@ def periodic(market: str, code: str, today: date) -> dict | None:
             "searchType": "1", "t1code": "40000", "t2Gcode": "-2", "t2code": "-2", "rowRange": "20", "lang": "en"}).json()
         for a in json.loads(payload["result"] or "[]"):  # English: many Chinese report PDFs have fonts without Unicode
             title, kind = html.unescape(a["TITLE"] or ""), html.unescape(a["LONG_TEXT"] or "").split(" - ", 1)[-1]
-            if re.search(r"Annual Report|Interim|Quarterly", kind + title, re.I) and not SKIP.search(kind + title):
+            wanted = r"Annual Report" if annual else r"Annual Report|Interim|Quarterly"
+            if re.search(wanted, kind if annual else kind + title, re.I) and not SKIP.search(kind + title):
                 day = a["DATE_TIME"][6:10] + "-" + a["DATE_TIME"][3:5] + "-" + a["DATE_TIME"][:2]
                 return {"id": "hk-" + a["FILE_LINK"].rsplit("/", 1)[-1].split(".")[0], "date": day,
                         "url": "https://www1.hkexnews.hk" + a["FILE_LINK"], "title": " ".join(title.split())}
         return None
     recent = http.get(sec.SUBMISSIONS.format(cik=int(sid))).json()["filings"]["recent"]
     for form, day, acc, doc in zip(recent["form"], recent["filingDate"], recent["accessionNumber"], recent["primaryDocument"]):
-        if form in US_PERIODIC and day >= start.isoformat():
+        if form in (US_ANNUAL if annual else US_PERIODIC) and day >= start.isoformat():
             return {"id": f"us-{acc}", "date": day, "title": f"{form} {day}",
                     "url": f"https://www.sec.gov/Archives/edgar/data/{int(sid)}/{acc.replace('-', '')}/{doc}"}
     return None

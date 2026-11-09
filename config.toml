@@ -92,3 +92,12 @@ max_chars = 6000              # passage text per name: windows around the hard-f
 window = [300, 700]           # characters before / after each keyword
 workers = 3
 keep_days = 400               # cached filings older than this are deleted
+
+[research_words]              # the research report's words (PLAN.md "The analysis in words"; research/words.py)
+model = "deepseek-flash"      # your choice (2026-11-09) after stage 11 compared it with deepseek-v4-pro (PLAN.md Status)
+temperature = 0.2
+max_tokens = 3000
+timeout = 150                 # seconds per call
+# USD per 1M tokens at the peak price (input cache hit, cache miss, output), api-docs.deepseek.com 2026-11-09;
+# off-peak (outside 01:00-04:00 and 06:00-10:00 UTC on weekdays) is half
+prices = { "deepseek-flash" = [0.006, 0.3, 1.2], "deepseek-v4-pro" = [0.044, 1.32, 3.96] }

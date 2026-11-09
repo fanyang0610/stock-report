@@ -504,6 +504,42 @@
   CN financials' targets rested on the 1.6% CNY yield: your decision (2026-11-09, "Yes, add the floor") added the
   industry's implied cost of equity as a floor (above). Answered, not changed: a DCF below zero counts as 0 (the
   published loss-maker convention, shown with the implied margin); Tencent's cross-holdings are in its EBIT already.
+- Stage 11 (research: writing, cross-check and report): done 2026-11-09. research/texts.py, words.py, compare.py,
+  charts.py, report.py and render/research.html.j2 (~1,130 lines of Python and a 320-line template); `research CODE` writes reports/<date>/research_<code>.pdf and prints the text summary; the
+  choices are "As built in stage 11" under "The analysis in words". Stage 10's valuation.json gains what the street's
+  target needs (street.implied) and our 5-year growth (forecast_growth_5y).
+  - The 12 test companies (13 reports: Ping An A and H) build with every word section filled, ~9-11 pages each. Warm
+    (data cached) 13-32 s; cold, nothing cached (比亚迪 002594): 57 s (data 35, sources 6, review 2, words 13); 招商银行's
+    first build 149 s, HKEXnews' 30 MB H-share annual report needing retries. The 4-minute target holds.
+  - DeepSeek, measured on the same three reports (茅台, Apple, 腾讯) and code: deepseek-v4-pro wrote in ~20-27 s for
+    USD 0.04-0.10 a report at the peak price; deepseek-flash in ~11-13 s for 0.011-0.015. v4-pro drew more on the
+    sources (Apple's results-release quotes), flash more on the fact sheet, with fewer items dropped; both made the
+    errors the checks now catch. Your choice (2026-11-09): flash. The final 13 on flash with the repair round: 5-8
+    calls, USD 0.005-0.010 each (0.089 in all, cache hits make repeats cheap), 0-7 items dropped per report after
+    the repair round (13% before it).
+  - Faults found by reading the reports and fixed: points and risks copying the bull and bear; a comparison whose
+    direction contradicted code's figures (腾讯 "34.0% 高于 38.4%", 招商银行 "14.2% 高于 14.8%", the second missed until
+    comparisons were read by sentence, not clause); P/B compared with the market's P/E (Ping An H); units doubled after
+    a key ("42 位位"); the non-GAAP driver on a REIT (its consensus is FFO); the conclusion dropped for naming code's
+    own rating; short 「」 terms (strategy names) failed as quotes; a quote not counted as the item's source; Link's
+    bear case and risks lost to missing sources (the repair round); HK MD&A headings dropped as page furniture; an
+    HK stop heading matching a body line ("Five Year Plan..."); the football chart's labels overlapping.
+  - Tests: tests/test_research_words.py (the figure, quote, rating-word and comparison checks; the agreement; section
+    cutting on small CN, US and HK samples; the end-to-end dry run of 茅台's report from saved data with DeepSeek
+    mocked: words checked and filled, the PDF rendered, the summary under 4,000 bytes). 194 tests pass.
+  - The fresh-context stage review (one; the fixes checked by tests and by rebuilding the 13, not by a second review)
+    confirmed the agreement logic, the dry run and that no report's words contradict code's rating or target. Fixed:
+    Chinese numerals without a unit word passed the figure check (十五%, 三分之一, 一半, 翻番; now any numeral run before a
+    unit or fraction word, any run of two with 十 / 百 / 千 / 万 / 亿, and 翻番 / 一半 / 过半 are figures); the gap to the
+    street wasn't always stated (now a code-written first driver with both targets and the gap, which the words start
+    from); the review's findings and a research rating above the screening's weak quality or growth weren't drivers
+    against the screening (both added); a string field passed unchecked (only the business-model word now, which
+    shows quality-screen's exemption C when code's ROE and cash tests also hold). Answered, not changed: a quote is
+    checked against every source line and code then cites the line it is in (the attribution is the real one); a
+    year or date passes when the material has it (a date isn't a financial figure); the "about 4 in 10" hit rate is
+    Bradshaw, Brown and Huang's published figure; JPM and China Shenhua at 持有 with a negative expected return sit
+    inside stage 10's 25% uncertainty band (the method, not this stage); the daily card's research line is stage 12.
+    The app is now ~9583 lines (an estimate, not a limit; words.py 410).
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1330,11 +1366,54 @@ the plan left open, each a published default:
   line; (2) the bull case and (3) the bear case, written separately from the same facts, so the report isn't
   one-sided (LLMs, like sell-side analysts, lean positive); (4) thesis, outlook, catalysts, risks, "what would change
   our view" and the explanation against the screening, given code's rating and list of drivers. (1)-(3) in parallel.
-- Model: DeepSeek's stronger model for the writing, the fast one for the router; stage 11 measures both and keeps the
-  stronger unless the fast one reads as well (save tokens, never cut quality). Cost measured in stage 11 (expected a
-  few cents to a few jiao a report).
+- Model: the fast one (deepseek-flash) for the writing and the router, your choice (2026-11-09) after stage 11
+  compared it with the stronger deepseek-v4-pro (Status).
 - Filings and headlines are outside text: DeepSeek has no tools, answers in JSON, its quotes are checked, and its words
   can't move a number or the rating, so injected text can't change a result.
+
+As built in stage 11 (2026-11-09; research/texts.py the sources, words.py the calls and checks, compare.py the
+comparisons and the forecast table, charts.py the SVG charts, report.py the report; `research CODE`):
+- Sources: the latest annual report (CNINFO 年度报告, the 10-K or 20-F, HKEXnews' "[Annual Report]" in English) cut by
+  its headings: CN the 管理层讨论与分析 section (the line that is just the heading: the contents' lines carry dots or
+  page numbers) and in it every heading of a topic (主要业务 / 所处行业, 核心竞争力, 经营情况, 未来发展, 可能面对的风险) to the
+  next heading of its level; US each Item's longest span (the contents list it empty), Item 1A's one-sentence risk
+  headings; HK the Chairman's Statement and the MD&A from the line that equals the heading to the next section's, a
+  heading repeated as a page header kept, then the outlook and principal risks sub-headings. Page furniture (lines
+  repeated 4 times, page numbers, the 适用 boxes, table rows) is dropped; each section keeps 4,500 (CN) or 6,000
+  characters; source lines of at most 260 / 520. A CN PDF whose fonts have no Unicode map (招商银行's) gives way to the
+  issuer's HK annual report. Plus the latest US 8-K results release (Ex-99.1), 25 non-routine filing titles of 12
+  months, 30 headlines of 90 days, 20 broker report titles of 6 months (CN) or 15 rating changes with targets (US, HK).
+  Not built: the CN and HK results announcements (their annual report and broker titles carry the year), and 互动易 / e
+  互动 Q&A (e互动, where all five CN test companies list, needs a paged company search; a later addition if the words
+  prove thin). US and HK segments are in the business text the words quote (no checkable free segment table).
+- The report's own results review: the review's checklist, rules and cache (data/review) on 90 days of filings, 30 of
+  headlines and the latest periodic report's passages (passages.latest), before the valuation, so a hard red flag
+  stops the rating (rating.flags) as for a listed name.
+- Keys: ~90 facts under a key with a Chinese label and the value as shown (units included; a count is bare and its
+  label names the unit). A written figure passes only as a key or when it is in a source line the item cites (a
+  rounded figure doesn't); a year or date passes when the material has it, a horizon (近 5 年) when a key's label has
+  it; a quote of 6+ characters must be verbatim in some source line (code adds that line to the item's sources); a
+  rating word other than code's rating, an unknown key, an item with neither a source nor a key, and a comparison
+  between two keys their values contradict (高于 / 低于) or between two different measures (P/B against P/E) are
+  dropped. Each call's dropped items go back once with their reasons (one repair round), and the rewrites are checked
+  again. Code also drops a unit written after a key.
+- Calls: business / industry / moat / management (with quality-screen's exemption C as a model word), bull and bear
+  in parallel, then the thesis with the checked items (raw, with keys), code's drivers and the 90-day moves as keys;
+  points and risks must not copy the bull and bear (a Sell's risks are mostly upside ones). Temperature 0.2, JSON out.
+- Against the street (compare.street): what the street's target needs in our DCF (rating.reverse at the street's
+  target discounted 12 months: the long-run margin, 5-year growth with its base rate, the cost of capital) and, for a
+  financial, the long-run ROE; the floor; the adjusted (non-GAAP) basis for US non-REITs; the targets' 4-in-10 hit
+  rate. valuation.json keeps them under street.implied. Against the screening (compare.screening): the agreement and
+  the drivers named in the plan, each only when it applies.
+- The PDF (render/research.html.j2, ~9-11 pages): page 1 the decision, conclusion, points, risks, the screening box and
+  key data; the company with CN 主营构成 and the peers table; bull and bear and what the price assumes; ten years of
+  accounts with the accounting checks and the market's own flags; the 3-year forecast (12-month windows from where the
+  trailing figures end) beside the consensus by fiscal year; the methods table, a football field, the rates and
+  long-run inputs, the sensitivity grid and the P/E (financials P/B) band; why we differ from the street; catalysts,
+  risks, what would change our view, management and the review's findings; flows and the screening; the back page
+  (rating meaning, method, limits, input dates, the cited source lines). Without DeepSeek the numbers go out with the
+  word sections marked 暂不可用. reports/<date>/research_<code>.pdf; report.json beside facts.json keeps the words,
+  timings and usage, so report.render() redraws it from saved data.
 
 #### Against the daily screening
 - The screening's view of the stock: its rating if it is on the day's lists; else its place in the market's score
@@ -1561,7 +1640,7 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
     the math (a DCF checked against Damodaran's own spreadsheet example, justified P/B, the M-score and F-score on a
     saved sample); the 12 companies have targets and ratings, each sanity-checked against common sense, the street
     and the news, gaps explained and never tuned; the stage review; status; committed.
-11. **Research: writing, cross-check and report.** Section cutting per market, the four DeepSeek calls with key filling
+11. **Research: writing, cross-check and report** (done 2026-11-09, Status). Section cutting per market, the four DeepSeek calls with key filling
     and quote checks (the skills' prompt parts), the comparison with the screening, the PDF template with SVG charts,
     the text summary; time and cost measured, the stronger and the fast model compared. `research CODE` writes the PDF.
     Done when: the 12 reports read well to me and to the stage reviewer and every number traces to code; a cold report

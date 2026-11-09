@@ -92,3 +92,32 @@ def days(key: str) -> int:
 
 def stamp() -> str:
     return time.strftime("%Y-%m-%d %H:%M")
+
+
+CUR = {"CNY": "元", "HKD": "港元", "USD": "美元"}
+
+
+def number(x) -> bool:
+    return isinstance(x, (int, float)) and x == x
+
+
+def pct(x, sign: bool = False, digits: int = 1) -> str:
+    return "-" if not number(x) else f"{x:+.{digits}%}" if sign else f"{x:.{digits}%}"
+
+
+def times(x) -> str:
+    return "-" if not number(x) else f"{x:.1f}倍"
+
+
+def money(x, currency: str | None = None) -> str:
+    """An amount in Chinese units: 1.82万亿元, 1,816亿元, 3.5亿美元."""
+    if not number(x):
+        return "-"
+    unit, a = CUR.get(currency, currency or ""), abs(x)
+    text = f"{x / 1e12:.2f}万亿" if a >= 1e12 else f"{x / 1e8:,.0f}亿" if a >= 1e10 else f"{x / 1e8:.1f}亿" if a >= 1e8 \
+        else f"{x / 1e4:,.0f}万" if a >= 1e4 else f"{x:,.2f}"
+    return text + unit
+
+
+def price(x, currency: str | None = None) -> str:
+    return "-" if not number(x) else f"{x:,.2f}{CUR.get(currency, currency or '')}"

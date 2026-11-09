@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="zh-CN">
+{%- set f, v, w, F = r.f, r.v, r.w, r.fmt -%}
+{%- set val = f.valuation -%}
+{%- macro src(x) -%}{% if x and x.src %}<sup class="src">{% for i in x.src %}[{{ i }}]{% endfor %}</sup>{% endif %}{%- endmacro -%}
+{%- macro items(list, empty="材料不足以判断") -%}
+  {%- if not r.ok %}<p class="muted">（文字分析暂不可用）</p>
+  {%- elif list %}<ul>{% for x in list %}<li>{% if x.title %}<b>{{ x.title }}</b>：{% endif %}{{ x.text }}{{ src(x) }}</li>{% endfor %}</ul>
+  {%- else %}<p class="muted">{{ empty }}</p>{% endif -%}
+{%- endmacro -%}
+{%- macro p(x) -%}{{ F.pct(x) }}{%- endmacro -%}
+<head>
+<meta charset="utf-8">
+<title>{{ f.name }} {{ f.code }} 个股研究 {{ r.doc.date }}</title>
+<style>
+  @page { size: A4; margin: 12mm 12mm 13mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "PingFang SC", "Hiragino Sans GB", "Heiti SC", sans-serif; font-size: 9.4pt; line-height: 1.55; color: #1f2329; }
+  h1 { font-size: 18pt; margin: 0; }
+  h2 { font-size: 13pt; margin: 0 0 2mm; padding-bottom: 1mm; border-bottom: 2px solid #1f2329; }
+  h3 { font-size: 10.5pt; margin: 4mm 0 1.2mm; break-after: avoid; }
+  p { margin: 0 0 1.2mm; }
+  ul { margin: 0 0 1.5mm; padding-left: 5mm; }
+  li { margin-bottom: 0.8mm; }
+  section { break-before: page; }
+  .muted, .sub { color: #646a73; }
+  .small { font-size: 8.2pt; }
+  sup.src { color: #2f54eb; font-size: 6.8pt; margin-left: 0.5mm; }
+  .head { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #1f2329; padding-bottom: 2mm; margin-bottom: 3mm; }
+  .decision { display: flex; gap: 4mm; margin-bottom: 3mm; }
+  .badge { min-width: 30mm; text-align: center; color: #fff; border-radius: 3px; padding: 3mm 2mm; }
+  .badge .big { font-size: 22pt; font-weight: 700; line-height: 1.1; }
+  .b-买入 { background: #389e0d; } .b-持有 { background: #d48806; } .b-卖出 { background: #c41d1d; } .b-other { background: #646a73; }
+  .nums { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5mm 3mm; align-content: center; }
+  .nums div b { display: block; font-size: 12.5pt; }
+  .nums div span { color: #646a73; font-size: 8pt; }
+  .conclusion { background: #f0f5ff; border-left: 3px solid #2f54eb; padding: 2mm 3mm; margin: 0 0 2.5mm; font-size: 10.2pt; }
+  .cols { display: flex; gap: 5mm; } .cols > div { flex: 1; min-width: 0; }
+  .box { border: 1px solid #dfe2e6; border-radius: 2px; padding: 2mm 3mm; margin-top: 2mm; break-inside: avoid; }
+  .agree { font-weight: 700; } .agree-相反 { color: #c41d1d; } .agree-部分一致 { color: #d48806; } .agree-一致 { color: #389e0d; }
+  table { width: 100%; border-collapse: collapse; margin: 1mm 0 2mm; break-inside: avoid; }
+  th { text-align: left; font-weight: 600; color: #646a73; font-size: 8.2pt; border-bottom: 1px solid #c9cdd4; padding: 0.8mm 1.4mm; }
+  td { padding: 0.8mm 1.4mm; border-bottom: 1px solid #eef0f3; vertical-align: top; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.kv td:first-child { color: #646a73; width: 42%; }
+  .chart { margin: 1mm 0 2mm; break-inside: avoid; }
+  .bullbear { display: flex; gap: 4mm; } .bullbear > div { flex: 1; border-top: 3px solid; padding-top: 1mm; }
+  .bull { border-color: #389e0d !important; } .bear { border-color: #c41d1d !important; }
+  .warn { color: #c41d1d; }
+  .back { font-size: 8.3pt; line-height: 1.5; color: #3c4149; }
+  .sources td { font-size: 7.8pt; }
+</style>
+</head>
+<body>
+{# ---------- 1. the decision ---------- #}
+<div class="head">
+  <div><h1>{{ f.name }} <span class="sub" style="font-size:12pt">{{ f.code }} · {{ r.market_name }}</span></h1>
+    <div class="sub">{{ f.industry or '' }}{% if f.damodaran.industry %} · {{ f.damodaran.industry }}{% endif %} · 类型：{{ r.type_name }}</div></div>
+  <div class="sub" style="text-align:right">个股研究报告<br>数据 {{ f.price.date }} · 生成 {{ r.doc.date }}</div>
+</div>
+<div class="decision">
+  <div class="badge b-{{ v.rating if v.rating in ('买入','持有','卖出') else 'other' }}"><div class="big">{{ v.rating }}</div><div class="small">12 个月评级</div></div>
+  {% if v.target is number %}
+  <div class="nums">
+    <div><b>{{ F.price(v.target, r.q) }}</b><span>12 个月目标价</span></div>
+    <div><b>{{ F.price(v.price, r.q) }}</b><span>现价（{{ f.price.date }}）</span></div>
+    <div><b>{{ F.pct(v.expected_return, True) }}</b><span>预期回报（含股息）</span></div>
+    <div><b>{{ F.pct(v.market_return) }}</b><span>大盘预期回报</span></div>
+    <div><b>{{ F.pct(v.excess_return, True) }}</b><span>超额回报</span></div>
+    <div><b>±{{ F.pct(v.uncertainty.band, False, 0) }}</b><span>评级门槛（不确定性越大越宽）</span></div>
+    <div><b>{{ F.price(v.bear, r.q) }}</b><span>悲观情景</span></div>
+    <div><b>{{ F.price(v.bull, r.q) }}</b><span>乐观情景</span></div>
+  </div>
+  {% else %}<div class="nums"><div style="grid-column: span 4"><b>没有目标价</b><span>{{ v.reason }}</span></div></div>{% endif %}
+</div>
+{% if r.ok and w.conclusion %}<div class="conclusion">{{ w.conclusion.text }}{{ src(w.conclusion) }}</div>{% elif not r.ok %}<div class="conclusion warn">文字分析暂不可用（DeepSeek 未响应）：以下数字和评级照常由程序算出。</div>{% endif %}
+<div class="cols">
+  <div><h3>投资要点</h3>{{ items(w.points) }}</div>
+  <div><h3>主要风险</h3>{{ items(w.risks) }}</div>
+</div>
+<div class="cols">
+  <div class="box"><h3 style="margin-top:0">与每日筛选的比较：{% if r.screen.agreement %}<span class="agree agree-{{ r.screen.agreement }}">{{ r.screen.agreement }}</span>{% else %}无法比较{% endif %}</h3>
+    <p>每日筛选的看法：<b>{{ r.screen.view or '不在筛选范围' }}</b>{% if r.screen.reason %}（{{ r.screen.reason }}）{% endif %}；本报告：<b>{{ v.rating }}</b>。</p>
+    {% if r.ok and w.vs_screening %}<p>{{ w.vs_screening.text }}{{ src(w.vs_screening) }}</p>{% elif w.drivers_screen %}<p>{{ w.drivers_screen | join('；') }}</p>{% endif %}
+  </div>
+  <div class="box"><h3 style="margin-top:0">关键数据</h3>
+    <table class="kv small">
+      <tr><td>市值</td><td class="num">{{ F.money(val.market_cap, r.q) }}</td></tr>
+      <tr><td>52 周区间</td><td class="num">{{ F.price(f.price.low_52w, r.q) }} — {{ F.price(f.price.high_52w, r.q) }}</td></tr>
+      <tr><td>市盈率（过去 / 未来 12 个月）</td><td class="num">{{ F.times(val.pe_ttm) }} / {{ F.times(val.pe_fwd) }}</td></tr>
+      <tr><td>市净率 · 股息率</td><td class="num">{{ F.times(val.pb) }} · {{ F.pct(val.div_yield) }}</td></tr>
+      <tr><td>市场一致目标价</td><td class="num">{% if r.street.target %}{{ F.price(r.street.target, r.q) }}（{{ F.pct(r.street.upside, True, 0) }}）{% else %}无{% endif %}</td></tr>
+      <tr><td>卖方评级</td><td class="num">{% if r.street.ratings %}{% for k, n in r.street.ratings.items() if n %}{{ {'buy':'买入','add':'增持','neutral':'中性','reduce':'减持','sell':'卖出','strongBuy':'强烈买入','hold':'持有','strongSell':'强烈卖出'}.get(k, k) }} {{ n | int }}{% if not loop.last %} · {% endif %}{% endfor %}{% else %}无{% endif %}</td></tr>
+    </table>
+  </div>
+</div>
+
+{# ---------- 2-3. the company, its industry ---------- #}
+<section>
+<h2>公司做什么</h2>
+{{ items(w.business) }}
+{% if f.segments %}
+{%- set last = f.segments | map(attribute='period') | max -%}
+<table class="small"><tr><th>主营构成（{{ last }}）</th><th>分类</th><th class="num">收入</th><th class="num">占比</th><th class="num">毛利率</th></tr>
+{% for s in f.segments if s.period == last %}<tr><td>{{ s.item }}</td><td>{{ {'product':'产品','region':'地区','industry':'行业'}.get(s.by, s.by) }}</td><td class="num">{{ F.money(s.revenue, r.rc) }}</td><td class="num">{{ F.pct(s.share, False, 0) }}</td><td class="num">{{ F.pct(s.gross_margin) }}</td></tr>{% endfor %}
+</table>{% elif f.market != 'cn' %}<p class="small muted">美股和港股的分部收入见上文引用的年报原文（免费数据里没有可核对的分部表）。</p>{% endif %}
+<h3>行业与竞争</h3>
+{{ items(w.industry) }}
+{% if f.peers and f.peers.peers %}
+<table class="small"><tr><th>同行（{{ f.peers.group }}，{{ f.peers.count }} 家）</th><th class="num">市值</th><th class="num">市盈率</th><th class="num">市净率</th><th class="num">ROE</th><th class="num">营收增长</th><th class="num">股息率</th></tr>
+<tr><td><b>{{ f.name }}</b></td><td class="num">{{ F.money(val.market_cap, r.q) }}</td><td class="num">{{ F.times(val.pe_ttm) }}</td><td class="num">{{ F.times(val.pb) }}</td><td class="num">{{ F.pct(f.summary.roe_latest) }}</td><td class="num">{{ F.pct(f.summary.rev_cagr_3y) }}</td><td class="num">{{ F.pct(val.div_yield) }}</td></tr>
+{% for x in f.peers.peers[:7] %}<tr><td>{{ x.name }}</td><td class="num">{{ F.money(x.mcap, r.q) }}</td><td class="num">{{ F.times(x.pe) }}</td><td class="num">{{ F.times(x.pb) }}</td><td class="num">{{ F.pct(x.roe) }}</td><td class="num">{{ F.pct(x.rev_growth) }}</td><td class="num">{{ F.pct(x.div_yield) }}</td></tr>{% endfor %}
+<tr><td class="muted">同行中位数</td><td></td><td class="num">{{ F.times(f.peers.median.pe) }}</td><td class="num">{{ F.times(f.peers.median.pb) }}</td><td class="num">{{ F.pct(f.peers.median.roe) }}</td><td class="num">{{ F.pct(f.peers.median.rev_growth) }}</td><td class="num">{{ F.pct(f.peers.median.div_yield) }}</td></tr>
+</table>{% endif %}
+{% if f.industry_history %}<p class="small muted">行业估值的历史（{{ f.industry }}，半年度中位数）：{% for x in f.industry_history[-6:] %}{{ x.period[:7] }} 市盈率 {{ F.times(x.pe_median) }}{% if not loop.last %}；{% endif %}{% endfor %}。</p>{% endif %}
+<h3>护城河</h3>
+{{ items(w.moat) }}
+</section>
+
+{# ---------- 4. the thesis ---------- #}
+<section>
+<h2>多空观点</h2>
+<div class="bullbear">
+  <div class="bull"><h3 style="margin-top:0">多头：为什么可能更好</h3>{{ items(w.bull) }}</div>
+  <div class="bear"><h3 style="margin-top:0">空头：为什么可能更差</h3>{{ items(w.bear) }}</div>
+</div>
+<p class="small muted">多头和空头由两次独立的调用分别写成，各自只看同样的材料，避免报告一边倒。</p>
+<h3>现价假设了什么</h3>
+{% set rv = v.reverse or {} %}
+<ul>
+{% if rv.implied_growth_5y is number %}<li>按我们的其余假设，现价相当于未来 5 年营收每年增长 <b>{{ F.pct(rv.implied_growth_5y, True) }}</b>{% if v.base_rates and v.base_rates.share_at_least.implied is number %}；{{ v.base_rates.years }} 年间同等规模（按营收第 {{ v.base_rates.fifth }} 个五分之一）的公司里，5 年做到这一增长的占 {{ F.pct(v.base_rates.share_at_least.implied, False, 0) }}{% endif %}。我们的预测是 {{ F.pct(v.forecast_growth_5y, True) }}{% if v.base_rates and v.base_rates.share_at_least.forecast is number %}（做到的占 {{ F.pct(v.base_rates.share_at_least.forecast, False, 0) }}）{% endif %}。</li>{% endif %}
+{% if rv.implied_wacc is number %}<li>现价相当于资本成本 <b>{{ F.pct(rv.implied_wacc) }}</b>，我们用 {{ F.pct(v.inputs.wacc) }}。</li>{% endif %}
+{% if rv.implied_margin is number %}<li>现价相当于长期营业利润率 <b>{{ F.pct(rv.implied_margin) }}</b>。</li>{% endif %}
+{% if rv.implied_roe is number %}<li>按我们的股权成本 {{ F.pct(v.inputs.cost_equity) }}，现价相当于长期 ROE <b>{{ F.pct(rv.implied_roe) }}</b>；按下一年 ROE {{ F.pct(rv.roe_next) }}，现价隐含的股权成本是 {{ F.pct(rv.implied_cost_equity) }}。</li>{% endif %}
+{% if rv.implied_dividend_growth_5y is number %}<li>现价相当于未来 5 年股息每年增长 <b>{{ F.pct(rv.implied_dividend_growth_5y, True) }}</b>。</li>{% endif %}
+</ul>
+<h3>展望</h3>
+{{ items(w.outlook) }}
+</section>
+
+{# ---------- 5. financials ---------- #}
+<section>
+<h2>财务分析</h2>
+{% if r.charts.history %}<div class="chart">{{ r.charts.history | safe }}</div>{% endif %}
+{% set fin = f.kind in ('bank', 'insurer', 'broker') %}
+<table class="small">
+<tr><th>财年（{{ r.rcur }}）</th>{% for h in f.history[-8:] %}<th class="num">{{ h.period[:4] }}</th>{% endfor %}</tr>
+<tr><td>营收</td>{% for h in f.history[-8:] %}<td class="num">{{ F.money(h.revenue) }}</td>{% endfor %}</tr>
+<tr><td>净利润</td>{% for h in f.history[-8:] %}<td class="num">{{ F.money(h.ni) }}</td>{% endfor %}</tr>
+{% if not fin %}<tr><td>毛利率</td>{% for h in f.history[-8:] %}<td class="num">{{ F.pct(h.gross_margin) }}</td>{% endfor %}</tr>
+<tr><td>营业利润率</td>{% for h in f.history[-8:] %}<td class="num">{{ F.pct(h.ebit_margin) }}</td>{% endfor %}</tr>{% endif %}
+<tr><td>净利率</td>{% for h in f.history[-8:] %}<td class="num">{{ F.pct(h.net_margin) }}</td>{% endfor %}</tr>
+<tr><td>ROE</td>{% for h in f.history[-8:] %}<td class="num">{{ F.pct(h.roe) }}</td>{% endfor %}</tr>
+{% if not fin %}<tr><td>投入资本回报率</td>{% for h in f.history[-8:] %}<td class="num">{{ F.pct(h.roic) }}</td>{% endfor %}</tr>
+<tr><td>经营现金流 / 净利润</td>{% for h in f.history[-8:] %}<td class="num">{{ F.pct(h.ocf_to_profit, False, 0) }}</td>{% endfor %}</tr>
+<tr><td>自由现金流</td>{% for h in f.history[-8:] %}<td class="num">{{ F.money(h.fcf) }}</td>{% endfor %}</tr>
+<tr><td>净负债</td>{% for h in f.history[-8:] %}<td class="num">{{ F.money(h.net_debt) }}</td>{% endfor %}</tr>{% endif %}
+{% if f.kind == 'bank' %}<tr><td>净息差</td>{% for h in f.history[-8:] %}<td class="num">{{ F.pct(h.nim, False, 2) if h.nim is number else '-' }}</td>{% endfor %}</tr>
+<tr><td>不良率</td>{% for h in f.history[-8:] %}<td class="num">{{ F.pct(h.npl, False, 2) if h.npl is number else '-' }}</td>{% endfor %}</tr>
+<tr><td>拨备覆盖率</td>{% for h in f.history[-8:] %}<td class="num">{{ F.pct(h.provision_cover, False, 0) if h.provision_cover is number else '-' }}</td>{% endfor %}</tr>
+<tr><td>资本充足率</td>{% for h in f.history[-8:] %}<td class="num">{{ F.pct(h.car) if h.car is number else '-' }}</td>{% endfor %}</tr>{% endif %}
+<tr><td>每股股息</td>{% for h in f.history[-8:] %}<td class="num">{{ '%.2f' | format(h.dps) if h.dps else '-' }}</td>{% endfor %}</tr>
+</table>
+{% set ck = f.checks %}
+<div class="cols">
+<div><h3>会计质量</h3>
+<table class="kv small">
+{% if ck.beneish %}<tr><td>Beneish M 值（&gt; -1.78 需警惕）</td><td class="num">{{ '%.2f' | format(ck.beneish.m_score) if ck.beneish.m_score is number else '-' }}{% if ck.beneish.flag %} <span class="warn">需警惕</span>{% endif %}</td></tr>{% endif %}
+{% if ck.piotroski %}<tr><td>Piotroski F 值（8-9 强，0-2 弱）</td><td class="num">{{ ck.piotroski.f_score }}/{{ ck.piotroski.signals_known }}</td></tr>{% endif %}
+{% if ck.altman and ck.altman.z2 is number %}<tr><td>Altman Z''（&lt; 1.1 困境）</td><td class="num">{{ '%.1f' | format(ck.altman.z2) }}</td></tr>{% endif %}
+{% if ck.accruals.accruals is number %}<tr><td>应计项 / 总资产</td><td class="num">{{ F.pct(ck.accruals.accruals) }}</td></tr>{% endif %}
+{% set exempt = ck.quality_screen.result == 'fail' and r.ok and w.model in ('会员费', '平台佣金', '高周转薄利') and (f.summary.roe_avg_5y or 0) > 0.2 and (f.summary.ocf_to_profit_5y or 0) > 1 %}
+<tr><td>去劣筛选（7 项）</td><td class="num">{{ {'pass':'通过','fail':'未通过'}.get(ck.quality_screen.result, ck.quality_screen.result) }}{% if ck.quality_screen.failed %}（{{ ck.quality_screen.failed | join('、') }}）{% endif %}{% if exempt %}；符合豁免 C：{{ w.model }}模式，ROE 高于 20%、经营现金流高于利润{% endif %}</td></tr>
+<tr><td>好生意五项</td><td class="num">{{ ck.checklist.stars }} 星{% if ck.checklist.fcf_negative_3y %} · <span class="warn">自由现金流连续 3 年为负</span>{% endif %}</td></tr>
+{% set es = ck.earnings_signals %}
+{% if es %}<tr><td>应收 / 存货增速快于营收</td><td class="num">{{ '是' if es.receivables_faster else '否' if es.receivables_faster is number else '-' }} / {{ '是' if es.inventory_faster else '否' if es.inventory_faster is number else '-' }}</td></tr>
+<tr><td>现金流低于利润且差距扩大</td><td class="num">{{ '是' if es.cash_below_profit_widening else '否' }}</td></tr>{% endif %}
+<tr><td>审计意见</td><td class="num">{{ f.audit_opinion or '-' }}</td></tr>
+</table></div>
+<div><h3>市场特有的信号</h3>
+<table class="kv small">
+{% if f.market == 'cn' and ck.cn_flags %}{% set c = ck.cn_flags %}
+<tr><td>存贷双高</td><td class="num">{{ '是' if c.cash_and_debt_high else '否' }}（现金占资产 {{ F.pct(c.cash_to_assets, False, 0) }}，有息负债占资产 {{ F.pct(c.debt_to_assets, False, 0) }}）</td></tr>
+<tr><td>大股东质押比例</td><td class="num">{{ F.pct(c.pledge_ratio / 100 if c.pledge_ratio is number else none) }}</td></tr>
+<tr><td>商誉 / 净资产</td><td class="num">{{ F.pct(c.goodwill_to_equity) }}</td></tr>
+<tr><td>未来解禁</td><td class="num">{% if c.lockups_ahead %}{% for l in c.lockups_ahead[:3] %}{{ l.date }}{% if not loop.last %}、{% endif %}{% endfor %}{% else %}无{% endif %}</td></tr>
+<tr><td>近一年股东减持</td><td class="num">{{ c.holder_sells_1y }} 次</td></tr>
+{% endif %}
+{% if f.market == 'us' %}
+<tr><td>股权激励 / 营收</td><td class="num">{{ F.pct(f.summary.sbc_to_revenue) }}</td></tr>
+<tr><td>一致预期口径差（Nasdaq vs Yahoo）</td><td class="num">{{ F.pct(f.consensus.basis_gap_yahoo, False, 0) }}</td></tr>
+<tr><td>内部人近 6 个月 买 / 卖</td><td class="num">{{ f.street.insider_buys_6m or 0 }} / {{ f.street.insider_sells_6m or 0 }} 笔</td></tr>
+<tr><td>做空占流通股</td><td class="num">{{ F.pct(f.street.short_float) }}</td></tr>
+{% endif %}
+{% if f.market == 'hk' %}
+<tr><td>近 12 个月高管或审计师变动公告</td><td class="num">{{ f.filings_12m.management | length }} / {{ f.filings_12m.auditor | length }}</td></tr>
+<tr><td>南向持股、卖空</td><td class="num">免费数据未取得</td></tr>
+{% endif %}
+{% for o in f.other_listings %}<tr><td>{{ o.market | upper }} {{ o.code }} 股价 · 本股溢价</td><td class="num">{{ o.price }} {{ o.currency }} · {{ F.pct(o.premium, True) }}</td></tr>{% endfor %}
+</table></div>
+</div>
+{% if val.ttm_note %}<p class="small muted">注：最新财年里与年报相差 5% 以上的数字（东方财富的重述数）未使用，过去 12 个月的数字可能混合了重述的季度。</p>{% endif %}
+</section>
+
+{# ---------- 6-7. forecast and valuation ---------- #}
+<section>
+<h2>预测与估值</h2>
+{% set fc = r.forecast %}
+{% if fc and fc.rows %}
+<h3>我们的三年预测（{{ r.rcur }}；第 1-2 年的利润来自一致预期，之后增长逐年回落）</h3>
+<table class="small"><tr><th></th>{% for c in fc.columns %}<th class="num">第 {{ loop.index }} 年<br><span class="muted">{{ c }}</span></th>{% endfor %}</tr>
+{% for label, vals, kind in fc.rows %}<tr><td>{{ label }}</td>{% for x in vals %}<td class="num">{% if x is none %}-{% elif kind == 'money' %}{{ F.money(x) }}{% elif kind == 'pct' %}{{ F.pct(x) }}{% else %}{{ '%.2f' | format(x) }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
+</table>
+{% if fc.consensus %}<p class="small">一致预期（{{ fc.source }}{% if fc.analysts %}，{{ fc.analysts | int }} 位分析师{% endif %}，按财年，{{ fc.consensus_currency }}）：{% for x in fc.consensus %}{{ x.year }} 每股收益 {{ '%.2f' | format(x.eps) }}{% if x.revenue %}、营收 {{ F.money(x.revenue) }}{% endif %}{% if not loop.last %}；{% endif %}{% endfor %}。</p>{% endif %}
+{% endif %}
+{% if v.target is number %}
+<h3>估值方法与目标价（{{ r.type_name }}的方法组合）</h3>
+<table class="small"><tr><th>方法</th><th class="num">权重</th><th class="num">倍数 / 关键假设</th><th class="num">今日价值</th><th class="num">12 个月价值</th></tr>
+{% for m in r.methods %}<tr><td>{{ m.name }}{% if m.group %}（{{ m.group }}，{{ m.count }} 家）{% endif %}</td><td class="num">{{ F.pct(m.weight, False, 0) }}</td>
+<td class="num">{% if m.multiple %}{{ F.times(m.multiple) }}{% elif m.pb %}市净率 {{ F.times(m.pb) }}{% elif m.growth_5y is defined %}股息增长 {{ F.pct(m.growth_5y, True) }}{% elif m.roe_term is defined %}长期 ROE {{ F.pct(m.roe_term) }}{% elif m.path %}长期利润率 {{ F.pct(m.path.target_margin) }}{% elif m.yield %}股息率 {{ F.pct(m.yield) }}{% endif %}</td>
+<td class="num">{{ F.price(m.value, r.q) if m.value is defined and m.value is number else '-' }}</td><td class="num"><b>{{ F.price(m.target, r.q) }}</b></td></tr>{% endfor %}
+<tr><td><b>加权目标价</b></td><td class="num">100%</td><td></td><td></td><td class="num"><b>{{ F.price(v.target, r.q) }}</b></td></tr>
+</table>
+{% if r.charts.football %}<div class="chart">{{ r.charts.football | safe }}</div>{% endif %}
+{% set k = v.inputs %}
+<div class="cols">
+<div><h3>折现率和长期假设（{{ k.currency }}）</h3>
+<table class="kv small">
+<tr><td>无风险利率（10 年国债，{{ k.rf_date }}）</td><td class="num">{{ F.pct(k.rf, False, 2) }}</td></tr>
+<tr><td>股权风险溢价（{{ k.country }}，Damodaran）</td><td class="num">{{ F.pct(k.erp, False, 2) }}</td></tr>
+<tr><td>贝塔（{{ k.industry }}）</td><td class="num">{{ '%.2f' | format(k.beta) }}</td></tr>
+<tr><td>股权成本{% if k.floor and k.floor.applied %}（行业隐含，CAPM 为 {{ F.pct(k.floor.cost_equity_capm) }}）{% endif %}</td><td class="num">{{ F.pct(k.cost_equity) }}</td></tr>
+{% if k.wacc %}<tr><td>资本成本（WACC）· 债务评级</td><td class="num">{{ F.pct(k.wacc) }} · {{ k.rating }}</td></tr>{% endif %}
+<tr><td>永续期资本成本 · 永续增长</td><td class="num">{{ F.pct(k.stable_cost) }} · {{ F.pct(k.g) }}</td></tr>
+{% set d = v.methods.dcf or v.methods.dcf_normal %}
+{% if d %}<tr><td>长期营业利润率（{{ fc.margin_source }}）</td><td class="num">{{ F.pct(d.path.target_margin) }}</td></tr>
+<tr><td>销售额 / 投入资本</td><td class="num">{{ '%.2f' | format(d.sales_to_capital) }}</td></tr>
+<tr><td>护城河（长期回报保留一半超额）</td><td class="num">{{ '是' if d.moat else '否' }}，永续期投入资本回报 {{ F.pct(d.roic_term) }}</td></tr>
+<tr><td>终值隐含市盈率 · 终值占价值</td><td class="num">{{ F.times(d.terminal_multiple) }} · {{ F.pct(d.pv_terminal_share, False, 0) }}</td></tr>{% endif %}
+</table></div>
+<div>{% set sg = v.sensitivity %}{% if sg and sg['values'] %}<h3>敏感性：{{ '现金流折现' if sg.method == 'dcf' else '股息折现' }}的今日价值（{{ r.cur }}）</h3>
+<table class="small"><tr><th>资本成本 \ 永续增长</th>{% for g in sg.growth %}<th class="num">{{ F.pct(g) }}</th>{% endfor %}</tr>
+{% for row in sg['values'] %}<tr><td>{{ F.pct(sg.cost_shift[loop.index0], True, 0) }}</td>{% for x in row %}<td class="num">{{ '{:,.0f}'.format(x) if x is number else '-' }}</td>{% endfor %}</tr>{% endfor %}
+</table>{% endif %}
+</div>
+</div>
+{% if r.charts.band %}<h3>{{ '市净率' if v.type in ('bank', 'insurer', 'broker') else '市盈率' }}和自身历史</h3><div class="chart">{{ r.charts.band | safe }}</div>{% endif %}
+<h3>为什么和市场一致目标价不同{% if r.street.target %}（市场 {{ F.price(r.street.target, r.q) }}，我们 {{ F.pct(r.street.ours_vs_street, True, 0) }}）{% endif %}</h3>
+{% if r.ok and w.vs_street %}<p>{{ w.vs_street.text }}{{ src(w.vs_street) }}</p>{% endif %}
+{% if w.drivers_street %}<ul class="small">{% for x in w.drivers_street %}<li>{{ x }}</li>{% endfor %}</ul>{% elif not r.street.target %}<p class="muted">没有市场一致目标价。</p>{% endif %}
+{% endif %}
+</section>
+
+{# ---------- 8-9. catalysts, risks ---------- #}
+<section>
+<h2>催化剂、风险和改变看法的信号</h2>
+<h3>日程</h3>
+<ul class="small">
+{% if f.consensus.next_earnings %}<li>下次财报：{{ f.consensus.next_earnings | join('、') }}</li>{% endif %}
+{% if f.street.ex_dividend %}<li>最近除息日：{{ f.street.ex_dividend }}</li>{% endif %}
+{% if f.market == 'cn' and f.checks.cn_flags.lockups_ahead %}<li>解禁：{% for l in f.checks.cn_flags.lockups_ahead %}{{ l.date }}{% if not loop.last %}、{% endif %}{% endfor %}</li>{% endif %}
+<li>最新一期报告：{{ f.latest.period }}{% if f.latest.notice %}（{{ f.latest.notice }} 披露）{% endif %}</li>
+</ul>
+<h3>催化剂</h3>
+{{ items(w.catalysts) }}
+<h3>风险</h3>
+{{ items(w.risks) }}
+<h3>什么会让我们改变看法</h3>
+{{ items(w.change_view) }}
+<h3>管理层与治理</h3>
+{{ items(w.management) }}
+<table class="small">
+{% for t in f.filings_12m.management %}<tr><td class="num">{{ t.date }}</td><td>{{ t.title }}</td></tr>{% endfor %}
+{% for t in f.filings_12m.auditor %}<tr><td class="num">{{ t.date }}</td><td>{{ t.title }}</td></tr>{% endfor %}
+{% if f.market == 'cn' %}{% for t in (f.flows.holder_trades or [])[:5] %}<tr><td class="num">{{ t.date }}</td><td>{{ t.holder }} {{ t.direction }} {{ '%.2f' | format(t.shares) }} 万股（{{ t.channel }}）</td></tr>{% endfor %}
+{% for b in (f.flows.buybacks or [])[:2] %}<tr><td class="num">{{ b.notice }}</td><td>回购：已用 {{ F.money(b.amount_done, 'CNY') }}，上限 {{ F.money(b.amount_cap, 'CNY') }}</td></tr>{% endfor %}{% endif %}
+</table>
+{% if f.checks.income %}<p class="small">股息：近 {{ f.checks.income.dps | length }} 年提高 {{ f.checks.income.raises }} 次、持平 {{ f.checks.income.holds }} 次、削减 {{ f.checks.income.cuts }} 次；近 5 年每股股息年均增长 {{ F.pct(f.checks.income.dps_cagr_5y, True) }}，派息率 {{ F.pct(f.checks.income.payout, False, 0) }}；股息率 {{ F.pct(f.checks.income.yield) }}，近 5 年平均 {{ F.pct(f.checks.income.yield_avg_5y) }}。</p>{% endif %}
+<h3>公告和新闻里的风险（与每日名单相同的审核规则）</h3>
+{% if r.findings %}<ul class="small">{% for x in r.findings %}<li>{% if x.hard %}<b class="warn">硬风险</b>{% else %}关注{% endif %}：{{ x.words }}（{{ x.date }} {{ x.type }}：「{{ x.quote[:80] }}」）</li>{% endfor %}</ul>
+{% elif r.doc.review %}<p class="small">近 90 天公告、30 天新闻和最新定期报告未见重大风险。</p>{% else %}<p class="small muted">审核暂不可用。</p>{% endif %}
+</section>
+
+{# ---------- 11-12. flows, screening ---------- #}
+<section>
+<h2>资金、情绪和每日筛选</h2>
+{% if r.charts.price %}<div class="chart">{{ r.charts.price | safe }}</div>{% endif %}
+{% set px = f.price %}
+<p class="small">近 1 / 3 / 6 / 12 个月：{{ F.pct(px.ret_1m, True) }} / {{ F.pct(px.ret_3m, True) }} / {{ F.pct(px.ret_6m, True) }} / {{ F.pct(px.ret_12m, True) }}（相对大盘 {{ F.pct(px.rel_12m, True) }}）；年化波动 {{ F.pct(px.vol_1y, False, 0) }}，两年贝塔 {{ '%.2f' | format(px.beta_2y) if px.beta_2y is number else '-' }}，距一年高点 {{ F.pct(px.drawdown_1y, True) }}。</p>
+{% if px.moves_90d %}<p class="small">近 90 天异动：{% for m in px.moves_90d %}{{ m.date }} {{ F.pct(m.move, True) }}（大盘 {{ F.pct(m.index, True) }}）{% if not loop.last %}；{% endif %}{% endfor %}。</p>{{ items(w.moves, "未找到对应的公告或新闻，真因不明。") }}{% endif %}
+<table class="kv small">
+{% if f.market == 'cn' %}{% set fl = f.flows %}
+{% if fl.margin %}<tr><td>融资余额（对比 60 日前）</td><td class="num">{{ F.money(fl.margin.balance, 'CNY') }}（{{ F.pct(fl.margin.balance / fl.margin.balance_60d - 1 if fl.margin.balance_60d else none, True) }}）</td></tr>{% endif %}
+{% if fl.holders %}<tr><td>股东户数（{{ fl.holders[0].date }}，较上期）</td><td class="num">{{ '{:,.0f}'.format(fl.holders[0].count) }}（{{ '%+.1f' | format(fl.holders[0].change) }}%）</td></tr>{% endif %}
+<tr><td>近一年龙虎榜</td><td class="num">{{ fl.dragon_tiger_1y.days }} 天</td></tr>
+<tr><td>近 6 个月机构调研</td><td class="num">{{ fl.surveys_6m.events }} 次，{{ fl.surveys_6m.institutions }} 家机构</td></tr>{% endif %}
+{% if f.market == 'us' and f.flows.short %}<tr><td>做空股数（{{ f.flows.short.date }}）· 回补天数</td><td class="num">{{ '{:,.0f}'.format(f.flows.short.shares) if f.flows.short.shares else '-' }} · {{ f.flows.short.days_to_cover or '-' }}</td></tr>{% endif %}
+<tr><td>近 6 个月分析师上调 / 下调评级</td><td class="num">{{ f.consensus.upgrades_6m if f.consensus.upgrades_6m is number else '-' }} / {{ f.consensus.downgrades_6m if f.consensus.downgrades_6m is number else '-' }}</td></tr>
+</table>
+<h3>与每日筛选：{% if r.screen.agreement %}<span class="agree agree-{{ r.screen.agreement }}">{{ r.screen.agreement }}</span>{% else %}无法比较{% endif %}</h3>
+{% set sc = f.screening %}
+{% if sc.in_universe %}<p>每日筛选：{% if sc.rating %}今日名单上的<b>{{ sc.rating }}</b>{% else %}不在今日名单上，评分排第 {{ sc.score_rank }} 名（共 {{ sc.universe }} 只），属于<b>{{ sc.fifth }}</b>{% endif %}；四项评级（A 最好，E 最差）：价值 {{ sc.g_value }}、质量 {{ sc.g_quality }}、成长 {{ sc.g_growth }}、动量 {{ sc.g_momentum }}。{% if sc.why %}强项：{{ sc.why }}。{% endif %}{% if sc.weak %}弱项：{{ sc.weak }}。{% endif %}</p>
+{% else %}<p>该股不在每日筛选的范围内：{{ sc.reason }}。</p>{% endif %}
+{% if r.ok and w.vs_screening %}<p>{{ w.vs_screening.text }}{{ src(w.vs_screening) }}</p>{% endif %}
+{% if w.drivers_screen %}<ul class="small">{% for x in w.drivers_screen %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+<p class="small muted">两者的用途不同：每日筛选是 20 只等额的一篮子，按规则平均有效，单只可能看错；个股研究只看这一家，信息更多，单只的误差也更大。怎么结合由你决定。</p>
+</section>
+
+{# ---------- 13. back pages ---------- #}
+<section class="back">
+<h2>方法、来源和局限</h2>
+<p><b>评级的含义</b>：预期 12 个月超额回报 =（目标价 − 现价 + 下一年股息）÷ 现价 − 大盘预期回报（无风险利率 + 股权风险溢价）。超额在 +门槛以上为买入，−门槛以下为卖出，其间为持有；门槛随估值的不确定性在 10% 到 25% 之间（晨星按不确定性放宽星级区间的做法；中国券商以 6-12 个月相对沪深 300 的评级标准）。卖方的 12 个月目标价到期时只有约四成达到（Bradshaw、Brown 和 Huang，2013）：评级是有结构的判断，不是承诺。</p>
+<p><b>估值</b>：公司类型（{{ r.type_name }}：{{ v.type_reason }}）决定方法组合和权重。现金流折现按 Damodaran 的 10 年 FCFF 结构：第 1-2 年用一致预期，之后增长逐年降到永续增长率，利润率 5 年内移到长期目标；折现率用无风险利率、Damodaran 的国家股权风险溢价和行业贝塔。倍数法用自身近 5 年（周期股 10 年）的中位数和同行中位数，乘以未来 12 个月的一致预期。所有数字由程序从免费数据算出；文字由 DeepSeek 依据事实表和编号来源写成，数字由程序按键名填入，无法核对的数字、引文和建议词会被删除（本报告删除 {{ w.dropped | length if w.dropped else 0 }} 条）。</p>
+<p><b>局限</b>：第 1-2 年依赖卖方一致预期（没有更好的免费预测）；本报告加上的是纪律：增长回落到基准率、多种方法、按不确定性定门槛、空头观点、会计检查和反向现金流折现。免费数据无法估算保险的内含价值、集团的分部价值、药物管线或物业净资产，报告直接说明而不硬算；尚无收入的生物科技公司不评级。基准率只含今天仍上市的公司。</p>
+<p><b>数据日期</b>：{% for k, d in f.as_of.items() %}{{ k.split('.')[0] }} {{ d[5:] }}{% if not loop.last %}；{% endif %}{% endfor %}。年报：{{ r.sections.doc or '无' }}{% if r.sections.date %}（{{ r.sections.date }}）{% endif %}{% if r.sections.note %}，{{ r.sections.note }}{% endif %}。</p>
+{% if r.cited %}<h3>文中引用的来源</h3>
+<table class="sources">{% for x in r.cited %}<tr><td class="num">[{{ x.n }}]</td><td class="num">{{ x.date or '' }}</td><td>{{ x.type }}{% if x.part %}（{{ x.part }}）{% endif %}：{{ x.text[:220] }}{% if x.text | length > 220 %}…{% endif %}</td></tr>{% endfor %}</table>{% endif %}
+<p style="margin-top:3mm"><b>声明</b>：本报告由程序根据公开免费数据自动生成，仅供你个人参考，不构成投资建议；数据和文字可能有误，请以公司公告为准。</p>
+</section>
+</body>
+</html>
