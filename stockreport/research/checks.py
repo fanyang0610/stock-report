@@ -222,7 +222,7 @@ def earnings_signals(a: pd.DataFrame) -> dict:
             "cash_below_profit_widening": None if None in (conv(t), conv(p)) else conv(t) < 1 and conv(t) < conv(p),
             "capex_intensity": float(intensity.iloc[-1]) if len(intensity) else None,
             "capex_intensity_3y": float(intensity.iloc[-4:-1].mean()) if len(intensity) > 3 else None,
-            "non_recurring_share": div(val(t, "ni") - val(t, "ni_core"), val(t, "ni")) if val(t, "ni_core") is not None else None}
+            "non_recurring_share": div(val(t, "ni") - val(t, "ni_core"), val(t, "ni")) if None not in (val(t, "ni"), val(t, "ni_core")) else None}
 
 
 def cn_flags(a: pd.DataFrame, flows: dict) -> dict:

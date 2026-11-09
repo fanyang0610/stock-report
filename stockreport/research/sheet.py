@@ -16,7 +16,7 @@ from stockreport.research.checks import cagr, div, fcf, roe_series, val
 CHECK = ["revenue", "ni", "equity", "ocf", "assets"]
 BALANCE = ["assets", "cur_assets", "cur_liab", "cash", "receivables", "inventory", "ppe", "goodwill", "intangibles",
            "liabilities", "debt", "lt_debt", "equity", "pref", "minority", "retained", "contract_liab", "cip"]
-FIN_OFF = ["ocf", "capex", "fcf", "debt", "cash", "net_debt", "roic", "ocf_to_profit", "gp", "gross_margin"]
+FIN_OFF = ["ocf", "capex", "fcf", "debt", "cash", "net_debt", "roic", "ocf_to_profit", "gp", "gross_margin", "ebit_margin"]
 RATING = {"buy": "买入", "hold": "持有", "sell": "卖出"}
 
 
@@ -75,12 +75,13 @@ def history(a: pd.DataFrame, dps: dict[str, float], kind: str) -> list[dict]:
     tax_rate = (h["tax"] / h["pretax"]).clip(0, 0.5).fillna(0.25)
     invested = h["equity"] + h["debt"].fillna(0) - h["cash"].fillna(0)
     h["roic"] = ((h["pretax"] + h["interest"].fillna(0)) * (1 - tax_rate) / invested).where(invested > 0)
+    h["ebit_margin"] = (h["pretax"] + h["interest"].fillna(0)) / h["revenue"]
     h["ocf_to_profit"], h["net_debt"] = h["ocf"] / h["ni"].where(h["ni"] > 0), h["debt"] - h["cash"]
     h["dps"] = h["period"].str[:4].map(dps)
     h[{"bank": FIN_OFF, "insurer": FIN_OFF, "broker": FIN_OFF, "reit": ["ocf_to_profit"]}.get(kind, [])] = np.nan
     keep = ["period", "currency", "revenue", "gp", "op_income", "ni", "ni_core", "eps", "dps", "ocf", "capex", "fcf",
             "div_paid", "buyback", "assets", "equity", "debt", "cash", "net_debt", "goodwill", "shares", "gross_margin",
-            "op_margin", "net_margin", "roe", "roa", "roic", "ocf_to_profit", "npl", "provision_cover", "car", "cet1", "nim",
+            "op_margin", "ebit_margin", "net_margin", "roe", "roa", "roic", "ocf_to_profit", "npl", "provision_cover", "car", "cet1", "nim",
             "solvency"]
     return h.reindex(columns=keep).dropna(axis=1, how="all").replace({np.nan: None}).to_dict("records")
 
@@ -122,7 +123,7 @@ def stats(series: pd.Series, now: float | None) -> dict:
     if len(s) < 12 or now is None or now <= 0:
         return {"now": now, "months": len(s)}
     mean, sd = float(s.mean()), float(s.std())
-    return {"now": now, "months": len(s), "mean": mean, "sd": sd, "min": float(s.min()), "max": float(s.max()),
+    return {"now": now, "months": len(s), "mean": mean, "median": float(s.median()), "sd": sd, "min": float(s.min()), "max": float(s.max()),
             "pct": float((s < now).mean()), "above_3sd": now > mean + 3 * sd}
 
 

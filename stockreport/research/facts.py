@@ -101,6 +101,12 @@ def consensus(market: str, g: dict, last_fy: int) -> dict:
            "ratings_yahoo": street.get("ratings"), "upgrades_6m": street.get("upgrades_6m"),
            "downgrades_6m": street.get("downgrades_6m"), "surprises": street.get("surprises"),
            "next_earnings": street.get("next_earnings")}
+    est = street.get("estimates") or {}
+    e0, e1 = est.get("0y") or {}, est.get("+1y") or {}
+    if e0.get("end"):  # Yahoo's revenue and EPS range by fiscal year; revenue only when +1y's end differs from 0y's
+        year, same = int(e0["end"][:4]), e1.get("end") == e0.get("end")  # (Yahoo repeats 0y's end for AAPL)
+        out["yahoo_years"] = {str(y): {"revenue": None if same else e.get("revenue"), "eps_low": e.get("eps_low"),
+                                       "eps_high": e.get("eps_high")} for y, e in ((year, e0), (year + 1, e1)) if e}
     y0 = min(set(eps) & set(out["eps_yahoo"]), default=None)
     out["basis"] = BASIS.get(out["source"])
     out["basis_gap_yahoo"] = abs(eps[y0] - out["eps_yahoo"][y0]) / abs(out["eps_yahoo"][y0]) if y0 and out["eps_yahoo"][y0] else None
@@ -205,7 +211,9 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     else:
         divs = g["prices"]["dividends"]
         dps_12m = float(divs.loc[divs["ex_date"] > year_ago, "dps"].sum()) if len(divs) else 0.0
+    balance = {k: None if fin and k in ("debt", "cash") else checks.val(bal, k) for k in ("debt", "cash", "minority")}
     valuation = {"price": price, "quote_currency": quote_cur, "report_currency": report_cur, "fx_quote_to_report": rate,
+                 "balance": balance | {"period": bal["period"]},
                  "shares": shares, "market_cap": mcap, "market_cap_report": mcap * rate, "ev": ev, "ttm": t12,
                  "pe_ttm": checks.div(mcap * rate, t12["ni"]) if (t12["ni"] or 0) > 0 else None,
                  "book_common": common, "pb": checks.div(mcap * rate, common), "ps": checks.div(mcap * rate, t12["revenue"]),

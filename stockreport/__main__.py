@@ -239,6 +239,7 @@ def main(argv: list[str] | None = None) -> int:
     research = sub.add_parser("research", help="single-stock research (stage 9: the fact sheet)")
     research.add_argument("code", help="ticker, e.g. 600519, 00700 or AAPL")
     research.add_argument("--facts", action="store_true", help="write the fact sheet (data/research/<market>/<code>/facts.json)")
+    research.add_argument("--value", action="store_true", help="value and rate it (stage 10: data/research/<market>/<code>/valuation.json)")
     clean = sub.add_parser("cleanup", help="apply the storage retention periods")
     clean.add_argument("--dry-run", action="store_true", help="only list what would be deleted")
     args = parser.parse_args(argv)
@@ -262,12 +263,12 @@ def main(argv: list[str] | None = None) -> int:
         print(verdicts.add(args.code, args.action, args.until, args.reason, date.today()))
         return 0
     if args.command == "research":
-        if not args.facts:
-            parser.error("the research PDF comes in stage 11; use --facts for the fact sheet")
+        if not (args.facts or args.value):
+            parser.error("the research PDF comes in stage 11; use --facts for the fact sheet or --value for the rating")
         setup_logging()
-        from stockreport.research import facts
+        from stockreport.research import facts, rating
         market = facts.market_of(args.code)
-        print(facts.show(facts.build(market, args.code)))
+        print(rating.show(rating.build(market, args.code)) if args.value else facts.show(facts.build(market, args.code)))
         return 0
     if args.command == "cleanup":
         cleanup(dry_run=args.dry_run)

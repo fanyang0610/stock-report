@@ -440,8 +440,57 @@
   Answered, not changed: Eastmoney's search box is a per-message query, not a list to store, so stage 12 calls it; the
   "definition" label covers only banks' and insurers' revenue; the regional-sample fallback (fewer than 10 firms) is
   general, not for a name. Not built (said under "Data (stage 9)"): HK Southbound holdings and short selling, US and HK
-  segments (stage 11, from filings), US and HK industry valuation history. Line budgets so the app stays near 9,500:
-  stage 10 at most 750 lines, stage 11 800, stage 12 340.
+  segments (stage 11, from filings), US and HK industry valuation history. Line estimates (mine, not limits; your words
+  2026-11-09: "the priority is always quality and if the code does the job, not how short it is"): stage 10 ~750,
+  stage 11 ~800, stage 12 ~340.
+- Stage 10 (research: valuation and rating): done 2026-11-09. research/dcf.py (the math), value.py (type, rates,
+  forecast), rating.py (methods, target, bear / bull, band, rating, reverse DCF, base rates, sensitivity grid);
+  `research CODE --value` writes valuation.json; 724 lines (the app 8,332); the choices with their reasons are "As
+  built in stage 10" under "The method". The DCF reproduces Damodaran's simple Ginzu example to the cent (Almarai:
+  operating assets 37,517.53, 7.1878 a share) and his cost of capital worksheet (7.0550%); tests also cover the
+  excess-return model against the justified P/B, the DDM, the rating band, the forecast paths and the moat (the
+  M-score and F-score tests are stage 9's). The 12 (rating, target against price; the street's mean target; why they
+  differ):
+  - 贵州茅台 买入 1,943 (+34%; street +16%): a 5.3% CNY cost of equity on a 5.8% free-cash-flow yield; the price assumes
+    revenue falls 1% a year. News: baijiu "bottoming", reversal not yet.
+  - 招商银行 买入 66.8 (+56%; +25%) and 中国平安 A 买入 75.2 (+38%; +38%), H 买入 86.8 HKD (+63%; +48%): the price implies
+    a 14.3% / 13.3% / 18.4% cost of equity against our 5.2-5.7% (ChinaBond 1.59% + Damodaran's China premium 5.14% x
+    a beta of 0.7-0.8), and P/B sits below its own 10-year median (1.29, 1.12). Ping An's Q3 profit fell 93.7%
+    (2026-11-05); its consensus may lag; bear 45 / bull 123.
+  - 中国神华 持有 42.8 (-12%; +7%): its next dividend at its payout of consensus earnings and a coal beta of 1.26 (cost of
+    equity 8.1%); CPIC just bought 5% of its H shares for the yield.
+  - 恒瑞医药 持有 59.9 (+19%; +42%): DCF 44 against its own median P/E of 65 from 2018-2021.
+  - Apple 卖出 215 (-37%; -1%): the price needs revenue growth of 21% a year for 5 years, reached by 3% of companies of
+    its size (our US table); cost of equity 10.8% (Damodaran's computer-hardware beta 1.34).
+  - JPMorgan 卖出 225 (-33%; +12%): ROE fading to the cost of equity; the price assumes 14.6% for ever. Morningstar has
+    long held JPM above its fair value; headlines call it "pricey".
+  - Micron 卖出 578 (-16%; +135%; the screening's 买入, opposite): cyclical; the DCF counts the consensus boom years
+    (1,083), normalized earnings at its 10-year margin don't (287 and 365); bear 127 / bull 1,090, at the 25% band's
+    edge (-25.4% excess).
+  - Realty Income 持有 57.7 (-2%; +6%); 领展 持有 42.2 (+3%; +11%): dividend models and yields agree within ~10%.
+  - Snowflake 卖出 85.8 (-69%; +59%): its DCF is 0 at its industry's 3.7% margin (Damodaran, US internet software);
+    the price assumes 67%; EV/Sales against peers gives 172.
+  - 腾讯 买入 799 HKD (+90%; +54%): the price assumes revenue shrinking 3% a year; own median P/E 27x (2016-2026)
+    against ~13x now.
+  The pattern: CN and HK names above the street, US names below. It follows from the inputs, as Morningstar's absolute
+  fair values do (Tencent and Chinese banks under, JPM and Apple over): CNY costs of equity of 5-9% against much higher
+  implied ones, US megacaps priced for growth few companies reach. Extra runs: Palantir 卖出 (fast grower), NVIDIA
+  买入 (cyclical), 五粮液 买入, BeiGene 卖出, 君实生物 卖出 (loss-making), 加科思-B 不评级 (pre-revenue).
+  Faults the sanity checks found and fixed: the moat clause extended to banks (招商银行 3.4 times book), the own
+  history's mean (trough P/Es: Micron 38x against an 11x median), a trailing dividend grown in the DDM (五粮液 +138%), a
+  negative own median as a margin target (Palantir's, BeiGene's DCF 0), consensus growth measured from today (SNOW +41%
+  for +28%), a third consensus year (2-3 analysts), Link's WACC from revaluation-hit profit, the rating table's gaps,
+  and a stage 9 crash on a missing profit (checks.earnings_signals).
+  The fresh-context stage review (one; fixes checked by tests and rebuilding the 12): math confirmed; fixed: the HK
+  benchmark compared a CNY return with HKD rates (now the listing market's premium over the reporting currency's
+  yield: Ping An H's excess +2 points), test-only Ginzu paths in the app (moved to the test; a test of the production
+  paths added), a possible crash with no bear or bull value, the pre-revenue label applied to US names, and PLAN.md
+  reasons that led with the name instead of the rule (the cyclical "half" and the income "60%" now marked judgements).
+  Answered, not changed: CN financials' targets rest on the 1.6% CNY yield (said above; recommended to you: a floor at
+  the industry's implied cost of equity, Gebhardt, Lee and Swaminathan 2001, which moves 招商银行 to +31% and Ping An A
+  to +27%, ratings unchanged); SNOW's DCF of 0 is the published loss-maker convention, shown with the implied margin;
+  Micron's 卖出 is the rule's at the band's edge; own-history P/E is the plan's; Tencent's cross-holdings are in its
+  EBIT already.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1129,8 +1178,19 @@ and the target price are code's: DeepSeek is told them and can't change them.
 | REIT | listing type | dividend discount and P/FFO against history (no free NAV) | occupancy, leverage, rates |
 | Holding company / conglomerate | industry | P/B against its own history and a DCF (no reliable free segment values for a sum of the parts; said so) | the discount's history |
 
-The exact tests (growth "well above the norm", "volatile" margins) are fixed in stage 10 from published definitions,
-written here with their reasons, never chosen on an outcome.
+The exact tests, fixed in stage 10 (research/value.kind_of), tried in this order: the listing type and industry (bank,
+insurer, broker, REIT); pre-revenue: HKEX's "-B" (chapter 18A biotech; STAR's "-U" where a name keeps it, but CNINFO's
+names drop it) or operating costs over twice the revenue; loss-making: an operating loss (pretax profit + interest
+expense) over the last twelve months; holding: Damodaran's "Diversified"; cyclical: Damodaran's Materials or Energy
+sector, or his Semiconductor, Semiconductor Equip, Shipbuilding & Marine and Transportation industries (the plan's
+materials, chemicals, energy, shipping, memory chips), with an operating margin whose worst of the last 10 years fell
+below half its median (a downturn that halved margins; no published cut-off was found, so "half" is code's reading of
+"volatile", a judgement written here: China Shenhua's low is 21% against a 27% median, not cyclical; Micron's -34%
+against 28%, cyclical); fast grower: 3-year revenue growth of 20% a year or more (Lynch's fast growers
+grow 20-25% a year, "One Up on Wall Street"); income: Damodaran's Utilities, or a 5-year payout of 60% or more (well
+above the CSI 300's and S&P 500's ~35-40%: a company that pays out most of its profit) with 5-year revenue growth
+below the market's median company's over the latest 5-year window of our history tables (CN 6.7% in 2020-2025); else
+ordinary. The 60% is also a judgement of "most of its profit".
 
 #### Forecast (code)
 - Years 1-2: the consensus (revenue and EPS), the best free forecast at that horizon and known to run optimistic, its
@@ -1168,6 +1228,68 @@ written here with their reasons, never chosen on an outcome.
 - 不评级 / 评级暂停, as sell-side desks do: a pending takeover suspends the rating (the price follows the deal; its terms
   shown); a non-standard audit opinion, a fraud investigation or a going-concern doubt gives no target (the accounts
   can't carry a valuation). The results review's hard red flags and quote checks are reused as they are.
+
+As built in stage 10 (2026-11-09; research/dcf.py the math, value.py the type, rates, forecast and inputs, rating.py the
+methods, target, rating, reverse DCF, base rates and grid; `research CODE --value` writes valuation.json). The choices
+the plan left open, each a published default:
+- Currency: the cash flows' (reporting) currency's 10-year government yield, so r and g are in one currency
+  (investment-research's rule): Tencent and Ping An H are valued in CNY at the ChinaBond yield and converted at
+  today's rate. Other reporting currencies use the US yield, said on the sheet.
+- Beta: Damodaran's industry unlevered beta corrected for cash, from his US table for US companies and his global
+  table for the rest (his own practice and the Ginzu's "Industry (Global)"; his China-region averages give the whole
+  market a beta of 1.75), relevered at market debt to equity with the statutory tax rate (CN 25%, HK 16.5%, US 25%);
+  banks, insurers and brokers use the industry's levered beta. ERP: his premium for the company's country (his
+  company list), the listing market's for the benchmark. Debt cost: the yield + the default spread of the synthetic
+  rating from interest cover (his large-firm table above USD 5bn, else the smaller-firm one; the bands' gaps go to the
+  band below). A REIT's profit carries revaluations: no rating or WACC from it (its methods don't use them).
+- Stable period, the simple Ginzu's defaults: a mature company's cost of capital (yield + the mature-market premium,
+  4.23% in his 2026 data), growth at the yield but at least 5 points below that cost (investment-research's r - g
+  rule: CN 0.82%, US 4.07%, HKD 2.89% today), a return on new capital equal to the cost of capital; the moat clause
+  (above) keeps half the median edge for a company whose return on capital beat its cost of capital in each of at
+  least 8 years (the plan's 8-year window, as for margins and brokers' ROE; "half" is the plan's "part", a judgement).
+  Financial firms: ROE converges to the cost of equity (Damodaran's stable-growth rule for financial firms; the plan
+  puts the moat clause under the DCF only). A first build extended the moat clause to banks, outside the plan; the
+  sanity check found it (招商银行 at 3.4 times book) and it was put back to the plan.
+- Forecast: the consensus windows start where the trailing figures end (a true 12 months' growth; SNOW's first year was
+  +41% from today against +28% from its last quarter); two windows (years 1-2: Nasdaq's third year has 2-3 analysts);
+  revenue from Yahoo's revenue consensus when its year mapping is unambiguous (Yahoo repeats 0y's end date for +1y on
+  AAPL), else growing with the consensus profit; operating income moves with the consensus profit; then growth falls
+  in equal steps to the stable rate by year 10 and the margin moves to its target by year 5 (the Ginzu's default). The
+  margin target: a cyclical's 10-year average (normalized after the years the consensus sees), the industry's for the
+  young (the plan's "young or loss-making": a loss-maker, a fast grower, under 5 years of history, or a negative 8-year
+  median, which is no mature record; a first build missed the last two, found on Palantir and BeiGene, whose DCF was
+  0), else the company's 8-year median. Sales to capital: its 5-year median when its
+  invested capital (equity + debt - cash) is positive in at least 3 of them, else the industry's. No consensus: the
+  3-year revenue trend, faded.
+- Multiples: the own history's median (P/E distributions are skewed: trough-year P/Es put Micron's mean at 38x
+  against an 11x median), the peers' median from the day's snapshot (P/E; EV/Sales; PEG as forward P/E over consensus
+  growth), each times the next 12 months' consensus from today: a normal trailing multiple a year from now, so its
+  12-month target directly. Absolute methods' values roll forward 12 months at the cost of equity less the dividend.
+- Dividends: next year's dividend is the next 12 months' consensus EPS x the 5-year payout (at most 100%), the
+  expected dividends of Damodaran's DDM; a first build grew the trailing dividend instead, a departure from his model
+  that 五粮液 exposed (its 2025 dividend was 166% of a collapsed profit). A REIT's is the trailing year's. REIT: the dividend yield against its own 5-year average stands in for P/FFO
+  history (FFO history isn't free); the bond leg of "yield against history and bonds" waits for a longer yield history.
+- Cyclical: DCF with normalized margins, the own median P/E on normalized EPS (trailing revenue x the 10-year average
+  net margin), justified P/B on the 10-year average ROE, a third each. Broker: justified P/B on the 8-year average ROE
+  and P/B against history.
+- Bear / bull: the first forecast year's analysts' low and high (Yahoo's range around its own mean; CN: the brokers'
+  six months of reports, at least 3), and the long-run margin (financials: ROE) one standard deviation of its own 10
+  years lower and higher, at most the margin's own size. The band: the larger of the bear-to-bull half-range and the
+  methods' half-range, rounded up to 5 points, between 10% and 25%; analysts' disagreement and earnings volatility
+  enter it through bear and bull. A negative equity value from the DCF counts as 0 with its weight (limited liability:
+  SNOW's DCF at its industry's 3.7% margin), and the reverse then gives the margin the price assumes.
+- Benchmark: the listing market's premium over the yield of the reporting currency, the currency the target grows in
+  (by interest parity an HKD investor's return on a CNY reporter is its CNY return plus the yield gap): Tencent and Ping
+  An H are compared at 1.59% + Hong Kong's 5.01%, not the HKD yield's 8.67%.
+- Not in the equity bridge: cross-holdings (their profit is in pretax profit, so in EBIT), employee options, a debt
+  concept stage 9 doesn't read (SNOW's convertible notes).
+- Reverse: the years 1-5 revenue growth that makes the DCF equal the price (fading as in the base case); a loss-maker's
+  long-run margin; a financial's implied ROE at our cost of equity and implied cost of equity at next year's ROE; a
+  dividend payer's 5-year dividend growth. Base rates: of the companies in the same fifth by revenue in each start year
+  of our annual tables (CN 2009-2025, US 2015-2026 in USD, HK 2015-2026), the share whose 5-year revenue growth reached
+  the forecast's and the implied rate.
+- Takeover, investigation and going-concern flags come from the results review's cache for names it has read (stage
+  11 adds the research report's own review); a non-standard CN audit opinion from Eastmoney's opinion field.
 
 #### The analysis in words (DeepSeek, quote-checked)
 - Sources code gives it: the latest annual report's business, MD&A/outlook and risk sections, cut by their standard
@@ -1405,7 +1527,7 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
    fact sheets whose key figures agree with a second source (贵州茅台, 招商银行, 中国神华, 恒瑞医药, Apple, JPMorgan,
    Micron, Realty Income, a loss-making grower, 腾讯, 中国平安 A+H, 领展); the fresh-context stage review has run and its
    findings are fixed or answered; this plan's status is updated and the work is committed on main.
-10. **Research: valuation and rating.** The type tests, DCF and reverse DCF, multiples, the bank and insurer models,
+10. **Research: valuation and rating** (done 2026-11-09, Status). The type tests, DCF and reverse DCF, multiples, the bank and insurer models,
     the dividend discount, normalized earnings, scenarios, uncertainty, target and rating. Done when: pytest passes on
     the math (a DCF checked against Damodaran's own spreadsheet example, justified P/B, the M-score and F-score on a
     saved sample); the 12 companies have targets and ratings, each sanity-checked against common sense, the street
