@@ -10,7 +10,7 @@ from datetime import date
 
 import pandas as pd
 
-from stockreport.fetch import filings, yahoo
+from stockreport.fetch import filings, nasdaq, yahoo
 from stockreport.research import (STATEMENT, cached, checks, cn, damodaran, days, folder, fresh, hk, listings, load,
                                   save, sheet, sources, stamp, us)
 
@@ -54,6 +54,28 @@ def optional(path, days_: int, make, what: str):
         return None
 
 
+def newer_years(st: pd.DataFrame, second: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """The statements with the second source's (Yahoo's) fiscal years newer than the filer's own (TSMC's FY2025 20-F
+    wasn't in SEC's data in November 2026); those years are a single source (facts' crosscheck says which)."""
+    last = st.loc[st["months"] == 12, "period"].max() if len(st) else ""
+    new = second[second["period"] > last] if len(second) and "period" in second else second.iloc[:0]
+    if new.empty:
+        return st, []
+    return pd.concat([st, new.assign(months=12).reindex(columns=st.columns)], ignore_index=True), list(new["period"])
+
+
+def units(price: float, shares: float, quote: dict, listed: float | None) -> float:
+    """Ordinary shares per unit a US line trades in: 1, unless the filing's count times the price is more than 20% off
+    the line's market value (Tencent's quote, else Nasdaq's screener): an ADR (TSMC's is 5 shares, Alibaba's 8) or a
+    share class (BRK.B). The count in the line's own units is then that market value over the price, as the screening
+    counts US shares (crosscheck.us_shares), so per-share figures match the price and the consensus (per ADR)."""
+    mv = (quote or {}).get("mcap") or listed
+    if not (mv and price and shares):
+        return 1.0
+    r = shares * price / mv
+    return r if abs(r - 1) > 0.2 else 1.0
+
+
 def gather(market: str, code: str, today: date) -> dict:
     f, S, D = folder(market, code), days("statements"), days("daily")
     g = {"street": cached(f / "street.json", D, lambda: sources.summary(market, code, today)),
@@ -71,8 +93,10 @@ def gather(market: str, code: str, today: date) -> dict:
             payload = us.companyfacts(code)  # several MB, parsed in memory and not kept
             save(f / "statements.csv.gz", us.parse_statements(code, payload))
             save(f / "latest.json", us.latest(code, payload, today))
-        g["statements"] = load(f / "statements.csv.gz")
-        g["latest"] = load(f / "latest.json") or us.from_annual(g["statements"])  # a 20-F filer: no quarterly reports
+        g["statements"], g["latest"] = load(f / "statements.csv.gz"), load(f / "latest.json")
+        if not g["latest"]:  # a 20-F filer: no quarterly reports, and its newest annual report can be missing from
+            g["statements"], g["from_second"] = newer_years(g["statements"], g["second"])  # SEC's data for months
+            g["latest"] = us.from_annual(g["statements"])
         g["consensus"] = optional(f / "consensus.json", S, lambda: us.consensus(code), f"{code} Nasdaq consensus")
         g["flows"] = cached(f / "flows.json", D, lambda: us.flows(code))
     else:
@@ -197,6 +221,10 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         a["div_paid"] = a["period"].str[:4].map(dps) * a["shares"]  # the cash flow lumps interest paid in
     else:
         a["shares"] = sheet.split_basis(a, g["prices"]["splits"]).values
+    if market == "us":  # an ADR or another share class: shares in the line's own units
+        listed = nasdaq.load_list().drop_duplicates("code").set_index("code")["mcap"].get(code) if nasdaq.LIST.exists() else None
+        per = units(price, shares, g["tencent"], listed)
+        shares, a["shares"] = shares / per, a["shares"] / per
     fin = kind in checks.FINANCIAL  # banks', insurers' and brokers' debt, cash and operating cash flow are their business
     check, a = sheet.crosscheck(a, None if g["single"] else g["second"], fin)  # a figure > 5% off is left out
     mcap = price * shares
@@ -288,7 +316,9 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         "screening": sheet.screening(market, code, snap, today, listed, kind),
         "filings_12m": {"count": len(titles), "management": [t for t in titles if re.search(MANAGEMENT, t["title"])][:10],
                         "auditor": [t for t in titles if re.search(AUDITOR, t["title"])][:5]},
-        "crosscheck": {"single_source": g["single"]} | check | sheet.quote_check({"price": price, "mcap": mcap}, g["tencent"]),
+        "crosscheck": {"single_source": g["single"], "years_from_second": g.get("from_second") or [],
+                       "shares_per_unit": None if market != "us" or per == 1.0 else per} | check |
+                      sheet.quote_check({"price": price, "mcap": mcap}, g["tencent"]),
         "as_of": {p.name: date.fromtimestamp(p.stat().st_mtime).isoformat() for p in folder(market, code).iterdir()
                   if p.name != "facts.json"}}  # each input's date: a failed refresh keeps an older cache
     save(folder(market, code) / "facts.json", facts)

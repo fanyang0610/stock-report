@@ -118,3 +118,22 @@ def test_a_20f_filer_takes_its_last_fiscal_year_as_trailing():
     assert x["period"] == "2025-12-31" and x["basis"] == "FY" and x["revenue"] == 309.1 and x["revenue_prior"] == 290.4
     assert x["ni_prior"] == 101.0 and x["capex"] == 60.1 and x["equity"] == 194.0 and x["notice"] == "2026-02-04"
     assert us.from_annual(st.iloc[:0]) == {}
+
+
+def test_an_adr_counts_shares_in_its_own_units():
+    # TSMC: 25.93bn shares, an ADR of 5 at 413.35 against a 2,143.8bn market value -> 5.0 shares a unit; Apple 1
+    from stockreport.research import facts
+    assert facts.units(413.35, 25.93e9, {"mcap": 2143.8e9}, None) == pytest.approx(5.0, rel=0.01)
+    assert facts.units(355.63, 14.53e9, {"mcap": 5168e9}, None) == 1.0
+    assert facts.units(413.35, 25.93e9, {}, 2141.6e9) == pytest.approx(5.0, rel=0.01)  # Nasdaq's value when Tencent fails
+    assert facts.units(413.35, 25.93e9, {}, None) == 1.0
+
+
+def test_a_20f_filers_newest_year_from_the_second_source():
+    import pandas as pd
+    from stockreport.research import facts
+    st = pd.DataFrame({"period": ["2023-12-31", "2024-12-31"], "months": [12, 12], "revenue": [2161.7, 2894.3]})
+    second = pd.DataFrame({"period": ["2024-12-31", "2025-12-31"], "revenue": [2894.3, 3809.1], "currency": ["TWD"] * 2})
+    out, years = facts.newer_years(st, second)
+    assert years == ["2025-12-31"] and out["revenue"].tolist() == [2161.7, 2894.3, 3809.1] and out["months"].tolist() == [12] * 3
+    assert facts.newer_years(st, second.iloc[:1])[1] == []

@@ -667,6 +667,19 @@
     持有 (fair value +33%, band 30%; the street -2%), 君实生物 and 百济神州 卖出 -> 持有 (bands 75% and 70%).
   - Amazon now: 持有, fair value -24%, 12-month -4% (the street +22%); Novo Nordisk 持有, +4%, +5%. The other 18
     within a point or two except where today's data moved (Micron's and NVIDIA's US fact sheets were rebuilt today).
+- US lines that trade in other units (2026-11-12, your OK "Yes, fix it here"). The fact sheet multiplied a US line's
+  price by the filing's ordinary-share count, so an ADR of several shares came out several times too large: TSMC at
+  $10,719bn and a P/E of 305 (its ADR is 5 shares), Alibaba's US line, PDD, JD, Baidu, NetEase, Toyota, AstraZeneca
+  and BHP alike; the sheet's own check flagged an 80% gap and the report went on. Now, when the filing's count times
+  the price is more than 20% off the line's market value (Tencent's quote, else Nasdaq's screener), the share count is
+  that value over the price, the screening's own count (crosscheck.us_shares), and every year's per-share figure
+  follows, matching the consensus and dividends, which are per ADR (facts.units; crosscheck.shares_per_unit). TSMC
+  $2,144bn, P/E 41.6; Alibaba's US line $253bn, P/E 15.9; Apple unchanged. Also: SEC's data had no FY2025 for TSMC in
+  November 2026 (its 20-F years arrive late); a 20-F filer's fiscal years newer than SEC's now come from Yahoo's annual
+  series, the second source, as a single source (crosscheck.years_from_second). TSMC: 持有, fair value +47% (band
+  55%), 12-month +21% (the street +36%); Alibaba's US line 买入, +58% (band 50%), +21%. Not changed: an ADR whose
+  company isn't in Damodaran's list (TSMC, Alibaba's US line) takes the listing market's country and his total-market
+  beta, and a TWD or CNY valuation the US yield where no yield of its own is kept (stage 10's stated limits). 261 tests.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
