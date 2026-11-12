@@ -67,7 +67,7 @@ BEAR = """任务：空头观点。你只代表看空的一方（另一位研究�
 每条：title 短标题（不超过 14 个字），text 1-3 句，最后一句说明这条担忧落空需要看到什么。
 JSON：{"bear":[{"title":"","text":"","src":[]}]}"""
 
-THESIS = """任务：结论页和观点。程序已给出评级 {rating}、目标价 {target}（现价 {price}），预期 12 个月回报 {expected_return}，大盘 {market_return}。
+THESIS = """任务：结论页和观点。程序已给出评级 {rating}、12 个月目标价 {target}（现价 {price}），预期 12 个月回报 {expected_return}，大盘 {market_return}；合理价值 {fair_value}（{fair_upside}），评级看合理价值的超额回报 {fair_excess}，股价一般约 3 年向合理价值靠拢，所以 12 个月目标价只计入约三分之一的差距。
 下面附有已核对的业务、多头、空头三部分，以及程序列出的「与市场一致目标价不同的原因」和「与每日筛选的异同」。你的观点要和程序的评级一致，同时公平呈现两方。
 - conclusion：一句话结论（不超过 50 个字），写出 {rating}，说清为什么是这个评级。
 - points（3 条）：投资要点：你综合多空两方之后支持 {rating} 的理由，每条 title + 1-2 句；不要照抄多头或空头的条目。
@@ -75,7 +75,7 @@ THESIS = """任务：结论页和观点。程序已给出评级 {rating}、目�
 - outlook（2-3 条）：未来 1-3 年的展望；管理层的计划用「」引用原话。
 - catalysts（2-4 条）：接下来可能影响股价的事件和时间（财报、分红、解禁、产品、政策），只写材料里有的。
 - change_view（2-3 条）：什么会让我们改变看法：可观察、可证伪的信号，每条写出要看的指标的键名（如 {latest_rev_growth}）和方向。
-- vs_street：2-4 句，先写出差距（{target} 对 {street_target}，{ours_vs_street}），再解释为什么不同，只用列出的原因和它们的键名。
+- vs_street：2-4 句，先写出差距（合理价值 {fair_value} 对市场目标价 {street_target}，{ours_vs_street}），再解释为什么不同，只用列出的原因和它们的键名。
 - vs_screening：1-3 句，解释研究评级和每日筛选为什么一致或不同，只用列出的原因和键名；没有列出原因时说明两者一致。
 - moves：近 90 天有大涨大跌时 1-2 条，日期和涨幅写键名（news-pulse：价值事件、情绪波动、真因不明或混合），只用来源，找不到原因就写真因不明；没有异动时为空列表。
 JSON：{"conclusion":{"text":"","src":[]},"points":[{"title":"","text":"","src":[]}],"risks":[{"title":"","text":"","src":[]}],"outlook":[{"text":"","src":[]}],"catalysts":[{"text":"","src":[]}],"change_view":[{"text":"","src":[]}],"vs_street":{"text":"","src":[]},"vs_screening":{"text":"","src":[]},"moves":[{"text":"","src":[]}]}"""
@@ -100,16 +100,20 @@ def keys(f: dict, v: dict, extra: dict) -> dict[str, tuple[str, str]]:
     out = {
         "name": ("公司", f["name"]), "industry": ("行业", f.get("industry")),
         "rating": ("我们的评级", v["rating"]), "target": ("12 个月目标价", price(v.get("target"), q)),
+        "fair_value": ("合理价值（一年后；股价约 3 年向它靠拢）", price(v.get("fair_value"), q)),
+        "fair_upside": ("合理价值相对现价", pct(ratio(v.get("fair_value"), v["price"]), True)),
+        "fair_excess": ("合理价值的超额回报（评级依据）", pct(v.get("fair_excess"), True)),
         "price": ("现价", price(v["price"], q)),
         "upside": ("目标价相对现价", pct(ratio(v.get("target"), v["price"]), True)),
         "expected_return": ("预期 12 个月回报（含股息）", pct(v.get("expected_return"), True)),
         "market_return": ("大盘预期 12 个月回报", pct(v.get("market_return"))),
-        "excess_return": ("预期超额回报", pct(v.get("excess_return"), True)),
+        "excess_return": ("预期 12 个月超额回报", pct(v.get("excess_return"), True)),
         "band": ("评级门槛（估值不确定性）", "±" + pct((v.get("uncertainty") or {}).get("band"), digits=0) if v.get("uncertainty") else None),
-        "bear": ("悲观情景价值", price(v.get("bear"), q)), "bull": ("乐观情景价值", price(v.get("bull"), q)),
+        "bear": ("悲观情景的 12 个月价格", price(v.get("bear"), q)), "bull": ("乐观情景的 12 个月价格", price(v.get("bull"), q)),
         "street_target": ("市场一致目标价", price(st.get("target"), q)),
         "street_upside": ("市场目标价相对现价", pct(st.get("upside"), True)),
-        "ours_vs_street": ("我们的目标价相对市场目标价", pct(st.get("ours_vs_street"), True)),
+        "ours_vs_street": ("我们的合理价值相对市场目标价", pct(st.get("ours_vs_street"), True)),
+        "target_vs_street": ("我们的 12 个月目标价相对市场目标价", pct(st.get("target_vs_street"), True)),
         "street_rated": ("给出评级的卖方机构数", f"{n_rated:g}" if n_rated else None),
         "street_bullish": ("其中看多（买入或增持）的机构数", f"{bullish:g}" if n_rated else None),
         "analysts": ("覆盖的分析师人数", f"{c['analysts']:g}" if c.get("analysts") else None),

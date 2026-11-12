@@ -197,7 +197,8 @@ def consensus_years(f: dict, k: dict, today: date) -> dict:
     c, fx, fy_month = f["consensus"], yahoo.load_fx(), int(f["summary"]["fy_latest"][5:7])
     eps = {y: convert(fx, e, c["currency"], k["currency"]) for y, e in c["eps"].items() if e is not None}
     yy = c.get("yahoo_years") or {}
-    rev = {y: d["revenue"] for y, d in yy.items() if d.get("revenue")}
+    rev = {y: convert(fx, d["revenue"], c.get("revenue_currency") or k["currency"], k["currency"])
+           for y, d in yy.items() if d.get("revenue")}
     end = date.fromisoformat(f["latest"]["period"])
     base = date(end.year + end.month // 12, end.month % 12 + 1, 1)
     out = {"eps": [], "revenue": [], "from": base.isoformat(), "ntm_eps": forward(eps, fy_month, today, 0),
@@ -220,20 +221,24 @@ def consensus_years(f: dict, k: dict, today: date) -> dict:
 
 
 def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
-    """Ten years of revenue growth and margins: the consensus years first (revenue from Yahoo's revenue consensus,
-    else growing with the consensus profit; operating income moving with the consensus profit), then growth falling in
-    equal steps to the stable rate by year 10 and the margin moving to its target by year 5 (the Ginzu's default).
+    """Ten years of revenue growth and margins: the consensus years first (revenue from Yahoo's revenue consensus;
+    operating income moving with the consensus profit), then the margin moving to its target by year 5 (the Ginzu's
+    default). Beyond the analysts' revenue forecasts, growth is the base rate (k["base_growth"]: the median 5-year
+    revenue growth of companies of the same size, Mauboussin's base rates) to year 5, then falls in equal steps to the
+    stable rate by year 10: growth shows no persistence beyond chance and analysts' long-term forecasts are too high
+    (Chan, Karceski and Lakonishok 2003), so a consensus year's growth isn't carried on (the Ginzu's two stages, with the
+    base rate as years 3-5). Without a base rate, growth falls from the last consensus year's to the stable rate.
     Targets: a cyclical's 10-year average (normalized earnings after the years the consensus sees); the industry's for
     the young (PLAN.md "Forecast"): a loss-maker, a fast grower, under 5 years of history or a negative 8-year median;
     the rest their own 8-year median. With no consensus: the
     3-year revenue trend, faded."""
     t, s = f["valuation"]["ttm"], f["summary"]
     rev0, ni0, ebit0, shares = t["revenue"], t["ni"], k["ebit"], k["shares"]
-    m0 = ebit0 / rev0
+    m0, base = ebit0 / rev0, k.get("base_growth")
     growth, margin, prev_r, prev_e = [], [], rev0, (ni0 / shares if ni0 else None)
     for e, r in zip(cons["eps"], cons["revenue"]):
         pg = e / prev_e - 1 if prev_e and prev_e > 0 and e > 0 else None
-        rg = r / prev_r - 1 if r and prev_r > 0 else pg
+        rg = r / prev_r - 1 if r and prev_r > 0 else base if base is not None else pg  # profit growth isn't revenue's
         if rg is None:
             break
         growth.append(rg)
@@ -251,7 +256,11 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     else:
         target = own.median()
     n = len(growth)
-    growth += [growth[-1] + (g_term - growth[-1]) * (t_ - n) / (dcf.YEARS - n) for t_ in range(n + 1, dcf.YEARS + 1)]
+    if base is None:
+        growth += [growth[-1] + (g_term - growth[-1]) * (t_ - n) / (dcf.YEARS - n) for t_ in range(n + 1, dcf.YEARS + 1)]
+    else:
+        growth += [base if t_ <= CONVERGENCE else base + (g_term - base) * (t_ - CONVERGENCE) / (dcf.YEARS - CONVERGENCE)
+                   for t_ in range(n + 1, dcf.YEARS + 1)]
     last = margin[-1]
     margin += [target if t_ >= CONVERGENCE else last + (target - last) * (t_ - n) / (CONVERGENCE - n)
                for t_ in range(n + 1, dcf.YEARS + 1)]

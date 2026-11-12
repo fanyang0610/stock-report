@@ -59,17 +59,17 @@
   <div class="sub" style="text-align:right">个股研究报告<br>数据 {{ f.price.date }} · 生成 {{ r.doc.date }}</div>
 </div>
 <div class="decision">
-  <div class="badge b-{{ v.rating if v.rating in ('买入','持有','卖出') else 'other' }}"><div class="big">{{ v.rating }}</div><div class="small">12 个月评级</div></div>
+  <div class="badge b-{{ v.rating if v.rating in ('买入','持有','卖出') else 'other' }}"><div class="big">{{ v.rating }}</div><div class="small">看合理价值的评级</div></div>
   {% if v.target is number %}
   <div class="nums">
     <div><b>{{ F.price(v.target, r.q) }}</b><span>12 个月目标价</span></div>
     <div><b>{{ F.price(v.price, r.q) }}</b><span>现价（{{ f.price.date }}）</span></div>
     <div><b>{{ F.pct(v.expected_return, True) }}</b><span>预期回报（含股息）</span></div>
     <div><b>{{ F.pct(v.market_return) }}</b><span>大盘预期回报</span></div>
-    <div><b>{{ F.pct(v.excess_return, True) }}</b><span>超额回报</span></div>
-    <div><b>±{{ F.pct(v.uncertainty.band, False, 0) }}</b><span>评级门槛（不确定性越大越宽）</span></div>
-    <div><b>{{ F.price(v.bear, r.q) }}</b><span>悲观情景</span></div>
-    <div><b>{{ F.price(v.bull, r.q) }}</b><span>乐观情景</span></div>
+    <div><b>{{ F.price(v.fair_value, r.q) if v.fair_value is number else '-' }}</b><span>合理价值（约 3 年内收敛）</span></div>
+    <div><b>{{ F.pct(v.fair_excess, True) if v.fair_excess is number else '-' }}</b><span>合理价值的超额回报（评级依据）</span></div>
+    <div><b>±{{ F.pct(v.uncertainty.band, False, 0) }}</b><span>评级门槛：上面的超额回报须超过（不确定性越大越宽）</span></div>
+    <div><b>{{ '{:,.2f}'.format(v.bear) }} — {{ F.price(v.bull, r.q) }}</b><span>12 个月悲观 — 乐观</span></div>
   </div>
   {% else %}<div class="nums"><div style="grid-column: span 4"><b>没有目标价</b><span>{{ v.reason }}</span></div></div>{% endif %}
 </div>
@@ -209,7 +209,7 @@
 <h2>预测与估值</h2>
 {% set fc = r.forecast %}
 {% if fc and fc.rows %}
-<h3>我们的三年预测（{{ r.rcur }}；第 1-2 年的利润来自一致预期，之后增长逐年回落）</h3>
+<h3>我们的三年预测（{{ r.rcur }}；第 1-2 年的利润来自一致预期，之后营收按同等规模公司的增长）</h3>
 <table class="small"><tr><th></th>{% for c in fc.columns %}<th class="num">第 {{ loop.index }} 年<br><span class="muted">{{ c }}</span></th>{% endfor %}</tr>
 {% for label, vals, kind in fc.rows %}<tr><td>{{ label }}</td>{% for x in vals %}<td class="num">{% if x is none %}-{% elif kind == 'money' %}{{ F.money(x) }}{% elif kind == 'pct' %}{{ F.pct(x) }}{% else %}{{ '%.2f' | format(x) }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
 </table>
@@ -221,7 +221,8 @@
 {% for m in r.methods %}<tr><td>{{ m.name }}{% if m.group %}（{{ m.group }}，{{ m.count }} 家）{% endif %}</td><td class="num">{{ F.pct(m.weight, False, 0) }}</td>
 <td class="num">{% if m.multiple %}{{ F.times(m.multiple) }}{% elif m.pb %}市净率 {{ F.times(m.pb) }}{% elif m.growth_5y is defined %}股息增长 {{ F.pct(m.growth_5y, True) }}{% elif m.roe_term is defined %}长期 ROE {{ F.pct(m.roe_term) }}{% elif m.path %}长期利润率 {{ F.pct(m.path.target_margin) }}{% elif m.yield %}股息率 {{ F.pct(m.yield) }}{% endif %}</td>
 <td class="num">{{ F.price(m.value, r.q) if m.value is defined and m.value is number else '-' }}</td><td class="num"><b>{{ F.price(m.target, r.q) }}</b></td></tr>{% endfor %}
-<tr><td><b>加权目标价</b></td><td class="num">100%</td><td></td><td></td><td class="num"><b>{{ F.price(v.target, r.q) }}</b></td></tr>
+<tr><td><b>加权：一年后的合理价值</b></td><td class="num">100%</td><td></td><td></td><td class="num"><b>{{ F.price(v.fair_value if v.fair_value is number else v.target, r.q) }}</b></td></tr>
+<tr><td><b>12 个月目标价</b>（现价按股权成本增长，再缩小三分之一的差距）</td><td></td><td></td><td></td><td class="num"><b>{{ F.price(v.target, r.q) }}</b></td></tr>
 </table>
 {% if r.charts.football %}<div class="chart">{{ r.charts.football | safe }}</div>{% endif %}
 {% set k = v.inputs %}
@@ -311,8 +312,8 @@
 {# ---------- 13. back pages ---------- #}
 <section class="back">
 <h2>方法、来源和局限</h2>
-<p><b>评级的含义</b>：预期 12 个月超额回报 =（目标价 − 现价 + 下一年股息）÷ 现价 − 大盘预期回报（无风险利率 + 股权风险溢价）。超额在 +门槛以上为买入，−门槛以下为卖出，其间为持有；门槛随估值的不确定性在 10% 到 25% 之间（晨星按不确定性放宽星级区间的做法；中国券商以 6-12 个月相对沪深 300 的评级标准）。卖方的 12 个月目标价到期时只有约四成达到（Bradshaw、Brown 和 Huang，2013）：评级是有结构的判断，不是承诺。</p>
-<p><b>估值</b>：公司类型（{{ r.type_name }}：{{ v.type_reason }}）决定方法组合和权重。现金流折现按 Damodaran 的 10 年 FCFF 结构：第 1-2 年用一致预期，之后增长逐年降到永续增长率，利润率 5 年内移到长期目标；折现率用无风险利率、Damodaran 的国家股权风险溢价和行业贝塔。倍数法用自身近 5 年（周期股 10 年）的中位数和同行中位数，乘以未来 12 个月的一致预期。所有数字由程序从免费数据算出；文字由 DeepSeek 依据事实表和编号来源写成，数字由程序按键名填入，无法核对的数字、引文和建议词会被删除（本报告删除 {{ w.dropped | length if w.dropped else 0 }} 条）。</p>
+<p><b>评级和目标价的含义</b>：合理价值是各方法加权的一年后价值。评级看合理价值的超额回报 =（合理价值 − 现价 + 下一年股息）÷ 现价 − 大盘预期回报（无风险利率 + 股权风险溢价）：在 +门槛以上为买入，−门槛以下为卖出，其间为持有；门槛随估值的不确定性在 10% 到 25% 之间（晨星按不确定性要求的安全边际；中国券商以 6-12 个月相对沪深 300 的评级标准）。股价向合理价值靠拢通常要几年：晨星预计一般在 3 年内，价值与价格之比对超额回报的预测力约持续 3 年（Ali、Hwang 和 Trombley，2003）。所以 12 个月目标价 = 现价按股权成本增长（减去股息）后，再缩小与合理价值之间三分之一的差距（按对数）。卖方的 12 个月目标价默认一年内到达合理价值，到期时只有约四成达到（Bradshaw、Brown 和 Huang，2013）：评级是有结构的判断，不是承诺。</p>
+<p><b>估值</b>：公司类型（{{ r.type_name }}：{{ v.type_reason }}）决定方法组合和权重。现金流折现按 Damodaran 的 10 年 FCFF 结构：营收先用一致预期，之后到第 5 年用同等规模公司最近 5 年营收增长的中位数（高增长持续不了：Chan、Karceski 和 Lakonishok，2003），再逐年降到第 10 年的永续增长率；利润率 5 年内移到长期目标；折现率用无风险利率、Damodaran 的国家股权风险溢价和行业贝塔。倍数法用自身近 5 年（周期股 10 年）的中位数和同行中位数，乘以未来 12 个月的一致预期。所有数字由程序从免费数据算出；文字由 DeepSeek 依据事实表和编号来源写成，数字由程序按键名填入，无法核对的数字、引文和建议词会被删除（本报告删除 {{ w.dropped | length if w.dropped else 0 }} 条）。</p>
 <p><b>局限</b>：第 1-2 年依赖卖方一致预期（没有更好的免费预测）；本报告加上的是纪律：增长回落到基准率、多种方法、按不确定性定门槛、空头观点、会计检查和反向现金流折现。免费数据无法估算保险的内含价值、集团的分部价值、药物管线或物业净资产，报告直接说明而不硬算；尚无收入的生物科技公司不评级。基准率只含今天仍上市的公司。</p>
 <p><b>数据日期</b>：{% for k, d in f.as_of.items() %}{{ k.split('.')[0] }} {{ d[5:] }}{% if not loop.last %}；{% endif %}{% endfor %}。年报：{{ r.sections.doc or '无' }}{% if r.sections.date %}（{{ r.sections.date }}）{% endif %}{% if r.sections.note %}，{{ r.sections.note }}{% endif %}。</p>
 {% if r.cited %}<h3>文中引用的来源</h3>

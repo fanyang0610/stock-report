@@ -132,6 +132,37 @@ def test_forecast_paths_follow_the_consensus_then_fade():
     assert value.paths(f, k, "loss_making", {"eps": [], "revenue": []}, 0.02)["target_margin"] == 0.1  # industry
 
 
+def test_growth_beyond_the_consensus_is_the_base_rate():
+    # one revenue consensus year (+20%), profit +30% then +25%: year 2 grows revenue at the size class's median (5%),
+    # not with profit (Chan, Karceski and Lakonishok 2003), its margin following profit; years 3-5 at 5%; then down to g
+    f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0}}, "summary": {}, "history": [{"ebit_margin": 0.2}] * 8}
+    k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1, "base_growth": 0.05}
+    p = value.paths(f, k, "ordinary", {"eps": [1.3, 1.625], "revenue": [120.0, None]}, 0.02)
+    assert p["growth"][:5] == pytest.approx([0.2, 0.05, 0.05, 0.05, 0.05])
+    assert p["growth"][5:] == pytest.approx([0.05 - 0.03 * i / 5 for i in range(1, 6)])
+    assert p["margin"][1] == pytest.approx(15 * 1.625 / (120 * 1.05))  # operating income grows with profit
+
+
+def test_twelve_month_target_closes_a_third_of_the_gap():
+    # price 100, cost of equity 8%, dividend 2: 106 a year on; a fair value of 106 x 1.331 closes 10% of it a year
+    carry = 100 * 1.08 - 2
+    assert rating.converge(carry * 1.1 ** 3, carry) == pytest.approx(carry * 1.1)
+    assert rating.converge(carry / 1.1 ** 3, carry) == pytest.approx(carry / 1.1)  # the same way down
+    assert rating.converge(carry, carry) == pytest.approx(carry) and rating.converge(0.0, carry) == 0.0
+
+
+def test_base_rate_of_the_latest_complete_window(monkeypatch):
+    # 10 companies growing 0-9% a year, the largest fastest; 2015-2021 with 2021 possibly partial (cols[-1]): today's
+    # base rate is the largest fifth's median over 2015-2020 (rank 80% and up: c7-c9, 7-9%)
+    import pandas as pd
+    years = range(2015, 2022)
+    rev = pd.DataFrame({str(y): [100.0 * (i + 1) * (1 + 0.01 * i) ** (y - 2015) for i in range(10)] for y in years},
+                       index=[f"c{i}" for i in range(10)])
+    monkeypatch.setattr(rating, "base_table", lambda market: rev)
+    b = rating.base_rates("cn", 5000.0, {})
+    assert b["recent_window"] == "2015-2020" and b["fifth"] == 5 and b["fifth_recent"] == pytest.approx(0.08)
+
+
 def test_excess_earnings_of_a_cyclical_at_a_peak():
     # consensus 30 and 20 against a normal 10, at 10%: 20 + 10 / 1.1 from now, a year less from the target date
     assert rating.excess([30.0, 20.0], 10.0, 0.10, 0) == pytest.approx(20 + 10 / 1.1)

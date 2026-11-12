@@ -98,10 +98,12 @@ def history(rows: list[dict], kind: str) -> str:
 
 
 def football(val: dict, names: dict) -> str:
-    """Each method's 12-month value as a bar, bear to bull as a band, the price and the street's target as lines."""
+    """Each method's value a year from now as a bar, the fair value's bear to bull as a band, the price, the fair value,
+    the 12-month target and the street's target as lines."""
     rows = [(names[m], val["methods"][m]["target"], w) for m, w in val["weights"].items()]
     rows += [("悲观 — 乐观情景", None, None)]
-    marks = [val["price"], val["target"], val["bear"], val["bull"]] + [r[1] for r in rows if r[1] is not None]
+    fair, lo, hi_ = (val.get(f"fair_{a}") or val[b] for a, b in (("value", "target"), ("bear", "bear"), ("bull", "bull")))
+    marks = [val["price"], val["target"], fair, lo, hi_] + [r[1] for r in rows if r[1] is not None]
     street = (val.get("street") or {}).get("target")
     hi = max(marks + ([street] if street else [])) * 1.08
     h = PAD[1] + 26 * len(rows) + 36
@@ -114,10 +116,11 @@ def football(val: dict, names: dict) -> str:
             body += (f'<rect x="{LABEL}" y="{yy}" width="{max(x(t) - LABEL, 1):.1f}" height="18" fill="#c7d2fe"/>'
                      f'<text x="{x(t) + 4:.1f}" y="{yy + 13}" fill="{INK}">{t:,.0f}</text>')
         else:
-            body += (f'<rect x="{x(val["bear"]):.1f}" y="{yy}" width="{max(x(val["bull"]) - x(val["bear"]), 1):.1f}" height="18" fill="#ffd8bf"/>'
-                     f'<text x="{x(val["bull"]) + 4:.1f}" y="{yy + 13}" fill="{INK}">{val["bear"]:,.0f} — {val["bull"]:,.0f}</text>')
+            body += (f'<rect x="{x(lo):.1f}" y="{yy}" width="{max(x(hi_) - x(lo), 1):.1f}" height="18" fill="#ffd8bf"/>'
+                     f'<text x="{x(hi_) + 4:.1f}" y="{yy + 13}" fill="{INK}">{lo:,.0f} — {hi_:,.0f}</text>')
     bottom = PAD[1] + 10 + len(rows) * 26
-    marks = [(v_, c_, l_) for v_, c_, l_ in ((val["price"], INK, "现价"), (val["target"], BLUE, "目标价"), (street, GREEN, "市场目标价")) if v_]
+    marks = [(v_, c_, l_) for v_, c_, l_ in ((val["price"], INK, "现价"), (val["target"], BLUE, "12 个月目标价"),
+                                            (fair, "#722ed1", "合理价值"), (street, GREEN, "市场目标价")) if v_]
     for i, (value, color, label) in enumerate(sorted(marks)):  # labels on their own rows, left to right
         body += (f'<line x1="{x(value):.1f}" x2="{x(value):.1f}" y1="{PAD[1]}" y2="{bottom + 4 + 14 * i}" stroke="{color}" stroke-width="1.5" '
                  f'stroke-dasharray="{"" if color == INK else "4 3"}"/>'

@@ -41,9 +41,9 @@ def screening(facts: dict, val: dict, market_pe: float | None, findings: list[di
             drivers.append("比较对象：筛选在同行业内排名（该股价值评级 {scr_value}），研究对比全市场和自身的现金流；"
                            "同行市盈率中位数 {ind_pe}，全市场 {mkt_pe}")
         if d < 0 and "A" in (g["quality"], g["growth"]):
-            drivers.append("质量和成长：筛选看重这两项（质量 {scr_quality}、成长 {scr_growth}），研究看现价是否已经反映（预期超额回报 {excess_return}）")
+            drivers.append("质量和成长：筛选看重这两项（质量 {scr_quality}、成长 {scr_growth}），研究看现价是否已经反映（合理价值的超额回报 {fair_excess}）")
         if d > 0 and {"D", "E"} & {g["quality"], g["growth"]}:
-            drivers.append("质量和成长：筛选里这两项偏弱（质量 {scr_quality}、成长 {scr_growth}），研究看现价相对价值（预期超额回报 {excess_return}）")
+            drivers.append("质量和成长：筛选里这两项偏弱（质量 {scr_quality}、成长 {scr_growth}），研究看现价相对价值（合理价值的超额回报 {fair_excess}）")
         if findings:
             drivers.append("公告和新闻：本报告的审核读到" + "、".join(dict.fromkeys(x["words"] for x in findings[:3])) +
                            "，这是筛选的数字看不到的")
@@ -54,7 +54,7 @@ def screening(facts: dict, val: dict, market_pe: float | None, findings: list[di
         if ((val.get("inputs") or {}).get("floor") or {}).get("applied"):
             drivers.append("资本成本：研究用行业隐含的股权成本 {cost_equity}（CAPM 为 {capm_cost_equity}），市场多年来按这个水平定价")
         if not drivers:
-            drivers.append("估值：研究的预期超额回报 {excess_return}，筛选的价值项只占四分之一（价值评级 {scr_value}）")
+            drivers.append("估值：研究的合理价值超额回报 {fair_excess}，筛选的价值项只占四分之一（价值评级 {scr_value}）")
     return {"view": view, "agreement": agreement, "drivers": drivers, "keys": keys,
             "reason": None if sc.get("in_universe") else sc.get("reason")}
 
@@ -62,10 +62,11 @@ def screening(facts: dict, val: dict, market_pe: float | None, findings: list[di
 def street(facts: dict, val: dict) -> list[str]:
     """Why our target differs from the street's: the drivers whose gap is material, most relevant first."""
     st, k = val.get("street") or {}, val.get("inputs") or {}
-    if not st.get("target") or val.get("target") is None:
+    if not st.get("target") or val.get("fair_value") is None:
         return []
     need, rev, kind = st.get("implied") or {}, val.get("reverse") or {}, val["type"]
-    out = ["差距：我们的目标价 {target}，市场一致目标价 {street_target}，我们相对市场 {ours_vs_street}"]
+    out = ["差距：我们的合理价值 {fair_value}，市场一致目标价 {street_target}，我们相对市场 {ours_vs_street}",
+           "时间：卖方的 12 个月目标价默认一年内到达合理价值；我们按约 3 年靠拢，12 个月目标价 {target} 只计入三分之一的差距"]
     d = (val.get("methods") or {}).get("dcf") or (val.get("methods") or {}).get("dcf_normal")
     if kind in ("bank", "insurer", "broker") and need.get("implied_roe") is not None:
         out.append("回报率：市场的目标价对应长期 ROE {street_roe}（按我们的股权成本 {cost_equity}），我们假设长期 ROE {roe_term}；"

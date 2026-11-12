@@ -1,10 +1,12 @@
 """Research stage 10, part 2: each method's value and 12-month target, the weighted target, bear / base / bull, the
 valuation's uncertainty, the rating, what today's price assumes (reverse DCF, with base rates), the sensitivity grid
 and the comparison with the street; saved as data/research/<market>/<code>/valuation.json (`research CODE --value`).
-- Targets: an absolute method's value today rolled forward 12 months at the cost of equity less the dividend yield; a
-  multiple applied to the next 12 months' consensus (a normal trailing multiple a year from now).
-- Rating (PLAN.md "Rating"): expected 12-month excess return = (target - price + next year's dividend) / price
-  - the listing market's expected return (Damodaran's premium for it over the yield of the currency the target grows
+- Fair value a year from now: an absolute method's value today rolled forward 12 months at the cost of equity less
+  the dividend yield; a multiple applied to the next 12 months' consensus (a normal trailing multiple a year from now).
+- The 12-month target: the price a year on if it earns its cost of equity and closes a third of its (log) gap to the
+  fair value, as the gap closes over about three years (CONVERGE); bear and bull the same way.
+- Rating (PLAN.md "Rating"): the excess return if the price reached the fair value = (fair value - price + next year's
+  dividend) / price - the listing market's expected return (Damodaran's premium for it over the yield of the currency the target grows
   in: the reporting currency's, so a CNY reporter listed in HK is compared in CNY terms, by interest parity). 买入 at +band or more, 卖出 at -band or
   worse, else 持有; the band is the valuation's uncertainty (the larger of the bear-to-bull half-range and the methods'
   half-range), rounded up to 5 points, at least the brokers' 10% and at most 25% (Morningstar's uncertainty-scaled
@@ -29,6 +31,8 @@ from stockreport.research import dcf, folder, load, save, stamp, value
 from stockreport.research.checks import FINANCIAL, cagr
 
 BAND = (0.10, 0.25)
+CONVERGE = 3  # years for the price to reach fair value: Morningstar's "generally within three years" (Equity Research
+# Methodology, 2020); value-to-price predicts abnormal returns for up to three years (Ali, Hwang and Trombley 2003)
 TABLE_CURRENCY = {"cn": "CNY", "us": "USD", "hk": "CNY"}  # Eastmoney's HK amounts are CNY (stage 9)
 NAMES = {"dcf": "DCF (FCFF, 10 years)", "dcf_normal": "DCF, margins normalized", "pe_own": "P/E against own history",
          "pe_peers": "P/E against peers", "pe_normal": "own P/E on normalized EPS", "pb_own": "P/B against own history",
@@ -140,7 +144,8 @@ def weigh(found: dict, kind: str) -> tuple[float | None, dict]:
 
 def rate(target: float, bear: float, bull: float, targets: list[float], price: float, dividend: float,
          market_return: float) -> dict:
-    """The expected 12-month excess return over the market's and the rating at the valuation's uncertainty band."""
+    """The rating: the excess return over the market's if the price reached the fair value a year from now
+    (`target`), against the valuation's uncertainty band, the margin of safety Morningstar's stars ask."""
     spread = (max(bull, target, bear) - min(bull, target, bear)) / 2 / target if target > 0 else math.inf
     disagree = (max(targets) - min(targets)) / 2 / target if target > 0 else math.inf
     band = min(max(math.ceil(max(spread, disagree) * 20 - 1e-9) / 20, BAND[0]), BAND[1])
@@ -148,6 +153,13 @@ def rate(target: float, bear: float, bull: float, targets: list[float], price: f
     excess = expected - market_return
     return {"rating": "买入" if excess >= band else "卖出" if excess <= -band else "持有", "expected_return": expected,
             "excess_return": excess, "uncertainty": {"scenario_half_range": spread, "methods_half_range": disagree, "band": band}}
+
+
+def converge(fair: float, carry: float) -> float:
+    """The price a year from now: `carry` (today's price earning its cost of equity, less the dividend) closing a third
+    of its log gap to the fair value a year from now, as the gap closes over CONVERGE years. Fair values are never
+    negative (each method's floor is 0), and a bear value of 0 stays 0, the limit of the log gap."""
+    return carry * (fair / carry) ** (1 / CONVERGE) if fair > 0 and carry > 0 else fair
 
 
 @lru_cache(maxsize=3)
@@ -167,19 +179,22 @@ def base_table(market: str) -> pd.DataFrame:
 
 def base_rates(market: str, revenue_now: float, rates: dict[str, float | None], years: int = 5) -> dict:
     """Mauboussin and Callahan's base rates: of the companies in the same fifth by revenue (its rank in each start
-    year), how many grew revenue at least as fast over `years`; and the median company's growth (the market's norm)."""
+    year), how many grew revenue at least as fast over `years`; the median company's growth (the market's norm); and
+    the same fifth's median in the latest complete window (today's conditions: the DCF's growth beyond the consensus)."""
     p = base_table(market)
     cols, rows = sorted(p.columns), []
     for a, b in zip(cols, cols[years:]):
         start, end = p[a], p[b]
         ok = (start > 0) & (end > 0)
-        rows.append(pd.DataFrame({"g": (end[ok] / start[ok]) ** (1 / years) - 1, "fifth": (start.rank(pct=True)[ok] * 5).clip(upper=4.999).astype(int)}))
+        rows.append(pd.DataFrame({"g": (end[ok] / start[ok]) ** (1 / years) - 1, "end": b,
+                                  "fifth": (start.rank(pct=True)[ok] * 5).clip(upper=4.999).astype(int)}))
     if not rows:
         return {}
     d, latest = pd.concat(rows), p[cols[-2]].dropna()  # the last full year's cross-section (the newest may be partial)
     fifth = min(int((latest < revenue_now).mean() * 5), 4)
-    same = d[d["fifth"] == fifth]["g"]
+    same, now = d[d["fifth"] == fifth]["g"], d[(d["fifth"] == fifth) & (d["end"] == cols[-2])]["g"]  # cols[-1] may be partial
     return {"years": f"{cols[0]}-{cols[-1]}", "fifth": fifth + 1, "count": len(same), "median": float(same.median()),
+            "fifth_recent": float(now.median()) if len(now) else None, "recent_window": f"{int(cols[-2]) - years}-{cols[-2]}",
             "market_median": float(d["g"].median()), "recent_median": float(rows[-1]["g"].median()),
             "share_at_least": {name: float((same >= x).mean()) if x is not None else None for name, x in rates.items()}}
 
@@ -266,7 +281,9 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     k["mature_margin"] = value.peer_medians(f, today).get("mature_margin")  # the young's target margin (value.paths)
     t = v["ttm"]
     cur_rev = value.convert(yahoo.load_fx(), t["revenue"], k["currency"], TABLE_CURRENCY[market]) if t["revenue"] else None
-    norm = base_rates(market, cur_rev or 0, {})["recent_median"] if cur_rev else None  # the last 5-year window's median
+    rates = base_rates(market, cur_rev, {}) if cur_rev else {}
+    norm = rates.get("recent_median")  # the last 5-year window's median: the market's norm (kind_of)
+    k["base_growth"] = rates.get("fifth_recent")  # companies of this size now: growth beyond the consensus (value.paths)
     kind, why = value.kind_of(f, k, norm)
     cons = value.consensus_years(f, k, today)
     status, reason = flags(f) if kind != "pre_revenue" else ("不评级", why)
@@ -281,6 +298,11 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     bull = weigh(methods(f, k, kind, cons, today, hi, +1), kind)[0] or target
     dividend = value.next_dividend(f, k, cons)
     r = rate(target, bear, bull, [found[m]["target"] for m in weights], v["price"], dividend, k["market_return"])
+    gap, _ = r.pop("excess_return"), r.pop("expected_return")  # the rating's: fair value against the price
+    carry = v["price"] * (1 + k["cost_equity"]) - dividend  # the price a year on, earning its cost of equity
+    move = lambda x: converge(x, carry)
+    target12 = move(target)
+    expected = (target12 - v["price"] + dividend) / v["price"]
     d = found.get("dcf") or found.get("dcf_normal")
     ours = cagr(d["years"]["revenue"][4], t["revenue"], 5) if d else None
     rev = reverse(f, k, kind, cons, found)
@@ -288,13 +310,15 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     street = c.get("target_mean") or c.get("target_yahoo")
     roll = 1 + k["cost_equity"] - dividend / v["price"]  # as the absolute methods' targets roll forward
     needs = reverse(f, k, kind, cons, found, street / roll, margin=True) if street else {}  # what the street's target assumes
-    out |= r | {"target": target, "weights": weights, "methods": found, "bear": bear, "bull": bull,
+    out |= r | {"target": target12, "fair_value": target, "fair_excess": gap, "expected_return": expected,
+            "excess_return": expected - k["market_return"], "weights": weights, "methods": found,
+            "bear": move(bear), "bull": move(bull), "fair_bear": bear, "fair_bull": bull,
             "market_return": k["market_return"], "dividend_next": dividend, "reverse": rev, "sensitivity": sensitivity(f, k, found),
             "base_rates": base_rates(market, cur_rev, {"forecast": ours, "implied": rev.get("implied_growth_5y"),
                                                        "street": needs.get("implied_growth_5y")}) if cur_rev else {},
             "forecast_growth_5y": ours,
             "street": {"target": street, "upside": street / v["price"] - 1 if street else None, "ours_vs_street":
-                       target / street - 1 if street else None, "ratings": c.get("ratings") or c.get("ratings_yahoo"),
+                       target / street - 1 if street else None, "target_vs_street": target12 / street - 1 if street else None, "ratings": c.get("ratings") or c.get("ratings_yahoo"),
                        "analysts": c.get("analysts"), "implied": needs},
             "screening": {kk: f["screening"].get(kk) for kk in ("rating", "fifth", "score_rank", "universe", "in_universe", "reason")}}
     return finish(out)
@@ -319,8 +343,9 @@ def show(r: dict) -> str:
         extra = f"  (x{x['multiple']:.2f})" if x.get("multiple") else ""
         lines.append(f"  {NAMES[m]:<36} {w:>4.0%}  target {x['target']:>9.2f}" + (f"  value {x['value']:.2f}" if x.get("value") is not None else "") + extra)
     s, u = r["street"], r["uncertainty"]
-    lines.append(f"  target {r['target']:.2f} (bear {r['bear']:.2f} / bull {r['bull']:.2f}); expected {pct(r['expected_return'])} vs market "
-                 f"{r['market_return']:.1%}: excess {pct(r['excess_return'])}, band ±{u['band']:.0%}")
+    lines.append(f"  fair value {r['fair_value']:.2f} (bear {r['fair_bear']:.2f} / bull {r['fair_bull']:.2f}): excess {pct(r['fair_excess'])}"
+                 f" against a band of ±{u['band']:.0%}; 12-month target {r['target']:.2f}, expected {pct(r['expected_return'])} vs market "
+                 f"{r['market_return']:.1%}")
     rv = r["reverse"]
     lines.append(f"  reverse: growth {pct(rv.get('implied_growth_5y'))}" + (f", WACC {rv['implied_wacc']:.1%}" if rv.get("implied_wacc") else "") + (f", margin {rv['implied_margin']:.1%}" if rv.get("implied_margin") is not None else "") + (f"; implied ROE {rv['implied_roe']:.1%}, implied COE "
                  f"{rv['implied_cost_equity']:.1%}" if rv.get("implied_roe") else "") + (f"; dividend growth {pct(rv['implied_dividend_growth_5y'])}"

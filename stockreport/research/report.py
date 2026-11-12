@@ -203,10 +203,13 @@ def summary(f: dict, v: dict, doc: dict, limit: int = 4000) -> str:
     if v.get("target") is None:
         lines.append(f"评级：{v['rating']}（{v.get('reason') or '无法估值'}），现价 {price(v['price'], q)}")
     else:
-        lines.append(f"评级：{v['rating']}　目标价 {price(v['target'], q)}（现价 {price(v['price'], q)}，"
-                     f"{pct(v['target'] / v['price'] - 1, True, 0)}）")
-        lines.append(f"预期 12 个月回报 {pct(v['expected_return'], True)}（含股息），大盘预期 {pct(v['market_return'])}；"
-                     f"超额 {pct(v['excess_return'], True)} 对比门槛 ±{v['uncertainty']['band']:.0%}")
+        lines.append(f"评级：{v['rating']}　12 个月目标价 {price(v['target'], q)}（现价 {price(v['price'], q)}，"
+                     f"{pct(v['target'] / v['price'] - 1, True, 0)}），预期回报 {pct(v['expected_return'], True)}（含股息），"
+                     f"大盘预期 {pct(v['market_return'])}")
+        if number(v.get("fair_value")):
+            lines.append(f"合理价值 {price(v['fair_value'], q)}（{pct(v['fair_value'] / v['price'] - 1, True, 0)}），超额回报 "
+                         f"{pct(v['fair_excess'], True)} 对比评级门槛 ±{v['uncertainty']['band']:.0%}；股价一般约 3 年向合理价值"
+                         f"靠拢，所以 12 个月目标价只计入约三分之一的差距")
     for o in doc.get("others") or []:  # the issuer's other line (A+H)
         x = (f"{MARKET_NAME[o['market']]} {o['code']}：{o['rating']}" + (
             f"，目标价 {price(o['target'], o['currency'])}（现价 {price(o['price'], o['currency'])}，"

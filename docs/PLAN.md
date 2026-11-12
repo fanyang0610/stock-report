@@ -561,8 +561,53 @@
     no name confirmed was taken (now asked); the target test broke on a split (now on the price's move); a report
     logged before its PDF existed; a question left open after a screening request. Answered, not changed: a bare
     4-digit number is an HK code (2025 is 02025, as the plan's 0700); a second keyword in one poll gets one report, as
-    before. Not yet seen live: the record's settlement (first due 2027-11-12) and the worker sending while the
-    listener polls; the listener restart and the test round-trip wait for your OK (rule 9).
+    before. Not yet seen live: the record's settlement (first due 2027-11-12).
+  - With your OK (2026-11-12): the listener restarted (launchctl kickstart) and the round trip went out: you sent
+    "test" (the help text), "平安" (the question: 中国平安 or 平安银行), "1" (no AI): the acknowledgement, the summary and
+    the PDF of 中国平安 A+H, 62 s after the answer, the worker sending while the listener polled, no send failed. That
+    report still had the valuation's old 12-month targets (below); it was rebuilt after.
+- Valuation gap check (2026-11-12, your words: "the gap of BYD is too large to believe our approach is correct ... i
+  actually have similar concerns with your valuation of tencent, moutai apple and snowflake"). Each of the 20 valued
+  companies recomputed on its own fact sheet, one change at a time. Two structural faults and two data faults, fixed
+  for every company on published evidence ("Forecast", "Valuation and target price", "Rating"):
+  - The 12-month target assumed the whole gap to fair value closes within the year. Prices converge on fair value
+    "generally within three years" (Morningstar) and value-to-price predicts returns for up to three years (Ali, Hwang
+    and Trombley 2003): the target now closes a third of the log gap, on top of the cost of equity. The rating is still
+    the discount to fair value against the margin of safety, so it doesn't move with this.
+  - Growth beyond the consensus faded slowly from the last consensus year's (比亚迪 ~20% for years): now the size
+    class's median growth to year 5 (Chan, Karceski and Lakonishok 2003), then the stable rate by year 10.
+  - A year without a revenue consensus grew revenue with the consensus profit (比亚迪 year 2: 23%, a margin recovery):
+    now at the base rate, operating income still following profit. 百济神州's Yahoo revenue consensus is in USD (its
+    reporting currency there) and was set against CNY statements (year 1: -83%): now converted (consensus
+    revenue_currency).
+  - Before -> after, 12-month target against the price (fair value; the street's target): 比亚迪 +133% -> +21% (+57%;
+    +26%), 比亚迪股份 +79% -> +14% (+32%; +54%), 腾讯 +70% -> +23% (+62%; +54%), 茅台 +25% -> +10% (+27%; +16%), 五粮液
+    +40% -> +11% (+33%; -2%), Apple -26% -> -5% (-29%; -1%), Snowflake -54% -> -21% (-61%; +59%), Palantir -62% -> -29%
+    (-71%; +43%), 百济神州 -67% -> -16% (-48%; +40%), 君实 -68% -> -28%, Micron +14% -> +11%, NVIDIA +68% -> +7% (-1%;
+    +73%); the banks, insurers and REITs had smaller gaps to begin with (招商银行 +12% -> +10%, 中国平安 A +16% -> +10%,
+    JPMorgan -10% -> +1%: a 持有 whose fair value is below the price but whose year's carry is above it). Every
+    12-month target is now between -29% and +23%. One rating changed, by the growth fix: NVIDIA 买入 -> 持有 (its fair
+    value rested on +50% consensus growth fading over eight years; with the base rate after year 2 it is the price).
+    The others stand, as the rating rule is unchanged: it rests on the fair value against the margin of safety, so
+    比亚迪 (fair value +57%), 腾讯 (+62%) and 茅台 (+27%) stay 买入, Apple (-29%) and Snowflake (-61%) 卖出, with 12-month
+    excess returns of +16%, +18%, +6%, -14% and -31%; page 1 now labels which figure the rating uses. The fair values
+    against the street's targets (both a value a year on): 腾讯 +6%, 茅台 +9%, 比亚迪 +25%, Apple -29%, Snowflake -76%;
+    the three far ones are the margin (比亚迪: profitable peers' 8.5% against the 6.3% the street's target implies), the
+    cost of capital (Apple: Damodaran's hardware beta 1.34, 10.7%, against the 8.3% the street's target implies) and
+    stock-based pay as a cost (Snowflake): stage 10's inputs, kept, each said in the report.
+  - What the street shows: for the names that fell this autumn its targets sit far above the price too (腾讯 420
+    against a 657 high and a 645 target; Micron 690, 1,214, 1,622; NVIDIA 187, 239, 323; Snowflake 276, 369, 438),
+    targets that haven't followed the price down. The large gaps left against the street are views with their stated
+    condition: the growth names (Snowflake, Palantir, 百济神州) on GAAP margins and base-rate growth, where the street
+    capitalizes its own growth forecasts (Chan, Karceski and Lakonishok: those don't persist).
+  - Tests: the growth path beyond the consensus, the 12-month convergence and the latest window's base rate
+    (tests/test_research_valuation.py). 256 pass. The fresh review (one, on Sonnet; fixes checked by the tests)
+    confirmed the formula, the fields, the currency direction and that no number comes from DeepSeek; fixed: the
+    window's reason (first written as two names' consensus, now the consistency above) and its figures (CN is
+    2019-2024 at 4.9%), page 1 not saying the rating uses the fair value's excess, three comparison lines calling the
+    12-month excess "price against value". The PDF's page 1 shows the 12-month target, the fair value, its excess against the band and the 12-month
+    bear and bull; the summary adds the fair value line; the words get {fair_value}; the gap to the street is now fair
+    value against the street's target (both are "value in a year"), with a driver on the time it takes.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1309,7 +1354,17 @@ ordinary. The 60% is also a judgement of "most of its profit".
   company's own trend faded toward the market's base rate.
 - Years 3-10: growth fades to the long-run rate, no higher than the risk-free rate (Damodaran); margins move from
   today's toward the company's own 8-year median (mature) or the industry's (young or loss-making); reinvestment by its
-  sales-to-capital ratio.
+  sales-to-capital ratio. Since 2026-11-12 (your gap check, below): beyond the analysts' revenue forecasts, growth is
+  the base rate (the median 5-year revenue growth of the same size fifth in the latest complete window, the window
+  ending at the year base_rates already takes as the last full one: the largest fifth's CN 4.9% over 2019-2024, HK
+  4.3% and US 6.9% over 2020-2025; the US middle fifth 8.3%) to year 5, then falls to the long-run rate by year 10.
+  Chan, Karceski and Lakonishok (2003): growth shows no persistence beyond chance, so a consensus year's growth isn't
+  carried on (it was faded slowly from the last consensus year's, which kept 比亚迪 near 20% for years); a year without
+  a revenue consensus grows at the base rate, not with the consensus profit (profit growth from a margin recovery isn't
+  revenue growth). The latest window rather than every window pooled, because growth must be in today's nominal terms
+  to match today's discount rates (Damodaran's consistency of growth and the riskless rate in one currency): the
+  pooled China median (7.3%, 2009-2025) carries the 2010s' nominal growth into a CNY valuation discounted at a 1.6%
+  yield. Its limits: one cross-section, covering the covid years, of today's listings only (survivors).
 - Base rates: how often companies of a similar size in the same market grew as fast as the forecast says, from our own
   8-17 years of annual history per market (Mauboussin and Callahan's base-rate idea; today's listings only, which the
   report says).
@@ -1322,16 +1377,25 @@ ordinary. The 60% is also a judgement of "most of its profit".
   part of that edge (Morningstar's quantitative moat idea, measured from data).
 - Multiples: P/E, EV/EBIT, P/B or P/S as the type uses, against the stock's own 5-10-year range and its peers' median,
   applied to next year's consensus.
-- The target: the methods weighted as the type says, rolled forward 12 months at the cost of equity less the dividend;
-  bear / base / bull values from moving growth and margins by the analysts' spread or the company's own history; a
-  sensitivity grid.
+- The fair value: the methods weighted as the type says, a year from now (an absolute method's value rolled forward 12
+  months at the cost of equity less the dividend; a multiple on the next 12 months' consensus); bear / base / bull
+  values from moving growth and margins by the analysts' spread or the company's own history; a sensitivity grid.
+- The 12-month target (since 2026-11-12): the price a year on if it earns its cost of equity (less the dividend) and
+  closes a third of its log gap to the fair value, as prices converge on fair value "generally within three years"
+  (Morningstar's Equity Research Methodology, 2020) and value-to-price predicts abnormal returns for up to three years
+  (Ali, Hwang and Trombley 2003; Frankel and Lee 1998). Before, the target assumed the whole gap closed within the
+  year, which is what sell-side targets assume and why they are met only about 4 times in 10 (Bradshaw, Brown and
+  Huang 2013): 比亚迪 +133%, 腾讯 +70%, Apple -26%, Snowflake -54% a year from a model's value, with no event to move
+  the price that far (your words, 2026-11-12: "such dramatic price shifting drivers ... are usually caused by black
+  swan or very obvious impactful events ... that hard to be missed by the street consensus but only captured by you").
 - The street's target and rating are shown for comparison only and never feed ours; the report says where and why ours
   differs.
 
 #### Rating (code)
-- Expected 12-month excess return = (target − price + next year's dividend) ÷ price − the market's expected return
-  (risk-free + equity risk premium): the same benchmark (the index fund) and horizon (12 months) as the screening's
-  ratings, so the two compare.
+- The rating's excess return = (fair value − price + next year's dividend) ÷ price − the market's expected return
+  (risk-free + equity risk premium): the discount to fair value against the margin of safety below, as Morningstar's
+  stars rate it (unchanged 2026-11-12: the ratings stand; the 12-month target and expected return now show what a
+  year is expected to deliver, a third of the gap). The benchmark is the index fund, as the screening's.
 - 买入 at +10% or more, 卖出 at −10% or worse, 持有 between; the band widens to ±15 / 20 / 25% as valuation uncertainty
   rises (the bear-to-bull spread, the methods' disagreement, earnings volatility, analysts' disagreement, measured by
   code). Borrowed: Morningstar's uncertainty-scaled star bands, and Chinese brokers' regulated standard (a rating
