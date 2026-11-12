@@ -680,6 +680,56 @@
   55%), 12-month +21% (the street +36%); Alibaba's US line 买入, +58% (band 50%), +21%. Not changed: an ADR whose
   company isn't in Damodaran's list (TSMC, Alibaba's US line) takes the listing market's country and his total-market
   beta, and a TWD or CNY valuation the US yield where no yield of its own is kept (stage 10's stated limits). 261 tests.
+- Business segments for US and HK (2026-11-13; the follow-up to Amazon's valuation: its price implies a 24% long-run
+  margin against a 5.6% 8-year median, a mix the report couldn't show; stage 11 had left US and HK segments to the
+  annual report's text). research/segments.py; the fact sheet's `segments` now in all three markets, in 主营构成's
+  layout plus each segment's operating profit, its share of the segments' profit and its margin.
+  - US: the latest 10-K / 20-F's XBRL instance and labels ("Data sources"). A breakdown (operating segments; products
+    and services; regions) is kept for a year only when its parts add up to the reported revenue within 0.5%: the
+    most members that do, so subtotals drop out (Amazon tags product / service beside its seven sales groups), with
+    the eliminations and corporate lines the sum needs (P&G, Coca-Cola, Caterpillar, JD, Baidu, Disney; ASU 2023-07's
+    operating-segments tables read beside the plain ones, which differ at Caterpillar). A gross margin only when the
+    segments' add up to the company's (Disney tags one segment's cost: dropped); operating profit only when every
+    segment has it, the rest its own line (Apple: -54bn, R&D its regions don't carry); a Chinese 20-F's US-dollar year
+    left out. Of 50 large US filers, the 49 with an annual report all give a breakdown, 38 by segment; none for one-
+    segment companies (TSMC, Lilly, Visa, Salesforce) and banks; no segment profit where the measure isn't GAAP
+    operating income (Alibaba's adjusted EBITA, Caterpillar's segment profit, Berkshire's pretax). ~4 s a company.
+  - HK: no free table ("Data sources"). An A+H issuer's A line's 主营构成; an issuer with its own SEC filing by its US
+    line (Alibaba, JD); else the annual report's segment note from the PDF's layout text: a revenue row whose columns
+    add up to the last, whose total is the statements' revenue of a fiscal year within 2% at the units' scale, with
+    names only when the header's cells form one group per column (MTR's column groups first put the right figures
+    under the wrong names: now left out), per year the table with gross profit or segment results if one has them. Of
+    16 HK-only companies whose annual report the filing search finds, 4 parse (Tencent, Techtronic, Anta, HKEX); the
+    others are left out: segments as rows (SHKP), column groups (MTR), a total that isn't the statements' revenue
+    (AIA's insurance revenue, WH Group), no statements to check against (Link, a REIT), a table the parser doesn't
+    recognise (CK Hutchison, Galaxy, Sands China, CK Asset, Towngas, Sunny Optical, Lenovo). Not found by the filing
+    search at all: 6 of the 22 tried (Meituan, Xiaomi, HSBC, Li Ning, CLP, Hang Seng Bank; filings.periodic, a limit of
+    its own that the words' sections share). Tencent's fact sheet took 15 s cold with the note.
+  - The report: page 2's table holds the breakdowns that carry a margin and the others go on one line each (按产品：…),
+    with the segments' operating margins over the years (Amazon: AWS 27.1% → 35.4%, North America 4.2% → 6.9%) and the
+    source; a company without a checked table gets a line saying so. CN shows its latest period with margins (茅台's
+    annual 主营构成; its third quarter has none). The words' keys: the largest product (else segment) by revenue and
+    the segment with the most operating profit, its share of the segments' profit, its revenue share and margin
+    (Amazon: AWS, 57% of the profit on 18% of revenue at 35.4%), which Amazon's summary now names as the risk to watch.
+  - The DCF's margin target stays the company's own 8-year median ("Forecast"), decided from the evidence, not from
+    Amazon's gap. Segment data improve next year's earnings forecasts (Kinney 1971; Collins 1976; Baldwin 1984, on
+    analysts after line-of-business reporting; Ettredge, Kwon, Smith and Zarowin 2005, on prices after SFAS 131), a
+    horizon our DCF takes from the consensus, whose analysts read the same notes. No published test was found of a
+    revenue-weighted mix of segment margins forecasting the 5-10-year margin better than the firm's own history, and
+    Fairfield, Ramnath and Yohn (2009) find industry-level detail doesn't improve profitability forecasts over
+    economy-wide models (it does for growth). The free history is 3 years in a 10-K and 2 in an HK annual report,
+    below the 5 years the plan asks of a company's own record, and CN's 主营构成 has no operating profit. At today's
+    weights the mix is today's margin (Amazon's segments: 11.2% in 2025); a shifting mix needs segment growth
+    forecasts that no free source gives and that base rates fade (Chan, Karceski and Lakonishok 2003). So the report
+    shows the mix beside the margin the price implies, and no valuation changes (Amazon 持有 at 201.88, Apple 卖出 at
+    249.60, as before). A sum of the parts stays out too: segments carry no industry for peers' multiples.
+  - 265 tests (the parsers on trimmed Amazon and JD instances and Tencent's and Anta's segment pages). The
+    fresh-context stage review found no blocker. Fixed from it: a negative part counts only if it is an offsetting
+    line (eliminations, corporate), so a subtotal can't be netted back out of a sum; an HK profit row must add up
+    across its columns like the revenue row; a note under the table when the segments' profit leaves out an
+    unallocated line (Apple's 43% regional margins are before R&D); the profit key's label no longer says 业务 (Apple's
+    segments are regions). Answered: item names stay the filings' own English (no translation step added), and a
+    year's breakdown is chosen per year, labelled by its period.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1352,7 +1402,7 @@ As built in stage 12 (2026-11-12; research/router.py the layers, jobs.py the que
 | Data | CN | HK | US |
 |---|---|---|---|
 | Statements, 10+ years | Eastmoney F10 (as the history tables) | Eastmoney HK, Yahoo timeseries | SEC companyfacts |
-| Segments | Eastmoney 主营构成 (RPT_F10_FN_MAINOP; probed: 茅台酒 / 系列酒, 国内 / 国外) | annual report text | 10-K text |
+| Segments | Eastmoney 主营构成 (RPT_F10_FN_MAINOP; probed: 茅台酒 / 系列酒, 国内 / 国外) | the A line's 主营构成, else the issuer's own SEC filing, else the annual report's segment note (2026-11-13) | the 10-K's or 20-F's XBRL instance (2026-11-13) |
 | Consensus forecasts, ratings, targets | Eastmoney 盈利预测 (RPT_WEB_RESPREDICT; probed: 茅台 42 institutions, EPS to 2028), broker reports (reportapi) | Yahoo earnings trend, targets, recommendations | Nasdaq analyst API, Yahoo |
 | Filings and full reports | CNINFO | HKEXnews | EDGAR (10-K, 10-Q, 8-K, Form 4) |
 | Price, index, FX, rates | Tencent, 通达信, ChinaBond | Yahoo, HKGB | Yahoo, FRED |
@@ -1526,7 +1576,9 @@ the plan left open, each a published default:
   which is no mature record) the margin of the mature firms in its business, Damodaran's advice for a target margin:
   the median operating margin of its peer group's profitable members in the day's snapshot (at least 10), else his
   industry margin, an aggregate that loss-makers drag down (US internet software 3.7% against 24% for SNOW's 32
-  profitable software peers); else the company's 8-year median. Sales to capital: its 5-year median when its
+  profitable software peers); else the company's 8-year median, not a mix of its segments' margins (2026-11-13,
+  Status: the evidence for segment data is about next year's earnings, and the free segment history is 2-3 years).
+  Sales to capital: its 5-year median when its
   invested capital (equity + debt - cash) is positive in at least 3 of them, else the industry's. No consensus: the
   3-year revenue trend, faded.
 - Multiples: the own history's median (P/E distributions are skewed: trough-year P/Es put Micron's mean at 38x
@@ -1594,7 +1646,7 @@ comparisons and the forecast table, charts.py the SVG charts, report.py the repo
   months, 30 headlines of 90 days, 20 broker report titles of 6 months (CN) or 15 rating changes with targets (US, HK).
   Not built: the CN and HK results announcements (their annual report and broker titles carry the year), and 互动易 / e
   互动 Q&A (e互动, where all five CN test companies list, needs a paged company search; a later addition if the words
-  prove thin). US and HK segments are in the business text the words quote (no checkable free segment table).
+  prove thin). US and HK segments: built 2026-11-13 (Status), first left to the business text the words quote.
 - The report's own results review: the review's checklist, rules and cache (data/review) on 90 days of filings, 30 of
   headlines and the latest periodic report's passages (passages.latest), before the valuation, so a hard red flag
   stops the rating (rating.flags) as for a listed name.
@@ -1615,7 +1667,7 @@ comparisons and the forecast table, charts.py the SVG charts, report.py the repo
   rate. valuation.json keeps them under street.implied. Against the screening (compare.screening): the agreement and
   the drivers named in the plan, each only when it applies.
 - The PDF (render/research.html.j2, ~9-11 pages): page 1 the decision, conclusion, points, risks, the screening box and
-  key data; the company with CN 主营构成 and the peers table; bull and bear and what the price assumes; ten years of
+  key data; the company with its revenue mix (segments, products, regions; operating profit by segment where filed) and the peers table; bull and bear and what the price assumes; ten years of
   accounts with the accounting checks and the market's own flags; the 3-year forecast (12-month windows from where the
   trailing figures end) beside the consensus by fiscal year; the methods table, a football field, the rates and
   long-run inputs, the sensitivity grid and the P/E (financials P/B) band; why we differ from the street; catalysts,
@@ -2039,6 +2091,10 @@ Karceski and Lakonishok, "The level and persistence of growth rates" (JF 2003).
   - Headlines: the SEC filing list (data.sec.gov/submissions), see Method 8.
   - Base-rate panel (Phase 13, verified 2026-10-19): SEC frames data.sec.gov/api/xbrl/frames/us-gaap/<concept>/USD/CY<year>[Q4I].json, one concept's figure for one calendar year from every filer, dead companies included (CY2016 net income: 6,779 filers); ~1 MB each, 9 concepts a year (revenue concepts, NetIncomeLoss / ProfitLoss, StockholdersEquity at the year end, which 10-Q balance sheets fill for other fiscal years). SIC codes from data.sec.gov/submissions (0.1-1 MB each, read once per filer). Foreign filers report in IFRS and aren't in the us-gaap frames; their SIC code still comes from submissions.
   - Market-wide filings (Phase 11; unused since the market-wide feed was removed on 2026-10-26): SEC full-text search efts.sec.gov/LATEST/search-index?forms=...&startdt=&enddt=&from= (100 a page, `items` per 8-K, the document path in `_id`); filing documents at www.sec.gov/Archives/edgar/data/<cik>/<accession>/<document>.
+  - Segments (research, verified 2026-11-13): the latest 10-K / 20-F / 40-F's extracted XBRL instance
+    (www.sec.gov/Archives/edgar/data/<cik>/<accession>/index.json lists it as <name>_htm.xml, 1-11 MB) and the filing's
+    MetaLinks.json (labels, 1-2 MB, the same layout whether a filer's labels sit in a linkbase or in its schema:
+    Microsoft's); both read in memory, never stored; ~4 s a company. companyfacts and the frames carry no dimensions.
 - HK (verified in Phase 5, 2026-10-17):
   - Company list: Eastmoney datacenter RPT_HKF10_INFO_ORGPROFILE (every HK profile: name, ORG_CODE, industry, GICS-style industry type, organisation type, listing date; ~7,000 rows incl. delisted names, weekly). The Eastmoney list (push2 clist, fs = m:128+t:3,m:128+t:4,m:128+t:1) is blocked, as for CN and US.
   - Results: Eastmoney datacenter RPT_HKF10_FN_MAININDICATOR, one market-wide table filtered by report date (periods ending in the last ~2.2 years, ~12,500 rows; weekly, daily in March, April and August): year-to-date revenue and profit, growth (in the reporting currency, like Eastmoney's CN 业绩报表), BPS, gross margin, operating cash flow, debt/assets, issued shares, and Eastmoney's market value, PE-TTM and PB for the candidate list and the consistency checks. The 1,200 largest ordinary shares by that market value are kept up to date (config `hk_candidates`). TTM = year-to-date + last fiscal year - same period a year earlier, on each company's own fiscal year (the row's start date: March, June... year ends).
@@ -2060,6 +2116,10 @@ Karceski and Lakonishok, "The level and persistence of growth rates" (JF 2003).
   - Headlines: HKEXnews titleSearchServlet.do with the stockId from activestock_sehk_c.json. Phase 11: stockId -1 with a one-day range returns all of a day's filings in one call (rowRange 5000); t1code 40000 (lang en) lists a stock's annual and interim reports.
   - FX: Yahoo "<CUR>=X" for HKD and the reporting and estimate currencies (CNY, USD, SGD, JPY, EUR...), and 12 years of daily "<CUR>CNY=X" closes for the period-end rates (900 days until stage 6; the HK annual history
     goes back to 2015; data/fx_cny.csv.gz, ~280 KB, rewritten with each HK fetch).
+  - Segments (research, verified 2026-11-13): no Eastmoney HK table (its HK F10 has none; 同花顺's HK F10 gives
+    revenue shares only, no amounts or profit), so: an A+H issuer's A line's 主营构成, an issuer with its own SEC
+    filing (Alibaba, JD, Baidu) by its US line's XBRL, else the HKEXnews annual report's segment note, the PDF read in
+    memory (4-36 MB) with pypdf's layout text (extraction_mode="layout") for the pages that name the note.
 - FX, only needed when a company reports in a different currency from the one it trades in: ECB rates via api.frankfurter.dev.
 - Legacy references (read only), all under ~/Developer/EquitySignalsClawbot-legacy/:
   - Sources/EquitySignalsClawbotCore/PublicUniverse.swift (around line 1310, the Eastmoney list call)

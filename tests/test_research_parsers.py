@@ -137,3 +137,71 @@ def test_a_20f_filers_newest_year_from_the_second_source():
     out, years = facts.newer_years(st, second)
     assert years == ["2025-12-31"] and out["revenue"].tolist() == [2161.7, 2894.3, 3809.1] and out["months"].tolist() == [12] * 3
     assert facts.newer_years(st, second.iloc[:1])[1] == []
+
+
+def us_segments(name: str) -> pd.DataFrame:
+    from stockreport.research import segments
+    facts = segments.parse_instance((DATA / f"segments_us_{name}_sample.xml").read_bytes())  # trimmed 10-K / 20-F
+    return segments.breakdowns(facts, segments.parse_labels(json.loads((DATA / f"segments_us_{name}_labels.json").read_text())))
+
+
+def test_us_segments_are_parts_that_add_up_not_subtotals():
+    # Amazon's FY2025 10-K: three segments with operating income; the seven sales groups, not product / service
+    df = us_segments("amzn")
+    fy = df[df["period"] == "2025-12-31"].set_index(["by", "item"])
+    aws = fy.loc[("segment", "AWS")]
+    assert aws["revenue"] == pytest.approx(128725e6) and aws["op_income"] == pytest.approx(45606e6)
+    assert aws["op_margin"] == pytest.approx(0.3543, abs=1e-4) and aws["op_share"] == pytest.approx(0.5703, abs=1e-4)
+    assert len(fy.loc["segment"]) == 3 and fy.loc["segment", "share"].sum() == pytest.approx(1)
+    assert ("product", "Advertising services") in fy.index and len(fy.loc["product"]) == 7
+    assert fy.loc["product", "share"].sum() == pytest.approx(1) and fy.loc["region", "share"].sum() == pytest.approx(1)
+    assert fy.loc["product", "gross_margin"].isna().all() and sorted(df["period"].unique()) == ["2023-12-31", "2024-12-31", "2025-12-31"]
+    assert segments_unallocated(df, "2025-12-31") is None  # Amazon's segments carry all of its operating income
+
+
+def segments_unallocated(df, period):
+    rows = df[(df["period"] == period) & (df["item"] == "未分配（总部及调节项）")]
+    return rows["op_income"].iloc[0] if len(rows) else None
+
+
+def test_us_segments_with_eliminations_in_the_reporting_currency():
+    # JD's 20-F: CNY (its USD convenience translation of the latest year left out), the eliminations between segments
+    # tagged on the consolidation axis, a loss-making segment (no profit shares), corporate costs as the remainder
+    df = us_segments("jd")
+    fy = df[(df["period"] == "2025-12-31") & (df["by"] == "segment")].set_index("item")
+    assert fy.loc["JD Retail", "revenue"] == pytest.approx(1126.399e9, rel=1e-6)
+    assert fy.loc["分部间抵消", "revenue"] == pytest.approx(-83.742e9, rel=1e-6) and pd.isna(fy.loc["分部间抵消", "op_margin"])
+    assert fy["share"].sum() == pytest.approx(1, abs=0.005) and fy["op_share"].isna().all()
+    assert fy.loc["New Businesses", "op_margin"] < 0 and fy.loc["JD Retail", "gross_margin"] == pytest.approx(0.1759, abs=1e-4)
+    assert segments_unallocated(df, "2025-12-31") == pytest.approx(-7.256e9, rel=1e-3)
+
+
+def test_segment_partition_and_checked_measures():
+    from stockreport.research import segments
+    values = {"product": 60, "service": 40, "a": 30, "b": 30, "c": 25, "d": 15, "elim": -5}
+    assert sorted(segments.partition(values, 95, {"elim"})) == ["a", "b", "c", "d", "elim"]  # the parts, eliminations in
+    # a negative that isn't an offsetting line can't net a subtotal back out: {product, a, b, c, d, odd} would add up
+    assert sorted(segments.partition(values | {"elim": 0, "odd": -60}, 100)) == ["a", "b", "c", "d"]
+    assert segments.partition({"a": 50, "b": 30}, 100) is None and segments.partition({"a": 100}, 100) is None
+    got = {"a": 10.0, "b": 5.0}
+    assert segments.measure(got.get, ["a", "b"], 15.0, ["a", "b"]) == got
+    assert segments.measure(got.get, ["a", "b"], 20.0, ["a", "b"]) == {}  # partial tags don't add up: dropped
+    assert segments.measure(got.get, ["a", "b", "c"], 15.0, ["a", "b", "c"]) == {}
+
+
+def test_hk_segment_note_from_the_annual_reports_layout_text():
+    from stockreport.research import segments
+    tencent = segments.page_tables((DATA / "segments_hk_tencent_page.txt").read_text())  # 2025 annual report p.194
+    assert [t["year"] for t in tencent] == [2025, 2024]
+    assert tencent[0]["names"][:4] == ["VAS", "Marketing Services", "FinTech and Business Services", "Others"]
+    revenue = {2025: ("2025-12-31", 751.766e9), 2024: ("2024-12-31", 660.257e9)}  # the statements', CNY
+    df = segments.from_report(tencent, revenue, "ANNUAL REPORT 2025").set_index(["period", "item"])
+    vas = df.loc[("2025-12-31", "VAS")]
+    assert vas["revenue"] == pytest.approx(369.281e9) and vas["gross_margin"] == pytest.approx(222296 / 369281)
+    assert df.loc["2024-12-31", "share"].sum() == pytest.approx(1) and df["op_income"].isna().all()
+    assert segments.from_report(tencent, {2025: ("2025-12-31", 700e9)}, "x").empty  # not the company's revenue
+    # Anta: names offset to the right of the amounts, a bulleted row label, segment results, an unallocated column
+    anta = segments.page_tables((DATA / "segments_hk_anta_page.txt").read_text())[0]
+    assert anta["names"][:3] == ["ANTA brand", "FILA brand", "All other brands"] and anta["op"][3] == -274
+    df = segments.from_report([anta], {2025: ("2025-12-31", 80.219e9)}, "Annual Report 2025").set_index("item")
+    assert df.loc["FILA brand", "op_margin"] == pytest.approx(7418 / 28469) and len(df) == 4

@@ -102,10 +102,33 @@
 <h2>公司做什么</h2>
 {{ items(w.business) }}
 {% if f.segments %}
-{%- set last = f.segments | map(attribute='period') | max -%}
-<table class="small"><tr><th>主营构成（{{ last }}）</th><th>分类</th><th class="num">收入</th><th class="num">占比</th><th class="num">毛利率</th></tr>
-{% for s in f.segments if s.period == last %}<tr><td>{{ s.item }}</td><td>{{ {'product':'产品','region':'地区','industry':'行业'}.get(s.by, s.by) }}</td><td class="num">{{ F.money(s.revenue, r.rc) }}</td><td class="num">{{ F.pct(s.share, False, 0) }}</td><td class="num">{{ F.pct(s.gross_margin) }}</td></tr>{% endfor %}
-</table>{% elif f.market != 'cn' %}<p class="small muted">美股和港股的分部收入见上文引用的年报原文（免费数据里没有可核对的分部表）。</p>{% endif %}
+{%- set measured = (f.segments | selectattr('gross_margin', 'number') | list) + (f.segments | selectattr('op_income', 'number') | list) -%}
+{%- set last = (measured or f.segments) | map(attribute='period') | max -%}
+{%- set rows = f.segments | selectattr('period', 'equalto', last) | list -%}
+{%- set names = {'segment':'分部','product':'产品','region':'地区','industry':'行业'} -%}
+{%- set ns = namespace(table=[], lines=[], parts=[]) -%}
+{%- for by in ['segment', 'industry', 'product', 'region'] -%}{%- set part = rows | selectattr('by', 'equalto', by) | list -%}
+{%- if part | selectattr('gross_margin', 'number') | list or part | selectattr('op_income', 'number') | list -%}{%- set ns.table = ns.table + part[:8] -%}
+{%- elif part -%}{%- set ns.parts = [] -%}{%- for s in part[:8] -%}{%- set ns.parts = ns.parts + [s.item ~ ' ' ~ F.pct(s.share, False, 0)] -%}{%- endfor -%}
+{%- set ns.lines = ns.lines + ['按' ~ names[by] ~ '：' ~ ns.parts | join('，')] -%}{%- endif -%}{%- endfor -%}
+{%- set with_gross = ns.table | selectattr('gross_margin', 'number') | list | length > 0 -%}
+{%- set with_op = ns.table | selectattr('op_income', 'number') | list | length > 0 -%}
+{%- if ns.table %}
+<table class="small"><tr><th>收入构成（{{ last }}）</th><th>分类</th><th class="num">收入</th><th class="num">占比</th>{% if with_gross %}<th class="num">毛利率</th>{% endif %}{% if with_op %}<th class="num">营业利润</th><th class="num">占分部利润</th><th class="num">营业利润率</th>{% endif %}</tr>
+{% for s in ns.table %}<tr><td>{{ s.item }}</td><td>{{ names.get(s.by, s.by) }}</td><td class="num">{{ F.money(s.revenue, r.rc) }}</td><td class="num">{{ F.pct(s.share, False, 0) }}</td>{% if with_gross %}<td class="num">{{ F.pct(s.gross_margin) }}</td>{% endif %}{% if with_op %}<td class="num">{{ F.money(s.op_income, r.rc) }}</td><td class="num">{{ F.pct(s.op_share, False, 0) }}</td><td class="num">{{ F.pct(s.op_margin) }}</td>{% endif %}</tr>{% endfor %}
+</table>{% endif %}
+{%- for line in ns.lines %}
+<p class="small">{{ line }}{% if not ns.table and loop.first %}（{{ last }}）{% endif %}。</p>{% endfor %}
+{%- set first = f.segments | selectattr('by', 'equalto', 'segment') | selectattr('op_margin', 'number') | map(attribute='period') | min -%}
+{%- if with_op and first and first < last %}
+{%- set tn = namespace(trend=[]) -%}
+{%- for s in rows if s.by == 'segment' and s.op_margin is number -%}{%- for x in f.segments if x.by == 'segment' and x.period == first and x.item == s.item and x.op_margin is number -%}
+{%- set tn.trend = tn.trend + [s.item ~ ' ' ~ F.pct(x.op_margin) ~ ' → ' ~ F.pct(s.op_margin)] -%}{%- endfor -%}{%- endfor %}
+<p class="small muted">各分部营业利润率（{{ first[:4] }} → {{ last[:4] }}）：{{ tn.trend | join('；') }}。</p>{% endif %}
+{%- if ns.table | selectattr('item', 'equalto', '未分配（总部及调节项）') | list %}
+<p class="small muted">各分部的营业利润未扣“未分配”一行的总部、研发等费用，所以分部利润率高于公司整体的营业利润率。</p>{% endif %}
+<p class="small muted">来源：{{ rows[0].source or '东方财富 主营构成' }}{% if f.market == 'us' %}（XBRL 标注，各部分之和与报表收入核对一致）{% elif f.market == 'hk' and not (rows[0].source or '').startswith('A 股') %}（年报分部附注，合计与报表收入核对一致）{% endif %}。</p>
+{% elif f.market != 'cn' %}<p class="small muted">年报中没有读到可核对的分部表（只有一个分部，或附注格式读不出），分部情况见上文引用的年报原文。</p>{% endif %}
 <h3>行业与竞争</h3>
 {{ items(w.industry) }}
 {% if f.peers and f.peers.peers %}

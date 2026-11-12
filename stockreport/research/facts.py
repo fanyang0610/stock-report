@@ -12,7 +12,7 @@ import pandas as pd
 
 from stockreport.fetch import filings, nasdaq, yahoo
 from stockreport.research import (STATEMENT, cached, checks, cn, damodaran, days, folder, fresh, hk, listings, load,
-                                  save, sheet, sources, stamp, us)
+                                  save, segments, sheet, sources, stamp, us)
 
 log = logging.getLogger(__name__)
 QUOTE = {"cn": "CNY", "hk": "HKD", "us": "USD"}
@@ -99,12 +99,14 @@ def gather(market: str, code: str, today: date) -> dict:
             g["latest"] = us.from_annual(g["statements"])
         g["consensus"] = optional(f / "consensus.json", S, lambda: us.consensus(code), f"{code} Nasdaq consensus")
         g["flows"] = cached(f / "flows.json", D, lambda: us.flows(code))
+        g["segments"] = optional(f / "segments.csv.gz", S, lambda: segments.us(code, today), f"{code} segments")
     else:
         currency = g["street"].get("report_currency") or "HKD"
         st = cached(f / "statements.csv.gz", S, lambda: hk.statements(code, currency))
         if st.empty:  # no Eastmoney statements (REITs): Yahoo's annual series is the only source
             st, g["single"] = g["second"].reindex(columns=STATEMENT), True
         g["statements"], g["consensus"], g["flows"] = st, None, {}
+        g["segments"] = optional(f / "segments.csv.gz", S, lambda: segments.hk(code, today, st), f"{code} segments")
         a_line = listings.issuer(market, code).query("market == 'cn'")
         if len(a_line):  # an A+H issuer's dividends as declared, per fiscal year, from its A line's 分红
             g["a_dividends"] = cached(f / "a_dividends.json", S, lambda: cn.dividends(a_line["code"].iloc[0]))
@@ -311,7 +313,7 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         "checks": acct, "consensus": cons | ({"note": REIT_NOTE} if kind == "reit" else {}), "flows": g["flows"], "street": {k: street.get(k) for k in (
             "beta", "short_float", "short_ratio", "insiders", "institutions", "insider_buys_6m", "insider_sells_6m",
             "insider_net_shares_6m", "target_moves_6m", "ex_dividend")},
-        "segments": g["segments"].replace({float("nan"): None}).to_dict("records") if market == "cn" and len(g["segments"]) else [],
+        "segments": g["segments"].replace({float("nan"): None}).to_dict("records") if g.get("segments") is not None else [],
         "peers": sheet.peers(snap, code, industry, mcap), "industry_history": sheet.industry_history(industry) if market == "cn" and industry else [],
         "screening": sheet.screening(market, code, snap, today, listed, kind),
         "filings_12m": {"count": len(titles), "management": [t for t in titles if re.search(MANAGEMENT, t["title"])][:10],

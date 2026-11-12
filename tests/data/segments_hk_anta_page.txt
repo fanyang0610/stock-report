@@ -1,0 +1,61 @@
+140
+
+
+
+
+
+
+               1.        Revenue and Segment Reporting (Continued)
+                         (b)       Segment reporting
+
+                                   The CEO and senior management team are the Group’s chief operating decision-makers (the “CODMs”). The CODMs review
+                                   the Group’s internal reports periodically in order to assess performance and allocate resources from a brand perspective.
+                                   Consistent with the way in which information is reported internally to the CODMs, the Group has presented two reportable
+                                   segments of ANTA brand and FILA brand, respectively. Other than the two reportable segments, all other operating segments
+                                   have been aggregated and presented as “all other brands”. The segment information for the reporting period is as follows:
+
+
+                                                                                                                                                                                                Headquarters
+                                                                                                                                                                                                                and
+                                                                                                                           ANTA                         FILA                 All other             unallocated
+                                                                                                                           brand                      brand                     brands                       items                    Total
+                                                                                                                RMB’million        RMB’million        RMB’million        RMB’million        RMB’million
+
+                                     For the year ended 31 December 2025
+                                     Revenue
+                                     – Revenue from external customers                           34,754                 28,469                 16,996                           –                 80,219
+
+                                     Gross profit                                                                     18,621                 18,916                 12,197                           –                 49,734
+
+                                     Results                                                                               7,211                   7,418                   4,736                     (274)                19,091
+                                     – Net finance income                                                              –                           –                           –                   1,151                   1,151
+                                     – Share of net profit of associates                                        –                           –                           –                   1,203                   1,203
+                                     – Gain arising from repurchase and
+                                             cancellation of 2025 Convertible
+                                             Bonds                                                                                 –                           –                           –                           1                           1
+
+                                     Profit before taxation                                                      7,211                   7,418                   4,736                   2,081                 21,446
+
+                                     As at 31 December 2025
+                                     Assets
+                                     – Investments in associates                                                  –                           –                           –                 16,453                 16,453
+                                     – Other investments                                                                –                           –                           –                   6,348                   6,348
+                                     – Deferred tax assets                                                              –                           –                           –                   1,933                   1,933
+                                     – Cash and cash equivalents, fixed
+                                             deposits held at banks and pledged
+                                             deposits                                                                   20,181                   1,082                   7,641                 26,117                 55,021
+                                     – Other assets                                                                13,982                 10,017                 11,356                   9,281                 44,636
+                                     Reconciliation:
+                                     – Elimination of internal borrowings                                     –                           –                           –                       (96)                      (96)
+
+                                     Total assets                                                                    34,163                 11,099                 18,997                 60,036               124,295
+
+                                     Liabilities
+                                     – Borrowings                                                                             –                           –                           –                 23,302                 23,302
+                                     – Current taxation                                                                    –                           –                           –                   3,698                   3,698
+                                     – Deferred tax liabilities                                                          –                           –                           –                   1,984                   1,984
+                                     – Other liabilities                                                               9,554                   6,441                   5,773                   1,234                 23,002
+                                     Reconciliation:
+                                     – Elimination of internal borrowings                                 (35)                          –                       (61)                          –                       (96)
+
+                                     Total liabilities                                                                  9,519                   6,441                   5,712                 30,218                 51,890

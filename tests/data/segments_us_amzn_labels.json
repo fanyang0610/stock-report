@@ -1,0 +1,178 @@
+{
+"instance": {
+"sample": {
+"tag": {
+"us-gaap_AdvertisingMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Advertising [Member]",
+"terseLabel": "Advertising services"
+}
+}
+}
+},
+"amzn_AmazonWebServicesMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Amazon Web Services [Member]",
+"terseLabel": "AWS"
+}
+}
+}
+},
+"amzn_AmazonWebServicesSegmentMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Amazon Web Services Segment [Member]",
+"terseLabel": "AWS"
+}
+}
+}
+},
+"country_DE": {
+"lang": {
+"en-us": {
+"role": {
+"label": "GERMANY",
+"terseLabel": "Germany"
+}
+}
+}
+},
+"country_GB": {
+"lang": {
+"en-us": {
+"role": {
+"label": "UNITED KINGDOM",
+"terseLabel": "United Kingdom"
+}
+}
+}
+},
+"amzn_InternationalSegmentMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "International Segment [Member]",
+"terseLabel": "International"
+}
+}
+}
+},
+"country_JP": {
+"lang": {
+"en-us": {
+"role": {
+"label": "JAPAN",
+"terseLabel": "Japan"
+}
+}
+}
+},
+"us-gaap_NonUsMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Non-US [Member]",
+"terseLabel": "Rest of world"
+}
+}
+}
+},
+"amzn_NorthAmericaSegmentMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "North America Segment [Member]",
+"terseLabel": "North America"
+}
+}
+}
+},
+"amzn_OnlineStoresMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Online Stores [Member]",
+"terseLabel": "Online stores"
+}
+}
+}
+},
+"amzn_OtherServicesMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Other Services [Member]",
+"terseLabel": "Other"
+}
+}
+}
+},
+"amzn_PhysicalStoresMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Physical Stores [Member]",
+"terseLabel": "Physical stores"
+}
+}
+}
+},
+"us-gaap_ProductMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Product [Member]",
+"terseLabel": "Net product sales"
+}
+}
+}
+},
+"us-gaap_ServiceMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Service [Member]",
+"terseLabel": "Net service sales"
+}
+}
+}
+},
+"amzn_SubscriptionServicesMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Subscription Services [Member]",
+"terseLabel": "Subscription services"
+}
+}
+}
+},
+"amzn_ThirdPartySellerServicesMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Third-Party Seller Services [Member]",
+"terseLabel": "Third-party seller services"
+}
+}
+}
+},
+"country_US": {
+"lang": {
+"en-us": {
+"role": {
+"label": "UNITED STATES",
+"terseLabel": "United States"
+}
+}
+}
+}
+}
+}
+}
+}

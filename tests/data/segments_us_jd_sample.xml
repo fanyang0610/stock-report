@@ -1,0 +1,475 @@
+<xbrl
+  xmlns="http://www.xbrl.org/2003/instance"
+  xmlns:country="http://xbrl.sec.gov/country/2025"
+  xmlns:currency="http://xbrl.sec.gov/currency/2025"
+  xmlns:cyd="http://xbrl.sec.gov/cyd/2025"
+  xmlns:dei="http://xbrl.sec.gov/dei/2025"
+  xmlns:ecd="http://xbrl.sec.gov/ecd/2025"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+  xmlns:jd="http://www.jd.com/20251231"
+  xmlns:link="http://www.xbrl.org/2003/linkbase"
+  xmlns:srt="http://fasb.org/srt/2025"
+  xmlns:us-gaap="http://fasb.org/us-gaap/2025"
+  xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
+  xmlns:xlink="http://www.w3.org/1999/xlink"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<context id="P01_01_2023To12_31_2023"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> </entity> <period> <startDate>2023-01-01</startDate> <endDate>2023-12-31</endDate> </period> </context>
+<context id="P01_01_2023To12_31_2023_CorporateNonSegmentMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:CorporateNonSegmentMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2023-01-01</startDate> <endDate>2023-12-31</endDate> </period> </context>
+<context id="P01_01_2023To12_31_2023_ElectronicsAndHomeApplianceProductsMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">jd:ElectronicsAndHomeApplianceProductsMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2023-01-01</startDate> <endDate>2023-12-31</endDate> </period> </context>
+<context id="P01_01_2023To12_31_2023_GeneralMerchandiseProductsMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">jd:GeneralMerchandiseProductsMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2023-01-01</startDate> <endDate>2023-12-31</endDate> </period> </context>
+<context id="P01_01_2023To12_31_2023_IntersegmentEliminationMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:IntersegmentEliminationMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2023-01-01</startDate> <endDate>2023-12-31</endDate> </period> </context>
+<context id="P01_01_2023To12_31_2023_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">jd:JdLogisticsMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2023-01-01</startDate> <endDate>2023-12-31</endDate> </period> </context>
+<context id="P01_01_2023To12_31_2023_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</xbrldi:explicitMember> <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">jd:JdLogisticsMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2023-01-01</startDate> <endDate>2023-12-31</endDate> </period> </context>
+<context id="P01_01_2023To12_31_2023_JdRetailMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</xbrldi:explicitMember> <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">jd:JdRetailMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2023-01-01</startDate> <endDate>2023-12-31</endDate> </period> </context>
+<context id="P01_01_2023To12_31_2023_LogisticsAndOtherServicesMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">jd:LogisticsAndOtherServicesMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2023-01-01</startDate> <endDate>2023-12-31</endDate> </period> </context>
+<context id="P01_01_2023To12_31_2023_NewBusinessMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</xbrldi:explicitMember> <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">jd:NewBusinessMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2023-01-01</startDate> <endDate>2023-12-31</endDate> </period> </context>
+<context id="P01_01_2023To12_31_2023_OnlineMarketplaceAndMarketingServicesMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">jd:OnlineMarketplaceAndMarketingServicesMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2023-01-01</startDate> <endDate>2023-12-31</endDate> </period> </context>
+<context id="P01_01_2023To12_31_2023_OperatingSegmentsMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2023-01-01</startDate> <endDate>2023-12-31</endDate> </period> </context>
+<context id="P01_01_2023To12_31_2023_ProductMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">us-gaap:ProductMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2023-01-01</startDate> <endDate>2023-12-31</endDate> </period> </context>
+<context id="P01_01_2023To12_31_2023_ServiceMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">us-gaap:ServiceMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2023-01-01</startDate> <endDate>2023-12-31</endDate> </period> </context>
+<context id="P01_01_2024To12_31_2024"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> </entity> <period> <startDate>2024-01-01</startDate> <endDate>2024-12-31</endDate> </period> </context>
+<context id="P01_01_2024To12_31_2024_CorporateNonSegmentMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:CorporateNonSegmentMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2024-01-01</startDate> <endDate>2024-12-31</endDate> </period> </context>
+<context id="P01_01_2024To12_31_2024_ElectronicsAndHomeApplianceProductsMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">jd:ElectronicsAndHomeApplianceProductsMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2024-01-01</startDate> <endDate>2024-12-31</endDate> </period> </context>
+<context id="P01_01_2024To12_31_2024_GeneralMerchandiseProductsMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">jd:GeneralMerchandiseProductsMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2024-01-01</startDate> <endDate>2024-12-31</endDate> </period> </context>
+<context id="P01_01_2024To12_31_2024_IntersegmentEliminationMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:IntersegmentEliminationMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2024-01-01</startDate> <endDate>2024-12-31</endDate> </period> </context>
+<context id="P01_01_2024To12_31_2024_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">jd:JdLogisticsMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2024-01-01</startDate> <endDate>2024-12-31</endDate> </period> </context>
+<context id="P01_01_2024To12_31_2024_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</xbrldi:explicitMember> <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">jd:JdLogisticsMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2024-01-01</startDate> <endDate>2024-12-31</endDate> </period> </context>
+<context id="P01_01_2024To12_31_2024_JdRetailMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</xbrldi:explicitMember> <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">jd:JdRetailMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2024-01-01</startDate> <endDate>2024-12-31</endDate> </period> </context>
+<context id="P01_01_2024To12_31_2024_LogisticsAndOtherServicesMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">jd:LogisticsAndOtherServicesMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2024-01-01</startDate> <endDate>2024-12-31</endDate> </period> </context>
+<context id="P01_01_2024To12_31_2024_NewBusinessMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</xbrldi:explicitMember> <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">jd:NewBusinessMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2024-01-01</startDate> <endDate>2024-12-31</endDate> </period> </context>
+<context id="P01_01_2024To12_31_2024_OnlineMarketplaceAndMarketingServicesMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">jd:OnlineMarketplaceAndMarketingServicesMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2024-01-01</startDate> <endDate>2024-12-31</endDate> </period> </context>
+<context id="P01_01_2024To12_31_2024_OperatingSegmentsMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2024-01-01</startDate> <endDate>2024-12-31</endDate> </period> </context>
+<context id="P01_01_2024To12_31_2024_ProductMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">us-gaap:ProductMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2024-01-01</startDate> <endDate>2024-12-31</endDate> </period> </context>
+<context id="P01_01_2024To12_31_2024_ServiceMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">us-gaap:ServiceMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2024-01-01</startDate> <endDate>2024-12-31</endDate> </period> </context>
+<context id="P01_01_2025To12_31_2025"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> </entity> <period> <startDate>2025-01-01</startDate> <endDate>2025-12-31</endDate> </period> </context>
+<context id="P01_01_2025To12_31_2025_CorporateNonSegmentMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:CorporateNonSegmentMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2025-01-01</startDate> <endDate>2025-12-31</endDate> </period> </context>
+<context id="P01_01_2025To12_31_2025_ElectronicsAndHomeApplianceProductsMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">jd:ElectronicsAndHomeApplianceProductsMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2025-01-01</startDate> <endDate>2025-12-31</endDate> </period> </context>
+<context id="P01_01_2025To12_31_2025_GeneralMerchandiseProductsMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">jd:GeneralMerchandiseProductsMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2025-01-01</startDate> <endDate>2025-12-31</endDate> </period> </context>
+<context id="P01_01_2025To12_31_2025_IntersegmentEliminationMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:IntersegmentEliminationMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2025-01-01</startDate> <endDate>2025-12-31</endDate> </period> </context>
+<context id="P01_01_2025To12_31_2025_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">jd:JdLogisticsMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2025-01-01</startDate> <endDate>2025-12-31</endDate> </period> </context>
+<context id="P01_01_2025To12_31_2025_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</xbrldi:explicitMember> <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">jd:JdLogisticsMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2025-01-01</startDate> <endDate>2025-12-31</endDate> </period> </context>
+<context id="P01_01_2025To12_31_2025_JdRetailMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</xbrldi:explicitMember> <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">jd:JdRetailMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2025-01-01</startDate> <endDate>2025-12-31</endDate> </period> </context>
+<context id="P01_01_2025To12_31_2025_LogisticsAndOtherServicesMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">jd:LogisticsAndOtherServicesMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2025-01-01</startDate> <endDate>2025-12-31</endDate> </period> </context>
+<context id="P01_01_2025To12_31_2025_NewBusinessMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</xbrldi:explicitMember> <xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">jd:NewBusinessMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2025-01-01</startDate> <endDate>2025-12-31</endDate> </period> </context>
+<context id="P01_01_2025To12_31_2025_OnlineMarketplaceAndMarketingServicesMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">jd:OnlineMarketplaceAndMarketingServicesMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2025-01-01</startDate> <endDate>2025-12-31</endDate> </period> </context>
+<context id="P01_01_2025To12_31_2025_OperatingSegmentsMembersrtConsolidationItemsAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">us-gaap:OperatingSegmentsMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2025-01-01</startDate> <endDate>2025-12-31</endDate> </period> </context>
+<context id="P01_01_2025To12_31_2025_ProductMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">us-gaap:ProductMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2025-01-01</startDate> <endDate>2025-12-31</endDate> </period> </context>
+<context id="P01_01_2025To12_31_2025_ServiceMembersrtProductOrServiceAxis"> <entity> <identifier scheme="http://www.sec.gov/CIK">0001549802</identifier> <segment> <xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">us-gaap:ServiceMember</xbrldi:explicitMember> </segment> </entity> <period> <startDate>2025-01-01</startDate> <endDate>2025-12-31</endDate> </period> </context>
+<unit id="Unit_CNY"> <measure>iso4217:CNY</measure> </unit>
+<unit id="Unit_USD"> <measure>iso4217:USD</measure> </unit>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2023To12_31_2023_ProductMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">871224000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2024To12_31_2024_ProductMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">928007000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2025To12_31_2025_ProductMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">1023802000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2025To12_31_2025_ProductMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_USD">146402000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2023To12_31_2023_ServiceMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">213438000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2024To12_31_2024_ServiceMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">230812000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2025To12_31_2025_ServiceMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">285283000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2025To12_31_2025_ServiceMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_USD">40795000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2023To12_31_2023"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">1084662000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2024To12_31_2024"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">1158819000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2025To12_31_2025"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">1309085000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2025To12_31_2025"
+      decimals="-6"
+     
+      unitRef="Unit_USD">187197000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:CostOfGoodsAndServicesSold
+      contextRef="P01_01_2023To12_31_2023"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">924958000000</us-gaap:CostOfGoodsAndServicesSold>
+<us-gaap:CostOfGoodsAndServicesSold
+      contextRef="P01_01_2024To12_31_2024"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">974951000000</us-gaap:CostOfGoodsAndServicesSold>
+<us-gaap:CostOfGoodsAndServicesSold
+      contextRef="P01_01_2025To12_31_2025"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">1099057000000</us-gaap:CostOfGoodsAndServicesSold>
+<us-gaap:CostOfGoodsAndServicesSold
+      contextRef="P01_01_2025To12_31_2025"
+      decimals="-6"
+     
+      unitRef="Unit_USD">157163000000</us-gaap:CostOfGoodsAndServicesSold>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2023To12_31_2023"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">26025000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2024To12_31_2024"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">38736000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2025To12_31_2025"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">2774000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2025To12_31_2025"
+      decimals="-6"
+     
+      unitRef="Unit_USD">397000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2023To12_31_2023_ElectronicsAndHomeApplianceProductsMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">538799000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2024To12_31_2024_ElectronicsAndHomeApplianceProductsMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">564982000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2025To12_31_2025_ElectronicsAndHomeApplianceProductsMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">605131000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2023To12_31_2023_GeneralMerchandiseProductsMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">332425000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2024To12_31_2024_GeneralMerchandiseProductsMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">363025000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2025To12_31_2025_GeneralMerchandiseProductsMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">418671000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2023To12_31_2023_OnlineMarketplaceAndMarketingServicesMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">84726000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2024To12_31_2024_OnlineMarketplaceAndMarketingServicesMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">90111000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2025To12_31_2025_OnlineMarketplaceAndMarketingServicesMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">107131000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2023To12_31_2023_LogisticsAndOtherServicesMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">128712000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2024To12_31_2024_LogisticsAndOtherServicesMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">140701000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2025To12_31_2025_LogisticsAndOtherServicesMembersrtProductOrServiceAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">178152000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2023To12_31_2023_JdRetailMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">945343000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2024To12_31_2024_JdRetailMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">1015948000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2025To12_31_2025_JdRetailMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">1126399000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2023To12_31_2023_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">166625000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2024To12_31_2024_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">182837000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2025To12_31_2025_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">217146000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2023To12_31_2023_NewBusinessMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">26617000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2024To12_31_2024_NewBusinessMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">19157000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2025To12_31_2025_NewBusinessMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">49282000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2023To12_31_2023_IntersegmentEliminationMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">-53923000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2024To12_31_2024_IntersegmentEliminationMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">-59123000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2025To12_31_2025_IntersegmentEliminationMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">-83742000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2023To12_31_2023"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">1084662000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2024To12_31_2024"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">1158819000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      contextRef="P01_01_2025To12_31_2025"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">1309085000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+<us-gaap:CostOfRevenue
+      contextRef="P01_01_2023To12_31_2023_JdRetailMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">798380000000</us-gaap:CostOfRevenue>
+<us-gaap:CostOfRevenue
+      contextRef="P01_01_2024To12_31_2024_JdRetailMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">847917000000</us-gaap:CostOfRevenue>
+<us-gaap:CostOfRevenue
+      contextRef="P01_01_2025To12_31_2025_JdRetailMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">928261000000</us-gaap:CostOfRevenue>
+<us-gaap:CostOfRevenue
+      contextRef="P01_01_2023To12_31_2023_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">154494000000</us-gaap:CostOfRevenue>
+<us-gaap:CostOfRevenue
+      contextRef="P01_01_2024To12_31_2024_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">164689000000</us-gaap:CostOfRevenue>
+<us-gaap:CostOfRevenue
+      contextRef="P01_01_2025To12_31_2025_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">198039000000</us-gaap:CostOfRevenue>
+<us-gaap:CostOfRevenue
+      contextRef="P01_01_2023To12_31_2023_NewBusinessMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">21004000000</us-gaap:CostOfRevenue>
+<us-gaap:CostOfRevenue
+      contextRef="P01_01_2024To12_31_2024_NewBusinessMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">15109000000</us-gaap:CostOfRevenue>
+<us-gaap:CostOfRevenue
+      contextRef="P01_01_2025To12_31_2025_NewBusinessMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">49995000000</us-gaap:CostOfRevenue>
+<us-gaap:CostOfRevenue
+      contextRef="P01_01_2023To12_31_2023_IntersegmentEliminationMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">-49053000000</us-gaap:CostOfRevenue>
+<us-gaap:CostOfRevenue
+      contextRef="P01_01_2024To12_31_2024_IntersegmentEliminationMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">-52844000000</us-gaap:CostOfRevenue>
+<us-gaap:CostOfRevenue
+      contextRef="P01_01_2025To12_31_2025_IntersegmentEliminationMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">-77325000000</us-gaap:CostOfRevenue>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2023To12_31_2023_JdRetailMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">35925000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2024To12_31_2024_JdRetailMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">41077000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2025To12_31_2025_JdRetailMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">51402000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2023To12_31_2023_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">1005000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2024To12_31_2024_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">6317000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2025To12_31_2025_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">5269000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2023To12_31_2023_NewBusinessMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">-329000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2024To12_31_2024_NewBusinessMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">-2865000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2025To12_31_2025_NewBusinessMemberusgaapStatementBusinessSegmentsAxis_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">-46641000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2023To12_31_2023_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">36601000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2024To12_31_2024_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">44529000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2025To12_31_2025_OperatingSegmentsMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">10030000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2023To12_31_2023_CorporateNonSegmentMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">-10576000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2024To12_31_2024_CorporateNonSegmentMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">-5793000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2025To12_31_2025_CorporateNonSegmentMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">-7256000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2023To12_31_2023"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">26025000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2024To12_31_2024"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">38736000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2025To12_31_2025"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">2774000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:Revenues
+      contextRef="P01_01_2023To12_31_2023_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">50063000000</us-gaap:Revenues>
+<us-gaap:Revenues
+      contextRef="P01_01_2024To12_31_2024_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">55062000000</us-gaap:Revenues>
+<us-gaap:Revenues
+      contextRef="P01_01_2025To12_31_2025_JdLogisticsMemberusgaapStatementBusinessSegmentsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">80314000000</us-gaap:Revenues>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2023To12_31_2023_CorporateNonSegmentMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">-10576000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2024To12_31_2024_CorporateNonSegmentMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">-5793000000</us-gaap:OperatingIncomeLoss>
+<us-gaap:OperatingIncomeLoss
+      contextRef="P01_01_2025To12_31_2025_CorporateNonSegmentMembersrtConsolidationItemsAxis"
+      decimals="-6"
+     
+      unitRef="Unit_CNY">-7256000000</us-gaap:OperatingIncomeLoss>
+</xbrl>

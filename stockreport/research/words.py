@@ -95,8 +95,11 @@ def keys(f: dict, v: dict, extra: dict) -> dict[str, tuple[str, str]]:
     ratings = st.get("ratings") or {}
     n_rated = sum(x or 0 for x in ratings.values())
     bullish = sum(ratings.get(x) or 0 for x in ("buy", "add", "strongBuy"))
-    seg = [x for x in f.get("segments") or [] if x["by"] == "product" and x["period"] == max(y["period"] for y in f["segments"])]
-    top = max(seg, key=lambda x: x.get("share") or 0, default=None)
+    rows = [x for x in f.get("segments") or [] if x["period"] == max(y["period"] for y in f["segments"])]
+    by = next((b for b in ("product", "segment", "industry") if any(x["by"] == b for x in rows)), None)
+    top = max((x for x in rows if x["by"] == by), key=lambda x: x.get("share") or 0, default=None)
+    earner = max((x for x in rows if x["by"] == "segment" and x.get("op_share") is not None), key=lambda x: x["op_share"], default=None)
+    what = {"product": "产品", "segment": "业务分部", "industry": "行业"}.get(by)
     out = {
         "name": ("公司", f["name"]), "industry": ("行业", f.get("industry")),
         "rating": ("我们的评级", v["rating"]), "target": ("12 个月目标价", price(v.get("target"), q)),
@@ -169,8 +172,12 @@ def keys(f: dict, v: dict, extra: dict) -> dict[str, tuple[str, str]]:
         "div_cuts": ("削减股息的年数", f"{inc['cuts']}" if inc.get("cuts") is not None else None),
         "yield_avg_5y": ("近 5 年平均股息率", pct(inc.get("yield_avg_5y"))),
         "eps_growth_consensus": ("一致预期的每股收益年增长", pct(val.get("eps_growth_consensus"), True)),
-        "top_segment": ("最大的产品分部", top["item"] if top and top.get("share") else None),
-        "top_segment_share": ("最大产品分部的收入占比", pct(top.get("share"), digits=0) if top else None),
+        "top_segment": (f"收入最大的{what}", top["item"] if top and top.get("share") else None),
+        "top_segment_share": (f"收入最大的{what}的收入占比", pct(top.get("share"), digits=0) if top else None),
+        "profit_segment": ("营业利润最多的分部", earner["item"] if earner else None),
+        "profit_segment_profit_share": ("营业利润最多的分部占各分部营业利润之和的比例", pct(earner["op_share"], digits=0) if earner else None),
+        "profit_segment_revenue_share": ("营业利润最多的分部的收入占比", pct(earner.get("share"), digits=0) if earner else None),
+        "profit_segment_margin": ("营业利润最多的分部的营业利润率", pct(earner.get("op_margin")) if earner else None),
         "next_earnings": ("下次财报日", (c.get("next_earnings") or [None])[0]),
         "upgrades_6m": ("近 6 个月上调评级的次数", f"{c['upgrades_6m']}" if c.get("upgrades_6m") is not None else None),
         "downgrades_6m": ("近 6 个月下调评级的次数", f"{c['downgrades_6m']}" if c.get("downgrades_6m") is not None else None),

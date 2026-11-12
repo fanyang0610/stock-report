@@ -1,0 +1,128 @@
+{
+"instance": {
+"sample": {
+"tag": {
+"us-gaap_CorporateNonSegmentMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Corporate, Non-Segment [Member]",
+"terseLabel": "Unallocated items"
+}
+}
+}
+},
+"jd_ElectronicsAndHomeApplianceProductsMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Electronics And Home Appliance Products [Member]",
+"terseLabel": "Electronics and home appliance products"
+}
+}
+}
+},
+"jd_GeneralMerchandiseProductsMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "General Merchandise Products [Member]",
+"terseLabel": "General merchandise products"
+}
+}
+}
+},
+"us-gaap_IntersegmentEliminationMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Intersegment Eliminations [Member]",
+"terseLabel": "Inter-segment"
+}
+}
+}
+},
+"jd_JdLogisticsMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "JD Logistics [Member]",
+"terseLabel": "JD Logistics"
+}
+}
+}
+},
+"jd_JdRetailMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Jd Retail [Member]",
+"terseLabel": "JD Retail"
+}
+}
+}
+},
+"jd_LogisticsAndOtherServicesMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Logistics And Other Services [Member]",
+"terseLabel": "Logistics and other services"
+}
+}
+}
+},
+"jd_NewBusinessMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "New Business [Member]",
+"terseLabel": "New Businesses"
+}
+}
+}
+},
+"jd_OnlineMarketplaceAndMarketingServicesMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "online marketplace and marketing services [Member]",
+"terseLabel": "Online marketplace and marketing services"
+}
+}
+}
+},
+"us-gaap_OperatingSegmentsMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Operating Segments [Member]",
+"terseLabel": "Operating segments"
+}
+}
+}
+},
+"us-gaap_ProductMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Product [Member]",
+"terseLabel": "Products"
+}
+}
+}
+},
+"us-gaap_ServiceMember": {
+"lang": {
+"en-us": {
+"role": {
+"label": "Service [Member]",
+"terseLabel": "Service"
+}
+}
+}
+}
+}
+}
+}
+}
