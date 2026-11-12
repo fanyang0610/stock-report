@@ -19,6 +19,7 @@ from stockreport.config import CONFIG, DATA, REPORTS
 from stockreport.fetch import profiles
 from stockreport.notes import SHORT, shorten
 from stockreport.render import html_to_pdf, render_html, text_summary
+from stockreport.research import record
 from stockreport.score import NAMES
 
 log = logging.getLogger(__name__)
@@ -269,6 +270,16 @@ def section(market: str, rows: pd.DataFrame, day: str, today: date, failed: list
              for k in ("buy", "hold", "sell", "veto", "removed")}
     for p in cards["removed"]:  # the name that took its place, as the cards name it
         p["replaced_by"] = next((b["short"] for b in cards[p.get("from") or "buy"] if b.get("replaces") == p["ticker"]), "")
+    try:  # a research report of the last 30 days that disagrees: one line on the card (never stops the report)
+        recent = record.recent(market, today, CONFIG["router"]["recent_days"])
+    except Exception:
+        log.exception("%s research log unreadable", market.upper())
+        recent = {}
+    for kind, word in (("buy", "买入"), ("hold", "持有"), ("sell", "卖出")):
+        for p in cards[kind]:
+            r = recent.get(p["ticker"])
+            if r and r["rating"] in ("买入", "持有", "卖出") and r["rating"] != word:
+                p["research"] = f"个股报告（{r['date'][5:]}）：{r['rating']}，与本榜不同，原因见该报告"
     return {"code": market.upper(), "name": name, "short": name.split()[0], "currency": currency, "unit": unit, "day": day,
             "expect": expect(market), "live": live(market), "field": FIELD[market],
             "data_date": max((c["price_date"] for c in cards["buy"] if c["price_date"]), default=day),

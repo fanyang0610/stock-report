@@ -35,7 +35,8 @@ uv run python -m stockreport fetch --market cn|us|hk
 uv run python -m stockreport run [--market cn|us|hk]                # fetch + score + lists + review sources + PDF (no DeepSeek)
 uv run python -m stockreport review                                 # results review (DeepSeek), then the PDF
 uv run python -m stockreport send [--test]                          # text summary + PDF to WeChat (reviewed first)
-uv run python -m stockreport listen                                 # listener (launchd): keywords now, the router from stage 12
+uv run python -m stockreport listen                                 # listener (launchd): the keyword, then the router for other messages
+uv run python -m stockreport research --queue                       # the background worker the listener starts: queued research requests, answered over WeChat
 uv run python -m stockreport research CODE [--model M]              # single-stock research report: PDF and text summary (stage 11)
 uv run python -m stockreport research CODE --facts                  # its fact sheet only (stage 9): facts.json
 uv run python -m stockreport research CODE --value                  # its valuation, target and rating only (stage 10): valuation.json

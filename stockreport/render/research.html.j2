@@ -90,6 +90,8 @@
       <tr><td>市盈率（过去 / 未来 12 个月）</td><td class="num">{{ F.times(val.pe_ttm) }} / {{ F.times(val.pe_fwd) }}</td></tr>
       <tr><td>市净率 · 股息率</td><td class="num">{{ F.times(val.pb) }} · {{ F.pct(val.div_yield) }}</td></tr>
       <tr><td>市场一致目标价</td><td class="num">{% if r.street.target %}{{ F.price(r.street.target, r.q) }}（{{ F.pct(r.street.upside, True, 0) }}）{% else %}无{% endif %}</td></tr>
+      {% for o in r.doc.others or [] %}<tr><td>{{ r.market_names[o.market] }} {{ o.code }} 评级 · 目标价</td><td class="num">{{ o.rating }}{% if o.target is number %} · {{ F.price(o.target, o.currency) }}（{{ F.pct(o.target / o.price - 1, True, 0) }}）{% endif %}</td></tr>
+      {% if o.premium is number %}<tr><td>{{ r.market_name }}较{{ r.market_names[o.market] }}溢价（按汇率折算）</td><td class="num">{{ F.pct(o.premium, True) }}</td></tr>{% endif %}{% endfor %}
       <tr><td>卖方评级</td><td class="num">{% if r.street.ratings %}{% for k, n in r.street.ratings.items() if n %}{{ {'buy':'买入','add':'增持','neutral':'中性','reduce':'减持','sell':'卖出','strongBuy':'强烈买入','hold':'持有','strongSell':'强烈卖出'}.get(k, k) }} {{ n | int }}{% if not loop.last %} · {% endif %}{% endfor %}{% else %}无{% endif %}</td></tr>
     </table>
   </div>

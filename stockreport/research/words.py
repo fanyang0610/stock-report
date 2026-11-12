@@ -337,12 +337,12 @@ def ask_checked(client, task: str, material: str, k: dict, lines: list[dict], ye
 class Client:
     """DeepSeek's chat API with the usage of every call counted (tokens, seconds)."""
 
-    def __init__(self, model: str):
+    def __init__(self, model: str, cfg: dict = CFG):
         key = dotenv_values(ROOT / ".env").get("DEEPSEEK_API_KEY")
         if not key:
             raise RuntimeError("DEEPSEEK_API_KEY is missing from .env")
-        self.model, self.calls = model, []
-        self.http = httpx.Client(base_url=CONFIG["notes"]["base_url"], timeout=CFG["timeout"],
+        self.model, self.cfg, self.calls = model, cfg, []
+        self.http = httpx.Client(base_url=CONFIG["notes"]["base_url"], timeout=cfg["timeout"],
                                  headers={"Authorization": f"Bearer {key}"})
 
     def ask(self, system: str, user: str) -> dict:
@@ -351,8 +351,8 @@ class Client:
             started = time.monotonic()
             try:
                 resp = self.http.post("/chat/completions", json={
-                    "model": self.model, "temperature": CFG["temperature"], "thinking": {"type": "disabled"},
-                    "response_format": {"type": "json_object"}, "max_tokens": CFG["max_tokens"],
+                    "model": self.model, "temperature": self.cfg["temperature"], "thinking": {"type": "disabled"},
+                    "response_format": {"type": "json_object"}, "max_tokens": self.cfg["max_tokens"],
                     "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]})
                 resp.raise_for_status()
                 body = resp.json()

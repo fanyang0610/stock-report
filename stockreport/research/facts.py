@@ -255,12 +255,12 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     industry = (val_cn.iloc[-1]["industry"] if market == "cn" and val_cn is not None else
                 snap.loc[snap["code"] == code, "industry"].iloc[0] if len(snap) and (snap["code"] == code).any() else street.get("industry"))
     titles = g["filings"] or []
-    others = []  # the issuer's other listings (A+H): price and this listing's premium over it in one currency
-    for _, o in lst[(lst["market"] != market) | (lst["code"] != code)].iterrows():
-        q = sources.tencent(o["market"], o["code"])
+    others = []  # the issuer's other listings (A+H): price and this listing's premium over it in one currency; none
+    for _, o in lst[(lst["market"] != market) | (lst["code"] != code)].iterrows():  # with a US line (an ADR's ratio
+        q = sources.tencent(o["market"], o["code"])                                 # or a share class isn't 1:1)
         per = float(fx.get(quote_cur, math.nan) / fx.get(QUOTE[o["market"]], math.nan))
         others.append({"market": o["market"], "code": o["code"], "price": q.get("price"), "currency": QUOTE[o["market"]],
-                       "premium": price / (q["price"] * per) - 1 if q.get("price") else None})
+                       "premium": price / (q["price"] * per) - 1 if q.get("price") and "us" not in (market, o["market"]) else None})
     facts = {
         "code": code, "market": market, "built": stamp(), "kind": kind, "listed": listed,
         "name": (me["name"].iloc[0] if len(me) and pd.notna(me["name"].iloc[0]) else None) or (me["name_en"].iloc[0] if len(me) else code),

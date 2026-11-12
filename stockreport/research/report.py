@@ -18,8 +18,8 @@ from dotenv import dotenv_values
 from stockreport import passages, review
 from stockreport.config import CONFIG, REPORTS, ROOT
 from stockreport.render import _env, fit_bytes, html_to_pdf
-from stockreport.research import (CUR, charts, compare, folder, load, money, pct, price, rating, save, sheet, sources,
-                                  stamp, texts, times, words)
+from stockreport.research import (CUR, charts, compare, folder, load, money, number, pct, price, rating, record, save,
+                                  sheet, sources, stamp, texts, times, words)
 from stockreport.research import facts as fact_sheet
 
 log = logging.getLogger(__name__)
@@ -91,6 +91,7 @@ def build(market: str, code: str, today: date | None = None, model: str | None =
     flags = red_flags(f, today)
     t["review"] = time.monotonic() - started - t["data"] - t["sources"]
     v = rating.build(market, code, today)
+    others = other_lines(f, today)
     t["valuation"] = time.monotonic() - started - sum(t.values())
     screen = compare.screening(f, v, market_pe(market, today), (flags or {}).get("findings"))
     street = compare.street(f, v)
@@ -98,15 +99,47 @@ def build(market: str, code: str, today: date | None = None, model: str | None =
     t["words"] = time.monotonic() - started - sum(t.values())
     doc = {"code": code, "market": market, "name": f["name"], "date": today.isoformat(), "built": stamp(), "lines": lines,
            "sections": {k: sec.get(k) for k in ("doc", "date", "url", "market", "note")} | {"parts": list((sec.get("parts") or {}))},
-           "words": w, "screen": screen | {"keys": None}, "review": flags, "timings": t}
+           "words": w, "screen": screen | {"keys": None}, "review": flags, "others": others, "timings": t}
     save(folder(market, code) / "report.json", doc)
     pdf = render(market, code)
     t["pdf"] = time.monotonic() - started - sum(t.values())
     t["total"] = time.monotonic() - started
     doc["timings"] = {k: round(x, 1) for k, x in t.items()}
     save(folder(market, code) / "report.json", doc)
+    for x in [v] + others:  # the record: each listing's rating and target, once its report exists
+        record.add(x, today)
     log.info("%s research report %s in %.0fs (%s); DeepSeek %s", code, pdf, t["total"], doc["timings"], w.get("usage"))
     return doc | {"pdf": str(pdf), "summary": summary(f, v, doc)}
+
+
+def built_today(market: str, code: str, today: date) -> dict | None:
+    """Today's report when it was built already, so a repeat request is answered in seconds from the saved words."""
+    path = folder(market, code) / "report.json"
+    doc = load(path) if path.exists() else None
+    pdf = REPORTS / today.isoformat() / f"research_{code}.pdf"
+    if not doc or doc["date"] != today.isoformat() or "total" not in doc["timings"] or not pdf.exists():
+        return None
+    f, v = (load(folder(market, code) / n) for n in ("facts.json", "valuation.json"))
+    return doc | {"pdf": str(pdf), "summary": summary(f, v, doc)}
+
+
+def other_lines(f: dict, today: date) -> list[dict]:
+    """The issuer's other A or H line, valued from its own fact sheet (PLAN.md "What it delivers": one report on the
+    company with a price, target and rating per listing, and the A/H premium). A US line (an ADR, a share class) shows
+    its price only."""
+    out = []
+    for o in f["other_listings"]:
+        if "us" in (o["market"], f["market"]):
+            continue
+        try:
+            ov = rating.build(o["market"], o["code"], today)
+        except Exception as e:
+            log.warning("%s: its %s line %s couldn't be valued: %s", f["code"], o["market"].upper(), o["code"], e)
+            continue
+        out.append({k: ov.get(k) for k in ("market", "code", "name", "rating", "target", "price", "currency",
+                                           "expected_return", "market_return")} |
+                   {"premium": o["premium"]})
+    return out
 
 
 def render(market: str, code: str) -> "Path":
@@ -138,7 +171,7 @@ def context(f: dict, v: dict, doc: dict) -> dict:
     finds = (doc.get("review") or {}).get("findings") or []
     return {
         "f": f, "v": v, "w": w, "ok": ok, "doc": doc, "q": q, "rc": rc, "cur": CUR.get(q, q), "rcur": CUR.get(rc, rc),
-        "market_name": MARKET_NAME[f["market"]], "type_name": TYPES.get(v.get("type"), v.get("type")),
+        "market_name": MARKET_NAME[f["market"]], "market_names": MARKET_NAME, "type_name": TYPES.get(v.get("type"), v.get("type")),
         "methods": [{"name": NAMES_CN[m], "weight": wt, **v["methods"][m]} for m, wt in (v.get("weights") or {}).items()],
         "forecast": compare.forecast(f, v), "screen": doc["screen"],
         "charts": {"price": charts.price(daily, f["code"], index_code, INDEX_NAME[f["market"]]) if daily is not None else "",
@@ -174,6 +207,13 @@ def summary(f: dict, v: dict, doc: dict, limit: int = 4000) -> str:
                      f"{pct(v['target'] / v['price'] - 1, True, 0)}）")
         lines.append(f"预期 12 个月回报 {pct(v['expected_return'], True)}（含股息），大盘预期 {pct(v['market_return'])}；"
                      f"超额 {pct(v['excess_return'], True)} 对比门槛 ±{v['uncertainty']['band']:.0%}")
+    for o in doc.get("others") or []:  # the issuer's other line (A+H)
+        x = (f"{MARKET_NAME[o['market']]} {o['code']}：{o['rating']}" + (
+            f"，目标价 {price(o['target'], o['currency'])}（现价 {price(o['price'], o['currency'])}，"
+            f"{pct(o['target'] / o['price'] - 1, True, 0)}）" if number(o.get("target")) else ""))
+        if number(o.get("premium")):
+            x += f"；{MARKET_NAME[f['market']]}股价比{MARKET_NAME[o['market']]}{'高' if o['premium'] >= 0 else '低'} {abs(o['premium']):.0%}（按汇率折算）"
+        lines.append(x)
     if ok and w.get("conclusion"):
         lines.append("结论：" + w["conclusion"]["text"])
     for title, field in (("要点", "points"), ("风险", "risks")):

@@ -114,6 +114,7 @@
     <div class="line"><span class="lbl">{{ p.risk_label }}：</span><span class="risk">{{ p.risk_text }}</span>{% if p.review_kind == 'ok' %}　{{ rv(p) }}{% endif %}</div>
     {% if p.review_shown and p.review_kind != 'ok' %}<div class="line small">{{ rv(p) }}</div>{% endif %}
     {% if p.note %}<div class="line small ai">AI 点评：{{ p.note }}</div>{% endif %}
+    {% if p.research %}<div class="line small">{{ p.research }}</div>{% endif %}
   </div>
   {% endfor %}
   {% if m.review %}<p class="warn small">{{ m.review }}</p>{% endif %}
@@ -136,6 +137,7 @@
     <div class="line"><span class="lbl">{{ p.risk_label }}：</span><span class="risk">{{ p.risk_text }}</span>{% if p.review_kind == 'ok' %}　{{ rv(p) }}{% endif %}</div>
     {% if p.review_shown and p.review_kind != 'ok' %}<div class="line small">{{ rv(p) }}</div>{% endif %}
     {% if p.note %}<div class="line small ai">AI 点评：{{ p.note }}</div>{% endif %}
+    {% if p.research %}<div class="line small">{{ p.research }}</div>{% endif %}
   </div>
   {% else %}<p class="muted">今天没有符合条件的股票。</p>
   {% endfor %}
@@ -150,6 +152,7 @@
     <div class="line">{{ grades(p) }} <span class="lbl">为什么卖出：</span><span class="risk">{{ p.sell_why }}</span>{% if p.review_kind in ('ok', 'wait') %}　<span class="rv-wait small" style="white-space:nowrap">{{ '审核：' if p.review_kind == 'ok' }}{{ p.review_shown }}</span>{% endif %}</div>
     {% if p.review_shown and p.review_kind not in ('ok', 'wait') %}<div class="line small">{{ rv(p) }}</div>{% endif %}
     {% if p.note %}<div class="line small ai">AI 点评：{{ p.note }}</div>{% endif %}
+    {% if p.research %}<div class="line small">{{ p.research }}</div>{% endif %}
   </div>
   {% endfor %}
 </section>

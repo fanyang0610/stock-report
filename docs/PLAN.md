@@ -540,6 +540,29 @@
     Bradshaw, Brown and Huang's published figure; JPM and China Shenhua at 持有 with a negative expected return sit
     inside stage 10's 25% uncertainty band (the method, not this stage); the daily card's research line is stage 12.
     The app is now ~9583 lines (an estimate, not a limit; words.py 410).
+- Stage 12 (research: the WeChat router and the record): done 2026-11-12. research/router.py, jobs.py, record.py and the
+  listener's routing (~590 lines; the app ~10,175, my estimate was ~340: the confirmation rules, the queue's locking
+  and the record's settlement took more); the choices are "As built in stage 12" under "The router".
+  - Tests: tests/test_router.py, 55 cases with DeepSeek and the search box mocked on a sample of the listings: codes in
+    every form, exact names, Chinese, English, Japanese, typos, partial names, A+H, two names, the vague, the
+    unsupported (index, crypto, unlisted, fund, an ETF hint), a wrong ticker, an invented company, the answers to a
+    question, DeepSeek down; the queue (one acknowledgement per company, in order, the next line after a failure);
+    the listener's loop; the record's 12-month return, dividend and target math. 249 tests pass.
+  - Live, 2026-11-12 (DeepSeek and the search box, nothing sent): 49 messages, each as intended; DeepSeek 0.5-1.4 s a
+    message. 平安 asks 中国平安 or 平安银行, 中信 asks 中信证券, 中信银行 or 中信股份; "最近有什么好股票" and "send me the
+    stock report" get the screening; Samsung "没找到" (not listed in the three markets); brk → Berkshire.
+  - 比亚迪 live (A line warm, H line cold): 87 s (the H line's fact sheet ~35 s), DeepSeek USD 0.013; page 1 and the
+    summary show 港股 01211 买入 124.17 港元 (+79%) and the A shares' 42% premium. Its A target, 191 (+133%) against
+    the street's 103 (+26%), is stage 10's fast-grower DCF (7.3% cost of capital on the brokers' ~27% a year EPS
+    growth; the street's target implies 12.7%): a gap for a valuation check like 2026-11-09's, not this stage.
+  - The fresh-context stage review (one; fixes checked by the tests, 253 pass, not by a second review) confirmed the
+    layers, the no-AI paths, the queue's locking and that DeepSeek moves no number. Fixed: bare capital tickers taken
+    without AI (HELP, NOW, ALL, BYD as Boyd Gaming: now read by DeepSeek, a question when it's down); a DeepSeek ticker
+    no name confirmed was taken (now asked); the target test broke on a split (now on the price's move); a report
+    logged before its PDF existed; a question left open after a screening request. Answered, not changed: a bare
+    4-digit number is an HK code (2025 is 02025, as the plan's 0700); a second keyword in one poll gets one report, as
+    before. Not yet seen live: the record's settlement (first due 2027-11-12) and the worker sending while the
+    listener polls; the listener restart and the test round-trip wait for your OK (rule 9).
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1110,7 +1133,7 @@ was docs/RESEARCH-PLAN.md (not committed), merged here.
 | You send | The bot does |
 |---|---|
 | 股票报告 / stock report (exactly, as today) | The daily screening report, unchanged: no AI call, within 30 s |
-| 600519 · 0700 · AAPL · 贵州茅台 (an exact code or full name) | Research report, no AI call needed to read the message |
+| 600519 · 0700 · $AAPL · 贵州茅台 (an exact code or full name; a bare AAPL goes to DeepSeek, stage 12) | Research report, no AI call needed to read the message |
 | 茅台 · 腾讯 · nvidia · "how is tencent doing" · テンセント · 宁德 | DeepSeek reads it, code confirms the company against the official listings, research report |
 | 平安 | Asks: "你指的是哪一家？1 中国平安 (601318 / 2318.HK) 2 平安银行 (000001)"; a reply of "1" or a name answers it |
 | 比亚迪 | One report on the company, covering its A share (002594) and H share (1211.HK): one analysis, a price, target and rating per listing, the A/H premium |
@@ -1168,6 +1191,45 @@ Layers, so the screening keyword keeps working when DeepSeek is slow or down (as
   company is never built twice at once; every message and decision is logged without secrets; only your recipient's
   messages are read (deliver.poll, as today). With DeepSeek down, layers 1, 2 and 4 still work, and a research report
   goes out with its numbers and its AI sections marked 暂不可用.
+
+As built in stage 12 (2026-11-12; research/router.py the layers, jobs.py the queue, record.py the record, listener.py):
+- Layer 2 reads 600519 / SH600519 / 600519.SH, 0700 / 00700 / 700.HK / HK700 (bare codes of 4-5 digits only, so "1"
+  stays an answer), and US tickers only when marked ($aapl, aapl.US): bare capitals are also words and other
+  companies' names (HELP, NOW, BYD is Boyd Gaming on NYSE and 比亚迪's English name), so DeepSeek reads them;
+  names match exactly after NFKC, case, spaces and HK's share-class tails (阿里巴巴-W is 阿里巴巴; HKEX's English short
+  name TENCENT counts). The companies are the listings with US lines kept only if the Nasdaq screener has them as
+  ordinary shares (it lists stocks only: no ETFs, notes or SPAC units); one issuer is Eastmoney's ORG_CODE, else the
+  SEC's CIK (BRK.B with BRK.A). The lead line: the code you sent, else A, then H, then US.
+- Layer 3: deepseek-flash, temperature 0, JSON, 12 s a call, tried twice (config [router]); the prompt is in router.py.
+  It returns the intent and, per company mentioned, the text as written and its candidates (name, English name,
+  ticker). A mention the message doesn't contain is dropped (no invented company). Each candidate is confirmed by
+  code: its ticker in the companies, its names (loosely: 腾讯 = 腾讯控股, Apple = Apple Inc.), and Eastmoney's search box's
+  first hit for its name. A ticker no name or search hit confirms is asked about, not taken; a ticker and a name pointing at different
+  companies give both as options (宁德时代 with a wrong ticker asks 迈为股份 or 宁德时代). Several candidates (平安, 中信)
+  ask; none found falls back to the search box's suggestions as a question, else "没找到".
+- Layer 4: the question lists up to 5 companies; "1", 第二个, ２, a name or a code alone answers it without AI, open 30
+  minutes; DeepSeek reads other replies with the question in view (the insurance one). With DeepSeek down, the search
+  box's suggestions become the question ("你是指 贵州茅台（600519）吗？是的话回复 1。"). Two companies: the first, and
+  the acknowledgement asks for the other on its own.
+- The acknowledgement says the company and its codes as confirmed (收到：比亚迪（002594 / 01211.HK）) and when: at once
+  for a report built today (resent from its saved words, no DeepSeek call), about 1 minute with this week's data
+  cached, about 2 cold, plus one per report queued ahead; a company already queued isn't queued again.
+- The queue: data/research/queue.json under a lock; `research --queue`, started detached, takes the requests in order
+  (one worker: data/research/worker.lock, released while the queue is locked, so a request queued as it exits starts
+  a new one); a failed build tries the issuer's next line, then sends an apology; a worker that stopped mid-job is
+  reported by the next one. It sends while the listener polls (the bridge's send only reads its context cache; first tried in the live round-trip).
+- A+H as one company: report.build values the issuer's other A or H line from its own fact sheet (stage 10), so the
+  summary and page 1 show a rating and target per listing and the A/H premium ("A股股价比港股高 42%（按汇率折算）");
+  the words are the lead line's. A US line (an ADR, another share class) shows its price only: its ratio to the
+  shares isn't in the data, so no premium is computed for it (stage 9 computed one as if 1:1).
+- The record: data/research/log.csv, one row per listing a day (the day's last build), date, price, target, rating,
+  expected return. `track` settles a row once, 366 days on, from Yahoo's closes (dividend-adjusted): the return to the
+  last close on or before the anniversary, the fund's with dividends (510300, SPY, 2800.HK) over the same closes, and
+  the target reached at that close and at any close before it (the move from the report day's close against the
+  target over the logged price, so a split changes nothing); a name with no later close stays open. A report is
+  logged once its PDF exists; an A+H report's two lines count as two observations.
+- The daily card: a name on the day's lists whose latest research report of the last 30 days rates it differently
+  gets 个股报告（11-05）：持有，与本榜不同，原因见该报告 (any difference: 部分一致 too).
 
 ### Data (stage 9; free only)
 | Data | CN | HK | US |
@@ -1645,7 +1707,7 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
     the text summary; time and cost measured, the stronger and the fast model compared. `research CODE` writes the PDF.
     Done when: the 12 reports read well to me and to the stage reviewer and every number traces to code; a cold report
     takes under ~4 minutes; the end-to-end dry run covers one report from saved data; status; committed.
-12. **Research: the WeChat router and the record.** The four layers, name resolution and issuer groups, the pending
+12. **Research: the WeChat router and the record** (done 2026-11-12, Status). The four layers, name resolution and issuer groups, the pending
     question, the background queue and the acknowledgement; the daily card's research line; the research log and
     `track`'s section; README. Done when: ~40 test messages route correctly with DeepSeek mocked and once live
     (Chinese, English, Japanese, codes, partial names, typos, A+H, vague, unsupported, two names); the stage review;

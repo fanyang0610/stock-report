@@ -93,6 +93,15 @@ window = [300, 700]           # characters before / after each keyword
 workers = 3
 keep_days = 400               # cached filings older than this are deleted
 
+[router]                      # reading a WeChat message that isn't the keyword (PLAN.md "The router"; research/router.py)
+model = "deepseek-flash"      # the fast model, as for the words (your choice, 2026-11-09)
+temperature = 0
+max_tokens = 600
+timeout = 12                  # seconds per call (tried twice); then layers 1, 2 and 4 answer without it
+pending_minutes = 30          # a numbered question stays open this long (data/state.json)
+options = 5                   # companies a question lists at most
+recent_days = 30              # a research report this recent that disagrees gets a line on the daily card
+
 [research_words]              # the research report's words (PLAN.md "The analysis in words"; research/words.py)
 model = "deepseek-flash"      # your choice (2026-11-09) after stage 11 compared it with deepseek-v4-pro (PLAN.md Status)
 temperature = 0.2

@@ -250,10 +250,12 @@ def loaders() -> dict:
 
 def scorecard() -> int:
     """Each cohort against the fund and the basket: its month-end marks, and its value at the newest close."""
+    from stockreport.research import record
     today, load_prices = date.today(), loaders()
     marks, cohorts = update(today, load_prices), load_cohorts()
     if cohorts.empty:
         print(f"No cohort yet: the first report of each month from {START} starts one (data/picks.csv).")
+        print("\n" + record.show(today))
         return 1
     pct = lambda x: "" if pd.isna(x) else f"{x:+.1%}"
     print("Scorecard: the first report of each month, held 12 months from the first close after it; equal amounts "
@@ -283,4 +285,5 @@ def scorecard() -> int:
             show["buy-fund"], show["buy-basket"] = (t["buy"] - t["fund"]).map(pct), (t["buy"] - t["basket"]).map(pct)
             show["unresolved"] = u.reindex(t.index.get_level_values("mark")).to_numpy()
             print(show.reset_index().drop(columns="recorded").to_string(index=False) + "\n")
+    print(record.show(today))
     return 0

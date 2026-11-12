@@ -1,12 +1,15 @@
 """WeChat delivery through bridge/wechat.mjs (Node helper around the cli-wechat-bridge npm package)."""
 
 import json
+import logging
 import os
 import subprocess
+import time
 from pathlib import Path
 
 from dotenv import dotenv_values
 
+log = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent.parent
 BRIDGE = ROOT / "bridge" / "wechat.mjs"
 MAX_TEXT_BYTES = 4000
@@ -53,6 +56,19 @@ def _bridge(args: list[str], stdin: str | None = None, timeout: int = 90) -> dic
         reason = (result.get("failed") or {}).get("reason", "unknown error")
         raise DeliveryError(_scrub(f"bridge {args[0]} not sent: {reason}", recipient))
     return result
+
+
+def retry(what: str, send) -> bool:
+    """send(), tried twice 3 s apart; False (logged) when both fail."""
+    for attempt in (1, 2):
+        try:
+            send()
+            return True
+        except DeliveryError as e:
+            log.warning("sending the %s failed (attempt %d/2): %s", what, attempt, e)
+            time.sleep(3)
+    log.error("gave up sending the %s", what)
+    return False
 
 
 def status() -> dict:

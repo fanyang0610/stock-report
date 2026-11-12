@@ -237,10 +237,11 @@ def main(argv: list[str] | None = None) -> int:
     verdict.add_argument("--until", help="last day it applies, YYYY-MM-DD (it also ends at the next report)")
     verdict.add_argument("--reason", default="", help="why, in a few words (shown on the report)")
     research = sub.add_parser("research", help="single-stock research report (PDF and text summary)")
-    research.add_argument("code", help="ticker, e.g. 600519, 00700 or AAPL")
+    research.add_argument("code", nargs="?", help="ticker, e.g. 600519, 00700 or AAPL")
     research.add_argument("--facts", action="store_true", help="write the fact sheet (data/research/<market>/<code>/facts.json)")
     research.add_argument("--value", action="store_true", help="value and rate it (stage 10: data/research/<market>/<code>/valuation.json)")
     research.add_argument("--model", help="DeepSeek model for the words (default: config.toml's research_words.model)")
+    research.add_argument("--queue", action="store_true", help="answer the WeChat research requests the listener queued")
     clean = sub.add_parser("cleanup", help="apply the storage retention periods")
     clean.add_argument("--dry-run", action="store_true", help="only list what would be deleted")
     args = parser.parse_args(argv)
@@ -264,8 +265,12 @@ def main(argv: list[str] | None = None) -> int:
         print(verdicts.add(args.code, args.action, args.until, args.reason, date.today()))
         return 0
     if args.command == "research":
-        setup_logging()
-        from stockreport.research import facts, rating, report
+        setup_logging(console=not args.queue)
+        from stockreport.research import facts, jobs, rating, report
+        if args.queue:
+            return jobs.work()
+        if not args.code:
+            parser.error("research needs a code (or --queue)")
         market = facts.market_of(args.code)
         if args.facts or args.value:
             print(rating.show(rating.build(market, args.code)) if args.value else facts.show(facts.build(market, args.code)))

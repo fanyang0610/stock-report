@@ -16,6 +16,14 @@ Each stock gets a card: price, grades for value, quality, growth and momentum, w
 cost of one board lot, what the review found, a short AI note and a date to check it again. The report also says what
 each rating's history suggests you should expect.
 
+**Any other message** is read as a request for one company: send a code or a name (600519, 0700, AAPL, 贵州茅台, 茅台,
+腾讯, nvidia, テンセント) and you get three messages: an acknowledgement within seconds, then, about 1-2 minutes later,
+a text summary and a ~10-page sell-side style research report in Chinese (rating, 12-month target price, thesis, bull
+and bear cases, 3-year forecast, valuation, risks, accounting quality, and how it compares with the daily screening).
+A company listed in both Shanghai/Shenzhen and Hong Kong (比亚迪, 中国平安) is one report with a rating and target per
+listing. If the name fits several companies (平安) the bot asks which one; answer with the number or the name. It
+doesn't analyse indexes, funds, crypto or unlisted companies, and does one company per message.
+
 **The aim is moderate:** beat the market's index fund over the year you hold the names, at about the market's level of
 risk. Published factor portfolios like this one have beaten their index by a few percent a year on average and lost to
 it in roughly 4 years out of 10. No list is a guarantee. **This is not investment advice.**
@@ -33,11 +41,19 @@ per market   liquid stocks  growth, momentum per market  Sell       checks picks
    weights, each stock ranked against its own sector. The ingredients come from published research for each market,
    not from tuning to our own backtest.
 3. **Lists.** The best scores fill the Buy list sector by sector; Hold and Sell follow fixed rules.
-4. **Review.** The only AI step. DeepSeek reads each listed company's recent filings, report passages and headlines and
+4. **Review.** The screening's one AI step. DeepSeek reads each listed company's recent filings, report passages and headlines and
    flags problems, each backed by a quote. Code checks every quote; a hard red flag (fraud, insolvency, an agreed sale
    of the company…) swaps the pick for the next one. The AI writes words only, never numbers. If DeepSeek is
    unavailable, the report still goes out, marked 审核暂不可用.
 5. **Deliver.** The report is rendered to PDF with headless Chrome and sent through a WeChat bot.
+
+A research request goes through `research/router.py`: an exact code or full name is read without AI; anything else
+goes to DeepSeek (the fast model), whose guesses are only hints that code confirms against the official listings
+(CNINFO, HKEX, SEC with the Nasdaq screener's ordinary shares) and Eastmoney's search box; when several companies fit,
+the bot asks a numbered question. The report itself (`research/`) computes every number in code (fact sheet,
+valuation and rating per type of company) and DeepSeek writes the words, each figure and quote checked against its
+source. Without DeepSeek, codes, exact names and the questions still work, and a report goes out with its numbers and
+its word sections marked 暂不可用.
 
 The full method, with the research behind each choice, is in [docs/PLAN.md](docs/PLAN.md).
 
@@ -47,7 +63,9 @@ Nothing at runtime needs Claude Code. Two macOS launchd jobs do the work:
 
 - **06:30 daily build** (`run`): fetch, score, lists, the review's sources and an unreviewed PDF. A few minutes on
   weekdays, ~30 minutes on Sundays (weekly fundamentals).
-- **Keyword listener** (`listen`): when you text the keyword, it runs the review and sends the text and PDF.
+- **Listener** (`listen`): when you text the keyword, it runs the review and sends the text and PDF; any other
+  message goes to the router, and research reports are built by a background worker (`research --queue`) so the
+  listener keeps answering.
 
 ## Setup
 
@@ -61,7 +79,7 @@ Requirements: macOS, Google Chrome, Node 18+, [uv](https://docs.astral.sh/uv/).
    | Variable | Needed for |
    |---|---|
    | `EQUITYSIGNALS_WECHAT_RECIPIENT_ID` | who receives the report |
-   | `DEEPSEEK_API_KEY` | the results review |
+   | `DEEPSEEK_API_KEY` | the results review, reading messages, the research report's words |
    | `SEC_USER_AGENT` | US filings (your name and contact email, required by SEC) |
    | `FRED_API_KEY` | US rates |
 
@@ -76,9 +94,10 @@ uv run python -m stockreport run                  # all markets: fetch, score, l
 uv run python -m stockreport run --market us      # one market (others keep their newest lists)
 uv run python -m stockreport review               # results review (DeepSeek), then the reviewed PDF + summary
 uv run python -m stockreport send                 # review, then send to WeChat (asks first); --test sends fake data
-uv run python -m stockreport track                # scorecard: each month's picks vs the index fund
+uv run python -m stockreport track                # scorecard: each month's picks vs the index fund, and the research record
 uv run python -m stockreport verdict              # list your verdicts in force
 uv run python -m stockreport verdict 600519 veto --until 2026-12-31 --reason "..."   # keep a name off Buy and Hold
+uv run python -m stockreport research 600519           # one company's research report -> reports/<date>/research_600519.pdf + summary
 uv run python -m stockreport research 600519 --facts   # one stock's fact sheet -> data/research/<market>/<code>/facts.json
 uv run python -m stockreport research 600519 --value   # its valuation, 12-month target and rating -> valuation.json
 uv run python -m stockreport cleanup --dry-run    # what retention would delete, and disk use
@@ -109,7 +128,7 @@ runs at 06:30 Mac time (China Standard Time); a run missed during sleep starts o
 ## Project layout
 
 ```
-stockreport/          the app (Python, ~5,800 lines)
+stockreport/          the app (Python, ~10,200 lines)
   fetch/              one module per data source
   universe.py         which stocks are scored
   signals.py          value, quality, growth and momentum ingredients
@@ -117,7 +136,10 @@ stockreport/          the app (Python, ~5,800 lines)
   lists.py            Buy, Hold, Sell
   review.py           the results review (DeepSeek), with passages.py, notes.py, quotes.py, events.py, verdicts.py
   report.py, render/  HTML -> PDF and the text summary
-  deliver.py          WeChat sending; listener.py answers the keyword
+  deliver.py          WeChat sending; listener.py answers the keyword and hands other messages to the router
+  research/           single-stock research: per-market data and the fact sheet (facts.py), valuation and rating
+                      (value.py, dcf.py, rating.py), the words (texts.py, words.py), the report (report.py), the
+                      router (router.py), the background queue (jobs.py) and the record (record.py)
   track.py            scorecard; history.py multi-year tables; crosscheck.py second-source checks; cleanup.py retention
 bridge/wechat.mjs     Node helper for the WeChat bot
 backtest/             backtest harness and data builders (not part of the app)
