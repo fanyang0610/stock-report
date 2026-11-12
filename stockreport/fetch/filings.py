@@ -19,6 +19,11 @@ CN_PERIODIC = "category_ndbg_szsh;category_bndbg_szsh;category_yjdbg_szsh;catego
 US_PERIODIC = ("10-K", "10-Q", "20-F", "40-F")
 US_ANNUAL = ("10-K", "20-F", "40-F")
 SKIP = re.compile(r"摘要|英文|取消|更正|補充|环境|環境|ESG|社會責任|社会责任|Environmental|Sustainab|Supplement", re.I)
+# HKEXnews' tier-two categories of the other periodic reports (the bracket of the search's LONG_TEXT). A filing can
+# carry two: in 208 HK names on 2026-11-13, 93 of 241 annual reports were filed as "Annual Report / Environmental,
+# Social and Governance Information/Report" (Meituan, Xiaomi, HSBC, CLP), and one separate ESG report under the annual
+# tag too (BYD's 2025 Sustainability Report), so an annual-tagged filing is the annual report when its title says so.
+HK_INTERIM = {"Interim/Half-Year Report", "Quarterly Report"}
 
 
 @cache
@@ -52,24 +57,32 @@ def periodic(market: str, code: str, today: date, annual: bool = False) -> dict 
                 return {"id": f"cn-{a['announcementId']}", "url": "http://static.cninfo.com.cn/" + a["adjunctUrl"],
                         "date": a["adjunctUrl"].split("/")[1], "title": title}
         return None
-    if market == "hk":
+    if market == "hk":  # English: many Chinese report PDFs have fonts without Unicode
         payload = http.get(hkex.SEARCH_URL, params={
             "sortDir": "0", "sortByOptions": "DateTime", "category": "0", "market": "SEHK", "stockId": sid,
             "documentType": "-1", "fromDate": f"{start:%Y%m%d}", "toDate": f"{today:%Y%m%d}", "title": "",
             "searchType": "1", "t1code": "40000", "t2Gcode": "-2", "t2code": "-2", "rowRange": "20", "lang": "en"}).json()
-        for a in json.loads(payload["result"] or "[]"):  # English: many Chinese report PDFs have fonts without Unicode
-            title, kind = html.unescape(a["TITLE"] or ""), html.unescape(a["LONG_TEXT"] or "").split(" - ", 1)[-1]
-            wanted = r"Annual Report" if annual else r"Annual Report|Interim|Quarterly"
-            if re.search(wanted, kind if annual else kind + title, re.I) and not SKIP.search(kind + title):
-                day = a["DATE_TIME"][6:10] + "-" + a["DATE_TIME"][3:5] + "-" + a["DATE_TIME"][:2]
-                return {"id": "hk-" + a["FILE_LINK"].rsplit("/", 1)[-1].split(".")[0], "date": day,
-                        "url": "https://www1.hkexnews.hk" + a["FILE_LINK"], "title": " ".join(title.split())}
-        return None
+        return hk_report(json.loads(payload["result"] or "[]"), annual)
     recent = http.get(sec.SUBMISSIONS.format(cik=int(sid))).json()["filings"]["recent"]
     for form, day, acc, doc in zip(recent["form"], recent["filingDate"], recent["accessionNumber"], recent["primaryDocument"]):
         if form in (US_ANNUAL if annual else US_PERIODIC) and day >= start.isoformat():
             return {"id": f"us-{acc}", "date": day, "title": f"{form} {day}",
                     "url": f"https://www.sec.gov/Archives/edgar/data/{int(sid)}/{acc.replace('-', '')}/{doc}"}
+    return None
+
+
+def hk_report(items: list[dict], annual: bool = False) -> dict | None:
+    """The newest periodic report (with `annual`, the newest annual report) among a stock's HKEXnews search rows,
+    newest first: {id, url, date, title}, or None."""
+    for a in items:
+        title = " ".join(html.unescape(a["TITLE"] or "").split())
+        tags = {t.strip() for group in re.findall(r"\[([^]]*)\]", html.unescape(a["LONG_TEXT"] or ""))
+                for t in group.split(" / ")}
+        report = "Annual Report" in tags and re.search("annual report", title, re.I) or not annual and tags & HK_INTERIM
+        if report and not re.search("Supplement", title, re.I):
+            day = a["DATE_TIME"][6:10] + "-" + a["DATE_TIME"][3:5] + "-" + a["DATE_TIME"][:2]
+            return {"id": "hk-" + a["FILE_LINK"].rsplit("/", 1)[-1].split(".")[0], "date": day,
+                    "url": "https://www1.hkexnews.hk" + a["FILE_LINK"], "title": title}
     return None
 
 

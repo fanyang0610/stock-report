@@ -54,3 +54,19 @@ def test_an_item_301_move_to_another_exchange_is_no_delisting_notice():
     wrapped = head + "The Company received a letter stating that it is not in\ncompliance and may transfer to Nasdaq.\nItem 9.01"
     move = head + "The Board approved the transfer of the listing of its common stock from Nasdaq to\nthe NYSE.\nItem 9.01"
     assert not filings.listing_moved(cure) and not filings.listing_moved(wrapped) and filings.listing_moved(move)
+
+
+def test_hk_periodic_report_by_its_category_and_title():
+    # HKEXnews' search rows of 2026-11-13: Meituan's annual report filed as "Annual Report / Environmental, Social and
+    # Governance Information/Report" (missed until then), BYD's separate sustainability report filed with the annual
+    # tag too, Tencent Music's interim (its second-quarter results announcement), Tencent's separate ESG report
+    rows = load("hkex_periodic_sample.json")
+    meituan = filings.hk_report(rows["03690"], annual=True)
+    assert meituan == {"id": "hk-2026042400179", "date": "2026-04-24", "title": "2025 ANNUAL REPORT",
+                       "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0424/2026042400179.pdf"}
+    assert filings.hk_report(rows["03690"])["title"] == "2026 Interim Report"
+    assert filings.hk_report(rows["01211"], annual=True)["title"] == "2025 Annual Report"
+    assert filings.hk_report([a for a in rows["01211"] if a["TITLE"] != "2025 Annual Report"], annual=True) is None
+    assert filings.hk_report(rows["01698"])["title"].startswith("ANNOUNCEMENT OF THE SECOND QUARTER 2026")
+    assert filings.hk_report(rows["01698"], annual=True)["title"] == "2025 ANNUAL REPORT"
+    assert filings.hk_report(rows["00700"], annual=True)["title"] == "ANNUAL REPORT 2025"

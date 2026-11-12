@@ -730,6 +730,22 @@
     unallocated line (Apple's 43% regional margins are before R&D); the profit key's label no longer says 业务 (Apple's
     segments are regions). Answered: item names stay the filings' own English (no translation step added), and a
     year's breakdown is chosen per year, labelled by its period.
+- HK annual reports the filing search missed (2026-11-13, the segments' follow-up). filings.periodic took a filing
+  whose category or title said "Environmental" or "Sustainab" for an ESG report, but HKEXnews files many annual
+  reports under two tier-two categories, "Annual Report / Environmental, Social and Governance Information/Report":
+  93 of the 241 annual reports of 208 HK names (40 large, 168 at random) in the last 500 days, Meituan, Xiaomi, HSBC,
+  Li Ning and CLP among them (CLP's title also names its linked sustainability report). Now a filing is a periodic
+  report by its tier-two categories (filings.hk_report), and an annual-tagged one is the annual report when its title
+  says so: BYD filed its separate 2025 Sustainability Report under the annual tag too. An interim or quarterly tag is
+  taken whatever the title (Tencent Music's interim is its second-quarter results announcement), as before; a title
+  test there would only risk misses (the stage review's point). In the sample the latest annual report is found for
+  200 names (125 before; the other 8 have none in the window), the same report as before wherever one was found
+  except 00131, whose 2026 report the old match skipped for its 2025 one; the latest periodic report (the review's
+  passages) moves to a newer annual report for 16 names with non-December years, and none moves back or is lost.
+  Tencent, Techtronic, Anta, HKEX and AIA read the same reports as before. Hang Seng Bank (00011) stays without one:
+  it is in HKEXnews' inactive list and not in HKEX's List of Securities since HSBC took it private, so the router
+  can't take it. No search page was full (5 rows at most of 20). A parser test on the saved search rows of Meituan,
+  BYD, Tencent Music and Tencent; 266 tests. The stage review found no blocker.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -2113,7 +2129,7 @@ Karceski and Lakonishok, "The level and persistence of growth rates" (JF 2003).
     www.hkex.com.hk/eng/services/trading/securities/securitieslists/ListOfSecurities.xlsx (one sheet, inline strings,
     read with zipfile and ElementTree; no Excel package): stock code, category, board lot (it also lists short-sell eligibility,
     unused: the old stage 3's 可做空 label was dropped). 2,817 equities; weekly into data/fundamentals/hk_lots.csv.gz.
-  - Headlines: HKEXnews titleSearchServlet.do with the stockId from activestock_sehk_c.json. Phase 11: stockId -1 with a one-day range returns all of a day's filings in one call (rowRange 5000); t1code 40000 (lang en) lists a stock's annual and interim reports.
+  - Headlines: HKEXnews titleSearchServlet.do with the stockId from activestock_sehk_c.json. Phase 11: stockId -1 with a one-day range returns all of a day's filings in one call (rowRange 5000); t1code 40000 (lang en) lists a stock's annual and interim reports, each with its tier-two categories in LONG_TEXT's bracket (tiertwo_e.json: 40100 Annual Report, 40200 Interim/Half-Year Report, 40300 Quarterly Report, 40400 ESG Information/Report; a filing can carry two).
   - FX: Yahoo "<CUR>=X" for HKD and the reporting and estimate currencies (CNY, USD, SGD, JPY, EUR...), and 12 years of daily "<CUR>CNY=X" closes for the period-end rates (900 days until stage 6; the HK annual history
     goes back to 2015; data/fx_cny.csv.gz, ~280 KB, rewritten with each HK fetch).
   - Segments (research, verified 2026-11-13): no Eastmoney HK table (its HK F10 has none; 同花顺's HK F10 gives
