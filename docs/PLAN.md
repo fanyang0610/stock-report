@@ -645,6 +645,28 @@
   today. The fix is operating income for the DCF with investment stakes valued apart (Damodaran's treatment of
   non-operating assets); it would cut 腾讯's value too unless its stakes are added, and no free source lists them, so it
   is a change of its own, not made here. 259 tests pass (a 20-F parser test added).
+- Amazon's valuation (your OK, 2026-11-12, "Yes, fix it here"). Checked one assumption at a time, as before:
+  - Operating profit: a fault in the US. Pretax profit plus interest counted equity stakes' fair-value changes (US
+    GAAP since 2018, ASU 2016-01: Amazon's Anthropic gains, TTM 179bn against 104bn of operating income) and interest
+    earned on cash the DCF then adds as cash. US filers' operating income is now the DCF's EBIT, its history's margins
+    and returns, EV/EBIT and the interest cover (sheet.ebit; SEC's OperatingIncomeLoss, the twelve months from the
+    10-Qs); CN and HK keep pretax plus interest (CN's 营业利润 already counts investment income; HK associates' share
+    stands for stakes no free source values apart, Tencent's). The consensus years' margin compares the consensus
+    profit with trailing profit on the same operating basis, so Amazon's one-off gains don't read as a profit fall.
+  - The margin target: kept at the company's own 8-year median. Measured first as a single persistence share (CN
+    0.75, HK 0.96, US 0.39 of a margin's distance from its median left 3 years on), then split: margins above their
+    median keep little (US 0.28, CN 0.04-0.30, HK 0), those below keep nearly all, in a sample of survivors over years
+    of falling Chinese margins, against Fama and French's (2000) finding that profitability below its mean reverts
+    faster. Above the median, Amazon's case, both say back towards the median: the stage 10 rule. No change.
+  - Even at today's 13.1% margin for good, the DCF gives 153 (-43%); the price implies a 24% long-run operating
+    margin, a mix (AWS, advertising) the free data's lack of US segments can't show. The methods disagree: DCF 76,
+    P/E on its own history 412, on its peers' 229.
+  - The rating band: a fault. Capped at 25%, it cut Morningstar's scale (a 20 to 75% margin of safety as uncertainty
+    rises) at its medium step: a valuation whose own methods spanned 76-412 gave 卖出 on a -33% gap. Now at most 75%
+    ("Rating"). Four ratings change, all where the methods disagree most: Amazon 卖出 -> 持有 (band 75%), 五粮液 买入 ->
+    持有 (fair value +33%, band 30%; the street -2%), 君实生物 and 百济神州 卖出 -> 持有 (bands 75% and 70%).
+  - Amazon now: 持有, fair value -24%, 12-month -4% (the street +22%); Novo Nordisk 持有, +4%, +5%. The other 18
+    within a point or two except where today's data moved (Micron's and NVIDIA's US fact sheets were rebuilt today).
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1442,10 +1464,12 @@ ordinary. The 60% is also a judgement of "most of its profit".
   (risk-free + equity risk premium): the discount to fair value against the margin of safety below, as Morningstar's
   stars rate it (unchanged 2026-11-12: the ratings stand; the 12-month target and expected return now show what a
   year is expected to deliver, a third of the gap). The benchmark is the index fund, as the screening's.
-- 买入 at +10% or more, 卖出 at −10% or worse, 持有 between; the band widens to ±15 / 20 / 25% as valuation uncertainty
-  rises (the bear-to-bull spread, the methods' disagreement, earnings volatility, analysts' disagreement, measured by
-  code). Borrowed: Morningstar's uncertainty-scaled star bands, and Chinese brokers' regulated standard (a rating
-  against the 沪深300 over 6-12 months).
+- 买入 at +10% or more, 卖出 at −10% or worse, 持有 between; the band widens with valuation uncertainty (the
+  bear-to-bull spread and the methods' disagreement, measured by code) up to 75%. Borrowed: Morningstar's margins of
+  safety, which rise with uncertainty (its top rating needs a 20, 30, 40, 50 or 75% discount at low to extreme
+  uncertainty), and Chinese brokers' regulated standard (a rating against the 沪深300 over 6-12 months). Capped at 25%
+  until 2026-11-12, which cut Morningstar's scale at its medium step, so a valuation whose own methods disagreed by
+  80% (Amazon: DCF 76, its own P/E history 412) still gave a strong rating on a 33% gap.
 - 不评级 / 评级暂停, as sell-side desks do: a pending takeover suspends the rating (the price follows the deal; its terms
   shown); a non-standard audit opinion, a fraud investigation or a going-concern doubt gives no target (the accounts
   can't carry a valuation). The results review's hard red flags and quote checks are reused as they are.

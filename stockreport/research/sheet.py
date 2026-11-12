@@ -64,7 +64,21 @@ def quarters(st: pd.DataFrame, n: int = 8) -> pd.DataFrame:
     return q[["period", "revenue_q", "ni_q", "revenue_yoy", "ni_yoy"]].tail(n)
 
 
-def history(a: pd.DataFrame, dps: dict[str, float], kind: str) -> list[dict]:
+def ebit(market: str, pretax, interest, op_income):
+    """Operating profit, a figure or a column. US filers: the operating income they report, when filed: their pretax
+    profit carries equity stakes' fair-value changes (US GAAP since 2018, ASU 2016-01: Amazon's Anthropic stake) and
+    interest earned on cash the valuation adds as cash (Damodaran's EBIT is operating income). Elsewhere pretax profit
+    plus interest expense: CN's 营业利润 itself counts investment income, and an HK associate's share stands for a
+    stake the free data can't value apart (Tencent's)."""
+    if isinstance(pretax, pd.Series):
+        total = pretax + interest.fillna(0)
+        return op_income.where(op_income.notna(), total) if market == "us" else total
+    if market == "us" and op_income is not None and op_income == op_income:
+        return op_income
+    return None if pretax is None else pretax + (interest or 0)
+
+
+def history(a: pd.DataFrame, dps: dict[str, float], kind: str, market: str = "cn") -> list[dict]:
     """Up to 10 fiscal years with margins, returns, cash conversion, free cash flow and leverage (not for banks, insurers
     and brokers, whose debt, cash and operating cash flow are their business; nor a REIT's cash conversion, its profit
     carrying property revaluations). EPS is profit over the year's shares on today's basis."""
@@ -74,8 +88,9 @@ def history(a: pd.DataFrame, dps: dict[str, float], kind: str) -> list[dict]:
     h["roe"], h["roa"], h["eps"] = roe_series(a).tail(10), h["ni"] / h["assets"], h["ni"] / h["shares"]
     tax_rate = (h["tax"] / h["pretax"]).clip(0, 0.5).fillna(0.25)
     invested = h["equity"] + h["debt"].fillna(0) - h["cash"].fillna(0)
-    h["roic"] = ((h["pretax"] + h["interest"].fillna(0)) * (1 - tax_rate) / invested).where(invested > 0)
-    h["ebit_margin"] = (h["pretax"] + h["interest"].fillna(0)) / h["revenue"]
+    operating = ebit(market, h["pretax"], h["interest"], h["op_income"])
+    h["roic"] = (operating * (1 - tax_rate) / invested).where(invested > 0)
+    h["ebit_margin"] = operating / h["revenue"]
     h["ocf_to_profit"], h["net_debt"] = h["ocf"] / h["ni"].where(h["ni"] > 0), h["debt"] - h["cash"]
     h["dps"] = h["period"].str[:4].map(dps)
     h[{"bank": FIN_OFF, "insurer": FIN_OFF, "broker": FIN_OFF, "reit": ["ocf_to_profit"]}.get(kind, [])] = np.nan
@@ -86,7 +101,7 @@ def history(a: pd.DataFrame, dps: dict[str, float], kind: str) -> list[dict]:
     return h.reindex(columns=keep).dropna(axis=1, how="all").replace({np.nan: None}).to_dict("records")
 
 
-def summary(a: pd.DataFrame, kind: str) -> dict:
+def summary(a: pd.DataFrame, kind: str, market: str = "cn") -> dict:
     """The keyed figures the report's words cite most: growth, margins, returns, cash and leverage (not for banks,
     insurers and brokers, whose debt, cash and operating cash flow are their business; a REIT's profit carries property
     revaluations, so no profit-based cover or cash conversion)."""
@@ -96,8 +111,8 @@ def summary(a: pd.DataFrame, kind: str) -> dict:
             old = a.iloc[-1 - n]
             out[f"rev_cagr_{n}y"], out[f"ni_cagr_{n}y"] = cagr(val(t, "revenue"), val(old, "revenue"), n), cagr(val(t, "ni"), val(old, "ni"), n)
     five, roe = a.tail(5), roe_series(a)
-    ebit = None if val(t, "pretax") is None else val(t, "pretax") + (val(t, "interest") or 0)
-    ebitda = None if ebit is None else ebit + (val(t, "da") or 0)
+    operating = ebit(market, val(t, "pretax"), val(t, "interest"), val(t, "op_income"))
+    ebitda = None if operating is None else operating + (val(t, "da") or 0)
     if kind in ("bank", "insurer", "broker"):
         a = a.assign(ocf=np.nan, capex=np.nan, debt=np.nan, cash=np.nan, gp=np.nan)
         t, five = a.iloc[-1], a.tail(5)
@@ -111,7 +126,7 @@ def summary(a: pd.DataFrame, kind: str) -> dict:
         "capex_to_ocf_5y": div(five["capex"].sum(min_count=1), five["ocf"].sum(min_count=1)), "loss_years_10y": int((a.tail(10)["ni"] < 0).sum()),
         "net_debt": None if val(t, "debt") is None else val(t, "debt") - (val(t, "cash") or 0),
         "net_debt_to_ebitda": None if reit else div(None if val(t, "debt") is None else val(t, "debt") - (val(t, "cash") or 0), ebitda),
-        "interest_cover": div(ebit, val(t, "interest")) if (val(t, "interest") or 0) > 0 and not reit else None,
+        "interest_cover": div(operating, val(t, "interest")) if (val(t, "interest") or 0) > 0 and not reit else None,
         "debt_to_equity": div(val(t, "debt"), val(t, "equity")), "goodwill_to_equity": div(val(t, "goodwill"), val(t, "equity")),
         "sbc_to_revenue": div(val(t, "sbc"), val(t, "revenue"))}
 

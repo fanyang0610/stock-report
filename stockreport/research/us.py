@@ -98,7 +98,7 @@ def latest(code: str, payload: dict, today: date) -> dict:
     gaap = payload["facts"]["us-gaap"]
     extra = {k: sec.ttm(sec.values(gaap, names), f["period"]) for k, names in (
         ("pretax", EXTRA["pretax"][0]), ("interest", EXTRA["interest"][0]), ("da", EXTRA["da"][0]),
-        ("capex", sec.TAXONOMIES["us-gaap"][0]["capex"]))}
+        ("capex", sec.TAXONOMIES["us-gaap"][0]["capex"]), ("op_income", sec.TAXONOMIES["us-gaap"][0]["op_income"]))}
     return {"period": f["period"], "months": 12, "basis": "TTM", "notice": f.get("notice_date"), "equity": f.get("equity"),
             "shares": f.get("shares_cover") or f.get("shares_basic")} | extra | {
         f"{k}{s}": f.get(f"{src}_{w}") for k, src in (("revenue", "revenue"), ("ni", "np"), ("gp", "gp"), ("ocf", "ocf"))
@@ -114,7 +114,7 @@ def from_annual(st: pd.DataFrame) -> dict:
     r, prior = a.iloc[-1], (a.iloc[-2] if len(a) > 1 else None)
     val = lambda row, k: None if row is None or k not in row or pd.isna(row[k]) else float(row[k])
     return {"period": r["period"], "months": 12, "basis": "FY", "notice": None if pd.isna(r.get("notice")) else r["notice"],
-            "equity": val(r, "equity"), "shares": val(r, "shares")} | {k: val(r, k) for k in ("pretax", "interest", "da", "capex")} | {
+            "equity": val(r, "equity"), "shares": val(r, "shares")} | {k: val(r, k) for k in ("pretax", "interest", "da", "capex", "op_income")} | {
         f"{k}{s}": val(row, k) for k in ("revenue", "ni", "gp", "ocf") for s, row in (("", r), ("_prior", prior))}
 
 

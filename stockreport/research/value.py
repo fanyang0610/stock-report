@@ -83,7 +83,7 @@ def inputs(f: dict) -> dict:
     mcap, debt = v["market_cap_report"], 0.0 if fin else (b["debt"] or 0.0)
     beta = ind["beta"] if fin else dcf.relever(ind["unlevered_beta_cash"], debt / mcap, tax_m)
     coe = dcf.capm(rf, beta, c["erp"])
-    ebit = None if t["pretax"] is None else t["pretax"] + (t["interest"] or 0)
+    ebit = sheet.ebit(market, t["pretax"], t["interest"], t.get("op_income"))
     cover = ebit / t["interest"] if ebit is not None and (t["interest"] or 0) > 0 else None
     fx = yahoo.load_fx()
     table = "financial" if fin else "large" if convert(fx, mcap, cur, "USD") >= LARGE_USD else "smaller"
@@ -236,6 +236,9 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     3-year revenue trend, faded."""
     t, s = f["valuation"]["ttm"], f["summary"]
     rev0, ni0, ebit0, shares = t["revenue"], t["ni"], k["ebit"], k["shares"]
+    pre = None if t.get("pretax") is None else t["pretax"] + (t.get("interest") or 0)
+    if ni0 and ebit0 and pre and pre > 0 and ebit0 != pre:  # profit on the same operating basis as ebit0 (sheet.ebit):
+        ni0 = ni0 * ebit0 / pre  # Amazon's trailing profit carries its stake's gains, its consensus years hardly any
     m0, base, keep = ebit0 / rev0, k.get("base_growth"), k.get("growth_persistence") or 0.0
     after = lambda g: base + keep * (g - base)  # a year beyond the revenue consensus
     growth, margin, prev_r, prev_e = [], [], rev0, (ni0 / shares if ni0 else None)

@@ -9,8 +9,10 @@ and the comparison with the street; saved as data/research/<market>/<code>/valua
   dividend) / price - the listing market's expected return (Damodaran's premium for it over the yield of the currency the target grows
   in: the reporting currency's, so a CNY reporter listed in HK is compared in CNY terms, by interest parity). 买入 at +band or more, 卖出 at -band or
   worse, else 持有; the band is the valuation's uncertainty (the larger of the bear-to-bull half-range and the methods'
-  half-range), rounded up to 5 points, at least the brokers' 10% and at most 25% (Morningstar's uncertainty-scaled
-  star bands; the Securities Association of China's ratings against the index over 6-12 months).
+  half-range), rounded up to 5 points, at least the brokers' 10% and at most 75% (Morningstar's margins of safety rise
+  with uncertainty: a 20, 30, 40, 50 and 75% discount for its top rating at low to extreme uncertainty; the Securities
+  Association of China's ratings against the index over 6-12 months). The cap was 25% until 2026-11-12, which cut
+  Morningstar's scale at its medium step: Amazon, whose methods spanned 76-412, was 卖出 on a -33% gap.
 - Bear and bull: the first forecast year's analysts' low and high (Yahoo; CN: the brokers' reports) and the long-run
   margin (financials: ROE) one standard deviation of the company's own 10 years lower and higher, at most the margin's
   own size.
@@ -30,7 +32,7 @@ from stockreport.fetch import yahoo
 from stockreport.research import dcf, folder, load, save, stamp, value
 from stockreport.research.checks import FINANCIAL, cagr
 
-BAND = (0.10, 0.25)
+BAND = (0.10, 0.75)  # at least the brokers' 10%, at most Morningstar's margin of safety for extreme uncertainty
 CONVERGE = 3  # years for the price to reach fair value: Morningstar's "generally within three years" (Equity Research
 # Methodology, 2020); value-to-price predicts abnormal returns for up to three years (Ali, Hwang and Trombley 2003)
 TABLE_CURRENCY = {"cn": "CNY", "us": "USD", "hk": "CNY"}  # Eastmoney's HK amounts are CNY (stage 9)
@@ -199,6 +201,12 @@ def base_rates(market: str, revenue_now: float, rates: dict[str, float | None], 
             "share_at_least": {name: float((same >= x).mean()) if x is not None else None for name, x in rates.items()}}
 
 
+def slope(x: pd.Series, y: pd.Series) -> float:
+    """y's slope on x across the deciles of x (their medians, robust to the tails), between 0 and 1."""
+    t = pd.DataFrame({"x": x, "y": y}).groupby(pd.qcut(x, 10, labels=False, duplicates="drop")).median()
+    return float(min(max(np.polyfit(t["x"], t["y"], 1)[0], 0.0), 1.0)) if len(t) > 2 else 0.0
+
+
 @lru_cache(maxsize=3)
 def persistence(market: str) -> float:
     """How much of a company's revenue growth above its size fifth's median carries into the next 5 years: the slope of
@@ -216,8 +224,7 @@ def persistence(market: str) -> float:
     if not rows:
         return 0.0
     d = pd.concat(rows)
-    t = d.groupby(pd.qcut(d["past"], 10, labels=False, duplicates="drop"))[["past", "next"]].median()
-    return float(min(max(np.polyfit(t["past"], t["next"], 1)[0], 0.0), 1.0)) if len(t) > 2 else 0.0
+    return slope(d["past"], d["next"])
 
 
 def flags(f: dict) -> tuple[str | None, str | None]:

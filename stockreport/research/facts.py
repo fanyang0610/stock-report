@@ -202,13 +202,13 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     mcap = price * shares
     t12 = ({"revenue": g["latest"].get("revenue"), "ni": g["latest"].get("ni"), "ocf": g["latest"].get("ocf")} if market == "us"
            else {k: sheet.ttm(st, k) for k in ("revenue", "ni", "ocf")})
-    for k in ("capex", "pretax", "interest", "da"):
+    for k in ("capex", "pretax", "interest", "da", "op_income"):
         t12[k] = sheet.ttm(st, k) if market != "us" else g["latest"].get(k)
     bal = st.iloc[-1].copy()  # the latest balance sheet (US: the latest 10-Q's equity on the last 10-K's layout)
     if market == "us" and g["latest"].get("equity"):
         bal["equity"] = g["latest"]["equity"]
     ev = None if fin else mcap * rate + (checks.val(bal, "debt") or 0) - (checks.val(bal, "cash") or 0) + (checks.val(bal, "minority") or 0)
-    ebit = None if t12["pretax"] is None else t12["pretax"] + (t12["interest"] or 0)
+    ebit = sheet.ebit(market, t12["pretax"], t12["interest"], t12["op_income"])
     common = None if checks.val(bal, "equity") is None else checks.val(bal, "equity") - (checks.val(bal, "pref") or 0)
     cons = consensus(market, g, int(a.iloc[-1]["period"][:4]))
     eps_years = sorted(cons["eps"])
@@ -277,7 +277,7 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         "name": (me["name"].iloc[0] if len(me) and pd.notna(me["name"].iloc[0]) else None) or (me["name_en"].iloc[0] if len(me) else code),
         "listings": lst.replace({float("nan"): None}).to_dict("records"), "other_listings": others, "industry": industry,
         "damodaran": dam, "business": street.get("business"), "employees": street.get("employees"),
-        "price": px, "valuation": valuation, "summary": sheet.summary(a, kind), "history": sheet.history(a, dps, kind),
+        "price": px, "valuation": valuation, "summary": sheet.summary(a, kind, market), "history": sheet.history(a, dps, kind, market),
         "latest": g["latest"] if market == "us" else sheet.latest_vs_prior(st),
         "audit_opinion": a.iloc[-1].get("opinion") if "opinion" in a else None,
         "checks": acct, "consensus": cons | ({"note": REIT_NOTE} if kind == "reit" else {}), "flows": g["flows"], "street": {k: street.get(k) for k in (

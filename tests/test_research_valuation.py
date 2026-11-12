@@ -109,8 +109,10 @@ def test_rating_band_scales_with_uncertainty():
     r = rating.rate(100, 95, 105, [90, 110], 85, 2, 0.08)
     assert r["uncertainty"]["band"] == pytest.approx(0.10) and r["excess_return"] == pytest.approx(17 / 85 - 0.08)
     assert r["rating"] == "买入"
-    wide = rating.rate(100, 70, 130, [90, 110], 85, 2, 0.08)  # bear-to-bull half-range 30% -> band capped at 25%
-    assert wide["uncertainty"]["band"] == pytest.approx(0.25) and wide["rating"] == "持有"
+    wide = rating.rate(100, 70, 130, [90, 110], 85, 2, 0.08)  # bear-to-bull half-range 30% -> band 30%
+    assert wide["uncertainty"]["band"] == pytest.approx(0.30) and wide["rating"] == "持有"
+    huge = rating.rate(100, 20, 300, [40, 300], 50, 0, 0.08)  # methods 40-300: capped at Morningstar's extreme 75%
+    assert huge["uncertainty"]["band"] == pytest.approx(0.75) and huge["rating"] == "买入"  # +100% - 8% still beats it
     assert rating.rate(100, 99, 101, [99, 101], 125, 0, 0.08)["rating"] == "卖出"  # -20% - 8% against a 10% band
 
 
