@@ -622,6 +622,29 @@
     12-month excess "price against value". The PDF's page 1 shows the 12-month target, the fair value, its excess against the band and the 12-month
     bear and bull; the summary adds the fair value line; the words get {fair_value}; the gap to the street is now fair
     value against the street's target (both are "value in a year"), with a driver on the time it takes.
+- Research requests that failed (2026-11-12, your words: "i sent amazon and nvo via wechat but received message telling
+  me report cannot be generated and error with data source"). The Mac sends everything through a system proxy (port
+  7897; launchd's jobs follow macOS's proxy settings through httpx). Through it, Nasdaq's API answered 403 (06:30, the
+  stock list; 16:57, Amazon's analyst forecast) and Yahoo's cookie page dropped the TLS handshake (16:58, NVO). Five
+  faults, each fixed for every company:
+  - The US universe: a failed list fetch keeps the cached list, whose prices the data check compared with the latest
+    three closes, so 456 names that had moved over 1% since 11-10 were dropped and today's US lists came from 339 of
+    ~800 (Amazon and Apple out). The check now compares with the closes up to the list's own day (a fresh list: as
+    before). Today's US build was run again (792 scored; Nasdaq answered) and the report reviewed again; nothing sent.
+  - A research report stopped when its consensus source failed: Eastmoney's (CN) and Nasdaq's (US) consensus are now
+    optional (facts.optional), Yahoo's taking their place as for HK.
+  - Yahoo's cookie request (yahoo.crumb_http) was the one call without the client's retries: now retried.
+  - A 20-F filer (Novo Nordisk, no 10-Q): no trailing twelve months, so the valuation stopped; its last fiscal year
+    now stands for them (us.from_annual).
+  - The fast grower's established margin, first written as 8 profitable years: Novo has 7 in SEC's data and took
+    peers' 10.7% for its 34-44%; now 5 years without a loss ("Forecast").
+  Results through the same proxy: Novo Nordisk 持有, fair value +4%, 12-month +5% (the street +5%); Amazon 卖出, fair
+  value -22%, 12-month -3% (the street +22%, 41 buy ratings). Open, Amazon's: its operating profit is pretax profit
+  plus interest (stage 10's convention), which counts its gains on its Anthropic stake (TTM 179bn against ~85bn of
+  operating income), and its long-run margin is its own 8-year median (6.9%, with 2022's Rivian loss) against ~11%
+  today. The fix is operating income for the DCF with investment stakes valued apart (Damodaran's treatment of
+  non-operating assets); it would cut 腾讯's value too unless its stakes are added, and no free source lists them, so it
+  is a change of its own, not made here. 259 tests pass (a 20-F parser test added).
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1379,10 +1402,12 @@ ordinary. The 60% is also a judgement of "most of its profit".
   0.03, US 0.22, so a 20-point excess keeps 2, 0.6 and 4 points. Before, the last consensus year's growth faded over
   eight years (比亚迪 near 20% for years). A year without a revenue consensus grows the same way from the year before,
   not with the consensus profit (profit growth from a margin recovery isn't revenue growth). The margin: a fast grower
-  keeps its own 8-year median when all 8 years were profitable (an established margin, the moat clause's 8 years);
-  only a fast grower without that record takes mature peers', as the young do (2026-11-12: 比亚迪, with 10 profitable
-  years at 3.0-7.5%, took 8.5% from the auto sector's profitable members, mostly parts makers, as its 乘用车 industry
-  has 7 members, under the 10-firm floor; the carmakers' own median is 3.7%). The latest window rather than every window pooled, because growth must be in today's nominal terms
+  keeps its own median when it has the 5 years any company needs for that and none was a loss (an established margin);
+  only a fast grower with a loss year takes mature peers', as the young do (2026-11-12: 比亚迪, with 10 profitable years
+  at 3.0-7.5%, took 8.5% from the auto sector's profitable members, mostly parts makers, as its 乘用车 industry has 7
+  members, under the 10-firm floor; the carmakers' own median is 3.7%. First written as 8 profitable years, the moat
+  clause's; Novo Nordisk, profitable at 34-44% for decades but with 7 years in SEC's data, then took 10.7%: 5 years, the
+  plan's minimum for a company's own history, is the consistent test). The latest window rather than every window pooled, because growth must be in today's nominal terms
   to match today's discount rates (Damodaran's consistency of growth and the riskless rate in one currency): the
   pooled China median (7.3%, 2009-2025) carries the 2010s' nominal growth into a CNY valuation discounted at a 1.6%
   yield. Its limits: one cross-section, covering the covid years, of today's listings only (survivors).

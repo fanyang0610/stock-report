@@ -103,3 +103,18 @@ def test_listings_parsers():
     cninfo = listings.parse_cninfo({"stockList": [{"code": "600519", "zwjc": "贵州茅台", "pinyin": "gzmt", "category": "A股"},
                                                   {"code": "900901", "zwjc": "云赛B股", "pinyin": "ysbg", "category": "B股"}]}, "A股")
     assert list(cninfo["code"]) == ["600519"] and cninfo.iloc[0]["name"] == "贵州茅台"
+
+
+def test_a_20f_filer_takes_its_last_fiscal_year_as_trailing():
+    # Novo Nordisk files 20-F (no 10-Q): the last annual row stands for the trailing twelve months
+    import pandas as pd
+    from stockreport.research import us
+    st = pd.DataFrame({"period": ["2024-12-31", "2025-12-31", "2025-06-30"], "months": [12, 12, 6],
+                       "revenue": [290.4, 309.1, 150.0], "ni": [101.0, 102.4, 50.0], "gp": [246.0, 258.0, 125.0],
+                       "ocf": [121.0, 119.1, 60.0], "pretax": [128.0, 130.5, 64.0], "interest": [1.0, 6.8, 3.0],
+                       "da": [12.0, 14.7, 7.0], "capex": [47.0, 60.1, 30.0], "equity": [143.5, 194.0, 170.0],
+                       "shares": [4.44, 4.44, 4.44], "notice": ["2025-02-05", "2026-02-04", "2025-08-06"]})
+    x = us.from_annual(st)
+    assert x["period"] == "2025-12-31" and x["basis"] == "FY" and x["revenue"] == 309.1 and x["revenue_prior"] == 290.4
+    assert x["ni_prior"] == 101.0 and x["capex"] == 60.1 and x["equity"] == 194.0 and x["notice"] == "2026-02-04"
+    assert us.from_annual(st.iloc[:0]) == {}

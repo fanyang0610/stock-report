@@ -45,6 +45,15 @@ def prices(f, market: str, code: str, today: date) -> dict:
     return {n: load(f / f"{n}.csv.gz") for n in names}
 
 
+def optional(path, days_: int, make, what: str):
+    """A source the report can do without: its table, or None (logged) when it fails with nothing cached."""
+    try:
+        return cached(path, days_, make)
+    except Exception as e:
+        log.warning("%s unavailable, the report goes on without it: %s", what, e)
+        return None
+
+
 def gather(market: str, code: str, today: date) -> dict:
     f, S, D = folder(market, code), days("statements"), days("daily")
     g = {"street": cached(f / "street.json", D, lambda: sources.summary(market, code, today)),
@@ -54,7 +63,7 @@ def gather(market: str, code: str, today: date) -> dict:
     if market == "cn":
         g["statements"] = cached(f / "statements.csv.gz", S, lambda: cn.statements(code))
         g["segments"] = cached(f / "segments.csv.gz", S, lambda: cn.segments(code))
-        g["consensus"] = cached(f / "consensus.json", S, lambda: cn.consensus(code, today))
+        g["consensus"] = optional(f / "consensus.json", S, lambda: cn.consensus(code, today), f"{code} Eastmoney consensus")
         g["valuation"] = cached(f / "valuation.csv.gz", D, lambda: cn.valuation(code))
         g["flows"] = cached(f / "flows.json", D, lambda: cn.flows(code, today))
     elif market == "us":
@@ -62,8 +71,9 @@ def gather(market: str, code: str, today: date) -> dict:
             payload = us.companyfacts(code)  # several MB, parsed in memory and not kept
             save(f / "statements.csv.gz", us.parse_statements(code, payload))
             save(f / "latest.json", us.latest(code, payload, today))
-        g["statements"], g["latest"] = load(f / "statements.csv.gz"), load(f / "latest.json")
-        g["consensus"] = cached(f / "consensus.json", S, lambda: us.consensus(code))
+        g["statements"] = load(f / "statements.csv.gz")
+        g["latest"] = load(f / "latest.json") or us.from_annual(g["statements"])  # a 20-F filer: no quarterly reports
+        g["consensus"] = optional(f / "consensus.json", S, lambda: us.consensus(code), f"{code} Nasdaq consensus")
         g["flows"] = cached(f / "flows.json", D, lambda: us.flows(code))
     else:
         currency = g["street"].get("report_currency") or "HKD"

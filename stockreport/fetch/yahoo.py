@@ -212,7 +212,7 @@ def update_gaps(today: date, codes: list[str], market: str = "us") -> None:
 def crumb_http() -> Http:
     """quoteSummary needs Yahoo's A3 cookie (set by fc.yahoo.com, itself a 404) and the crumb for it."""
     http = make_http()
-    http.client.get("https://fc.yahoo.com")
+    http.get("https://fc.yahoo.com", ok=(200, 404))  # retried: a dropped TLS handshake through a proxy (2026-11-12)
     http.crumb = http.get("https://query1.finance.yahoo.com/v1/test/getcrumb").text
     return http
 

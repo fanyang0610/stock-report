@@ -105,6 +105,19 @@ def latest(code: str, payload: dict, today: date) -> dict:
         for s, w in (("", "ttm"), ("_prior", "prior"))}
 
 
+def from_annual(st: pd.DataFrame) -> dict:
+    """latest() for a filer without quarterly reports (a 20-F filer: Novo Nordisk, TSMC): the last fiscal year as the
+    trailing twelve months, against the year before."""
+    a = st[st["months"] == 12].sort_values("period")
+    if a.empty:
+        return {}
+    r, prior = a.iloc[-1], (a.iloc[-2] if len(a) > 1 else None)
+    val = lambda row, k: None if row is None or k not in row or pd.isna(row[k]) else float(row[k])
+    return {"period": r["period"], "months": 12, "basis": "FY", "notice": None if pd.isna(r.get("notice")) else r["notice"],
+            "equity": val(r, "equity"), "shares": val(r, "shares")} | {k: val(r, k) for k in ("pretax", "interest", "da", "capex")} | {
+        f"{k}{s}": val(row, k) for k in ("revenue", "ni", "gp", "ocf") for s, row in (("", r), ("_prior", prior))}
+
+
 def companyfacts(code: str) -> dict:
     cik = sec.update_ciks(date.today()).drop_duplicates("code").set_index("code")["cik"].get(code)
     if cik is None:

@@ -149,7 +149,7 @@ def test_sales_growth_keeps_its_measured_share_and_established_margins_stay():
     k = {"ebit": 6.0, "shares": 10.0, "ind_margin": 0.1, "mature_margin": 0.085, "base_growth": 0.05, "growth_persistence": 0.2}
     p = value.paths(f, k, "fast_grower", {"eps": [1.3, 1.625], "revenue": [120.0, None]}, 0.02)
     assert p["growth"][:5] == pytest.approx([0.2, 0.08, 0.056, 0.056, 0.056])
-    assert p["target_margin"] == 0.06  # 8 profitable years: its own margin, not mature peers'
+    assert p["target_margin"] == 0.06  # profitable every year: its own margin, not mature peers'
     young = f | {"history": [{"ebit_margin": -0.01}] + [{"ebit_margin": 0.06}] * 7}
     assert value.paths(young, k, "fast_grower", {"eps": [], "revenue": []}, 0.02)["target_margin"] == 0.085
 

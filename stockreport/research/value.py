@@ -228,8 +228,8 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     it that sales growth keeps (k["growth_persistence"], measured in the market's own history: Chan, Karceski and
     Lakonishok 2003 find sales growth persists in part and profit growth not beyond chance), to year 5, then falls in
     equal steps to the stable rate by year 10 (the Ginzu's two stages). Without a base rate, growth falls from the last
-    consensus year's to the stable rate. A fast grower keeps its own 8-year median margin when all 8 years were
-    profitable (an established margin, as the moat clause's 8 years); else it takes mature peers', as the young do.
+    consensus year's to the stable rate. A fast grower keeps its own median margin when it has the 5 years any company
+    needs for that and none was a loss (an established margin); else it takes mature peers', as the young do.
     Targets: a cyclical's 10-year average (normalized earnings after the years the consensus sees); the industry's for
     the young (PLAN.md "Forecast"): a loss-maker, a fast grower, under 5 years of history or a negative 8-year median;
     the rest their own 8-year median. With no consensus: the
@@ -256,7 +256,7 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     own = history(f, "ebit_margin", 8)
     if kind == "cyclical":
         target = history(f, "ebit_margin", 10).mean()
-    elif kind == "loss_making" or kind == "fast_grower" and not (len(own) >= 8 and (own > 0).all()) \
+    elif kind == "loss_making" or kind == "fast_grower" and (own <= 0).any() \
             or len(own) < 5 or own.median() <= 0:  # young: mature firms' margin
         target = k.get("mature_margin") or k["ind_margin"]
     else:

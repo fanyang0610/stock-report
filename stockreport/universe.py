@@ -323,7 +323,13 @@ def build_us(today: date) -> tuple[pd.DataFrame, dict]:
     df = estimates(df, trend, 1 / trend["currency"].map(yahoo.load_fx()).reindex(df.index))
     df = yahoo_balance(df, "us", "USD").assign(float_value=df["mcap"])  # US float ≈ total value by sector (PLAN.md, "Lists")
 
-    listed_px = (closes.loc[df.index].div(df["last"], axis=0) - 1).abs().min(axis=1)
+    # the screener's price against the closes up to its own day: a failed fetch keeps an older list (2026-11-12: the
+    # 11-10 list against 11-11's closes dropped 456 names that had simply moved), and its shares are still good
+    fetched = nasdaq.load_list()["fetched"].astype(str).str[:10]
+    days = np.sort(prices["date"].unique())
+    near = days[days <= fetched.max()][-3:] if len(fetched) and (days <= fetched.max()).any() else days[-3:]
+    near_closes = prices[prices["date"].isin(near)].pivot(index="code", columns="date", values="close").reindex(df.index)
+    listed_px = (near_closes.div(df["last"], axis=0) - 1).abs().min(axis=1)
     checks = {
         "no recent fundamentals (SEC or Yahoo)": df["source"].isna(),
         "missing fundamentals": df[NEEDED].isna().any(axis=1),
