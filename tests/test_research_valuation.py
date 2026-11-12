@@ -143,6 +143,28 @@ def test_growth_beyond_the_consensus_is_the_base_rate():
     assert p["margin"][1] == pytest.approx(15 * 1.625 / (120 * 1.05))  # operating income grows with profit
 
 
+def test_sales_growth_keeps_its_measured_share_and_established_margins_stay():
+    # persistence 0.2: year 2 (no revenue consensus) 5% + 0.2 x (20% - 5%) = 8%, years 3-5 5% + 0.2 x 3% = 5.6%
+    f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0}}, "summary": {}, "history": [{"ebit_margin": 0.06}] * 8}
+    k = {"ebit": 6.0, "shares": 10.0, "ind_margin": 0.1, "mature_margin": 0.085, "base_growth": 0.05, "growth_persistence": 0.2}
+    p = value.paths(f, k, "fast_grower", {"eps": [1.3, 1.625], "revenue": [120.0, None]}, 0.02)
+    assert p["growth"][:5] == pytest.approx([0.2, 0.08, 0.056, 0.056, 0.056])
+    assert p["target_margin"] == 0.06  # 8 profitable years: its own margin, not mature peers'
+    young = f | {"history": [{"ebit_margin": -0.01}] + [{"ebit_margin": 0.06}] * 7}
+    assert value.paths(young, k, "fast_grower", {"eps": [], "revenue": []}, 0.02)["target_margin"] == 0.085
+
+
+def test_growth_persistence_from_the_history(monkeypatch):
+    # 40 companies whose growth never changes (0-19.5% a year): all of the past excess carries on, slope 1
+    import pandas as pd
+    rev = pd.DataFrame({str(y): [100.0 * (1 + 0.005 * i) ** (y - 2010) for i in range(40)] for y in range(2010, 2023)},
+                       index=[f"c{i}" for i in range(40)])
+    monkeypatch.setattr(rating, "base_table", lambda market: rev)
+    rating.persistence.cache_clear()
+    assert rating.persistence("cn") == pytest.approx(1.0, abs=0.02)
+    rating.persistence.cache_clear()
+
+
 def test_twelve_month_target_closes_a_third_of_the_gap():
     # price 100, cost of equity 8%, dividend 2: 106 a year on; a fair value of 106 x 1.331 closes 10% of it a year
     carry = 100 * 1.08 - 2

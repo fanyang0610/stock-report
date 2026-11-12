@@ -199,6 +199,27 @@ def base_rates(market: str, revenue_now: float, rates: dict[str, float | None], 
             "share_at_least": {name: float((same >= x).mean()) if x is not None else None for name, x in rates.items()}}
 
 
+@lru_cache(maxsize=3)
+def persistence(market: str) -> float:
+    """How much of a company's revenue growth above its size fifth's median carries into the next 5 years: the slope of
+    the next 5 years' excess growth on the past 3 years' across the deciles of the latter (their medians, robust to the
+    tails), pooled over the market's history (complete years only), between 0 and 1."""
+    p = base_table(market)
+    cols, rows = sorted(p.columns)[:-1], []
+    for i in range(3, len(cols) - 5):
+        s0, s, e = p[cols[i - 3]], p[cols[i]], p[cols[i + 5]]
+        ok = (s0 > 0) & (s > 0) & (e > 0)
+        d = pd.DataFrame({"past": (s[ok] / s0[ok]) ** (1 / 3) - 1, "next": (e[ok] / s[ok]) ** (1 / 5) - 1,
+                          "fifth": (s.rank(pct=True)[ok] * 5).clip(upper=4.999).astype(int)})
+        d = d[d["past"].between(-0.5, 1.0) & d["next"].between(-0.5, 1.0)]
+        rows.append(d[["past", "next"]] - d.groupby("fifth")[["past", "next"]].transform("median"))
+    if not rows:
+        return 0.0
+    d = pd.concat(rows)
+    t = d.groupby(pd.qcut(d["past"], 10, labels=False, duplicates="drop"))[["past", "next"]].median()
+    return float(min(max(np.polyfit(t["past"], t["next"], 1)[0], 0.0), 1.0)) if len(t) > 2 else 0.0
+
+
 def flags(f: dict) -> tuple[str | None, str | None]:
     """(status, reason) when no rating can be given: 不评级 or 评级暂停."""
     if f["kind"] not in FINANCIAL and f["kind"] != "reit" and f["market"] != "us" and value.PRE_REVENUE.search(str(f["name"]).upper()):
@@ -284,6 +305,7 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     rates = base_rates(market, cur_rev, {}) if cur_rev else {}
     norm = rates.get("recent_median")  # the last 5-year window's median: the market's norm (kind_of)
     k["base_growth"] = rates.get("fifth_recent")  # companies of this size now: growth beyond the consensus (value.paths)
+    k["growth_persistence"] = persistence(market)
     kind, why = value.kind_of(f, k, norm)
     cons = value.consensus_years(f, k, today)
     status, reason = flags(f) if kind != "pre_revenue" else ("不评级", why)

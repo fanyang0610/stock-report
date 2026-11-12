@@ -224,21 +224,26 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     """Ten years of revenue growth and margins: the consensus years first (revenue from Yahoo's revenue consensus;
     operating income moving with the consensus profit), then the margin moving to its target by year 5 (the Ginzu's
     default). Beyond the analysts' revenue forecasts, growth is the base rate (k["base_growth"]: the median 5-year
-    revenue growth of companies of the same size, Mauboussin's base rates) to year 5, then falls in equal steps to the
-    stable rate by year 10: growth shows no persistence beyond chance and analysts' long-term forecasts are too high
-    (Chan, Karceski and Lakonishok 2003), so a consensus year's growth isn't carried on (the Ginzu's two stages, with the
-    base rate as years 3-5). Without a base rate, growth falls from the last consensus year's to the stable rate.
+    revenue growth of companies of the same size, Mauboussin's base rates) plus the share of the last year's excess over
+    it that sales growth keeps (k["growth_persistence"], measured in the market's own history: Chan, Karceski and
+    Lakonishok 2003 find sales growth persists in part and profit growth not beyond chance), to year 5, then falls in
+    equal steps to the stable rate by year 10 (the Ginzu's two stages). Without a base rate, growth falls from the last
+    consensus year's to the stable rate. A fast grower keeps its own 8-year median margin when all 8 years were
+    profitable (an established margin, as the moat clause's 8 years); else it takes mature peers', as the young do.
     Targets: a cyclical's 10-year average (normalized earnings after the years the consensus sees); the industry's for
     the young (PLAN.md "Forecast"): a loss-maker, a fast grower, under 5 years of history or a negative 8-year median;
     the rest their own 8-year median. With no consensus: the
     3-year revenue trend, faded."""
     t, s = f["valuation"]["ttm"], f["summary"]
     rev0, ni0, ebit0, shares = t["revenue"], t["ni"], k["ebit"], k["shares"]
-    m0, base = ebit0 / rev0, k.get("base_growth")
+    m0, base, keep = ebit0 / rev0, k.get("base_growth"), k.get("growth_persistence") or 0.0
+    after = lambda g: base + keep * (g - base)  # a year beyond the revenue consensus
     growth, margin, prev_r, prev_e = [], [], rev0, (ni0 / shares if ni0 else None)
     for e, r in zip(cons["eps"], cons["revenue"]):
         pg = e / prev_e - 1 if prev_e and prev_e > 0 and e > 0 else None
-        rg = r / prev_r - 1 if r and prev_r > 0 else base if base is not None else pg  # profit growth isn't revenue's
+        last = growth[-1] if growth else s.get("rev_cagr_3y")
+        rg = r / prev_r - 1 if r and prev_r > 0 else (after(last) if last is not None else base) if base is not None \
+            else pg  # profit growth isn't revenue's
         if rg is None:
             break
         growth.append(rg)
@@ -251,7 +256,8 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     own = history(f, "ebit_margin", 8)
     if kind == "cyclical":
         target = history(f, "ebit_margin", 10).mean()
-    elif kind in ("loss_making", "fast_grower") or len(own) < 5 or own.median() <= 0:  # young: mature firms' margin
+    elif kind == "loss_making" or kind == "fast_grower" and not (len(own) >= 8 and (own > 0).all()) \
+            or len(own) < 5 or own.median() <= 0:  # young: mature firms' margin
         target = k.get("mature_margin") or k["ind_margin"]
     else:
         target = own.median()
@@ -259,7 +265,8 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     if base is None:
         growth += [growth[-1] + (g_term - growth[-1]) * (t_ - n) / (dcf.YEARS - n) for t_ in range(n + 1, dcf.YEARS + 1)]
     else:
-        growth += [base if t_ <= CONVERGENCE else base + (g_term - base) * (t_ - CONVERGENCE) / (dcf.YEARS - CONVERGENCE)
+        g5 = after(growth[-1])
+        growth += [g5 if t_ <= CONVERGENCE else g5 + (g_term - g5) * (t_ - CONVERGENCE) / (dcf.YEARS - CONVERGENCE)
                    for t_ in range(n + 1, dcf.YEARS + 1)]
     last = margin[-1]
     margin += [target if t_ >= CONVERGENCE else last + (target - last) * (t_ - n) / (CONVERGENCE - n)

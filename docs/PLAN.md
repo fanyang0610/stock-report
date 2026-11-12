@@ -600,8 +600,22 @@
     targets that haven't followed the price down. The large gaps left against the street are views with their stated
     condition: the growth names (Snowflake, Palantir, 百济神州) on GAAP margins and base-rate growth, where the street
     capitalizes its own growth forecasts (Chan, Karceski and Lakonishok: those don't persist).
+  - The three far gaps checked (your OK, 2026-11-12, "Yes, check them here"), each against its evidence:
+    - 比亚迪's margin: a fault (above): now its own 5.5% (8-year median); fair value +57% -> +25%, 12-month +21% ->
+      +12%, 买入 -> 持有 (the fair value's excess +19.4% against a 20% band), the H line 买入 -> 持有 (+20%, +11%); the
+      street +26%; it now agrees with the screening's 中性.
+    - The growth rule, re-read: the paper's finding is about profits; sales growth persists in part. Now measured and
+      kept (above); NVIDIA's fair value -1% -> +6%, Micron, Palantir, Snowflake within a point or two.
+    - Apple's cost of capital: Damodaran's method as he applies it (his US Computers/Peripherals, 36 firms, levered
+      beta 1.35, his own industry cost of capital 9.7%; ours 10.7% at today's 4.88% yield). Its regression beta is
+      1.05, but regression betas would give 茅台 0.10 (a 3% cost of equity), the error bottom-up betas avoid. Kept: the
+      fair value -29% (the DCF; the P/E methods -11%), 12-month -5%, 卖出; Damodaran's own Apple valuations sit below
+      its price too.
+    - Snowflake's stock-based pay (34% of revenue) as a cost: Damodaran's and Morningstar's position; the street's
+      non-GAAP figures leave it out without counting the dilution. Kept: fair value -61%, 12-month -21%, 卖出, the
+      condition stated in the report.
   - Tests: the growth path beyond the consensus, the 12-month convergence and the latest window's base rate
-    (tests/test_research_valuation.py). 256 pass. The fresh review (one, on Sonnet; fixes checked by the tests)
+    (tests/test_research_valuation.py), then the sales-growth persistence and the established margin. 258 pass. The fresh review (one, on Sonnet; fixes checked by the tests)
     confirmed the formula, the fields, the currency direction and that no number comes from DeepSeek; fixed: the
     window's reason (first written as two names' consensus, now the consistency above) and its figures (CN is
     2019-2024 at 4.9%), page 1 not saying the rating uses the fair value's excess, three comparison lines calling the
@@ -1357,11 +1371,18 @@ ordinary. The 60% is also a judgement of "most of its profit".
   sales-to-capital ratio. Since 2026-11-12 (your gap check, below): beyond the analysts' revenue forecasts, growth is
   the base rate (the median 5-year revenue growth of the same size fifth in the latest complete window, the window
   ending at the year base_rates already takes as the last full one: the largest fifth's CN 4.9% over 2019-2024, HK
-  4.3% and US 6.9% over 2020-2025; the US middle fifth 8.3%) to year 5, then falls to the long-run rate by year 10.
-  Chan, Karceski and Lakonishok (2003): growth shows no persistence beyond chance, so a consensus year's growth isn't
-  carried on (it was faded slowly from the last consensus year's, which kept 比亚迪 near 20% for years); a year without
-  a revenue consensus grows at the base rate, not with the consensus profit (profit growth from a margin recovery isn't
-  revenue growth). The latest window rather than every window pooled, because growth must be in today's nominal terms
+  4.3% and US 6.9% over 2020-2025; the US middle fifth 8.3%) plus the share of the last year's excess over it that
+  sales growth keeps, to year 5, then falls to the long-run rate by year 10. Chan, Karceski and Lakonishok (2003) find
+  profit growth no more persistent than chance and sales growth persistent in part (about twice the chance runs, more
+  for large firms); the share is measured in each market's own history (rating.persistence: the slope of the next 5
+  years' revenue growth above the size fifth's median on the past 3 years', over the deciles' medians): CN 0.09, HK
+  0.03, US 0.22, so a 20-point excess keeps 2, 0.6 and 4 points. Before, the last consensus year's growth faded over
+  eight years (比亚迪 near 20% for years). A year without a revenue consensus grows the same way from the year before,
+  not with the consensus profit (profit growth from a margin recovery isn't revenue growth). The margin: a fast grower
+  keeps its own 8-year median when all 8 years were profitable (an established margin, the moat clause's 8 years);
+  only a fast grower without that record takes mature peers', as the young do (2026-11-12: 比亚迪, with 10 profitable
+  years at 3.0-7.5%, took 8.5% from the auto sector's profitable members, mostly parts makers, as its 乘用车 industry
+  has 7 members, under the 10-firm floor; the carmakers' own median is 3.7%). The latest window rather than every window pooled, because growth must be in today's nominal terms
   to match today's discount rates (Damodaran's consistency of growth and the riskless rate in one currency): the
   pooled China median (7.3%, 2009-2025) carries the 2010s' nominal growth into a CNY valuation discounted at a 1.6%
   yield. Its limits: one cross-section, covering the covid years, of today's listings only (survivors).
