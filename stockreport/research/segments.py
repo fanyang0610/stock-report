@@ -269,7 +269,8 @@ def header(lines: list[str], at: int, row: list[tuple[float, int, int]]) -> tupl
             groups.append([c])
     if len(groups) != len(ends):
         return [""] * len(ends), year
-    return [" ".join(t for t, *_ in sorted(g, key=lambda c: (c[3], c[1]))) for g in groups], year
+    names = [" ".join(t for t, *_ in sorted(g, key=lambda c: (c[3], c[1]))) for g in groups]
+    return [re.sub(r"\s*(?:[*#†]+|\(\d\)|\(note \d+\))$", "", n, flags=re.I) for n in names], year  # footnote marks
 
 
 def page_tables(text: str) -> list[dict]:
@@ -299,13 +300,18 @@ def page_tables(text: str) -> list[dict]:
     return out
 
 
+def note_page(text: str) -> bool:
+    """A page that names the segment note and has a line starting with a revenue row's label (the row parser's own
+    labels: Meituan's "Total revenues" was passed over by a shorter list)."""
+    return bool(NOTE.search(text) and re.search(rf"(?im)^{LEAD}(?:{'|'.join(REVENUE_ROWS)})\b", text))
+
+
 def report_tables(pdf: bytes) -> list[dict]:
-    """The segment tables of an annual report: pages whose text names the segment note and has a revenue row."""
+    """The segment tables of an annual report, from the pages note_page picks."""
     from pypdf import PdfReader
     out = []
     for page in PdfReader(io.BytesIO(pdf)).pages:
-        text = page.extract_text() or ""
-        if NOTE.search(text) and re.search(r"(?im)^\s*(?:segment revenue|revenue|turnover|sales to external)", text):
+        if note_page(page.extract_text() or ""):
             out += page_tables(page.extract_text(extraction_mode="layout"))
     return out
 

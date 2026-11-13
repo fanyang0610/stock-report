@@ -205,3 +205,17 @@ def test_hk_segment_note_from_the_annual_reports_layout_text():
     assert anta["names"][:3] == ["ANTA brand", "FILA brand", "All other brands"] and anta["op"][3] == -274
     df = segments.from_report([anta], {2025: ("2025-12-31", 80.219e9)}, "Annual Report 2025").set_index("item")
     assert df.loc["FILA brand", "op_margin"] == pytest.approx(7418 / 28469) and len(df) == 4
+
+
+def test_hk_segment_note_whose_revenue_row_is_total_revenues():
+    # Meituan's 2025 annual report (2024 table): the row is "Total revenues", which the page filter once passed over;
+    # a footnote mark on a column name is dropped; a loss-making segment leaves the profit shares out
+    from stockreport.research import segments
+    text = (DATA / "segments_hk_meituan_page.txt").read_text()
+    assert segments.note_page(text)
+    table = segments.page_tables(text)[0]
+    assert table["year"] == 2024 and table["names"][:3] == ["Core local commerce", "New initiatives", "Unallocated items"]
+    df = segments.from_report([table], {2024: ("2024-12-31", 337.591576e9)}, "Annual Report 2025").set_index("item")
+    assert df.loc["Core local commerce", "revenue"] == pytest.approx(250.247496e9)
+    assert df.loc["Core local commerce", "op_margin"] == pytest.approx(52415162 / 250247496)
+    assert df.loc["Unallocated items", "op_income"] == pytest.approx(-8.296892e9) and df["op_share"].isna().all()

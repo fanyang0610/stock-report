@@ -703,8 +703,14 @@
     others are left out: segments as rows (SHKP), column groups (MTR), a total that isn't the statements' revenue
     (AIA's insurance revenue, WH Group), no statements to check against (Link, a REIT), a table the parser doesn't
     recognise (CK Hutchison, Galaxy, Sands China, CK Asset, Towngas, Sunny Optical, Lenovo). Not found by the filing
-    search at all: 6 of the 22 tried (Meituan, Xiaomi, HSBC, Li Ning, CLP, Hang Seng Bank; filings.periodic, a limit of
-    its own that the words' sections share). Tencent's fact sheet took 15 s cold with the note.
+    search at all: 6 of the 22 tried (Meituan, Xiaomi, HSBC, Li Ning, CLP, Hang Seng Bank; fixed the same day, below).
+    Tencent's fact sheet took 15 s cold with the note. Those five checked once found (2026-11-13): Meituan's note was
+    passed over because the page filter knew fewer revenue labels than the row parser ("Total revenues"); the filter
+    now uses the parser's own (segments.note_page), and Meituan parses (2024: core local commerce RMB 250.2bn at a
+    20.9% operating margin, new initiatives -7.3bn, unallocated -8.3bn). Left out: Xiaomi (a subtotal column and
+    column groups), CLP (names wrapped off their columns), Li Ning (one segment), HSBC (a bank: no revenue split in its
+    20-F, and its annual report's text unreadable). A footnote mark on a column name is dropped. Of the 21 HK-only
+    companies with an annual report found, 5 parse; the other 16 come out as before. 267 tests.
   - The report: page 2's table holds the breakdowns that carry a margin and the others go on one line each (按产品：…),
     with the segments' operating margins over the years (Amazon: AWS 27.1% → 35.4%, North America 4.2% → 6.9%) and the
     source; a company without a checked table gets a line saying so. CN shows its latest period with margins (茅台's
