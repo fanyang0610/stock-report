@@ -1,17 +1,19 @@
-"""The score (PLAN.md, "The score: four families, equal weights"): a family is the percentile rank among the stock's
-peers (its sector, financials apart; signals.peers) of the mean of its components' percentiles (a missing component
-skipped, a missing family 50), so each family spreads alike, as Stockopedia ranks each family before combining them,
-and a stock is judged against its own sector, as Seeking Alpha's quant grades and MSCI's multi-factor indexes judge
-it. The score is the mean of the four. Grades A-E are fifths of each family among the peers; a card's why-line names
-its two strongest components, its key risk a loss, heavy debt, a 30%+ fall in 6 months, or else its weakest component.
-The distress logit (signals.distress) goes with the score for the buys' screen (lists.screened)."""
+"""The score (PLAN.md, "The score: three families, equal weights"): a family is the percentile rank among the stock's
+peers (its sector, financials apart; signals.peers) of the mean of its components' percentiles, a missing component
+counted at the middle (signals.MIDDLE, the cross-sectional median imputation of Gu, Kelly and Xiu 2020), so a stock
+with few components doesn't land in the tails more often than one with all of them; each family spreads alike, as
+Stockopedia ranks each family before combining them, and a stock is judged against its own sector, as Seeking Alpha's
+quant grades and MSCI's multi-factor indexes judge it. The score is the mean of the three. Grades A-E are fifths of
+each family among the peers; a card's why-line names its two strongest components, its key risk a loss, heavy debt, a
+30%+ fall in 6 months, or else its weakest component. The distress logit (signals.distress) goes with the score for
+the buys' screen (lists.screened)."""
 
 import pandas as pd
 
 from stockreport.config import CONFIG
-from stockreport.signals import FAMILIES, components, distress, peer_rank, peers, percentiles
+from stockreport.signals import FAMILIES, MIDDLE, components, distress, peer_rank, peers, percentiles
 
-NAMES = {"value": "价值", "quality": "质量", "growth": "成长", "momentum": "动量"}
+NAMES = {"value": "价值", "quality": "质量", "momentum": "动量"}
 SIGNED = {"cash", "mom", "sue", "rev", "rg", "pg", "roa5"}  # worded by the figure's sign; the rest by the peers' median
 WORDS = {  # component -> (good, bad, the figure shown)
     "ep": ("市盈率低", "市盈率高", lambda x: f"PE {1 / x:.1f}" if x > 0 else "亏损"),
@@ -27,6 +29,7 @@ WORDS = {  # component -> (good, bad, the figure shown)
     "rev": ("分析师 3 个月上调{}盈利预测", "分析师 3 个月下调{}盈利预测", lambda x: f"相当于股价的 {x:+.1%}"),  # the year: phrase
     "ev": ("企业价值/息税前利润低", "企业价值/息税前利润高", lambda x: f"EV/EBIT {1 / x:.1f}" if x > 0 else "EBIT 为负"),
     "dy": ("股息率高", "股息率低", lambda x: f"{x:.1%}"),
+    "ep8": ("多年平均利润的市盈率低", "多年平均利润的市盈率高", lambda x: f"PE {1 / x:.1f}" if x > 0 else "多年平均亏损"),
     "prof8": ("8 年平均资产回报率高", "8 年平均资产回报率低", lambda x: f"{x:.0%}"),
     "gm8": ("毛利率多年稳定", "毛利率多年波动大", lambda x: f"均值/标准差 {x:.1f}"),
     "vol": ("股价波动小", "股价波动大", lambda x: f"年化 {x:.0%}"),
@@ -62,7 +65,7 @@ def score(df: pd.DataFrame, market: str, cn: pd.DataFrame | None = None, lines: 
     pct, group = percentiles(comp, df, market), peers(df)
     out = pd.concat([df, comp.add_prefix("c_"), pct.add_prefix("p_")], axis=1).assign(peers=group)
     for fam, parts in FAMILIES.items():
-        out[f"f_{fam}"] = peer_rank(pct[parts[market]].mean(axis=1), group).fillna(0.5)
+        out[f"f_{fam}"] = peer_rank(pct[parts[market]].fillna(MIDDLE).mean(axis=1), group)
         out[f"g_{fam}"] = grade(out[f"f_{fam}"])
     out["score"] = out[[f"f_{fam}" for fam in FAMILIES]].mean(axis=1).round(DIGITS)  # equal means compare equal
     out["score_rank"] = pd.Series(range(1, len(out) + 1), index=ranked(out).index)
@@ -91,7 +94,9 @@ def phrase(row: pd.Series, c: str, market: str) -> str:
         words = words.format(f" {int(row['rev_year'])} 财年" if pd.notna(row.get("rev_year")) else "下一财年")
     peers ="" if key in SIGNED or str(row.get("peers", "")).startswith("全市场") else "同行中" + " " * words[0].isascii()
     text = f"{peers}{words}（{figure}）"
-    return text.replace("市盈率", "扣非市盈率") if market == "cn" and c == "ep" else text
+    if market == "cn" and c in ("ep", "ep8"):  # CN's earnings are 扣非
+        return text.replace("市盈率", "扣非市盈率") if c == "ep" else text.replace("平均利润", "平均扣非利润")
+    return text
 
 
 def card_lines(row: pd.Series, used: list[str], market: str) -> tuple[str, str, str]:

@@ -1,4 +1,4 @@
-"""The score's ingredients (PLAN.md, "The score: four families"): each component per stock, and its percentile among
+"""The score's ingredients (PLAN.md, "The score: three families"): each component per stock, and its percentile among
 its sector's stocks on the date; and the distress probability the buys screen on. Inputs are point-in-time: the
 universe's latest public reports, prices and consensus, the annual reports public by the date (history.YEARS), for CN
 the quarterly 扣非 profit by notice date (fetch.eastmoney.CN_DEDUCT) and the research reports by publication date
@@ -9,14 +9,16 @@ from datetime import date
 import numpy as np
 import pandas as pd
 
-FAMILIES = {  # family -> market -> components
-    "value": {m: ["ep", "fep", "bp", "sp", "ev", "dy"] for m in ("cn", "hk", "us")},
-    "quality": {m: [prof, "cash", "debt", "prof8", "gm8", "vol"] for m, prof in (("cn", "roe"), ("hk", "roe"), ("us", "gpa"))},
-    "growth": {m: ["rg", "pg", "roa5"] for m in ("cn", "hk", "us")},
-    "momentum": {"cn": ["sue", "rev"], "hk": ["mom", "rev"], "us": ["mom", "rev"]},
+FAMILIES = {  # family -> market -> components (stage 16: growth's three went to quality and momentum)
+    "value": {m: ["ep", "fep", "bp", "sp", "ev", "dy", "ep8"] for m in ("cn", "hk", "us")},
+    "quality": {m: [prof, "cash", "debt", "prof8", "gm8", "vol", "roa5"]
+                for m, prof in (("cn", "roe"), ("hk", "roe"), ("us", "gpa"))},
+    "momentum": {"cn": ["sue", "pg", "rg", "rev"], "hk": ["mom", "pg", "rg", "rev"], "us": ["mom", "pg", "rg", "rev"]},
 }
+MIDDLE = 0.5  # a missing component's percentile in its family's mean: the middle (Gu, Kelly and Xiu 2020)
 LOWER_IS_BETTER = {"debt", "vol"}
 LONG_YEARS, LONG_MIN, PROF_CLIP = 8, 5, (-0.5, 1.5)  # the last 8 fiscal years, at least 5; a yearly ratio on a tiny base
+STALE_YEARS = 2  # the latest of them at most 2 calendar years before the day's (one annual report missing at most)
 # Campbell, Hilscher and Szilagyi (2008), Table 4, failure within 12 months (Gray and Carlisle's distress screen). For a
 # ranking the constant, the index's return in EXRETAVG and the market total in RSIZE drop out; PRICE (log price capped
 # at $15) is left out, a US small-stock term.
@@ -95,24 +97,30 @@ def forward(df: pd.DataFrame, today: date) -> pd.DataFrame:
     return df.assign(eps_ntm=(this_year + (1 - left) * df["eps_e2"]).where(left.notna()))
 
 
-def long_run(years: pd.DataFrame, day: str) -> pd.DataFrame:
+def long_run(years: pd.DataFrame, day: str, rate: pd.Series | None = None) -> pd.DataFrame:
     """Per stock, from its last LONG_YEARS fiscal years public by `day` (history.YEARS: code, year, core, assets, roa,
-    gm, avail), at least LONG_MIN of them: the average ROA (prof8; Gray and Carlisle's franchise power), gross-margin
-    stability (gm8: mean ÷ standard deviation) and the 5-year growth in profit over the assets 5 years before (roa5:
-    the latest year's profit minus that year's, Asness, Frazzini and Pedersen's growth in ROA). On assets, not the
-    book: a book shrunk or turned negative by buybacks, payouts or pre-listing preferred shares makes a return on it
-    meaningless (Eastmoney's ROE put Wynn Macau's 2020 loss at +470%), and assets are what every market's tables give
-    each year."""
+    gm, currency, avail), at least LONG_MIN of them: the average ROA (prof8; Gray and Carlisle's franchise power),
+    gross-margin stability (gm8: mean ÷ standard deviation), the 5-year growth in profit over the assets 5 years before
+    (roa5: the latest year's profit minus that year's, Asness, Frazzini and Pedersen's growth in ROA) and the average
+    yearly profit (core8, Graham's average earnings, for signals.components' ep8), each year in the quote currency at
+    `rate` (quote-currency units per unit of each currency; None: one currency). On assets, not the book: a book shrunk
+    or turned negative by buybacks, payouts or pre-listing preferred shares makes a return on it meaningless
+    (Eastmoney's ROE put Wynn Macau's 2020 loss at +470%), and assets are what every market's tables give each year.
+    None when the latest year is more than STALE_YEARS before the day's: the US history lacks some foreign filers'
+    newer annual reports (on 2026-11-13 Toyota's ended in fiscal 2020), and their figures aren't today's company."""
     y = years[(years["avail"] != "") & (years["avail"] <= day)].sort_values(["code", "year"])
     y = y.groupby("code").tail(LONG_YEARS).copy()
     y["prof"] = y["roa"].clip(*PROF_CLIP)
+    y["quote"] = y["core"] if rate is None else y["core"] * y["currency"].map(rate)
     g, gm = y.groupby("code"), y.groupby("code")["gm"]
     last = y.drop_duplicates("code", keep="last").set_index("code")
     before = y.set_index(["code", "year"])[["core", "assets"]].reindex(
         pd.MultiIndex.from_arrays([last.index, last["year"] - 5])).set_axis(last.index)
     return pd.DataFrame({"prof8": g["prof"].mean().where(g["prof"].count() >= LONG_MIN),
                          "gm8": (gm.mean() / gm.std().where(gm.std() > 0)).where(gm.count() >= LONG_MIN),
-                         "roa5": ((last["core"] - before["core"]) / before["assets"].where(before["assets"] > 0))})
+                         "roa5": ((last["core"] - before["core"]) / before["assets"].where(before["assets"] > 0)),
+                         "core8": g["quote"].mean().where(g["quote"].count() >= LONG_MIN)}
+                        ).where(last["year"] >= int(day[:4]) - STALE_YEARS, axis=0)
 
 
 def distress(df: pd.DataFrame) -> pd.Series:
@@ -140,8 +148,9 @@ def components(df: pd.DataFrame, market: str, cn: pd.DataFrame | None = None) ->
     a positive book; S/P, cash backing and debt not for banks, insurers and brokers. Forward E/P is the next 12 months'
     consensus EPS over the price (forward), the revisions next year's consensus now minus 91 days ago over the price,
     the same fiscal year at both dates (Chan, Jegadeesh and Lakonishok 1996), both with at least 3 estimates. EBIT/EV
-    and margin stability not for financials either; growth is the latest report's against a year earlier (CN and HK
-    year to date, US trailing 12 months); the long-run columns come from long_run."""
+    and margin stability not for financials either; revenue and profit growth are the latest report's against a year
+    earlier (CN and HK year to date, US trailing 12 months); the long-run columns come from long_run, ep8 being their
+    average yearly profit over today's market value (Graham's price over average earnings)."""
     fin = df["financial"].astype(bool)
     col = lambda c: df[c] if c in df else pd.Series(np.nan, index=df.index)
     pref = df.get("pref_share", 0.0)
@@ -161,7 +170,7 @@ def components(df: pd.DataFrame, market: str, cn: pd.DataFrame | None = None) ->
         "fep": (col("eps_ntm") / df["price"]).where(col("analysts") >= MIN_ANALYSTS),
         "rev": ((col("est_now") - col("est_90")) / df["price"]).where(col("est_n") >= MIN_ANALYSTS),
         "ev": (col("ebit") / col("ev")).where(~fin & (col("ev") > 0)),
-        "dy": col("div_yield"),
+        "dy": col("div_yield"), "ep8": col("core8") / df["mcap"],
         "prof8": col("prof8"), "gm8": col("gm8").where(~fin), "vol": col("vol_1y"),
         "rg": col("rev_growth"), "pg": col("np_growth"), "roa5": col("roa5"),
     }, index=df.index)

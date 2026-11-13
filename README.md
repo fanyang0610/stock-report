@@ -12,7 +12,7 @@ does, without looking at anyone's portfolio:
 | 持有 Hold | 10 | Expected to be roughly stable. |
 | 卖出 Sell | 10 | Expected to lag the market. |
 
-Each stock gets a card: price, grades for value, quality, growth and momentum, why it is on the list, the key risk, the
+Each stock gets a card: price, grades for value, quality and momentum, why it is on the list, the key risk, the
 cost of one board lot, what the review found, a short AI note and a date to check it again. The report also says what
 each rating's history suggests you should expect.
 
@@ -33,11 +33,11 @@ it in roughly 4 years out of 10. No list is a guarantee. **This is not investmen
 ```
 fetch/  ──►  universe  ──►  signals  ──►  score  ──►  lists  ──►  review  ──►  report (PDF + text)  ──►  WeChat
 free data    800 largest    value, quality,  one score   Buy/Hold/  DeepSeek     render/              deliver.py
-per market   liquid stocks  growth, momentum per market  Sell       checks picks
+per market   liquid stocks  momentum         per market  Sell       checks picks
 ```
 
 1. **Data.** Free sources only (exchanges, SEC, Eastmoney, Tencent, Yahoo and others), cached in `data/`.
-2. **Score.** Every stock gets one rule-based score: four families (value, quality, growth, momentum) with equal
+2. **Score.** Every stock gets one rule-based score: three families (value, quality, momentum) with equal
    weights, each stock ranked against its own sector. The ingredients come from published research for each market,
    not from tuning to our own backtest.
 3. **Lists.** The best scores fill the Buy list sector by sector; Hold and Sell follow fixed rules.
@@ -131,7 +131,7 @@ runs at 06:30 Mac time (China Standard Time); a run missed during sleep starts o
 stockreport/          the app (Python, ~10,200 lines)
   fetch/              one module per data source
   universe.py         which stocks are scored
-  signals.py          value, quality, growth and momentum ingredients
+  signals.py          value, quality and momentum ingredients
   score.py            families, score, grades, card lines
   lists.py            Buy, Hold, Sell
   review.py           the results review (DeepSeek), with passages.py, notes.py, quotes.py, events.py, verdicts.py

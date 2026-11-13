@@ -46,8 +46,9 @@ from stockreport.fetch import eastmoney, sec, swclass, yahoo
 from stockreport.score import score
 
 SIZES, HOLD = (20, 10, 5), 12
-KEEP = ["name", "sector", "peers", "financial", "country", "mcap_rank", "mcap", "float_value", "price", "score", "distress", "vol_1y",
-        "f_value", "f_quality", "f_growth", "f_momentum"]
+FAMILY_COLS = [f"f_{f}" for f in signals.FAMILIES]
+KEEP = ["name", "sector", "peers", "financial", "country", "mcap_rank", "mcap", "float_value", "price", "score", "distress",
+        "vol_1y"] + FAMILY_COLS
 EXPECT = history.HISTORY / "expect.json"
 
 
@@ -64,6 +65,20 @@ def float_factors(market: str) -> pd.Series:
 
 
 # ---------------------------------------------------------------- the score on each snapshot
+
+def quote_per(market: str, m: str, day, fx_month: pd.DataFrame | None) -> pd.Series | None:
+    """Quote-currency units per unit of each reporting currency on the snapshot's day, for the years' average profit
+    (signals.long_run; the live build takes today's rates, history.quote_per): US that month's Yahoo FX, as the
+    snapshot's own figures (panel.us_snapshot); HK Yahoo's daily <CUR>CNY=X (yahoo.cny_per); CN None."""
+    if market == "cn":
+        return None
+    if market == "us":
+        fx = pd.Series({c[:3]: fx_month.at[m, c] for c in fx_month.columns if c.endswith("=X")})  # units per US dollar
+        return 1 / pd.concat([fx, pd.Series({"USD": 1.0})])
+    cur = pd.Series(sorted(set(pd.read_csv(yahoo.FX_CNY)["currency"]) | {"CNY"}))
+    per = yahoo.cny_per(cur, pd.Series([day.isoformat()] * len(cur)))
+    return pd.Series((per / per[cur == "HKD"].iloc[0]).to_numpy(), index=cur)
+
 
 def prepare(s: pd.DataFrame, market: str, m: str, ytd: pd.DataFrame | None) -> pd.DataFrame:
     """The live universe's extra columns for one snapshot: sector, year-to-date figures for the cash backing, and the
@@ -100,13 +115,14 @@ def frame(market: str) -> pd.DataFrame:
     if market == "hk":
         ytd = history.hk_results().sort_values("date_type").drop_duplicates(["code", "period"]).set_index(["code", "period"])
     years = history.YEARS[market]()
+    fx_month = panel.Monthly(market).close if market == "us" else None
     for m, d in snaps.items():
         if m < run.START.get(market, ""):
             continue
         s = prepare(d["snap"], market, m, ytd)
         s["float_value"] = s["mcap"] * (factor.reindex(s.index).fillna(factor.median()) if len(factor) else 1.0)
         day = run.day_of(market, m)
-        s = s.join(signals.long_run(years, day.isoformat()))
+        s = s.join(signals.long_run(years, day.isoformat(), quote_per(market, m, day, fx_month)))
         cn = signals.cn_deduct(deduct, (day - timedelta(days=1)).isoformat()) if market == "cn" else None  # public before
         sc = score(s, market, cn, lines=False)
         rows.append(sc.reindex(columns=KEEP + [c for c in sc if c.startswith("p_")]).join(d["fwd"]).assign(date=m))
@@ -251,7 +267,7 @@ def families(f: pd.DataFrame) -> pd.DataFrame:
     per = np.select([f["date"].between(*p) for p in PERIODS.values()], list(PERIODS), "")
     by, rows = [f["date"], f["peers"]], {}
     size = f.groupby(by).size()
-    for col in ("f_value", "f_quality", "f_growth", "f_momentum", "score"):
+    for col in FAMILY_COLS + ["score"]:
         pct = f.groupby(by)[col].rank(pct=True)
         top, bottom = (f[m].groupby([f["date"][m], f["peers"][m]])["ret_12m"].mean() for m in (pct > 0.8, pct <= 0.2))
         gap = (top - bottom).dropna()

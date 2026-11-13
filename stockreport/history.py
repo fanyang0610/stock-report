@@ -43,7 +43,7 @@ def cn_years() -> pd.DataFrame:
     assets = a["assets"].where(a["assets"] > 0)
     return pd.DataFrame({"code": a["code"], "year": a["period"].str[:4].astype(int), "core": a["deduct"], "ni": a["np"],
                          "rev": a["revenue"], "gm": a["gross_margin"] / 100, "avail": np.where(later > notice, later, notice),
-                         "assets": assets, "roa": a["deduct"] / assets})
+                         "assets": assets, "roa": a["deduct"] / assets, "currency": "CNY"})
 
 
 def us_annual(today: date | None = None) -> pd.DataFrame:
@@ -69,7 +69,7 @@ def us_years() -> pd.DataFrame:
     return pd.DataFrame({"code": a["code"], "year": a["year"], "roe": roe, "core": core, "ni": a["ni"],
                          "rev": a["revenue"], "ocf": a["ocf"], "gm": a["gp"] / a["revenue"],
                          "fcf": a["ocf"] - a["capex"].fillna(0), "avail": a["avail"],
-                         "assets": assets, "roa": core / assets, "book": eq})
+                         "assets": assets, "roa": core / assets, "book": eq, "currency": a["currency"]})
 
 
 def hk_results() -> pd.DataFrame:
@@ -97,10 +97,20 @@ def hk_years() -> pd.DataFrame:
     assets = (fy["assets"] if "assets" in fy else pd.Series(np.nan, index=fy.index)).where(lambda x: x > 0) / rate
     return pd.DataFrame({"code": fy["code"], "year": fy["year"], "core": fy["np"] / rate, "ni": fy["np"] / rate,
                          "rev": fy["revenue"] / rate, "gm": fy["gross_margin"] / 100, "avail": fy["avail"],
-                         "assets": assets, "roa": fy["np"] / rate / assets})
+                         "assets": assets, "roa": fy["np"] / rate / assets, "currency": currency})
 
 
 YEARS = {"cn": cn_years, "us": us_years, "hk": hk_years}
+
+
+def quote_per(market: str) -> pd.Series | None:
+    """Quote-currency units per unit of each reporting currency at today's rates (Yahoo's, as the universe converts its
+    trailing figures), for the years' average profit (signals.long_run); CN: None, every amount in CNY."""
+    if market == "cn":
+        return None
+    from stockreport.fetch import yahoo
+    fx = yahoo.load_fx()  # units per US dollar
+    return (fx["HKD"] if market == "hk" else 1.0) / fx
 
 
 def cagr(new: pd.Series, old: pd.Series, n) -> pd.Series:

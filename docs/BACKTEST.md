@@ -1342,6 +1342,9 @@ newest live snapshot and the index files, so run the daily build first.
 
 ## 23. Stage 3 redone: the whole market, the best scores, equal amounts, four families (2026-11-01; backtest/qvm.py)
 
+(Stage 16, 2026-11-13: this section's tables are the four-family method's; section 26 has the three-family figures,
+which the 预期 lines now use.)
+
 The same history run with stage 3's redo (docs/PLAN.md, "The score" and "Lists"): four families ranked within sectors
 (value with dividend yield; quality with 8-year profitability, margin stability and low volatility; growth: revenue and
 profit growth and the 5-year profit growth over book; momentum), and the 20 names taken from the whole snapshot (the
@@ -1432,6 +1435,9 @@ snapshot and the CSI 300 file, so run the daily build first).
 
 ## 24. Stage 5: the Hold and Sell ratings (2026-11-02; backtest/qvm.py)
 
+(Stage 16, 2026-11-13: this section's tables are the four-family method's; section 26 has the three-family figures,
+which the 预期 lines now use.)
+
 Each month end, the live rules (stockreport.lists) on section 23's frames, rebuilt with each stock's 1-year
 volatility (section 23's note: HK's 10 and 5 best moved slightly): **Hold** = the 10 lowest 1-year volatilities among
 the 400 largest in the middle fifth of the score (the 40th to the 60th percentile from the top), at most 2 per sector,
@@ -1482,6 +1488,9 @@ here as US Sell ahead of SPY. Nothing is changed for it (AGENTS.md rules 3 and 1
 Rerun: as section 23 (`frame`, then `run`; the Hold and Sell rows print after the 20, 10 and 5 names).
 
 ## 25. Stage 7: what the report says to expect (2026-11-07; backtest/qvm.py)
+
+(Stage 16, 2026-11-13: this section's tables are the four-family method's; section 26 has the three-family figures,
+which the 预期 lines now use.)
 
 Four corrections to what the history tells the report, and one comparison; no list rule changed (docs/PLAN.md, stage 7).
 - **Dividend yield missing, not 0.** The month-end snapshots carry no dividends (backtest/panel.py set every stock's to
@@ -1535,3 +1544,65 @@ EBIT/EV and the screen, which the history can't run. It decides nothing (AGENTS.
 for a bug or new published evidence, not a backtest figure); the report's back pages give it per market.
 
 Rerun: as section 23 (`frame`, then `run`; the basket and the held-year falls print with the 20, 10 and 5 names).
+
+## 26. Stage 16: three families, the average-profit P/E, missing components at the middle (2026-11-13; backtest/qvm.py)
+
+The history run again for stage 16 (docs/PLAN.md, "The score"): growth's three measures moved (profit and revenue
+growth into momentum, the 5-year profit growth over assets into quality), the E/P on the 5-8-year average profit in
+value (each year in the quote currency at the month's rate: US the month's Yahoo FX, as the snapshot's own figures, HK
+Yahoo's daily <CUR>CNY=X), a missing component counted at the middle of its family instead of skipped, and no
+long-run figures from a history whose latest year is more than 2 years old. The method was set from the published
+evidence before this run and nothing was changed after it; these numbers fill the 预期 lines and decide nothing
+(AGENTS.md rules 3 and 12). "Before" is the four-family method rerun the same evening on the same data (the frames
+rebuilt with the 11-13 snapshot's float factors and today's history tables): CN and the US reproduce sections 23-25;
+HK's 20 names moved from section 23's +6.6% (69%) to +6.5% (66%) on the newer inputs alone. The history still has no
+forward E/P, revisions, EBIT/EV or dividends, so those four components are at the middle for every stock here, as before
+they were skipped for every stock (for those four, the same order either way); the average-profit E/P is present for CN 100%, US 80%
+and HK 65% of the rows (the US history starts in FY2015 and HK's annual figures need 5 years).
+
+| 12 months from each month end, after costs | CN (510300): before → after | US (SPY): before → after | HK (2800): before → after |
+|---|---|---|---|
+| windows | 81 (2019-01..2025-09) | 93 (2018-01..2025-09) | 108 (2016-10..2025-09) |
+| 20 names over the fund (windows ahead) | +2.2% (54%) → **+1.0% (48%)** | +1.5% (54%) → **+2.5% (59%)** | +6.5% (66%) → **+3.6% (61%)** |
+| 20 names: mean return (the fund's) | +8.8% → +7.6% (+6.6%) | +17.3% → +18.4% (+15.9%) | +12.0% → +9.1% (+5.5%) |
+| 10th / 90th percentile over the fund | −9.4% / +15.8% → −8.2% / +8.9% | −8.5% / +11.2% → −8.7% / +13.6% | −6.9% / +21.9% → −11.0% / +17.5% |
+| worst 12 months (the fund's; start) | −25.3% → −27.1% (−27.3%; 2021-10) | −16.3% → −15.1% (−10.6%; 2021-06) | −30.7% (−20.3%; 2021-03) → −28.0% (−39.6%; 2021-10) |
+| largest fall, overlapping portfolio (the fund's) | −35.6% → −31.2% (−36.5%) | −23.4% → −24.0% (−23.9%) | −40.6% → −38.1% (−47.2%) |
+| over the fund by sub-period: 2019-20 / 2021-22 / 2023 / 2024-26 | +1.2 / +0.6 / −0.9 / +6.9 → −3.4 / +2.7 / +1.6 / +3.8 | −1.5 / +1.2 / +7.3 / +6.4 → +0.3 / +1.4 / +7.0 / +8.5 | +11.8 / +4.4 / +14.7 / +6.0 → +9.7 / +5.4 / +11.1 / +0.5 |
+| each held year's largest fall: median (the fund's) | −12.3% → −11.0% (−10.4%) | −8.7% → −8.1% (−8.3%) | −10.9% → −11.3% (−15.0%) |
+| the worst held year's (start; the fund's over the same months) | −29.9% → −29.3% (2021-11; −27.7%) | −26.0% (2019-05) → −27.5% (2019-04; −19.4%) | −32.9% (2021-03; −22.6%) → −31.3% (2021-04; −26.0%) |
+| 10 best scores: over the fund, ahead, worst against the fund | −0.4%, 31%, −27.2% → −2.9%, 41%, −30.1% | +2.1%, 53%, −25.1% → +2.2%, 61%, −17.7% | +5.3%, 57%, −20.0% → +4.4%, 56%, −21.8% |
+| 5 best scores: the same | −4.9%, 40%, −34.3% → −6.3%, 37%, −48.5% | +3.0%, 56%, −31.9% → +1.8%, 54%, −21.6% | +6.2%, 54%, −26.9% → +4.0%, 51%, −28.7% |
+| neutral basket over the fund (ahead; unchanged: no score in it) | +3.2% (65%) | +3.0% (65%) | +0.0% (39%) |
+| **the picks: 20 names over the basket (ahead)** | −1.0% (36%) → **−2.2% (33%)** | −1.5% (43%) → **−0.5% (49%)** | +6.5% (71%) → **+3.6% (62%)** |
+| Hold 10 over the fund (windows ahead); volatility (the fund's) | −0.7% (53%) → **+0.5% (58%)**; 13.6% → 14.1% (18.9%) | −6.5% (35%) → **−6.5% (29%)**; 13.6% → 14.1% (16.4%) | −1.8% (44%) → **+0.1% (44%)**; 14.0% → 15.0% (21.5%) |
+| Hold: each held year's largest fall, median; the worst | −7.5% → −8.2%; −22.9% → −22.9% | −8.9% → −8.4%; −22.3% → −21.0% | −9.4% → −10.3%; −35.2% → −31.7% |
+| Sell 10 over the fund (windows behind); volatility | +3.0% (52%) → **+3.4% (51%)**; 28.1% → 28.4% | +1.7% (55%) → **−1.7% (59%)**; 21.9% → 21.5% | +0.6% (61%) → **+3.2% (63%)**; 33.8% → 32.3% |
+| Sell: each held year's largest fall, median; the worst | −17.6% → −18.1%; −36.1% → −33.8% | −12.4% → −12.7%; −35.8% → −34.7% | −25.2% → −23.2%; −50.6% → −47.7% |
+
+**The family check** (top fifth minus bottom fifth within each peer group and month, as section 25; sub-periods
+positive of 4), before → after: CN value +0.4% → +0.7% (2 → 2), quality +1.8% → +0.8% (3 → 2), growth 0.0% (2) → gone,
+momentum +2.2% → +1.8% (2 → 2), the score +2.0% → +1.7% (3 → 3); US value +2.2% → +0.7% (3 → 2), quality −9.6% →
+−9.9% (0 → 0), growth −1.5% (2) → gone, momentum −1.7% → −0.1% (2 → 2), the score −4.1% → −6.0% (1 → 0); HK value
+−0.4% → −0.8% (2 → 2), quality −1.2% → −2.1% (2 → 2), growth +5.9% (3) → gone, momentum +7.6% → +9.5% (4 → 3), the
+score +5.8% → +3.1% (3 → 3). US quality still runs against its published direction (section 23's reading: today's
+listings over a decade led by high-volatility technology); its new part, the 5-year profit growth, had a −8.7% spread
+there on its own (section 23's component spreads). No bug was found in the new parts: the average profit takes only
+annual reports public by each month end, converted at that month's rate, and the stale-history rule only removes
+figures.
+
+**What it says.** The changes moved the history in both directions: the 20 names' lead over the fund fell in CN
+(+2.2 → +1.0 points a year) and HK (+6.5 → +3.6), and rose in the US (+1.5 → +2.5, ahead in 59% of windows). In HK the
+growth family had the second-largest spread of this history (+5.9%), and its parts now count for less of the score
+(revenue and profit growth a half of momentum, the 5-year growth a seventh of quality), which is where HK's lead fell;
+momentum, now holding them, has the largest spread (+9.5%). In the US the picks' shortfall against the neutral basket
+nearly closed (−1.5 → −0.5) and Sell now trails the fund (−1.7%, behind in 59%), as a Sell rating should, though the
+US score's own top-minus-bottom spread is more negative (−6.0%). Hold now matches the fund in CN and HK (+0.5, +0.1)
+with less volatility. None of this decides the method (docs/PLAN.md, "How decisions are made"): the change follows the
+review's finding and the published recipes, and our 81-108 windows are short against them.
+
+**Limits.** All of sections 23-25's. The average-profit E/P uses total profit over today's market value, so in the
+history a month's market value is set against the years before it at their own share counts; its HK coverage is 65%
+of the rows, and US 80%, against 95% and 96% live.
+
+Rerun: as section 23 (`frame`, then `run`).

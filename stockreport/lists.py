@@ -16,8 +16,7 @@ from stockreport.score import ranked
 LOT = {"cn": 100, "us": 1}  # HK: each stock's board lot (HKEX)
 PARTNERSHIP = r"(?:\bL\.?P\.?|Limited Partnership)$"  # US master limited partnerships (K-1 units)
 COLUMNS = ["list", "rank", "code", "name", "sector", "weight", "price", "price_date", "lot", "lot_cost", "score",
-           "score_rank", "f_value", "f_quality", "f_growth", "f_momentum", "g_value", "g_quality", "g_growth",
-           "g_momentum", "vol_1y", "why", "weak", "risk", "status", "reason", "recheck", "period", "np_ytd", "np_ttm",
+           "score_rank", "f_value", "f_quality", "f_momentum", "g_value", "g_quality", "g_momentum", "vol_1y", "why", "weak", "risk", "status", "reason", "recheck", "period", "np_ytd", "np_ttm",
            "report_currency"]
 
 

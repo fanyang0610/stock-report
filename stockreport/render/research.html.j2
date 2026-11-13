@@ -325,7 +325,7 @@
 </table>
 <h3>与每日筛选：{% if r.screen.agreement %}<span class="agree agree-{{ r.screen.agreement }}">{{ r.screen.agreement }}</span>{% else %}无法比较{% endif %}</h3>
 {% set sc = f.screening %}
-{% if sc.in_universe %}<p>每日筛选：{% if sc.rating %}今日名单上的<b>{{ sc.rating }}</b>{% else %}不在今日名单上，评分排第 {{ sc.score_rank }} 名（共 {{ sc.universe }} 只），属于<b>{{ sc.fifth }}</b>{% endif %}；四项评级（A 最好，E 最差）：价值 {{ sc.g_value }}、质量 {{ sc.g_quality }}、成长 {{ sc.g_growth }}、动量 {{ sc.g_momentum }}。{% if sc.why %}强项：{{ sc.why }}。{% endif %}{% if sc.weak %}弱项：{{ sc.weak }}。{% endif %}</p>
+{% if sc.in_universe %}<p>每日筛选：{% if sc.rating %}今日名单上的<b>{{ sc.rating }}</b>{% else %}不在今日名单上，评分排第 {{ sc.score_rank }} 名（共 {{ sc.universe }} 只），属于<b>{{ sc.fifth }}</b>{% endif %}；三项评级（A 最好，E 最差）：价值 {{ sc.g_value }}、质量 {{ sc.g_quality }}、动量 {{ sc.g_momentum }}。{% if sc.why %}强项：{{ sc.why }}。{% endif %}{% if sc.weak %}弱项：{{ sc.weak }}。{% endif %}</p>
 {% else %}<p>该股不在每日筛选的范围内：{{ sc.reason }}。</p>{% endif %}
 {% if r.ok and w.vs_screening %}<p>{{ w.vs_screening.text }}{{ src(w.vs_screening) }}</p>{% endif %}
 {% if w.drivers_screen %}<ul class="small">{% for x in w.drivers_screen %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}

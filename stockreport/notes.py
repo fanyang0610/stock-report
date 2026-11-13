@@ -23,7 +23,7 @@ def card(row: dict, market: str, role: str) -> str:
              "research": "个股研究（你单独查询的股票，不一定在今日名单上）"}[role]
     graded = pd.notna(row.get("g_value"))
     lines = [f"股票：{row['code']} {row['name']}（{MARKET_NAMES[market]}，行业：{row.get('sector') or '未知'}）", f"名单：{where}",
-             f"评级：价值{row['g_value']} 质量{row['g_quality']} 成长{row['g_growth']} 动量{row['g_momentum']}（A 最好，E 最差）；"
+             f"评级：价值{row['g_value']} 质量{row['g_quality']} 动量{row['g_momentum']}（A 最好，E 最差）；"
              f"理由：{row.get('why')}；风险：{row.get('risk')}" if graded else "评级：今日未评分"]
     return "\n".join(lines)
 

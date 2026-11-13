@@ -752,6 +752,77 @@
   it is in HKEXnews' inactive list and not in HKEX's List of Securities since HSBC took it private, so the router
   can't take it. No search page was full (5 rows at most of 20). A parser test on the saved search rows of Meituan,
   BYD, Tencent Music and Tencent; 266 tests. The stage review found no blocker.
+- Stage 16 (screening score; the method review of 2026-11-13, findings S1 and S5): done 2026-11-13. Three families
+  (signals.FAMILIES): profit and revenue growth in momentum, the 5-year profit growth over assets in quality, the E/P on
+  the 5-8-year average profit in value (ep8: signals.long_run's core8, each year in the quote currency at the date's
+  rate, history.quote_per); a missing component at the middle of its family (signals.MIDDLE); no long-run figures from
+  a history whose latest year is more than 2 years old (signals.STALE_YEARS). The reasons and sources: "The score".
+  - Before and after on the 2026-11-13 snapshots, scored by the build's own path (re-scored with the old code, the
+    snapshot gave the published scores exactly and the same three lists in every market):
+    - Family rank correlations (Spearman) before: growth with momentum CN 0.54, US 0.24, HK 0.26; value with growth
+      CN 0.01, US −0.23, HK −0.21; value with quality CN 0.34, US −0.14, HK 0.27. After: value with quality CN 0.34, US
+      −0.13, HK 0.28; value with momentum CN −0.08, US −0.25, HK −0.24; quality with momentum CN 0.04, US −0.08, HK 0.09.
+    - The buys' median year-on-year profit growth (the scored market's): CN +63% → +50% (+9%), US +94% → +79% (+18%),
+      HK +13.4% → +13.0% (+9.3%); revenue growth CN +30% → +27% (+11%), US +22% → +23% (+10%), HK +13% → +12% (+9%).
+      Their median forward P/E: CN 11.5 → 10.4 (the market 16.2), US 18.7 → 16.0 (17.6), HK 9.1 → 7.8 (9.4). Their
+      mean family ranks after: value / quality / momentum CN 0.81 / 0.85 / 0.83, US 0.71 / 0.75 / 0.84, HK 0.65 / 0.85
+      / 0.77 (before, value 0.78, 0.69, 0.56 and growth 0.86, 0.86, 0.77). Momentum, now holding profit and revenue
+      growth, is still the US buys' strongest family: an earnings rise counts once (a third of the score), no longer
+      in two families.
+    - Kept: Buy CN 11 of 20, US 16, HK 15; Hold 3 of 10 in each market; Sell CN 7, US 7, HK 8.
+    - Buy, CN. Out on the average profit (trailing P/E against the average-profit one): 燕京啤酒 15.9 / 61.7, 德业股份
+      20.2 / 73.3, 春风动力 26.6 / 66.3, 海信视像 15.3 / 31.9, 杭州银行 6.1 / 11.2; out as growth weighs less (growth
+      A, 0.88-0.94 of its peers): 柏楚电子, 川投能源, 科达制造; 上港集团 rose (9th → 6th) but 交通运输's place went to
+      东航物流 (25th → 3rd). In: 格力电器 (value and quality A, held back by growth at 0.14: 267th → 130th), 海康威视
+      (94th → 33rd), 今世缘 (value 0.82 → 1.0 on its average profit), 宇通客车, 新奥股份 and 南京银行 (quality up with
+      the 5-year growth), 浙江鼎力, 东航物流, and 天赐材料 (momentum 0.45 → 0.83: its profit +828% and revenue +117%
+      now count there; its average-profit P/E 37 against 11 trailing, still the sector's 70th percentile).
+    - Buy, US. Out: TKO (36th → 103rd: quality 0.95 → 0.80, its 5-year growth missing and now at the middle), RGA
+      (Finance's place went to Allstate), Kinder Morgan (average-profit P/E 35 against 20: Utilities' place to ONEOK,
+      31st → 10th), Encompass Health (Health Care's place to Royalty Pharma, 43rd → 29th). In: Target (88th → 38th:
+      value A, held back by growth at 0.14), and the three named. The five names of one chip cycle the review counted
+      stay (Micron, Sandisk, Western Digital, TSMC, ASML; technology has 8 of the 20 places): each component is ranked
+      within the sector, and the sector's average-profit P/Es are high too, so Micron's 64.5 is at technology's 54th
+      percentile, and Sandisk (a 2025 spin-off, under 5 years) has none. The measure holds back a company whose peak
+      stands out from its peers', not a whole sector's cycle; that is the sector-relative design ("Peers").
+    - Buy, HK. Out: 长飞光纤光缆 (P/E 10.4 trailing, 71.6 on the average profit: profit +1,205%), 药明康德 (19.4 / 68.5;
+      医疗保健's place to 先声药业, 10th → 5th), 古茗 (15.5 / 39.1), 腾讯 (通讯服务's place to 中国移动, 56th → 25th),
+      工商银行 (quality 0.70 → 0.51; 金融's place to 中国太保). In: 万洲国际 (109th → 45th), 中国移动, 联想集团 (57th →
+      23rd), 先声药业, 中国太保.
+    - Hold: the steadiest prices in the middle fifth of the score, a band the new score fills differently. CN in 双汇发展,
+      华夏银行, 大秦铁路, 宁波港, 中国铁建, 上海医药, 中国交建 for 平安银行, 顺丰控股, 中国联通, 上汽集团, 中国中车,
+      光大证券, 京沪高铁; US in Apple, BNY, Coca-Cola Europacific, Cintas, Illinois Tool Works, Prologis, WEC for Bank of
+      Nova Scotia, Canadian Pacific, Duke, General Dynamics, PepsiCo, Public Storage, Southern; HK in 港铁, 华润啤酒,
+      恒安国际, 国药控股, 福耀玻璃, 招商银行, 中国银行 for 信和置业, 中国旺旺, 香港交易所, 浙江沪杭甬, 中国电信, 交通银行,
+      中国飞鹤.
+    - Sell: CN in 中国国航, 赛力斯, 芯源微 for 中国东航, 广汽集团 (its average profit is positive: value 0.38 → 0.50),
+      芯原股份; US in Boeing (an average loss: value 0.36 → 0.26), Rocket, Spotify for Banco Santander Brasil, Kroger,
+      Skydance; HK in 晶泰控股, 极智嘉 for 中国南方航空, 万科企业.
+    - The tails (S5): of the stocks short of some component, before, US momentum's were in its top tenth 28% of the
+      time and US growth's 23%; after, the same US names reach momentum's top tenth 13% of the time, and across the
+      families a stock short of components is in a top tenth 6-12% of the time, one with all of them 11-18%.
+    - The stale-history rule removed the long-run figures of 8 US names (Toyota, Sony, Deutsche Bank, Diageo,
+      Atlassian, Nebius, Celestica, YPF; none in a list before or after).
+  - The history run again (BACKTEST.md section 26; it decides nothing, and fills the 预期 lines): 20 names over the
+    fund CN +2.2% → +1.0% a year (ahead in 54% → 48% of windows), US +1.5% → +2.5% (54% → 59%), HK +6.5% → +3.6% (66%
+    → 61%); the picks over the neutral basket CN −1.0 → −2.2, US −1.5 → −0.5, HK +6.5 → +3.6; Hold CN −0.7 → +0.5, US
+    −6.5 → −6.5, HK −1.8 → +0.1; Sell CN +3.0 → +3.4, US +1.7 → −1.7, HK +0.6 → +3.2. The family check: CN value +0.7%,
+    quality +0.8%, momentum +1.8%, the score +1.7%; US +0.7%, −9.9%, −0.1%, −6.0%; HK −0.8%, −2.1%, +9.5%, +3.1%.
+  - The report: every card shows three grades (价值、质量、动量); page 1's grade line and the back pages' 怎么打分 say
+    what each family holds, and that a missing figure counts at the middle; the US evidence line; the research
+    report's screening line names three grades. README and AGENTS.md say three families.
+  - The fresh-context stage review (one, on Sonnet) found the code as planned, the figures as the outputs (two US
+    correlations had come from a run before the stale-history rule: fixed above) and no rule for a name. Its points,
+    answered: the buys still lean to earnings momentum and the chip cycle stays, which this entry states (the method's
+    result, not a fault to patch); the history moved both ways and decides nothing; the stale threshold of 2 years is
+    a data rule (at most one annual report missing), and TSMC, one report short, passes it. The full `run` (the 11-13
+    close, 16 hours after the comparison's snapshot) rendered all three markets; its CN lists differ from the
+    comparison's by a few names from that day's prices alone (燕京啤酒's E/P percentile among 17 food-and-drink peers
+    0.94 → 1.0 on a 0.2% price move: the list turnover of the review's finding S2, stage 17). 268 tests.
+  - Left for later: stockreport/research/compare.py (stage 13's folder, not edited here) still names a growth grade
+    (its 筛选成长评级 key shows "-") and says momentum is a quarter of the score; a follow-up once stage 13 lands. The
+    US annual history misses some foreign filers' newer annual reports (Toyota's ends in fiscal 2020, TSMC's in 2024):
+    a data follow-up for fetch/. Stage 17 (the lists and their words) follows the review.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -802,10 +873,10 @@
 - Out only on facts: figures that fail the cross-checks, ST / *ST, suspended, under 12 months of prices, and (from stage
   2) a hard red flag. Everything else is left to the score, so a troubled company ranks low rather than vanishing.
 
-### The score: four families, equal weights
+### The score: three families, equal weights
 Each component is a percentile among the stock's peers on the date, point-in-time; a family is the percentile rank among
-the peers of the mean of its components' percentiles (a missing component is skipped; a missing family counts as 50);
-the score is the mean of the four families. Ranking each family before combining is Stockopedia's way and makes the
+the peers of the mean of its components' percentiles (a missing component counts at the middle, 0.5: stage 16, below);
+the score is the mean of the three families. Ranking each family before combining is Stockopedia's way and makes the
 weights equal in effect: a plain mean of percentiles spreads much less than one percentile, which let one-component
 momentum drive the score (fixed in stage 1 after the stage review).
 - **Peers (stage 3):** the stock's sector, financials apart from the rest (their components differ: no S/P, cash
@@ -818,18 +889,37 @@ momentum drive the score (fixed in stage 1 after the stage review).
 
 | Family | CN | HK | US |
 |---|---|---|---|
-| 价值 Value | E/P on 扣非 TTM, forward E/P, B/P, S/P, EBIT/EV, dividend yield | E/P, forward E/P, B/P, S/P, EBIT/EV, dividend yield | the same |
-| 质量 Quality | ROE, cash backing, debt ÷ assets, 8-year ROA, margin stability, low volatility | the same as CN | gross profit ÷ assets, cash backing, liabilities ÷ assets, 8-year ROA, margin stability, low volatility |
-| 成长 Growth | revenue growth, profit growth, 5-year profit growth over assets | the same | the same |
-| 动量 Momentum | earnings momentum (SUE), revisions | 12-1-month price return, revisions | 12-1-month price return, revisions |
+| 价值 Value | E/P on 扣非 TTM, forward E/P, B/P, S/P, EBIT/EV, dividend yield, E/P on the 5-8-year average 扣非 profit | E/P, forward E/P, B/P, S/P, EBIT/EV, dividend yield, E/P on the 5-8-year average profit | the same as HK |
+| 质量 Quality | ROE, cash backing, debt ÷ assets, 8-year ROA, margin stability, low volatility, 5-year profit growth over assets | the same as CN | gross profit ÷ assets, cash backing, liabilities ÷ assets, 8-year ROA, margin stability, low volatility, 5-year profit growth over assets |
+| 动量 Momentum | earnings momentum (SUE), profit growth, revenue growth, revisions | 12-1-month price return, profit growth, revenue growth, revisions | the same as HK |
 
-- **Why four families (stage 3's redo).** You named Seeking Alpha's quant grades, Alpha Architect's Quantitative Value,
-  Greenblatt's Magic Formula and the dividend-low-volatility indexes at the start, and stage 1 borrowed only
-  Stockopedia's three families. Seeking Alpha grades five factors within sectors (value, growth, profitability,
-  momentum, EPS revisions) and its ratings beat the market in its live record (a University of Kentucky study, 2024);
-  its profitability is our quality and its revisions are in our momentum, as Stockopedia's momentum rank holds them,
-  so growth is the family that was missing. Equal weights, as before: Seeking Alpha doesn't publish its weights and
-  nothing here is fitted (AGENTS.md rule 3).
+- **Why three families (stage 16, 2026-11-13).** Stage 3's redo added a fourth, growth (revenue growth, profit growth,
+  5-year profit growth over assets), as Seeking Alpha's fifth grade, beside Stockopedia's three. The method review of
+  2026-11-13 (docs/REVIEW-2026-11-13.md, finding S1) found the Buy list was in practice an earnings-rebound list: the
+  buys' median year-on-year profit growth was CN +63% (the scored market's +9%), US +94% (+18%); growth was the buys'
+  highest family and value their lowest. One earnings spike lifted three families: E/P, forward E/P and EBIT/EV in
+  value; profit growth; and SUE, the revisions and the price in momentum. Growth and momentum moved together (family
+  rank correlation on 2026-11-13: CN 0.54, US 0.24, HK 0.26; in CN the SUE and profit growth are nearly one number) and
+  value against growth (US −0.23, HK −0.21), so with equal weights the same news held about half the vote. Each growth
+  measure now goes where the published recipe that measures it puts it, and the weights stay equal (a third each):
+  - **Profit growth into momentum.** A one-year change against the same period a year earlier is earnings momentum:
+    the SUE's numerator, which Chan, Jegadeesh and Lakonishok (1996) rank beside price momentum and revisions, as
+    Stockopedia's MomentumRank mixes price and earnings momentum.
+  - **Revenue growth into momentum**, judged on its evidence. Its support is for the one-year change as news:
+    Jegadeesh and Livnat (FAJ 2006) find the drift after an earnings surprise stronger when revenue moves the same way,
+    revenue-backed earnings changes being the persistent kind, and Ertimur, Livnat and Martikainen (RAST 2003) find
+    prices react more to revenue surprises than to expense surprises. Growth over several years predicts lower returns
+    (Lakonishok, Shleifer and Vishny 1994), so it stays one year. Beside profit growth it weighs a rebound's kind: a
+    profit rebound on flat revenue (a cost cut, a trough year left behind) lifts one of the two. The published form is
+    the standardized quarterly surprise; ours is the year-to-date (CN, HK) or trailing-12-month (US) change, ranked
+    within the sector: close to it, not the same.
+  - **5-year profit growth over assets into quality**: quality-minus-junk's growth leg (Asness, Frazzini and Pedersen:
+    quality is profitability, growth, safety and payout; growth the 5-year change in profitability), which is what the
+    measure was built as.
+  - Before and after on the 2026-11-13 snapshots (Status, stage 16): the three families' rank correlations are at most
+    0.34 in size (CN value-quality; value-momentum CN −0.08, US −0.25, HK −0.24); the buys' median profit growth CN +50%
+    (the market +9%), US +79% (+18%), HK +13% (+9%): still above the market, as momentum is a third of the score and
+    rewards it, no longer twice.
 - **Value:** a composite of six ratios, so no single ratio decides: Stockopedia's ValueRank is an equal blend of P/B,
   P/E, P/S, P/FCF, EBIT/EV and dividend yield (free cash flow isn't in the free CN and HK tables). E/P is CN's strongest
   value measure (Liu-Stambaugh-Yuan 2019). B/P only where book > 0 (negative book from buybacks is undefined, not cheap
@@ -849,6 +939,21 @@ momentum drive the score (fixed in stage 1 after the stage review).
   - **Dividend yield** (stage 3's redo): cash dividends with ex-dates in the last 365 days over the price (0 for a
     non-payer). In ValueRank, and the first sort of 中证红利低波 (50 high-yield, low-volatility A-shares, yield-weighted)
     and 恒生港股通红利低波 (HK, net-yield-weighted): a cash yield is hard to fake, which matters most in CN and HK.
+  - **E/P on the average profit** (stage 16; ep8): the average yearly profit of the last 8 fiscal years public by the
+    date, at least 5 (the 8-year ROA's years), over today's market value. Graham and Dodd's price over the average
+    earnings of a period of years (Security Analysis: five to ten years, so one year's peak or trough isn't the
+    yardstick), Gray and Carlisle's normalized earnings (Quantitative Value, 2012), and Anderson and Brooks (JBFA 2006:
+    in UK stocks since 1975, earnings averaged over the previous 8 years nearly doubled the one-year P/E's value-glamour
+    spread). In US data Gray and Vogel (JPM 2012) found 2-8-year averages added little to one-year ratios, so it is
+    here for the review's reason (finding S1), not for a larger premium: a peak year alone no longer reads as cheap. On
+    2026-11-13 Micron's trailing P/E was 10.6 and 64.5 on its average profit, 宁德时代's 14.1 and 43.9; a trough reads
+    the other way (五粮液 23.9 and 13.2, Alibaba 20.8 and 14.6). One component of seven, as each is.
+    - The profit is the 8-year ROA's: CN 扣非, US profit to common shareholders, HK profit to shareholders, each year
+      in the quote currency at the date's rate (the live build at today's Yahoo rates, as the universe converts its
+      trailing figures; the history run at the month's). Total amounts over today's market value, as the trailing E/P:
+      a company whose share count grew or shrank much over the years compares older profit with today's shares (a
+      per-share history needs split and bonus-share restatement in every market). Not adjusted for inflation
+      (Graham's form, not Shiller's). Coverage on 2026-11-13: CN 100%, US 96%, HK 95%.
 - **Quality:** profitability (Novy-Marx 2013; Asness-Frazzini-Pedersen's quality-minus-junk, which holds in 23 of 24
   countries), cash backing = −(net profit − operating cash flow) ÷ revenue (Sloan 1996), and balance-sheet strength
   (lower debt is better; not for financials, whose leverage is their business). Stage 3's redo adds:
@@ -873,30 +978,48 @@ momentum drive the score (fixed in stage 1 after the stage review).
       reporter's profit grew 7% from the end of 2020 to the end of 2025 on the rate alone: CNY 6.52 → 7.00 a dollar).
       Each year goes back at its period's rate (Yahoo's daily <CUR>CNY=X, kept from October 2014), the same conversion
       the universe's HK figures use; a company without a known reporting currency has none.
+    - Stage 16: none when the latest of those years is more than 2 calendar years before the date's year (one annual
+      report missing at most). The US history lacks some foreign filers' newer annual reports, and their figures aren't
+      today's company: on 2026-11-13 Toyota's ended in fiscal 2020 (its "8 years" were 2015-2020), and Sony, Deutsche
+      Bank, Diageo, Atlassian, Nebius, Celestica and YPF had none newer than 2023 (TSMC's ends in fiscal 2024: kept).
+      It applies to the 8-year ROA, margin stability, the 5-year growth and the average profit alike, which then count
+      at the middle.
   - **Margin stability** (franchise power's second half): the mean gross margin of those years over its standard
     deviation, at least 5 years; not for financials. Gray and Carlisle take the better of margin stability and margin
-    growth; growth is in its own family here.
+    growth; the 5-year profit growth below is the growth half here.
   - **Low volatility** (quality-minus-junk's safety: low beta and low volatility; the dividend-low-volatility indexes'
     second sort): the 1-year volatility of daily returns, lower is better. The low-volatility effect is strongest in CN
     (Blitz, Hanauer and van Vliet 2021: 2000-2018, also among the largest and most liquid A-shares).
-- **Growth** (stage 3's redo; Seeking Alpha's growth grade, within sectors):
-  - revenue growth and profit growth: the latest report against a year earlier (CN and HK year to date, from 业绩报表
-    and the HK main indicators; US trailing 12 months). Revenue surprises are followed by drift (Jegadeesh and Livnat
-    2006); one year only, as 5-year past sales growth predicts lower returns (Lakonishok, Shleifer and Vishny 1994);
-  - 5-year profit growth over assets: the latest fiscal year's profit minus that of 5 years before, over the total
-    assets 5 years before (quality-minus-junk's growth in ROA, one of its growth measures; CN 扣非 profit, US profit to
-    common, HK profit to shareholders), from the annual reports public by the date. Over the book until stage 6 (its
-    growth in ROE): CN's past book was the book per share × profit ÷ EPS, an EPS 业绩报表 restates for later bonus
-    shares while the book per share stays as reported (CATL 2022: CNY 288bn for its ~164bn), and a book can be small
-    or negative (above); assets have neither fault, and the 8-year figure is on assets too.
-  - Analysts' forecast growth is left out: stocks with the highest forecast growth have done worse (La Porta 1996), and
-    forward E/P already uses next year's estimate.
+  - **5-year profit growth over assets** (in the growth family from stage 3's redo until stage 16): the latest fiscal
+    year's profit minus that of 5 years before, over the total assets 5 years before (quality-minus-junk's growth in
+    ROA, one of its growth measures; CN 扣非 profit, US profit to common, HK profit to shareholders), from the annual
+    reports public by the date. Over the book until stage 6 (its growth in ROE): CN's past book was the book per share
+    × profit ÷ EPS, an EPS 业绩报表 restates for later bonus shares while the book per share stays as reported (CATL
+    2022: CNY 288bn for its ~164bn), and a book can be small or negative (above); assets have neither fault, and the
+    8-year figure is on assets too.
 - **Momentum:** the 12-1-month price return in the US and HK. In CN the price trend hasn't paid over 20 years (Jansen,
   Swinkels and Zhou 2021: past-return anomalies weak in A-shares), while earnings surprises are followed by drift
   (A-share studies, 2000-2020). So CN uses SUE: the latest quarter's 扣非 EPS minus the same quarter a year earlier,
   divided by the standard deviation of that change over the preceding 8 quarters, from the notice date. Stockopedia's own
   momentum rank mixes price and earnings momentum, so this stays within the method. HK's evidence on price momentum is
   mixed rather than negative, so it keeps the standard definition.
+  - Profit growth and revenue growth (stage 16, from the growth family; why: "Why three families"): the latest report
+    against a year earlier (CN and HK year to date, from 业绩报表 and the HK main indicators; US trailing 12 months).
+  - Analysts' forecast growth is left out: stocks with the highest forecast growth have done worse (La Porta 1996), and
+    forward E/P already uses next year's estimate.
+- **A missing component counts at the middle** (stage 16; the method review's finding S5). Until stage 16 a family was
+  the mean of the components a stock had, and a stock with fewer landed in the tails more often: on 2026-11-13 the US
+  stocks with momentum on one component (no revisions) were in momentum's top tenth 28% of the time against the 10% a
+  stock with both would be, US growth on two components 25%. Now a missing component counts as 0.5, the middle of the
+  percentile scale, in its family's mean: the cross-sectional median imputation of Gu, Kelly and Xiu (RFS 2020: each
+  characteristic's ranks mapped to [−1, 1] each month, a missing one set to the median), which Chen and McCoy
+  ("Missing values handling for machine learning portfolios", arXiv 2207.13071, 2024) find does about as well as
+  expectation-maximization imputation. A stock with less evidence leans to the middle: those US names reach the new
+  momentum's top tenth 13% of the time; across the families on 2026-11-13 a stock short of components is in a top tenth
+  6-12% of the time and a stock with all of them 11-18% (shrinking thin evidence leans this way). A component that
+  doesn't apply to a kind of stock (financials' S/P, cash backing, debt, EBIT/EV, margin stability) is at the middle
+  for all of them, who are ranked among themselves, so it changes nothing there. The percentiles shown (p_) and the
+  cards keep a missing figure missing: a card never words a figure it doesn't have.
 - **Forward E/P (stage 3):** the consensus EPS for the next 12 months over the price, at least 3 analysts (CN
   Eastmoney's 研报一致预期, US Nasdaq's consensus, HK Yahoo's). The predicted E/P is the largest part of the earnings
   yield in MSCI's Barra equity models, whose value factor MSCI's multi-factor indexes use; it judges a fast-growing
@@ -955,7 +1078,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
     out, history.us_preferred). US gross profit comes from SEC, else Yahoo's standardized figure (a quarter of SEC
     filers tag neither gross profit nor a cost of revenue).
   - Figures are kept as reported (no winsorizing): the score uses percentiles, and the cards show the numbers. A
-    missing growth figure no longer drops a stock: growth isn't scored (out only on facts).
+    missing revenue or profit growth figure doesn't drop a stock: it counts at the middle like any missing component
+    (out only on facts).
   - An issuer listed in two markets can appear in both lists: each market's portfolio is measured on its own.
 
 ### Lists
@@ -1084,7 +1208,7 @@ momentum drive the score (fixed in stage 1 after the stage review).
   ("this has nothing to do what i hold in my portfolio"): both are removed, with the holding rule. How you split your
   money between the list, funds and bonds stays yours.
 ### Cards
-- The price; the rank; the four grades A-E (fifths of each family); one line on why it's there (its two strongest
+- The price; the rank; the three grades A-E (fifths of each family; four until stage 16); one line on why it's there (its two strongest
   components in words, with the figure); the key risk (a loss, heavy debt (70%+ of assets, the SASAC warning line; not
   financials) or a 30%+ fall in 6 months, else its weakest component); the cost of one board lot (CN 100 shares, US 1
   share, HK the board lot from HKEX's List of Securities, verified 2026-10-24: Tencent 100, HSBC 400, China Mobile 500,
@@ -1700,7 +1824,8 @@ comparisons and the forecast table, charts.py the SVG charts, report.py the repo
 
 #### Against the daily screening
 - The screening's view of the stock: its rating if it is on the day's lists; else its place in the market's score
-  (top fifth 偏多, bottom fifth 偏空, else 中性) with its four family grades (the snapshot's f_* and g_*); or "not in the
+  (top fifth 偏多, bottom fifth 偏空, else 中性) with its family grades (the snapshot's f_* and g_*; three from stage
+  16, when growth's parts moved to quality and momentum: research/compare.py still names a growth grade); or "not in the
   screening's universe" with the reason.
 - Agreement, by code: 一致, 部分一致 (one step apart: a short line), 相反 (Buy against Sell or 偏空, or the reverse: a
   paragraph, on page 1).
@@ -1933,6 +2058,15 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
     `track`'s section; README. Done when: ~40 test messages route correctly with DeepSeek mocked and once live
     (Chinese, English, Japanese, codes, partial names, typos, A+H, vague, unsupported, two names); the stage review;
     then, with your OK (rule 9), the listener is restarted and one test round-trip goes out; status; committed.
+16. **Screening score** (the method review of 2026-11-13, docs/REVIEW-2026-11-13.md, findings S1 and S5; adopted
+    2026-11-13; its stages 13-15 are the research report's, 17 the screening's lists and words). Three families instead
+    of four: profit and revenue growth into momentum, the 5-year profit growth over assets into quality; the E/P on the
+    5-8-year average profit in value; a missing component counted at the middle of its family; no long-run figures from
+    a history more than 2 years old ("The score"). Not changed: equal weights, the lists' rules, the review. Done when:
+    this plan has each change with its source; the lists before and after on the same snapshots, with the names that
+    change and why; the family rank correlations and the buys' median profit growth against the market's, before and
+    after; the history run again (BACKTEST.md section 26); pytest passes; a full `run`; the fresh-context stage review;
+    status; committed.
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
 - The backtest snapshots and the stage-1 harness (index funds, costs, month-end frames).
@@ -1981,6 +2115,12 @@ TradingAgents-CN (github.com/hsliuping/TradingAgents-CN); Beneish, "The detectio
 Piotroski, "Value investing" (JAR 2000); Altman (JF 1968) and his emerging-market score; Bradshaw, Brown and Huang, "Do
 sell-side analysts exhibit differential target price forecasting ability?" (RAST 2013); La Porta (JF 1996); Chan,
 Karceski and Lakonishok, "The level and persistence of growth rates" (JF 2003).
+Stage 16: Graham and Dodd, "Security Analysis" (1934; price over the average earnings of five to ten years); Anderson and
+Brooks, "The long-term price-earnings ratio" (JBFA 2006); Gray and Vogel, "Analyzing valuation measures: a performance
+horse race over the past 40 years" (JPM 2012); Jegadeesh and Livnat, "Post-earnings-announcement drift: the role of
+revenue surprises" (FAJ 2006); Ertimur, Livnat and Martikainen, "Differential market reactions to revenue and expense
+surprises" (RAST 2003); Gu, Kelly and Xiu, "Empirical asset pricing via machine learning" (RFS 2020); Chen and McCoy,
+"Missing values handling for machine learning portfolios" (arXiv 2207.13071, 2024).
 
 ## Decisions kept from the old plan
 - Python 3.12 + uv. The old Swift project is archived read-only at ~/Developer/EquitySignalsClawbot-legacy.

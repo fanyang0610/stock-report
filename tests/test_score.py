@@ -40,21 +40,25 @@ def test_percentiles_rank_within_the_market_and_low_debt_is_better():
     assert s.loc["C0", "g_value"] == "E" and s.loc["C9", "g_quality"] == "A"
 
 
-def test_a_family_skips_missing_components_and_a_missing_family_counts_50():
+def test_a_missing_component_counts_at_the_middle_of_its_family():
     df = universe(financial=[True] + [False] * 9)  # a bank: no S/P, cash backing or debt
     df.loc["C1", "bps"] = -1.0                     # negative book: no B/P
     s = score(df, "hk")
     assert np.isnan(s.loc["C0", "p_sp"]) and np.isnan(s.loc["C1", "p_bp"]) and np.isnan(s.loc["C0", "p_ev"])
-    value = s[["p_ep", "p_bp", "p_sp", "p_dy"]].mean(axis=1)  # C1: E/P, S/P and the dividend yield; no EBIT/EV here
-    assert value["C1"] == pytest.approx((s.loc["C1", "p_ep"] + s.loc["C1", "p_sp"] + s.loc["C1", "p_dy"]) / 3)
+    value = s[["p_ep", "p_fep", "p_bp", "p_sp", "p_ev", "p_dy", "p_ep8"]].fillna(0.5).mean(axis=1)
+    assert value["C1"] == pytest.approx((s.loc["C1", "p_ep"] + s.loc["C1", "p_sp"] + s.loc["C1", "p_dy"] + 0.5 * 4) / 7)
     ranked = value.groupby(s["financial"]).rank(pct=True)  # ranked among financials and among the rest
     assert s["f_value"].tolist() == pytest.approx(ranked.tolist()) and s.loc["C0", "f_value"] == 1.0
-    quality = s[["p_roe", "p_cash", "p_debt", "p_vol"]].mean(axis=1)
-    assert quality["C0"] == pytest.approx((s.loc["C0", "p_roe"] + s.loc["C0", "p_vol"]) / 2)  # the bank: no cash, debt
     cn = score(universe(), "cn", pd.DataFrame(index=[]).assign(deduct_ttm=[], sue=[]))  # no SUE anywhere
-    assert (cn["f_momentum"] == 0.5).all()
-    four = (cn["f_value"] + cn["f_quality"] + cn["f_growth"] + 0.5) / 4
-    assert cn["score"].tolist() == pytest.approx(four.tolist())
+    assert cn["f_momentum"].tolist() == pytest.approx(np.arange(1, 11) / 10)  # profit and revenue growth still rank
+    three = (cn["f_value"] + cn["f_quality"] + cn["f_momentum"]) / 3
+    assert cn["score"].tolist() == pytest.approx(three.tolist())
+    # one strong component among missing ones no longer tops the family (stage 16: it landed in the tails too often)
+    few = universe(analysts=0)
+    few.loc["C5", ["bps", "revenue_ttm", "div_yield"]] = [-1.0, -1.0, np.nan]  # C5 keeps only E/P ...
+    few.loc["C5", "np_ttm"] = 100.0                                            # ... and it is the best
+    v = score(few, "hk")
+    assert v.loc["C5", "p_ep"] == 1.0 and v.loc["C5", "f_value"] < v.loc["C9", "f_value"]
 
 
 def test_us_financials_profitability_is_roe_among_financials():
@@ -234,8 +238,22 @@ def test_long_run_takes_the_years_public_by_the_day():
     lr = long_run(years, "2026-03-30").loc["A"]  # FY2025 not yet public: 2017-2024
     assert lr["prof8"] == pytest.approx(0.1) and lr["gm8"] == pytest.approx(0.45 / pd.Series([0.4, 0.5] * 4).std())
     assert lr["roa5"] == pytest.approx((19 - 14) / 100)  # FY2024 against FY2019, over FY2019's assets
+    assert lr["core8"] == pytest.approx(np.mean(range(12, 20)))  # the average yearly profit, 2017-2024
     assert long_run(years, "2026-03-31").loc["A", "prof8"] == pytest.approx((0.1 * 7 + 0.3) / 8)
     assert long_run(years[years["year"] >= 2022], "2026-03-31").isna().all(axis=None)  # 4 years: too few
+
+
+def test_long_run_average_profit_is_in_the_quote_currency_and_a_stale_history_has_none():
+    years = pd.DataFrame({"code": ["T"] * 6 + ["J"] * 6, "year": list(range(2020, 2026)) + list(range(2015, 2021)),
+                          "core": [10.0] * 5 + [40.0] + [100.0] * 6, "assets": 100.0, "roa": 0.1, "gm": 0.5,
+                          "currency": ["TWD"] * 6 + ["JPY"] * 6, "avail": "2026-04-30"})
+    rate = pd.Series({"TWD": 0.03, "JPY": 0.0065, "USD": 1.0})  # US dollars per unit
+    lr = long_run(years, "2026-11-13", rate)
+    assert lr.loc["T", "core8"] == pytest.approx((10 * 5 + 40) / 6 * 0.03)  # a peak year counts once in six
+    assert lr.loc["J"].isna().all()  # latest fiscal year 2020: the history isn't today's company
+    s = score(universe(core8=[0.0] * 9 + [5.0]), "us")
+    assert s.loc["C9", "c_ep8"] == pytest.approx(5.0 / 100)  # over today's market value
+    assert phrase(s.loc["C9"], "ep8", "cn") == "多年平均扣非利润的市盈率低（PE 20.0）"
 
 
 def test_long_run_is_on_assets_whatever_the_book():
