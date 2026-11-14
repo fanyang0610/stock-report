@@ -231,3 +231,40 @@ def test_us_trend_takes_next_years_estimate_now_and_90_days_ago():
                             type("R", (), {"json": lambda r: payload})()})()
     assert yahoo.us_trend(client, "NVDA") == {"code": "NVDA", "analysts": 52, "e1_year": "2027-01", "eps_e2": 15.9146,
                                               "eps_e2_90": 12.81483, "currency": "USD"}  # FY to January 2028
+
+
+def annual_fact(start, end, val, form, filed):
+    return {"start": start, "end": end, "val": val, "form": form, "filed": filed}
+
+
+def test_an_annual_report_companyfacts_lacks_is_read_from_its_instance():
+    # Real cut of TSMC's 2025 20-F instance (companyfacts stops at 2024): group figures in TWD and the USD convenience
+    # ones; the per-ADS figure (a dimension, a per-share unit) is left out
+    new = sec.parse_instance((SAMPLES / "sec_instance_tsm_sample.xml").read_bytes(), "20-F", "2026-04-16", "0001628280-26-025362")
+    ni = new["ifrs-full"]["ProfitLossAttributableToOwnersOfParent"]["units"]
+    assert sorted((f["end"], f["val"]) for f in ni["TWD"]) == [("2024-12-31", 1_158_380_200_000), ("2025-12-31", 1_697_604_000_000)]
+    assert [f["val"] for f in ni["USD"]] == [54_115_500_000] and "BasicEarningsLossPerShare" not in new["ifrs-full"]
+    assert new["dei"]["EntityCommonStockSharesOutstanding"]["units"]["shares"][0] == {
+        "end": "2025-12-31", "val": 25_932_524_521, "form": "20-F", "filed": "2026-04-16", "accn": "0001628280-26-025362"}
+    payload = {"facts": {"ifrs-full": {"ProfitLossAttributableToOwnersOfParent": {"units": {"TWD": [
+        annual_fact("2023-01-01", "2023-12-31", 851_740_000_000, "20-F", "2024-04-18"),
+        annual_fact("2024-01-01", "2024-12-31", 1_158_380_200_000, "20-F", "2025-04-17")]}}}}}
+    assert sec.last_annual(payload["facts"]) == "2024-12-31"
+    last = sec.parse_annual("TSM", sec.add_facts(payload, new))[-1]
+    assert (last["fy_end"], last["currency"], last["ni"], last["equity"], last["filed"]) == (
+        "2025-12-31", "TWD", 1_697_604_000_000, 5_355_038_700_000, "2026-04-16")
+
+
+def test_the_annual_history_follows_the_current_basis():
+    # Toyota-like: us-gaap in JPY to 2020, IFRS in JPY since (restating 2020); Diageo-like: GBP to 2023, then USD
+    ni = lambda tax, concept, unit, years, filed=None: {tax: {concept: {"units": {unit: [
+        annual_fact(f"{y - 1}-04-01", f"{y}-03-31", y, "20-F", filed or f"{y}-06-20") for y in years]}}}}
+    gaap, ifrs = ni("us-gaap", "NetIncomeLoss", "JPY", range(2016, 2021)), ni("ifrs-full", "ProfitLoss", "JPY", range(2020, 2023), "2022-06-20")
+    rows = sec.parse_annual("TM", {"facts": gaap | ifrs}, backfill=True)
+    assert [(r["fy_end"][:4], r["taxonomy"], r["filed"][:4]) for r in rows] == [(str(y), "us-gaap", str(y)) for y in range(2016, 2020)] + [
+        ("2020", "ifrs-full", "2020"), ("2021", "ifrs-full", "2022"), ("2022", "ifrs-full", "2022")]
+    assert [r["taxonomy"] for r in sec.parse_annual("TM", {"facts": gaap | ifrs})] == ["ifrs-full"] * 3
+    switch = {"ifrs-full": {"ProfitLoss": {"units": ni("x", "c", "GBP", range(2016, 2024))["x"]["c"]["units"]
+                                           | ni("x", "c", "USD", range(2022, 2026))["x"]["c"]["units"]}}}
+    assert [(r["fy_end"][:4], r["currency"]) for r in sec.parse_annual("DEO", {"facts": switch}, backfill=True)] == [
+        (str(y), "USD") for y in range(2022, 2026)]
