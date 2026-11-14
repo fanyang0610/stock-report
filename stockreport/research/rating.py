@@ -21,15 +21,13 @@ and the comparison with the street; saved as data/research/<market>/<code>/valua
 
 import math
 from datetime import date
-from functools import lru_cache
 
 import numpy as np
 import pandas as pd
 
 from stockreport import review
-from stockreport.config import DATA
 from stockreport.fetch import yahoo
-from stockreport.research import dcf, folder, load, save, stamp, value
+from stockreport.research import dcf, fade, folder, load, save, stamp, value
 from stockreport.research.checks import FINANCIAL, cagr
 
 BAND = (0.10, 0.75)  # at least the brokers' 10%, at most Morningstar's margin of safety for extreme uncertainty
@@ -58,18 +56,19 @@ def methods(f: dict, k: dict, kind: str, cons: dict, today: date, eps_factor: fl
     multiple = lambda key: own[key].get(window) or own[key].get("median")
     peers = value.peer_medians(f, today)
     if {"dcf", "dcf_normal"} & set(w):
-        path = value.paths(f, k, kind, cons | {"eps": eps}, k["g"])
+        roic = value.moat(value.history(f, "roic", 10), k["wacc"], k["stable_cost"], k["excess_keep"])
+        g_dcf = dcf.tested_growth(lambda x: dcf.terminal(1.0, x, k["stable_cost"], roic["ronic"]), k["g"])
+        path = value.paths(f, k, kind, cons | {"eps": eps}, g_dcf)
         m = value.history(f, "ebit_margin", 10)
         if shift and len(m) >= 3:  # bear / bull: the long-run margin one standard deviation lower / higher
             d = min(m.std(), abs(path["target_margin"])) * shift
             path["margin"] = [x + d * min(i + 1, value.CONVERGENCE) / value.CONVERGENCE for i, x in enumerate(path["margin"])]
         s2c, s2c_source = value.sales_to_capital(f, k)
-        roic_term, moat = value.moat(value.history(f, "roic", 10), k["wacc"], k["stable_cost"])
-        x, res = value.dcf_value(f, k, path, s2c, roic_term)
+        x, res = value.dcf_value(f, k, path, s2c, roic["ronic"], g_term=g_dcf)
         x = max(x, 0.0)
         out["dcf_normal" if kind == "cyclical" else "dcf"] = {
             "value": x, "target": x * roll, "path": path, "sales_to_capital": s2c, "s2c_source": s2c_source,
-            "roic_term": roic_term, "moat": moat, "terminal_multiple": (1 - k["g"] / max(roic_term, k["stable_cost"])) / (k["stable_cost"] - k["g"]),
+            "moat": roic, "g": g_dcf, "terminal_multiple": dcf.terminal(1.0, g_dcf, k["stable_cost"], roic["ronic"]),
             "years": {key: res[key] for key in ("revenue", "ebit", "nopat", "reinvestment", "fcff")},
             "pv_terminal_share": res["pv_terminal"] / res["operating"] if res["operating"] > 0 else None}
     if "pe_own" in w and multiple("pe") and eps_ntm > 0:
@@ -93,31 +92,35 @@ def methods(f: dict, k: dict, kind: str, cons: dict, today: date, eps_factor: fl
     if "ddm" in w and dps:
         g1 = cagr(eps[-1], eps[0], len(eps) - 1) if len(eps) > 1 else income.get("dps_cagr_5y")
         g1 = g1 if g1 is not None else 0.0
-        gt = min(g, max(g1, 0.0))
+        gt = min(dcf.tested_growth(lambda x: 1 / (coe - x), g), max(g1, 0.0))  # a fixed payout: r - g >= 5 points
         x = dcf.ddm(dps * fx / (1 + g1), g1, 5, coe, gt) / fx  # next year's dividend, then growing at g1 to year 5
         out["ddm"] = {"value": x, "target": x * roll, "dividend": dps, "growth_5y": g1, "growth_stable": gt}
     roe_hist = value.history(f, "roe", 10)
     if "excess_return" in w and book and eps:
-        roe_term, moat = value.moat(roe_hist, coe, k["stable_cost"])  # the moat clause, as for the DCF's return on capital
-        if shift and len(roe_hist) >= 3:
-            roe_term += min(roe_hist.std(), abs(roe_term)) * shift
+        moat = value.moat(roe_hist, coe, k["stable_cost"], k["excess_keep"])  # graded, as for the DCF's return on capital
+        roe_term, roe_fade = moat["start"], moat["ronic"]
+        if shift and len(roe_hist) >= 3:  # the long-run ROE one standard deviation lower / higher, until excess returns end
+            d = min(roe_hist.std(), abs(roe_term)) * shift
+            roe_term, roe_fade = roe_term + d, [r + d for r in roe_fade]
         roes, b = [], book
         for e in eps:
             roes.append(e * shares / b)
             b += e * shares * (1 - payout)
         n = len(roes)
         roes += [roes[-1] + (roe_term - roes[-1]) * (i - n) / (dcf.YEARS - n) for i in range(n + 1, dcf.YEARS + 1)]
-        res = dcf.excess_return(book, roes, [payout] * dcf.YEARS, dcf.steps(coe, k["stable_cost"]), roe_term, k["stable_cost"], g)
+        g_er = dcf.tested_growth(lambda x: 1 + dcf.excess_terminal(1.0, roe_fade, k["stable_cost"], x), g)
+        res = dcf.excess_return(book, roes, [payout] * dcf.YEARS, dcf.steps(coe, k["stable_cost"]), roe_fade, k["stable_cost"], g_er)
         x = per(res["value"])
-        out["excess_return"] = {"value": x, "target": x * roll, "roe": roes, "roe_term": roe_term, "moat": moat,
+        out["excess_return"] = {"value": x, "target": x * roll, "roe": roes, "roe_term": roe_term, "moat": moat, "g": g_er,
                                 "payout": payout, "pv_terminal_share": res["pv_terminal"] / res["value"] if res["value"] else None}
     if "pb_roe" in w and book:
         roe = value.history(f, "roe", 10 if kind == "cyclical" else 8).mean()
-        if not np.isnan(roe) and roe > g:
-            pb = dcf.justified_pb(roe + (min(roe_hist.std(), roe) * shift if shift else 0), coe, g)
+        g_pb = g if np.isnan(roe) else dcf.tested_growth(lambda x: dcf.justified_pb(roe, coe, x), g)  # a perpetual excess
+        if not np.isnan(roe) and roe > g_pb:
+            pb = dcf.justified_pb(roe + (min(roe_hist.std(), roe) * shift if shift else 0), coe, g_pb)
             extra = excess(eps, roe * book / shares, coe, 1)
             x = max(pb * book / shares + extra, 0.0) / fx
-            out["pb_roe"] = {"roe": roe, "pb": pb, "excess_earnings": extra / fx, "value": x, "target": x * roll}
+            out["pb_roe"] = {"roe": roe, "pb": pb, "g": g_pb, "excess_earnings": extra / fx, "value": x, "target": x * roll}
     if "pe_normal" in w and multiple("pe"):
         nm = value.history(f, "net_margin", 10).mean()
         if not np.isnan(nm) and nm > 0:
@@ -164,26 +167,11 @@ def converge(fair: float, carry: float) -> float:
     return carry * (fair / carry) ** (1 / CONVERGE) if fair > 0 and carry > 0 else fair
 
 
-@lru_cache(maxsize=3)
-def base_table(market: str) -> pd.DataFrame:
-    """Annual revenue per company and fiscal year from the screening's history tables (today's listings only)."""
-    if market == "cn":
-        t = pd.read_csv(DATA / "history" / "cn_annual.csv.gz", dtype={"code": str}, usecols=["code", "period", "revenue"])
-        t = t.assign(year=t["period"].astype(str).str[:4])
-    elif market == "us":
-        t = pd.read_csv(DATA / "history" / "us_annual.csv.gz", dtype={"code": str}, usecols=["code", "fy_end", "revenue", "currency"])
-        t = t[t["currency"] == "USD"].assign(year=lambda d: d["fy_end"].str[:4])
-    else:
-        t = pd.read_csv(DATA / "history" / "hk_results.csv.gz", dtype={"code": str}, usecols=["code", "period", "date_type", "revenue"])
-        t = t[t["date_type"] == 1].assign(year=lambda d: d["period"].str[:4])
-    return t.drop_duplicates(["code", "year"], keep="last").pivot(index="code", columns="year", values="revenue")
-
-
 def base_rates(market: str, revenue_now: float, rates: dict[str, float | None], years: int = 5) -> dict:
     """Mauboussin and Callahan's base rates: of the companies in the same fifth by revenue (its rank in each start
     year), how many grew revenue at least as fast over `years`; the median company's growth (the market's norm); and
     the same fifth's median in the latest complete window (today's conditions: the DCF's growth beyond the consensus)."""
-    p = base_table(market)
+    p = fade.revenue_table(market)
     cols, rows = sorted(p.columns), []
     for a, b in zip(cols, cols[years:]):
         start, end = p[a], p[b]
@@ -199,32 +187,6 @@ def base_rates(market: str, revenue_now: float, rates: dict[str, float | None], 
             "fifth_recent": float(now.median()) if len(now) else None, "recent_window": f"{int(cols[-2]) - years}-{cols[-2]}",
             "market_median": float(d["g"].median()), "recent_median": float(rows[-1]["g"].median()),
             "share_at_least": {name: float((same >= x).mean()) if x is not None else None for name, x in rates.items()}}
-
-
-def slope(x: pd.Series, y: pd.Series) -> float:
-    """y's slope on x across the deciles of x (their medians, robust to the tails), between 0 and 1."""
-    t = pd.DataFrame({"x": x, "y": y}).groupby(pd.qcut(x, 10, labels=False, duplicates="drop")).median()
-    return float(min(max(np.polyfit(t["x"], t["y"], 1)[0], 0.0), 1.0)) if len(t) > 2 else 0.0
-
-
-@lru_cache(maxsize=3)
-def persistence(market: str) -> float:
-    """How much of a company's revenue growth above its size fifth's median carries into the next 5 years: the slope of
-    the next 5 years' excess growth on the past 3 years' across the deciles of the latter (their medians, robust to the
-    tails), pooled over the market's history (complete years only), between 0 and 1."""
-    p = base_table(market)
-    cols, rows = sorted(p.columns)[:-1], []
-    for i in range(3, len(cols) - 5):
-        s0, s, e = p[cols[i - 3]], p[cols[i]], p[cols[i + 5]]
-        ok = (s0 > 0) & (s > 0) & (e > 0)
-        d = pd.DataFrame({"past": (s[ok] / s0[ok]) ** (1 / 3) - 1, "next": (e[ok] / s[ok]) ** (1 / 5) - 1,
-                          "fifth": (s.rank(pct=True)[ok] * 5).clip(upper=4.999).astype(int)})
-        d = d[d["past"].between(-0.5, 1.0) & d["next"].between(-0.5, 1.0)]
-        rows.append(d[["past", "next"]] - d.groupby("fifth")[["past", "next"]].transform("median"))
-    if not rows:
-        return 0.0
-    d = pd.concat(rows)
-    return slope(d["past"], d["next"])
 
 
 def flags(f: dict) -> tuple[str | None, str | None]:
@@ -252,15 +214,16 @@ def reverse(f: dict, k: dict, kind: str, cons: dict, found: dict, price: float |
     price, margin = price or v["price"], kind == "loss_making" if margin is None else margin
     d = found.get("dcf") or found.get("dcf_normal")
     if d:
+        ronic, g = d["moat"]["ronic"], d["g"]
         def at(g5):
-            path = d["path"] | {"growth": dcf.steps(g5, k["g"])}
-            return value.dcf_value(f, k, path, d["sales_to_capital"], d["roic_term"])[0]
+            path = d["path"] | {"growth": dcf.steps(g5, g)}
+            return value.dcf_value(f, k, path, d["sales_to_capital"], ronic, g_term=g)[0]
         if at(-0.3) <= at(1.0):
             out["implied_growth_5y"] = dcf.solve(at, price, -0.3, 1.0)
         else:  # growth destroys value when the return on new capital is below its cost
             out["implied_growth_5y"] = dcf.solve(lambda g5: -at(g5), -price, -0.3, 1.0)
             out["note"] = "the return on new capital is below its cost: faster growth lowers the value"
-        at_cost = lambda c: value.dcf_value(f, k, d["path"], d["sales_to_capital"], d["roic_term"], c)[0]
+        at_cost = lambda c: value.dcf_value(f, k, d["path"], d["sales_to_capital"], ronic, c, g)[0]
         shift = dcf.solve(lambda c: -at_cost(c), -price, -0.045, 0.25)  # the cost of capital the price implies
         out["implied_wacc"] = None if shift is None else k["wacc"] + shift
         if margin:  # the long-run margin the price assumes, the base case's growth
@@ -268,14 +231,15 @@ def reverse(f: dict, k: dict, kind: str, cons: dict, found: dict, price: float |
                 p = d["path"]
                 return value.dcf_value(f, k, p | {"margin": [x + (m - p["target_margin"]) * min(i + 1, value.CONVERGENCE)
                                                              / value.CONVERGENCE for i, x in enumerate(p["margin"])]},
-                                       d["sales_to_capital"], d["roic_term"])[0]
+                                       d["sales_to_capital"], ronic, g_term=g)[0]
             out["implied_margin"] = dcf.solve(margin_at, price, -0.5, 0.9)
     if kind in FINANCIAL and v["pb"]:
         roe = cons["eps"][0] * k["shares"] / v["book_common"] if cons["eps"] else f["summary"].get("roe_latest")
         pb = v["pb"] * price / v["price"]
+        g = (found.get("excess_return") or found.get("pb_roe") or {}).get("g", k["g"])  # the method's stable growth
         if roe:
-            out["implied_roe"] = k["g"] + pb * (k["cost_equity"] - k["g"])
-            out["implied_cost_equity"] = (roe - k["g"]) / pb + k["g"]
+            out["implied_roe"] = g + pb * (k["cost_equity"] - g)
+            out["implied_cost_equity"] = (roe - g) / pb + g
             out["roe_next"] = roe
     if found.get("ddm"):
         gt, d1 = found["ddm"]["growth_stable"], found["ddm"]["dividend"] * k["fx"]
@@ -285,15 +249,16 @@ def reverse(f: dict, k: dict, kind: str, cons: dict, found: dict, price: float |
 
 
 def sensitivity(f: dict, k: dict, found: dict) -> dict:
-    """The absolute method's value per share across the cost of capital (-1, 0, +1 point) and stable growth (-0.5, 0,
-    +0.5 point)."""
-    costs, growths = [-0.01, 0.0, 0.01], [k["g"] - 0.005, k["g"], k["g"] + 0.005]
+    """The absolute method's value per share across the cost of capital (-1, 0, +1 point) and its stable growth (-0.5,
+    0, +0.5 point)."""
+    costs, around = [-0.01, 0.0, 0.01], lambda g: [g - 0.005, g, g + 0.005]
     d = found.get("dcf") or found.get("dcf_normal")
     if d:
-        fn = lambda c, g: value.dcf_value(f, k, d["path"], d["sales_to_capital"], d["roic_term"], c, g)[0]
-        return {"method": "dcf", "cost_shift": costs, "growth": growths, "values": dcf.grid(fn, costs, growths)}
+        fn = lambda c, g: value.dcf_value(f, k, d["path"], d["sales_to_capital"], d["moat"]["ronic"], c, g)[0]
+        return {"method": "dcf", "cost_shift": costs, "growth": around(d["g"]), "values": dcf.grid(fn, costs, around(d["g"]))}
     if found.get("ddm"):
         x = found["ddm"]
+        growths = around(x["growth_stable"])
         d0 = x["dividend"] * k["fx"] / (1 + x["growth_5y"])
         fn = lambda c, g: dcf.ddm(d0, x["growth_5y"], 5, k["cost_equity"] + c, g) / k["fx"]
         return {"method": "ddm", "cost_shift": costs, "growth": growths, "values": dcf.grid(fn, costs, growths)}
@@ -312,7 +277,8 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     rates = base_rates(market, cur_rev, {}) if cur_rev else {}
     norm = rates.get("recent_median")  # the last 5-year window's median: the market's norm (kind_of)
     k["base_growth"] = rates.get("fifth_recent")  # companies of this size now: growth beyond the consensus (value.paths)
-    k["growth_persistence"] = persistence(market)
+    k |= {"growth_shares": fade.growth_shares(market, 1), "trend_shares": fade.growth_shares(market, 3),
+          "margin_keep": fade.margin_keep(market), "excess_keep": fade.excess_keep(market)}  # stage 14's measured rates
     kind, why = value.kind_of(f, k, norm)
     cons = value.consensus_years(f, k, today)
     status, reason = flags(f) if kind != "pre_revenue" else ("不评级", why)

@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from stockreport.research import dcf, rating, value
+from stockreport.research import dcf, fade, rating, value
 
 # Damodaran's simple Ginzu (fcffsimpleginzu.xlsx, downloaded 2026-11-09 from pages.stern.nyu.edu/~adamodar): his
 # worked example, Almarai (SAR millions), with the spreadsheet's default assumptions. Its valuation output sheet shows
@@ -31,7 +31,7 @@ def test_dcf_matches_damodarans_ginzu_example():
     stable = a["rf"] + a["mature_erp"]
     p = ginzu_paths(0.05, 0.05, a["rf"], margin, margin, 5, 0.175, 0.25, a["wacc"], stable)
     assert p["growth"][5] == pytest.approx(0.04916) and p["tax"][5] == pytest.approx(0.19) and p["wacc"][9] == pytest.approx(0.0881)
-    r = dcf.fcff(a["revenue"], p["growth"], p["margin"], p["tax"], [a["s2c"]] * 10, p["wacc"], a["rf"], stable, stable, 0.25)
+    r = dcf.fcff(a["revenue"], p["growth"], p["margin"], p["tax"], [a["s2c"]] * 10, p["wacc"], a["rf"], stable, [], 0.25)
     assert r["fcff"][0] == pytest.approx(1982.6967, abs=1e-3) and r["reinvestment"][9] == pytest.approx(939.0341, abs=1e-3)
     assert r["pv_flows"] == pytest.approx(16394.5389, abs=1e-3) and r["terminal_value"] == pytest.approx(43858.8187, abs=1e-3)
     assert r["operating"] == pytest.approx(37517.5308, abs=1e-3)
@@ -50,7 +50,7 @@ def test_cost_of_capital_matches_ginzu_worksheet():
 
 
 def test_nol_shields_income_until_used():
-    r = dcf.fcff(100, [0.0] * 10, [-0.1, 0.1] + [0.2] * 8, [0.25] * 10, [1.0] * 10, [0.1] * 10, 0.0, 0.1, 0.1, 0.25, nol=5)
+    r = dcf.fcff(100, [0.0] * 10, [-0.1, 0.1] + [0.2] * 8, [0.25] * 10, [1.0] * 10, [0.1] * 10, 0.0, 0.1, [], 0.25, nol=5)
     assert r["nopat"][:3] == pytest.approx([-10, 10, 20 - 15 * 0.25])  # the loss adds 10 to 5; 15 shields 10, then 5 of 20
 
 
@@ -65,9 +65,11 @@ def test_synthetic_rating_spread():
 def test_justified_pb_and_excess_return_agree():
     assert dcf.justified_pb(0.15, 0.10, 0.04) == pytest.approx(11 / 6)
     # constant ROE, payout and cost: the excess-return model's value over book is the justified P/B with g = ROE x retention
+    # (excess returns lasting 3,000 years stand for ever)
     roe, payout, coe = 0.12, 0.5, 0.09
-    r = dcf.excess_return(100, [roe] * 10, [payout] * 10, [coe] * 10, roe, coe, roe * (1 - payout))
+    r = dcf.excess_return(100, [roe] * 10, [payout] * 10, [coe] * 10, [roe] * 3000, coe, roe * (1 - payout))
     assert r["value"] / 100 == pytest.approx(dcf.justified_pb(roe, coe, roe * (1 - payout)))
+    assert dcf.excess_return(100, [coe] * 10, [payout] * 10, [coe] * 10, [], coe, 0.03)["value"] == pytest.approx(100)
     assert r["years"][1]["book"] == pytest.approx(106) and r["years"][0]["excess"] == pytest.approx(3)
 
 
@@ -96,12 +98,33 @@ def test_forward_twelve_months_weights_fiscal_years():
     assert value.forward(eps, 12, date(2026, 11, 9), 24) is None  # December 2028-October 2029 isn't covered
 
 
-def test_moat_keeps_half_the_edge():
+def test_moat_is_graded():
+    # a return above its 8% cost in all 8 years, median 21.5% against a 6% stable cost: an excess of 15.5 points kept
+    # 90% a year, so stable year 1 (year 11) earns 6% + 15.5% x 0.9^11 on new capital, for Morningstar's 15 years
     import pandas as pd
     always = pd.Series([0.20, 0.25, 0.18, 0.22, 0.30, 0.21, 0.24, 0.19])
-    assert value.moat(always, 0.08, 0.06) == (pytest.approx(0.06 + (always.median() - 0.06) / 2), True)
-    assert value.moat(always.replace(0.18, 0.07), 0.08, 0.06) == (0.06, False)  # one year below its cost: no moat
-    assert value.moat(always[:7], 0.08, 0.06) == (0.06, False)  # under 8 years
+    m = value.moat(always, 0.08, 0.06, 0.9)
+    assert m["moat"] and m["track"] == 1.0 and m["ronic"][0] == pytest.approx(0.06 + 0.155 * 0.9 ** 11)
+    assert len(m["ronic"]) == 15 and m["start"] == pytest.approx(0.06 + 0.155 * 0.9 ** 10)
+    weak = value.moat(always.replace(0.18, 0.07), 0.08, 0.06, 0.9)  # one year below its cost: 7 of 8, not none
+    assert weak["track"] == 7 / 8 and weak["ronic"][0] == pytest.approx(0.06 + 7 / 8 * (weak["edge"]) * 0.9 ** 11)
+    assert value.moat(always[:4], 0.08, 0.06, 0.9)["ronic"] == []  # under 5 years: no record
+    assert not value.moat(pd.Series([0.05] * 8), 0.08, 0.06, 0.9)["moat"]  # below its cost
+
+
+def test_terminal_value_fades_to_the_cost_of_capital():
+    # no excess years: the Ginzu's NOPAT (1 - g / WACC) / (WACC - g) = NOPAT / WACC; one year at 20% then the cost
+    assert dcf.terminal(10.0, 0.03, 0.08, []) == pytest.approx(10 * (1 - 0.03 / 0.08) / 0.05) == pytest.approx(125)
+    assert dcf.terminal(10.0, 0.03, 0.08, [0.20]) == pytest.approx(10 * (1 - 0.03 / 0.2) / 1.08 + 10.3 / 0.08 / 1.08)
+    assert dcf.excess_terminal(100.0, [0.15, 0.12], 0.10, 0.02) == pytest.approx(5 / 1.1 + 2 * 1.02 / 1.1 ** 2)
+
+
+def test_stable_growth_passes_the_sensitivity_test():
+    # a fixed payout's perpetuity 1 / (r - g): +0.5 point raises it at most 1/9 when r - g >= 5 points (the skill's rule)
+    assert dcf.tested_growth(lambda g: 1 / (0.08 - g), 0.04) == pytest.approx(0.03, abs=1e-6)
+    assert dcf.tested_growth(lambda g: 1 / (0.10 - g), 0.04) == 0.04
+    # a return on new capital equal to its cost: growth adds nothing, so the riskless rate stands even 1 point from r
+    assert dcf.tested_growth(lambda g: dcf.terminal(1.0, g, 0.058, []), 0.048) == 0.048
 
 
 def test_rating_band_scales_with_uncertainty():
@@ -121,17 +144,23 @@ def test_weights_pass_to_the_methods_that_ran():
     assert w == pytest.approx({"dcf": 2 / 3, "pe_own": 1 / 3}) and target == pytest.approx(100 * 2 / 3 + 40)
 
 
+KEEP = {"margin_keep": {"above": 0.9, "below": 0.6}}
+
+
 def test_forecast_paths_follow_the_consensus_then_fade():
     # consensus revenue and EPS +10% a year for two years: the margin holds; growth then falls in equal steps to g by
-    # year 10 and the margin reaches the own 8-year median (20%) by year 5
+    # year 10; the margin's 5-point gap below the own 8-year median (20%) keeps 60% a year (the measured share below)
     f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0}}, "summary": {},
          "history": [{"ebit_margin": 0.2}] * 8}
-    k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1}
+    k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1} | KEEP
     p = value.paths(f, k, "ordinary", {"eps": [1.1, 1.21], "revenue": [110.0, 121.0], "eps0": 1.0}, 0.02)
     assert p["growth"][:2] == pytest.approx([0.1, 0.1]) and p["growth"][9] == pytest.approx(0.02)
     assert p["growth"][2] == pytest.approx(0.1 - 0.08 / 8) and p["margin"][:2] == pytest.approx([0.15, 0.15])
-    assert p["margin"][2] == pytest.approx(0.15 + 0.05 / 3) and p["margin"][4:] == pytest.approx([0.2] * 6)
-    assert value.paths(f, k, "loss_making", {"eps": [], "revenue": []}, 0.02)["target_margin"] == 0.1  # industry
+    assert p["margin"][2:] == pytest.approx([0.2 - 0.05 * 0.6 ** t for t in range(1, 9)])
+    high = value.paths(f, k | {"ebit": 30.0}, "ordinary", {"eps": [1.1], "revenue": [110.0], "eps0": 1.0}, 0.02)
+    assert high["margin"][9] == pytest.approx(0.2 + 0.1 * 0.9 ** 9)  # 10 points above it keep 90% a year
+    young = value.paths(f, k, "loss_making", {"eps": [], "revenue": []}, 0.02)
+    assert young["target_margin"] == 0.1 and young["margin"][4:] == pytest.approx([0.1] * 6)  # industry's, by year 5
 
 
 def test_consensus_margins_on_the_consensus_basis():
@@ -139,7 +168,7 @@ def test_consensus_margins_on_the_consensus_basis():
     # revenue, the margin holds at 15% (from reported profit it would jump to 15% x 1.375 = 20.6%); a second window
     # past the revenue consensus ends the consensus years (NVIDIA's 79%), its profit forecast unused
     f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0}}, "summary": {}, "history": [{"ebit_margin": 0.15}] * 8}
-    k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1, "base_growth": 0.05}
+    k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1, "base_growth": 0.05} | KEEP
     p = value.paths(f, k, "ordinary", {"eps": [1.375, 2.5], "revenue": [110.0, None], "eps0": 1.25}, 0.02)
     assert p["consensus_years"] == 1 and p["margin"][:2] == pytest.approx([0.15, 0.15]) and p["growth"][1] == 0.05
 
@@ -163,36 +192,51 @@ def test_trailing_eps_on_the_consensus_basis(monkeypatch):
 
 def test_growth_beyond_the_consensus_is_the_base_rate():
     # one revenue consensus year (+20%), profit +30% then +25%: year 2 grows revenue at the size class's median (5%),
-    # not with profit (Chan, Karceski and Lakonishok 2003); years 3-5 at 5%; then down to g
+    # not with profit (Chan, Karceski and Lakonishok 2003), when no excess is kept; years 3-5 at 5%; then down to g
     f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0}}, "summary": {}, "history": [{"ebit_margin": 0.2}] * 8}
-    k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1, "base_growth": 0.05}
+    k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1, "base_growth": 0.05} | KEEP
     p = value.paths(f, k, "ordinary", {"eps": [1.3, 1.625], "revenue": [120.0, None], "eps0": 1.0}, 0.02)
     assert p["growth"][:5] == pytest.approx([0.2, 0.05, 0.05, 0.05, 0.05])
     assert p["growth"][5:] == pytest.approx([0.05 - 0.03 * i / 5 for i in range(1, 6)])
-    m1 = 15 * 1.3 / 120  # operating income grows with profit in the consensus year, then moves to the median
-    assert p["margin"][:2] == pytest.approx([m1, m1 + (0.2 - m1) / 4])
+    m1 = 15 * 1.3 / 120  # operating income grows with profit in the consensus year, then its gap below the median shrinks
+    assert p["margin"][:2] == pytest.approx([m1, 0.2 + (m1 - 0.2) * 0.6])
 
 
-def test_sales_growth_keeps_its_measured_share_and_established_margins_stay():
-    # persistence 0.2: years 2-5 (past the revenue consensus) 5% + 0.2 x (20% - 5%) = 8%
-    f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0}}, "summary": {}, "history": [{"ebit_margin": 0.06}] * 8}
-    k = {"ebit": 6.0, "shares": 10.0, "ind_margin": 0.1, "mature_margin": 0.085, "base_growth": 0.05, "growth_persistence": 0.2}
+def test_sales_growth_keeps_its_measured_shares_and_established_margins_stay():
+    # shares kept 0.3, 0.1, 0.1, 0.05 in the years after the consensus year: 5% + share x (20% - 5%), no cliff to the
+    # base rate, ending near it by year 5; a 3-year trend without a consensus takes the 3-year shares
+    f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0}}, "summary": {"rev_cagr_3y": 0.25}, "history": [{"ebit_margin": 0.06}] * 8}
+    k = {"ebit": 6.0, "shares": 10.0, "ind_margin": 0.1, "mature_margin": 0.085, "base_growth": 0.05,
+         "growth_shares": [0.3, 0.1, 0.1, 0.05, 0.0], "trend_shares": [0.2, 0.2, 0.1, 0.1, 0.0]} | KEEP
     p = value.paths(f, k, "fast_grower", {"eps": [1.3, 1.625], "revenue": [120.0, None]}, 0.02)
-    assert p["growth"][:5] == pytest.approx([0.2, 0.08, 0.08, 0.08, 0.08])
+    assert p["growth"][:5] == pytest.approx([0.2, 0.095, 0.065, 0.065, 0.0575])
+    trend = value.paths(f, k, "fast_grower", {"eps": [], "revenue": []}, 0.02)
+    assert trend["growth"][:5] == pytest.approx([0.25, 0.09, 0.09, 0.07, 0.07])
     assert p["target_margin"] == 0.06  # profitable every year: its own margin, not mature peers'
     young = f | {"history": [{"ebit_margin": -0.01}] + [{"ebit_margin": 0.06}] * 7}
     assert value.paths(young, k, "fast_grower", {"eps": [], "revenue": []}, 0.02)["target_margin"] == 0.085
 
 
-def test_growth_persistence_from_the_history(monkeypatch):
-    # 40 companies whose growth never changes (0-19.5% a year): all of the past excess carries on, slope 1
+def test_growth_shares_from_the_history(monkeypatch):
+    # 40 companies whose growth never changes (0-19.5% a year): all of the past excess carries on, each year
     import pandas as pd
     rev = pd.DataFrame({str(y): [100.0 * (1 + 0.005 * i) ** (y - 2010) for i in range(40)] for y in range(2010, 2023)},
                        index=[f"c{i}" for i in range(40)])
-    monkeypatch.setattr(rating, "base_table", lambda market: rev)
-    rating.persistence.cache_clear()
-    assert rating.persistence("cn") == pytest.approx(1.0, abs=0.02)
-    rating.persistence.cache_clear()
+    monkeypatch.setattr(fade, "revenue_table", lambda market: rev)
+    assert fade.growth_shares.__wrapped__("cn", 1) == pytest.approx([1.0] * 5, abs=0.02)
+    assert fade.pav([0.30, 0.06, 0.10, 0.20, 0.15]) == pytest.approx([0.30, 0.1275, 0.1275, 0.1275, 0.1275])
+
+
+def test_margin_gap_kept_net_of_the_market_drift():
+    # 20 companies at 10% for 5 years; then 5 jump to 20% and are at 13% 3 years on, while the other 15 (the market's
+    # median) fall to 8%: net of that 2-point drift the 5 keep (13% - 10% + 2%) / 10% = 50% of their gap
+    import pandas as pd
+    years = [str(y) for y in range(2010, 2019)]
+    rows = {f"c{i}": [0.10] * 5 + ([0.20, 0.18, 0.16, 0.13] if i < 5 else [0.10, 0.09, 0.085, 0.08]) for i in range(20)}
+    m = pd.DataFrame(rows, index=years).T
+    r = fade.margin_kept(m, 5, False, 3, "above")
+    assert r["n"] == 5 and r["median"] == pytest.approx(0.5)
+    assert fade.margin_kept(m, 5, False, 3, "above", net=False)["median"] == pytest.approx(0.3)
 
 
 def test_twelve_month_target_closes_a_third_of_the_gap():
@@ -210,7 +254,7 @@ def test_base_rate_of_the_latest_complete_window(monkeypatch):
     years = range(2015, 2022)
     rev = pd.DataFrame({str(y): [100.0 * (i + 1) * (1 + 0.01 * i) ** (y - 2015) for i in range(10)] for y in years},
                        index=[f"c{i}" for i in range(10)])
-    monkeypatch.setattr(rating, "base_table", lambda market: rev)
+    monkeypatch.setattr(fade, "revenue_table", lambda market: rev)
     b = rating.base_rates("cn", 5000.0, {})
     assert b["recent_window"] == "2015-2020" and b["fifth"] == 5 and b["fifth_recent"] == pytest.approx(0.08)
 
@@ -235,3 +279,14 @@ def test_peer_medians_need_ten_members(monkeypatch):
     assert p["mature_margin"] == pytest.approx(0.2) and p["profitable"] == 15
     f["peers"]["group"], f["code"] = "Software", "C10"
     assert value.peer_medians(f, date(2026, 11, 9))["by"] == "industry"  # 25 in its industry
+
+
+def test_excess_return_kept_net_of_the_market_drift():
+    # 5 companies at 20% against a 5% hurdle for 5 years (an excess of 15 points), at 12.5% 5 years on; 15 at 6% (too
+    # close to the hurdle to count) that, as the market's median, drift down 1 point: (12.5% - 5% + 1%) / 15% kept
+    import pandas as pd
+    years = [str(y) for y in range(2010, 2020)]
+    t = pd.DataFrame({f"c{i}": [0.20] * 5 + [0.15] * 4 + [0.125] if i < 5 else [0.06] * 9 + [0.05] for i in range(20)},
+                     index=years).T
+    kept, n = fade.excess_kept(t, 0.05, 5)
+    assert n == 5 and kept == pytest.approx((0.125 - 0.05 + 0.01) / 0.15)

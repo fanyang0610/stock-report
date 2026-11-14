@@ -814,6 +814,92 @@
     from it: a CN or HK line a report leaves empty (五粮液's 公允价值变动收益 since 2024) took the last period that had
     one in the trailing twelve months; such a line is now zero that period (sheet.ttm's sparse lines). Corrected in
     this entry: financial firms' operating profit, Alibaba's move, Apple's reason, the 20-F balance date.
+- Stage 14 (research long-run assumptions; the review of 2026-11-13, R2 and R4): done 2026-11-14. Each rule from
+  published evidence, measured in our three markets by a committed script (backtest/persistence.py on
+  stockreport/research/fade.py; its output is BACKTEST.md section 27); the rules are in "Forecast" and "As built"
+  (stable period):
+  - Margins: an own-median target is approached by the measured annual share kept, above and below apart, net of
+    the market's drift (CN 0.92 / 0.85, US 0.85 / 0.59, HK 0.88 / 0.85); before, every margin reached its 8-year
+    median by year 5. PLAN.md's "US 0.28 after 3 years" isn't reproduced and is replaced.
+  - Growth past the consensus: the measured share of one year's excess kept in each of the next years
+    (non-increasing: CN 0.25-0.05, US 0.30-0.13, HK 0.20-0.02); before, one 5-year share flat to year 5. The check
+    the brief asked for: a one-year excess keeps about what a three-year one does the next year, and the drop after a
+    high-growth year is what the history shows, so no even fade from the consensus year.
+  - The moat graded (track x edge, faded by the measured excess-return share kept a year: CN 0.911, US 0.954, HK
+    0.878, for at most Morningstar's 15-year stage II, then the return on new capital at its cost); before, half the
+    edge for ever for a return above its cost in every one of 8+ years, else none.
+  - Stable growth at the yield unless the terminal value fails the skill's own sensitivity test (+0.5 point at most
+    +1/9); before, the yield but at least 5 points below the stable cost. Only 五粮液's dividend model (cost of equity
+    5.34%) and the two REITs' dividend models (already capped by their own growth) sit below the yield; every DCF
+    takes it (CN 1.61%, US 5.10%, HK 3.95%).
+  - Before / after on the 25 cached companies, the same fact sheets (the CN and HK statements cached before stage 13
+    lacked its new lines and were fetched again once, then both runs read the same files; before = the code at stage
+    13's commit):
+  | company | type | DCF before -> after | fair value before -> after | excess / band before -> after | rating |
+  |---|---|---|---|---|---|
+  | 五粮液 000858 | income | 130 -> 125 (-3%) | 98.9 -> 94.1 (-5%) | +28% / 25% -> +22% / 30% | 买入 -> 持有 |
+  | 比亚迪 002594 | fast_grower | 90.1 -> 95.8 (+6%) | 104 -> 107 (+3%) | +21% / 20% -> +25% / 25% | 买入 |
+  | 招商银行 600036 | bank | - | 48.1 -> 49.6 (+3%) | +10% / 10% -> +14% / 10% | 买入 |
+  | 恒瑞医药 600276 | ordinary | 29.9 -> 31.0 (+4%) | 47.9 -> 48.4 (+1%) | -11% / 60% -> -10% / 55% | 持有 |
+  | 贵州茅台 600519 | ordinary | 1937 -> 1968 (+2%) | 1799 -> 1816 (+1%) | +20% / 20% -> +21% / 20% | 买入 |
+  | 中国神华 601088 | income | 72.7 -> 70.9 (-2%) | 44.9 -> 46.1 (+3%) | -9% / 55% -> -7% / 50% | 持有 |
+  | 中国平安 601318 | insurer | - | 61.7 -> 63.7 (+3%) | +15% / 30% -> +18% / 25% | 持有 |
+  | 君实生物 688180 | loss_making | 0 -> 0 | 9.3 -> 9.3 | -77% / 75% -> -77% / 75% | 卖出 |
+  | 百济神州 688235 | ordinary | 134 -> 136 (+2%) | 143 -> 145 (+1%) | -55% / 70% -> -55% / 75% | 持有 |
+  | 腾讯控股 00700 | ordinary | 550 -> 547 (-1%) | 648 -> 646 (-0%) | +49% / 20% -> +48% / 20% | 买入 |
+  | 领展房产基金 00823 | reit | - | 41.3 -> 41.3 | -2% / 10% -> -2% / 10% | 持有 |
+  | 比亚迪股份 01211 | fast_grower | 98.8 -> 115 (+16%) | 84.1 -> 94.2 (+12%) | +17% / 45% -> +31% / 50% | 持有 |
+  | 中国平安 02318 | insurer | - | 67.8 -> 67.9 (+0%) | +31% / 20% -> +31% / 15% | 买入 |
+  | Apple AAPL | ordinary | 162 -> 153 (-6%) | 248 -> 242 (-2%) | -40% / 30% -> -41% / 35% | 卖出 |
+  | Amazon AMZN | ordinary | 59.3 -> 77.0 (+30%) | 191 -> 201 (+5%) | -38% / 75% -> -34% / 75% | 持有 |
+  | Alibaba BABA | ordinary | 140 -> 146 (+4%) | 155 -> 158 (+2%) | +47% / 45% -> +51% / 50% | 买入 |
+  | JPMorgan JPM | bank | - | 298 -> 277 (-7%) | -21% / 30% -> -27% / 20% | 持有 -> 卖出 |
+  | Eli Lilly LLY | fast_grower | 332 -> 489 (+47%) | 569 -> 670 (+18%) | -68% / 75% -> -61% / 60% | 持有 -> 卖出 |
+  | Micron MU | cyclical | 899 -> 938 (+4%) | 760 -> 783 (+3%) | -16% / 65% -> -13% / 65% | 持有 |
+  | NVIDIA NVDA | cyclical | 251 -> 185 (-26%) | 224 -> 202 (-10%) | +26% / 50% -> +12% / 50% | 持有 |
+  | Novo Nordisk NVO | fast_grower | 41.0 -> 52.2 (+27%) | 40.6 -> 47.7 (+18%) | -7% / 45% -> +10% / 40% | 持有 |
+  | Realty Income O | reit | - | 56.9 -> 56.9 | -9% / 15% -> -9% / 15% | 持有 |
+  | Palantir PLTR | fast_grower | 24.6 -> 22.5 (-9%) | 52.9 -> 51.4 (-3%) | -79% / 75% -> -80% / 75% | 卖出 |
+  | Snowflake SNOW | loss_making | 53.3 -> 50.9 (-5%) | 116 -> 115 (-1%) | -71% / 50% -> -72% / 55% | 卖出 |
+  | TSMC TSM | ordinary | 398 -> 366 (-8%) | 649 -> 632 (-3%) | +49% / 45% -> +45% / 50% | 买入 -> 持有 |
+  - The large moves, each by the rule that caused it. A margin above its median now keeps part of its gap: DCF +47%
+    (Lilly: the consensus year's 54% falls to 33% by year 10, not to its 25% median by year 5), +30% (Amazon: 6.5% in
+    year 10 against a 5.6% median) and +16% (BYD Electronic, with a higher year-2 growth from HK's one-year share). The
+    growth profile: -26% (NVIDIA: 82%, then 30%, then 16% a year to year 5, where the flat share gave 24%; plus its
+    moat's fade), -9% Palantir. The graded moat: +27% (Novo Nordisk: 7 years of record, under the old 8, now 100% of
+    them above its cost); the end of excess returns for ever: JPMorgan's excess-return value -12%, Apple -6% and
+    TSMC -8% (with the growth profile). Four ratings change, each at a band's edge: 五粮液 买入 -> 持有 (the dividend
+    model's growth now 5 points below its own 5.34% cost of equity, 0.84% -> 0.34%: value 86 -> 78, so its methods
+    disagree more and the band widens to 30%; its +22% stays inside); JPMorgan 持有 -> 卖出 (excess returns now end;
+    the band narrows with them, -27% against 20%); Lilly 持有 -> 卖出 (its DCF moves toward the peers' EV/Sales, the
+    methods' half-range falls from 79% to 55%, a 60% band, and its -61% is just outside); TSMC 买入 -> 持有 (+45%
+    against a band widened to 50% by the lower DCF). The CN financials gain 3% (one weak year no longer removes their
+    moat; the floor's implied cost of equity is solved at the yield). The rest move 6% or less.
+  - Not changed, stated: return on equity stands for return on capital in the history tables, and the CN and HK
+    margins are net (扣非) margins, the tables having no operating profit; the hurdle is today's stable cost in every
+    year; 3 (margins) and 5 (returns) years are measured and the rest extrapolated by a constant annual share (Fama and
+    French's model); everything is survivors only. Stage 15 (the rating on the market's implied return) changes the
+    cost of capital, which the moat's hurdle and track follow at run time.
+  - Judgement calls, stated (the stage review asked for them plainly): netting the market's drift (a reasoned choice,
+    not a published one: a decade's market-wide trend isn't a company forecast). As measured instead (kept a year
+    above / below: CN 0.76 / 0.98, US 0.94 / 0.36, HK 0.71 / 0.97) the DCF would be Lilly 626 (not 489), TSMC 403
+    (366; fair value 652, 买入), Amazon 90 (77), 五粮液 113 (125), BYD Electronic 107 (115), 茅台 1954 (1968); no
+    other rating moves. The moat's minimum record of 5 years (was 8) is the plan's minimum for a company's own history
+    (as for its margin); it is what gives Novo Nordisk, with 7 years, a moat. One horizon per measure (3 years for
+    margins, 5 for returns), the longest every market measures with 3 or more start years. pb_roe (brokers, a third
+    of a cyclical's value) still capitalizes its average ROE for ever, with only the tested growth: one main method
+    per type is stage 15's.
+  - Tests: dcf.terminal and excess_terminal, tested_growth (the 5-point case and the DCF case), the graded moat, the
+    margin path above and below, the growth shares after a consensus year and after a 3-year trend, the shares from
+    the history, the pool-adjacent-violators, the margin gap and the excess return kept net of the drift; the Ginzu,
+    excess-return and base-rate tests updated to the new signatures. 276 pass.
+  - The fresh-context stage review (one, on Sonnet) found no correctness bug and no rule for one name; every number
+    in this entry, "Forecast" and the stable period reproduced from the script and the before/after files. Fixed from
+    it: an unused import; the print-only measurement code (excess_odds, the deciles' slope) moved from fade.py to the
+    script; a test for the excess return kept. Answered here: the judgement calls above with the as-measured effect;
+    the thin US history (3 start years for margins, growth years 3-5 pooled by the monotone fit) makes the US rates the
+    least sure, and they drive Lilly, Amazon and NVIDIA; a company's track lowers its starting excess while the fade
+    is the one measured on 5-of-5 records.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1569,15 +1655,38 @@ ordinary. The 60% is also a judgement of "most of its profit".
   sales-to-capital ratio. Since 2026-11-12 (your gap check, below): beyond the analysts' revenue forecasts, growth is
   the base rate (the median 5-year revenue growth of the same size fifth in the latest complete window, the window
   ending at the year base_rates already takes as the last full one: the largest fifth's CN 4.9% over 2019-2024, HK
-  4.3% and US 6.9% over 2020-2025; the US middle fifth 8.3%) plus the share of the last year's excess over it that
-  sales growth keeps, to year 5, then falls to the long-run rate by year 10. Chan, Karceski and Lakonishok (2003) find
-  profit growth no more persistent than chance and sales growth persistent in part (about twice the chance runs, more
-  for large firms); the share is measured in each market's own history (rating.persistence: the slope of the next 5
-  years' revenue growth above the size fifth's median on the past 3 years', over the deciles' medians): CN 0.09, HK
-  0.03, US 0.22, so a 20-point excess keeps 2, 0.6 and 4 points. Before, the last consensus year's growth faded over
-  eight years (比亚迪 near 20% for years). Past the revenue consensus, revenue grows that way from the last consensus
-  year, not with the consensus profit (profit growth from a margin recovery isn't revenue growth), and the margin
-  moves from the last consensus year's to its target. The margin: a fast grower
+  4.3% and US 6.9% over 2020-2025; the US middle fifth 8.3%) plus a share of the last consensus year's excess over it,
+  to year 5, then falls to the long-run rate by year 10. Chan, Karceski and Lakonishok (2003) find profit growth no
+  more persistent than chance and sales growth persistent in part (about twice the chance runs, more for large firms);
+  of McKinsey's high-growth companies only 13% still grew 20% a year (real) ten years on (Cao, Jiang and Koller 2006).
+  Since stage 14 the share is measured year by year (fade.growth_shares; backtest/persistence.py; BACKTEST.md section
+  27): the slope, over the deciles' medians, of each following year's growth above the size fifth's median on one
+  year's excess (the consensus year is one year's rate), non-increasing (pool-adjacent-violators: the US's thin years
+  otherwise rise again): CN 0.25, 0.08, 0.08, 0.08, 0.05; US 0.30, 0.13, 0.13, 0.13, 0.13; HK 0.20, 0.08, 0.08, 0.06,
+  0.02 in the years after it. A one-year excess and a three-year one keep about the same share the next year (CN 0.25
+  and 0.23, US 0.30 and 0.21, HK 0.20 and 0.14), so the consensus year takes the one-year profile and a company
+  without a consensus, which starts from its 3-year trend, the three-year one (CN 0.23-0.05, US 0.21-0.14, HK
+  0.15-0.02). It replaces stage 13's single share (the 5-year rate after a 3-year excess: CN 0.09, HK 0.03, US 0.22,
+  flat to year 5), which understated the first year and, in the US, overstated the later ones. The drop after a
+  high-growth year stays: the history shows it (NVIDIA's 82% consensus year is followed by 30%, then 17%: the review
+  had proposed an even fade from the consensus year, which no measure here supports). Past the revenue consensus,
+  revenue grows that way from the last consensus year, not with the consensus profit (profit growth from a margin
+  recovery isn't revenue growth). The margin (since stage 14): from the last consensus year's, the gap to an own
+  8-year median shrinks by the same share each year (Fama and French 2000's partial adjustment: profitability reverts
+  about 38% a year, faster below the mean), the share measured per market and side (fade.margin_keep: the median share
+  of a 3-point-or-larger gap to the 5 years' median before kept 3 years on, net of the market's drift, as an annual
+  rate). Kept a year above / below: CN 0.92 / 0.85, US 0.85 / 0.59, HK 0.88 / 0.85, so a gap keeps 64% / 44%, 44% /
+  7%, 54% / 44% by year 5. Net of the drift because each market's margins moved together over the decade (CN's
+  fell, US's rose): as measured, CN margins above their median kept 18% by year 5 and below 96%, US above ~100% and
+  below none, HK 28% and 83% (backtest/persistence.py prints both; the windows: 5 and 8 years, with and without the
+  year measured; 3 years is the horizon every market measures with 3 or more start years, the US and HK tables having
+  11 complete years). Survivors only: a company whose margin collapsed and that left the market is missing, so
+  persistence above the median and recovery below it are both overstated. Our rates are slower than Fama and
+  French's (their mean is fitted across firms; ours is the company's own median), except US margins below the
+  median, which recover as fast. Margins reached by year 5 as before: a cyclical's 10-year average (normalization is
+  the point) and the young's mature-peer margin (Damodaran's target margin for a company without its own). PLAN.md's
+  earlier "US 0.28 after 3 years" (Amazon's valuation, 2026-11-12) came from a script not kept and isn't reproduced
+  (the review found 78-110% kept above the median): this measurement replaces it. The margin: a fast grower
   keeps its own median when it has the 5 years any company needs for that and none was a loss (an established margin);
   only a fast grower with a loss year takes mature peers', as the young do (2026-11-12: 比亚迪, with 10 profitable years
   at 3.0-7.5%, took 8.5% from the auto sector's profitable members, mostly parts makers, as its 乘用车 industry has 7
@@ -1594,9 +1703,9 @@ ordinary. The 60% is also a judgement of "most of its profit".
 #### Valuation and target price (code)
 - DCF (FCFF, 10 years, the structure of Damodaran's "simple Ginzu"): the market's risk-free rate (ChinaBond 10y, US
   Treasury 10y, HK government bond) plus Damodaran's country equity risk premium times a bottom-up industry beta
-  relevered for the company's debt; debt cost from the interest-cover rating table; the long-run return on capital
-  fades to the cost of capital, except that a company whose returns stayed above it through its whole history keeps
-  part of that edge (Morningstar's quantitative moat idea, measured from data).
+  relevered for the company's debt; debt cost from the interest-cover rating table; after the ten years, the return on
+  new capital stays above its cost for the years a graded moat gives, then equals it (Morningstar's three stages; the
+  moat measured from data, "As built", stable period).
 - Operating profit (sheet.ebit; since stage 13 on one basis with the equity bridge, Damodaran's treatment of
   non-operating assets: their income out of EBIT, the assets at book in the bridge, cash apart). US filers: the
   operating income they report (SEC's OperatingIncomeLoss), with long-term investments at book (SEC's
@@ -1653,13 +1762,35 @@ the plan left open, each a published default:
   company list), the listing market's for the benchmark. Debt cost: the yield + the default spread of the synthetic
   rating from interest cover (his large-firm table above USD 5bn, else the smaller-firm one; the bands' gaps go to the
   band below). A REIT's profit carries revaluations: no rating or WACC from it (its methods don't use them).
-- Stable period, the simple Ginzu's defaults: a mature company's cost of capital (yield + the mature-market premium,
-  4.23% in his 2026 data), growth at the yield but at least 5 points below that cost (investment-research's r - g
-  rule: CN 0.82%, US 4.07%, HKD 2.89% today), a return on new capital equal to the cost of capital; the moat clause
-  (above) keeps half the median edge for a company whose return on capital beat its cost of capital in each of at
-  least 8 years (the plan's 8-year window, as for margins and brokers' ROE; "half" is the plan's "part", a judgement).
-  Financial firms: ROE converges to the cost of equity (Damodaran's stable-growth rule for financial firms) with the
-  same moat clause on ROE (Morningstar rates banks' moats too). Banks were first exempted from the clause after 招商银行
+- Stable period: a mature company's cost of capital (yield + the mature-market premium, 4.23% in his 2026 data), the
+  simple Ginzu's default. Since stage 14, Morningstar's last two stages (Equity Research Methodology: a stage II that
+  lasts from about a year with no moat to 10-15 years with a wide one, while the return on new capital fades to the
+  cost of capital; stage III with the return on new capital equal to it):
+  - The graded moat (value.moat) replaces the all-or-nothing clause (half the median edge for ever, only for a return
+    above its cost in every one of 8+ years: one weak year took it away). How long: the share of the company's last
+    10 years (at least 5, the plan's minimum for its own history) in which its return on capital beat its cost of
+    capital (the frequency of excess years stands for the odds they go on: of CN companies above today's stable cost of
+    equity in all 5 of the last years, 59% still are 5 years on, of 4 in 5 46%, of 0-2 33%; US 87%, 75%, 48%; HK 49%,
+    30%, 21%). How far: its median over the stable cost of capital. The expected excess today is track x edge, and it
+    fades by the market's measured share kept a year (fade.excess_keep: of companies above that cost in all 5 years by
+    2 points or more, the median share of the excess return on equity kept 5 years on, net of the market's drift, as
+    an annual rate: CN 0.911, US 0.954, HK 0.878; 63%, 79% and 52% by year 5; Koller: high returns on capital persist
+    far better than high growth; HOLT fades returns the same way). So the return on new capital in year 10 + j is
+    stable + track x edge x keep^(10 + j) for j = 1-15, Morningstar's longest stage II, then the cost of capital: in
+    year 11 a sustained excess keeps 36% in CN, 60% in the US, 24% in HK. Return on equity stands for the return on
+    capital in the history tables (they carry no invested capital), against today's stable cost of equity in each
+    year, and survivors only.
+  - Growth at the reporting currency's yield (Damodaran's cap), lower only where the terminal value fails a stated
+    sensitivity test (dcf.tested_growth): stable growth +0.5 point may raise the terminal value by at most 1/9. That is
+    the investment-research skill's tools/terminal_value.py check (it prints what +0.5 point does to the exit P/E)
+    behind its 5-point r - g floor, which it now calls a historical constraint: for a perpetuity of a fixed payout,
+    0.005 / (r - g - 0.005) <= 1/9 is r - g >= 5 points, so the dividend model keeps it. The DCF pays for its growth by
+    reinvesting at the return on new capital, and at the cost of capital growth adds no value, so its terminal value
+    barely moves with g and the riskless rate stands (CN 1.6% where the floor gave 0.82%); the excess-return model and
+    justified P/B run the same test on their own formulas.
+  - Financial firms: ROE moves from the consensus to stable + track x edge x keep^10 by year 10 (the stable cost when
+    there is no moat; Damodaran's stable-growth rule for financial firms), then the same fade on equity, then no excess
+    (P/B 1 on the stable period's book; Morningstar rates banks' moats too). Banks were first exempted from the clause after 招商银行
   came out at 3.4 times book; the cause was the cost of equity, which the floor below handles, so the exemption went
   in your review of the street gaps (2026-11-09; the stage reviewer had also called it outcome-driven).
 - CN and HK banks and insurers (your decision, 2026-11-09, after the stage review): the cost of equity is at least the
@@ -1673,7 +1804,8 @@ the plan left open, each a published default:
   +41% from today against +28% from its last quarter); two windows (years 1-2: Nasdaq's third year has 2-3 analysts);
   revenue from Yahoo's revenue consensus when its year mapping is unambiguous (Yahoo repeats 0y's end date for +1y on
   AAPL), else growing with the consensus profit; operating income moves with the consensus profit; then growth falls
-  in equal steps to the stable rate by year 10 and the margin moves to its target by year 5 (the Ginzu's default). The
+  in equal steps to the stable rate by year 10 and the margin moves to its target by year 5 (the Ginzu's default; since
+  stage 14 growth to year 5 and an own-median margin follow "Forecast"). The
   margin target: a cyclical's 10-year average (normalized after the years the consensus sees); for the young (the
   plan's "young or loss-making": a loss-maker, a fast grower, under 5 years of history, or a negative 8-year median,
   which is no mature record) the margin of the mature firms in its business, Damodaran's advice for a target margin:
@@ -2020,7 +2152,14 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
     assets, the assets at book in the equity bridge, in every market where the tables carry the lines. Done when: no
     consensus-year margin above the company's 10-year best without a stated reason; TSMC's research and screening P/E
     within 5%; the 25 cached companies rebuilt with a before/after table; a test per parser or formula change.
-    Stages 14-17 of the review file are proposals until you adopt each.
+    Stages 15-17 of the review file are proposals until you adopt each.
+14. **Research long-run assumptions** (docs/REVIEW-2026-11-13.md, findings R2 and R4; adopted 2026-11-14; done
+    2026-11-14, Status). A committed script measuring margin persistence (above and below the median apart, windows
+    stated, survivors said), growth persistence year by year and the fade of excess returns in all three markets; the
+    margin path, the growth past the consensus and a graded moat that sets how long excess returns last, from that
+    and the published evidence; the 5-point r - g rule replaced by the skill's sensitivity test. Done when: each rule
+    has its evidence in PLAN.md; the 25 cached companies rebuilt with a before/after table, each large move explained
+    by rule; a test per formula change.
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
 - The backtest snapshots and the stage-1 harness (index funds, costs, month-end frames).

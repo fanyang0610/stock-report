@@ -257,11 +257,11 @@
 <tr><td>贝塔（{{ k.industry }}）</td><td class="num">{{ '%.2f' | format(k.beta) }}</td></tr>
 <tr><td>股权成本{% if k.floor and k.floor.applied %}（行业隐含，CAPM 为 {{ F.pct(k.floor.cost_equity_capm) }}）{% endif %}</td><td class="num">{{ F.pct(k.cost_equity) }}</td></tr>
 {% if k.wacc %}<tr><td>资本成本（WACC）· 债务评级</td><td class="num">{{ F.pct(k.wacc) }} · {{ k.rating }}</td></tr>{% endif %}
-<tr><td>永续期资本成本 · 永续增长</td><td class="num">{{ F.pct(k.stable_cost) }} · {{ F.pct(k.g) }}</td></tr>
 {% set d = v.methods.dcf or v.methods.dcf_normal %}
+<tr><td>永续期资本成本 · 永续增长</td><td class="num">{{ F.pct(k.stable_cost) }} · {{ F.pct(d.g if d else k.g) }}</td></tr>
 {% if d %}<tr><td>长期营业利润率（{{ fc.margin_source }}）</td><td class="num">{{ F.pct(d.path.target_margin) }}</td></tr>
 <tr><td>销售额 / 投入资本</td><td class="num">{{ '%.2f' | format(d.sales_to_capital) }}</td></tr>
-<tr><td>护城河（长期回报保留一半超额）</td><td class="num">{{ '是' if d.moat else '否' }}，永续期投入资本回报 {{ F.pct(d.roic_term) }}</td></tr>
+<tr><td>护城河（回报高于资本成本的年份占比）</td><td class="num">{% if d.moat.moat %}{{ F.pct(d.moat.track, False, 0) }}，第 10 年新投资回报 {{ F.pct(d.moat.start) }}，此后 {{ d.moat.years }} 年降至资本成本{% else %}无，第 10 年后新投资回报等于资本成本{% endif %}</td></tr>
 <tr><td>终值隐含市盈率 · 终值占价值</td><td class="num">{{ F.times(d.terminal_multiple) }} · {{ F.pct(d.pv_terminal_share, False, 0) }}</td></tr>{% endif %}
 </table></div>
 <div>{% set sg = v.sensitivity %}{% if sg and sg['values'] %}<h3>敏感性：{{ '现金流折现' if sg.method == 'dcf' else '股息折现' }}的今日价值（{{ r.cur }}）</h3>

@@ -10,10 +10,11 @@ them into the target, the scenarios and the rating. Every choice below is a publ
   tax rate; banks, insurers and brokers use the industry's levered beta (debt is their raw material).
 - Debt cost: the yield plus the default spread of the synthetic rating from interest cover (his large-firm table above
   USD 5bn of market value, else the smaller-firm one).
-- Stable period (the simple Ginzu's defaults): the cost of capital of a mature company (yield + the mature-market
-  premium), growth at the yield but at least 5 points below that cost (the investment-research skill's r - g rule),
-  and a return on new capital equal to the cost of capital, except that a company whose return stayed above its cost
-  of capital in each of at least 8 years keeps half of its median edge (Morningstar's moat idea, from data)."""
+- Stable period (the simple Ginzu's defaults, stage 14's three stages): the cost of capital of a mature company
+  (yield + the mature-market premium); growth at the yield (Damodaran's cap), lower only where the terminal value
+  fails the sensitivity test (dcf.tested_growth); the return on new capital above its cost for the years a graded
+  moat gives (moat: how long and how far the return beat its cost, the market's measured fade, at most Morningstar's
+  15-year stage II), then equal to it."""
 
 import math
 import re
@@ -30,10 +31,10 @@ from stockreport.research.checks import FINANCIAL
 RATE_OF = {"CNY": "cn", "USD": "us", "HKD": "hk"}
 COUNTRY = {"cn": "China", "hk": "Hong Kong", "us": "United States"}
 MARGINAL_TAX = {"China": 0.25, "Hong Kong": 0.165, "United States": 0.25}  # CN EIT, HK profits tax, US federal + state
-GAP = 0.05  # investment-research: the stable cost of capital at least 5 points above growth
 LARGE_USD = 5e9  # Damodaran's cut between his large-firm and smaller-firm rating tables
 FAST = 0.20  # Lynch's fast growers grow 20-25% a year ("One Up on Wall Street", 1989)
-MOAT_YEARS = 8
+MOAT_YEARS = 5  # the plan's minimum for a company's own history (as for its margin)
+STAGE2 = 15  # Morningstar's longest stage II (excess returns fading to the cost of capital): 10-15 years for a wide moat
 CONVERGENCE = 5  # the simple Ginzu's default year of margin convergence
 CYCLICAL_SECTORS = {"Materials", "Energy"}  # with these industries: the plan's materials, energy, chemicals, shipping, memory
 CYCLICAL_INDUSTRIES = {"Semiconductor", "Semiconductor Equip", "Shipbuilding & Marine", "Transportation"}
@@ -101,7 +102,7 @@ def inputs(f: dict) -> dict:
             "beta": beta, "debt_to_equity": debt / mcap, "cost_equity": coe, "rating": rating, "cost_debt": None if spread is None else rf + spread,
             "interest_cover": None if kind == "reit" else cover, "tax_effective": tax_eff, "tax_marginal": tax_m,
             "wacc": coe if fin else None if spread is None else dcf.wacc(mcap, debt, coe, rf + spread, tax_m), "stable_cost": stable,
-            "g": min(rf, stable - GAP), "market_return": rf + damodaran.country(COUNTRY[market])["erp"],
+            "g": rf, "market_return": rf + damodaran.country(COUNTRY[market])["erp"],
             "market_return_listing": rf_list + damodaran.country(COUNTRY[market])["erp"],
             "ind_margin": ind.get("op_margin"), "ind_sales_to_capital": ind.get("sales_to_capital"),
             "debt": debt, "cash": 0.0 if fin else (b["cash"] or 0.0), "minority": b["minority"] or 0.0,
@@ -114,7 +115,7 @@ def implied_floor(f: dict, k: dict, today: date) -> dict:
     Swaminathan 2001's implied cost of capital, in its stable-growth form: each member's COE that makes the justified
     P/B equal its P/B on next year's consensus ROE, trailing where none; the median of the same industry in the day's
     snapshot, at least 5 members), so a discount the market has priced for years isn't assumed to close within the
-    12 months; the stable cost too, and growth stays 5 points below it. The CAPM figure is kept beside it."""
+    12 months; the stable cost too. The CAPM figure is kept beside it."""
     if f["market"] not in FLOOR["markets"] or f["kind"] not in FLOOR["kinds"]:
         return k
     snap, p = sheet.snapshot(f["market"], today), f.get("peers") or {}
@@ -129,8 +130,7 @@ def implied_floor(f: dict, k: dict, today: date) -> dict:
         return k | {"floor": floor | {"applied": False}}
     c = floor["implied_cost_equity"]
     stable = max(k["stable_cost"], c)
-    return k | {"cost_equity": c, "wacc": c, "stable_cost": stable, "g": min(k["rf"], stable - GAP),
-                "floor": floor | {"applied": True}}
+    return k | {"cost_equity": c, "wacc": c, "stable_cost": stable, "floor": floor | {"applied": True}}
 
 
 def history(f: dict, key: str, n: int) -> pd.Series:
@@ -254,21 +254,22 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     consensus (Yahoo's) and the profit consensus cover (a margin needs both: a window past the revenue forecasts ends
     them, where NVIDIA's second year put 50% more profit on base-rate revenue, a 79% margin), its operating income the
     trailing one (stock-based pay a cost) grown as the consensus EPS grows from the trailing EPS on its own basis
-    (trailing_eps); then the margin moving to its target by year 5 (the Ginzu's default). Beyond the analysts' revenue forecasts, growth is the base rate (k["base_growth"]: the median 5-year
-    revenue growth of companies of the same size, Mauboussin's base rates) plus the share of the last year's excess over
-    it that sales growth keeps (k["growth_persistence"], measured in the market's own history: Chan, Karceski and
-    Lakonishok 2003 find sales growth persists in part and profit growth not beyond chance), to year 5, then falls in
-    equal steps to the stable rate by year 10 (the Ginzu's two stages). Without a base rate, growth falls from the last
-    consensus year's to the stable rate. A fast grower keeps its own median margin when it has the 5 years any company
-    needs for that and none was a loss (an established margin); else it takes mature peers', as the young do.
-    Targets: a cyclical's 10-year average (normalized earnings after the years the consensus sees); the industry's for
-    the young (PLAN.md "Forecast"): a loss-maker, a fast grower, under 5 years of history or a negative 8-year median;
-    the rest their own 8-year median. With no consensus: the
-    3-year revenue trend, faded."""
+    (trailing_eps). Then (stage 14, PLAN.md "Forecast"):
+    - Growth: the base rate (k["base_growth"]: the median 5-year revenue growth of companies of the same size,
+      Mauboussin's base rates) plus the share of the last consensus year's excess over it that the market's history
+      keeps in each following year (k["growth_shares"], measured on one year's excess; k["trend_shares"] on three
+      years' for the 3-year trend a company without a consensus starts from), to year 5, then in equal steps to the
+      stable rate by year 10 (the Ginzu's two stages). Without a base rate, growth falls from the last consensus year's
+      to the stable rate.
+    - Margin: an own 8-year median target is approached as the market's history says a margin's gap to its median
+      shrinks, the same share each year, above and below the median apart (k["margin_keep"]; Fama and French 2000's
+      partial adjustment); a cyclical's 10-year average (normalized earnings after the years the consensus sees) and
+      the young's mature-peer margin are reached by year 5 (the Ginzu's default). The young (PLAN.md "Forecast"): a
+      loss-maker, a fast grower with a loss year (else its margin is established), under 5 years of history or a
+      negative 8-year median. With no consensus: the 3-year revenue trend."""
     t, s = f["valuation"]["ttm"], f["summary"]
     rev0, ebit0, eps0 = t["revenue"], k["ebit"], cons.get("eps0")
-    m0, base, keep = ebit0 / rev0, k.get("base_growth"), k.get("growth_persistence") or 0.0
-    after = lambda g: base + keep * (g - base)  # a year beyond the revenue consensus
+    m0, base = ebit0 / rev0, k.get("base_growth")
     growth, margin, prev_r = [], [], rev0
     for e, r in zip(cons["eps"], cons["revenue"]):
         if not r or prev_r <= 0:  # a margin needs the revenue and the profit of the same 12 months
@@ -276,14 +277,15 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
         growth.append(r / prev_r - 1)
         margin.append(ebit0 * e / eps0 / r if eps0 and eps0 > 0 and e > 0 else m0)
         prev_r = r
+    shares = k.get("growth_shares") or [0.0] * CONVERGENCE
     if not growth:
         growth = [s.get("rev_cagr_3y") or s.get("rev_cagr_5y") or g_term]
-        margin = [m0]
+        margin, shares = [m0], k.get("trend_shares") or [0.0] * CONVERGENCE
     own = history(f, "ebit_margin", 8)
+    young = kind == "loss_making" or kind == "fast_grower" and (own <= 0).any() or len(own) < 5 or own.median() <= 0
     if kind == "cyclical":
         target = history(f, "ebit_margin", 10).mean()
-    elif kind == "loss_making" or kind == "fast_grower" and (own <= 0).any() \
-            or len(own) < 5 or own.median() <= 0:  # young: mature firms' margin
+    elif young:  # mature firms' margin
         target = k.get("mature_margin") or k["ind_margin"]
     else:
         target = own.median()
@@ -291,15 +293,19 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     if base is None:
         growth += [growth[-1] + (g_term - growth[-1]) * (t_ - n) / (dcf.YEARS - n) for t_ in range(n + 1, dcf.YEARS + 1)]
     else:
-        g5 = after(growth[-1])
-        growth += [g5 if t_ <= CONVERGENCE else g5 + (g_term - g5) * (t_ - CONVERGENCE) / (dcf.YEARS - CONVERGENCE)
-                   for t_ in range(n + 1, dcf.YEARS + 1)]
+        growth += [base + shares[t_ - n - 1] * (growth[n - 1] - base) for t_ in range(n + 1, CONVERGENCE + 1)]
+        g5 = growth[-1]
+        growth += [g5 + (g_term - g5) * (t_ - CONVERGENCE) / (dcf.YEARS - CONVERGENCE) for t_ in range(CONVERGENCE + 1, dcf.YEARS + 1)]
     last = margin[-1]
-    margin += [target if t_ >= CONVERGENCE else last + (target - last) * (t_ - n) / (CONVERGENCE - n)
-               for t_ in range(n + 1, dcf.YEARS + 1)]
+    if kind == "cyclical" or young:
+        margin += [target if t_ >= CONVERGENCE else last + (target - last) * (t_ - n) / (CONVERGENCE - n)
+                   for t_ in range(n + 1, dcf.YEARS + 1)]
+    else:
+        keep = k["margin_keep"]["above" if last > target else "below"]
+        margin += [target + (last - target) * keep ** (t_ - n) for t_ in range(n + 1, dcf.YEARS + 1)]
     return {"growth": growth, "margin": margin, "target_margin": target, "consensus_years": n,
-            "margin_source": "10-year average" if kind == "cyclical" else "profitable peers' median" if target == k.get("mature_margin")
-            else "industry" if target == k["ind_margin"] else "own 8-year median"}
+            "margin_source": "10-year average" if kind == "cyclical" else "profitable peers' median" if young and target == k.get("mature_margin")
+            else "industry" if young else "own 8-year median"}
 
 
 def sales_to_capital(f: dict, k: dict) -> tuple[float, str]:
@@ -311,20 +317,29 @@ def sales_to_capital(f: dict, k: dict) -> tuple[float, str]:
     return (float(np.median(s2c)), "own 5-year median") if len(s2c) >= 3 else (k["ind_sales_to_capital"], "industry")
 
 
-def moat(series: pd.Series, cost: float, stable: float) -> tuple[float, bool]:
-    """The stable return on new capital: the stable cost of capital, plus half the median edge when the return beat
-    the company's cost of capital in each of at least 8 years."""
-    if len(series) >= MOAT_YEARS and (series > cost).all() and series.median() > stable:
-        return stable + (series.median() - stable) / 2, True
-    return stable, False
+def moat(series: pd.Series, cost: float, stable: float, keep: float) -> dict:
+    """The graded moat (Morningstar's excess-return period, measured): how long the return (on capital; financials:
+    on equity) beat the company's cost (`track`: the share of its last 10 years, at least 5 needed) and how far (`edge`:
+    its median over the stable cost) give the expected excess today, track x edge (a track is the frequency of excess
+    years, the odds they go on); it fades by the market's measured annual share kept (`keep`, fade.excess_keep), so the
+    return on new capital in stable year j (year 10 + j) is stable + track x edge x keep^(10 + j), for at most
+    Morningstar's 15-year stage II, then the cost of capital (its stage III). `start`: the return in year 10, where the
+    explicit years end."""
+    if len(series) < MOAT_YEARS or series.median() <= stable or not (series > cost).any():
+        return {"track": float((series > cost).mean()) if len(series) else None, "edge": None, "keep": keep,
+                "start": stable, "ronic": [], "years": 0, "moat": False}
+    track, edge = float((series > cost).mean()), float(series.median() - stable)
+    ronic = [stable + track * edge * keep ** (dcf.YEARS + j) for j in range(1, STAGE2 + 1)]
+    return {"track": track, "edge": edge, "keep": keep, "start": stable + track * edge * keep ** dcf.YEARS,
+            "ronic": ronic, "years": STAGE2, "moat": True}
 
 
-def dcf_value(f: dict, k: dict, path: dict, s2c: float, roic_term: float, cost_shift=0.0, g_term=None) -> tuple[float, dict]:
+def dcf_value(f: dict, k: dict, path: dict, s2c: float, ronic: list[float], cost_shift=0.0, g_term=None) -> tuple[float, dict]:
     g = k["g"] if g_term is None else g_term
     cost = dcf.steps(k["wacc"] + cost_shift, k["stable_cost"] + cost_shift)
     res = dcf.fcff(f["valuation"]["ttm"]["revenue"], path["growth"], path["margin"],
                    dcf.steps(k["tax_effective"], k["tax_marginal"]), [s2c] * dcf.YEARS, cost, g,
-                   k["stable_cost"] + cost_shift, max(roic_term + cost_shift, k["stable_cost"] + cost_shift), k["tax_marginal"])
+                   k["stable_cost"] + cost_shift, [r + cost_shift for r in ronic], k["tax_marginal"])
     equity = dcf.equity_value(res["operating"], k["debt"], k["minority"], k["cash"], k["nonop"])
     return equity / k["shares"] / k["fx"], res
 
