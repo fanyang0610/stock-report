@@ -2,22 +2,54 @@
 without anyone's portfolio: 买入 (Buy, expected to beat the market) the 20-name portfolio from the whole scored market
 (each sector its places by its share of the market's free-float value, filled by its best scores, equal amounts;
 Quantitative Value's screen first); 持有 (Hold, expected in line with it) the 10 steadiest prices among the largest
-names at the middle of the score; 卖出 (Sell, expected to lag it) the 10 lowest scores among the largest."""
+names at the middle of the score; 卖出 (Sell, expected to lag it) the 10 most expensive, lowest-quality and most
+distressed among the largest. A name rated in the newest earlier report keeps its rating until it falls well past
+the cut (buffered: MSCI's and CSI's 20% buffer)."""
 
+import math
 from datetime import date
 
 import numpy as np
 import pandas as pd
 
 from stockreport import verdicts
-from stockreport.config import CONFIG
-from stockreport.score import ranked
+from stockreport.config import CONFIG, DATA
+from stockreport.score import DIGITS, card_lines, ranked
+from stockreport.signals import FAMILIES, MIDDLE
 
 LOT = {"cn": 100, "us": 1}  # HK: each stock's board lot (HKEX)
 PARTNERSHIP = r"(?:\bL\.?P\.?|Limited Partnership)$"  # US master limited partnerships (K-1 units)
+PICKS = DATA / "picks.csv"  # every report's ratings, each day's last build (written by track.log_picks)
+NONE = {"buy": pd.Index([]), "hold": pd.Index([]), "sell": pd.Index([])}
 COLUMNS = ["list", "rank", "code", "name", "sector", "weight", "price", "price_date", "lot", "lot_cost", "score",
            "score_rank", "f_value", "f_quality", "f_momentum", "g_value", "g_quality", "g_momentum", "vol_1y", "why", "weak", "risk", "status", "reason", "recheck", "period", "np_ytd", "np_ttm",
            "report_currency"]
+
+
+def rated(market: str, today: date) -> dict[str, pd.Index]:
+    """The ratings of the market's newest report before `today` (data/picks.csv: buy, hold, sell; a buy or Hold the
+    review removed isn't rated, its replacement is): the names the buffer keeps. None yet: no name is kept."""
+    if not PICKS.exists():
+        return NONE
+    log = pd.read_csv(PICKS, dtype={"ticker": str, "date": str}, usecols=["date", "market", "bucket", "ticker"])
+    log = log[(log["market"] == market) & (log["date"] < today.isoformat()) & log["bucket"].isin(list(NONE))]
+    if log.empty:
+        return NONE
+    last = log[log["date"] == log["date"].max()]
+    return {k: pd.Index(last.loc[last["bucket"] == k, "ticker"].unique()) for k in NONE}
+
+
+def buffered(order: pd.Index, current: pd.Index, n: int) -> pd.Index:
+    """`order` (best first) with the buffer applied for n places, as MSCI's Quality Indexes (2025, section 3.1.1) and
+    CSI's indexes (the CSI 300: new names in the top 240 first, current ones in the top 360 next) keep their
+    constituents: the names within the first (1 - b) × n come first, then the current names within (1 + b) × n
+    (b: `buffer`, 20%), then the rest in order. The first n of the result are the list. Rounded so that the buffer
+    is at least one place (with one place, the current name stays while it is first or second)."""
+    b = CONFIG["lists"]["buffer"]
+    at = np.arange(len(order))
+    first = at < math.floor((1 - b) * n + 1e-9)
+    keep = order.isin(current) & (at < math.ceil((1 + b) * n - 1e-9)) & ~first
+    return order[first].append(order[keep]).append(order[~first & ~keep])
 
 
 def screened(df: pd.DataFrame) -> pd.Series:
@@ -55,16 +87,17 @@ def slots(weights: pd.Series, n: int, room: pd.Series) -> pd.Series:
     return out
 
 
-def positions(df: pd.DataFrame, n: int, market: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+def positions(df: pd.DataFrame, n: int, market: str, current: pd.Index = NONE["buy"]) -> tuple[pd.DataFrame, pd.DataFrame]:
     """The n buys and the bench (the next one in each sector held), from the scored stocks that can be bought. Each
     sector gets places by its share of the scored market's free-float value (float_value, universe.py), filled by its
-    best scores; equal amounts."""
+    best scores, the `current` buys kept within the buffer (buffered: with k places, while within the sector's best
+    ceil(1.2 k)); equal amounts."""
     share = df.groupby("sector")["float_value" if "float_value" in df else "mcap"].sum()
     field = df[buyable(df, market)]
     k = slots(share, n, field["sector"].value_counts())
     buys, bench = [], []
     for sector, g in field[field["sector"].map(k) > 0].groupby("sector"):
-        g = ranked(g)
+        g = g.loc[buffered(ranked(g).index, current, k[sector])]
         buys.append(g.iloc[:k[sector]])
         bench.append(g.iloc[k[sector]:k[sector] + 1])
     buys = ranked(pd.concat(buys))
@@ -90,42 +123,77 @@ def anniversary(d: date, years: int = 1) -> date:
         return d.replace(year=d.year + years, day=28)
 
 
-def holds(df: pd.DataFrame, n: int, out: pd.Index) -> pd.DataFrame:
+def holds(df: pd.DataFrame, n: int, out: pd.Index, current: pd.Index = NONE["hold"]) -> pd.DataFrame:
     """The Hold candidates in order (PLAN.md, "Lists"): among the `largest` names, those in the middle fifth of the
     market's score (`middle`: leaning neither to the top nor to the bottom), not screened (screened()) nor `out` (the
-    buys and their bench, your vetoes), the steadiest prices first (1-year volatility of daily returns, the lowest first; then the code), at most
-    `per_sector` a sector; the first n are the list, the next ones its bench."""
+    buys and their bench, the Sell names, your vetoes), the steadiest prices first (1-year volatility of daily returns,
+    the lowest first; then the code), at most `per_sector` a sector; the first n are the list, the next `bench` its bench.
+    A `current` Hold stays within the buffer: the band and the largest widened by `buffer` (the middle fifth's 20%:
+    36% to 64%; the 480 largest), and its place in the volatility order (buffered)."""
     cfg, order = CONFIG["lists"], ranked(df)
     at = pd.Series(np.arange(len(order)) / max(len(order), 1), index=order.index).reindex(df.index)
-    lo, hi = cfg["middle"]
-    field = df[(at >= lo) & (at < hi) & (df["mcap_rank"] <= cfg["largest"]) & ~screened(df) & ~df.index.isin(out)
-               & df["vol_1y"].notna()]
+    (lo, hi), b, cur = cfg["middle"], cfg["buffer"], df.index.isin(current)
+    pad = b * (hi - lo)
+    band = ((at >= lo) & (at < hi) & (df["mcap_rank"] <= cfg["largest"])) | (
+        cur & (at >= lo - pad) & (at < hi + pad) & (df["mcap_rank"] <= cfg["largest"] * (1 + b)))
+    field = df[band & ~screened(df) & ~df.index.isin(out) & df["vol_1y"].notna()]
     field = field.iloc[np.lexsort([field.index.astype(str), field["vol_1y"].to_numpy()])]
-    return capped(field, n, cfg["per_sector"]).assign(
+    field = field.loc[buffered(field.index, current, n)]
+    return capped(field, n + cfg["bench"], cfg["per_sector"]).assign(
         reason=lambda h: [f"评分居中（全市场 {len(df)} 只中第 {r} 名）；股价波动小（近一年年化 {v:.0%}）"
                           for r, v in zip(order.index.get_indexer(h.index) + 1, h["vol_1y"])])
 
 
-def sells(df: pd.DataFrame, n: int) -> pd.DataFrame:
-    """The Sell list: the n lowest scores among the `largest` names, at most `per_sector` a sector (ties: score.ranked
-    reversed, so of tied names the smaller)."""
-    cfg, order = CONFIG["lists"], ranked(df)
-    return capped(order[order["mcap_rank"] <= cfg["largest"]].iloc[::-1], n, cfg["per_sector"])
+def junk(df: pd.DataFrame) -> pd.Series:
+    """Sell's measure, the lower the more expensive, lower-quality and distressed: the mean of the value family, the
+    quality family and safety (1 - the percentile of Campbell-Hilscher-Szilagyi's failure logit, signals.distress,
+    among the market's non-financials; missing, as for financials, at the middle). The short side of Novy-Marx's
+    (2013) profitable value and of Asness, Frazzini and Pedersen's quality minus junk (2019), whose safety includes
+    the failure scores; Campbell, Hilscher and Szilagyi (2008) found the likeliest to fail earn the least. Momentum
+    is left out: a low score's losers rebound when markets turn (Daniel and Moskowitz 2016)."""
+    fin = df["financial"].astype(bool)
+    risk = df["distress"].where(~fin).rank(pct=True)
+    return ((df["f_value"] + df["f_quality"] + (1 - risk).fillna(MIDDLE)) / 3).round(DIGITS)
 
 
-def build(df: pd.DataFrame, market: str, today: date) -> pd.DataFrame:
+def sells(df: pd.DataFrame, n: int, out: pd.Index = NONE["sell"], current: pd.Index = NONE["sell"],
+          market: str = "") -> pd.DataFrame:
+    """The Sell list: among the `largest` names (a `current` Sell: the largest × 1.2), not `out` (the buys and their
+    bench), the n lowest of junk() (ties: the smaller free float, then the code), the `current` ones kept within the
+    buffer (buffered), at most `per_sector` a sector. With the score's card lines (`market`), `weak` names the two
+    weakest value and quality components and `reason` the failure risk's place when in the riskier half."""
+    cfg, key = CONFIG["lists"], junk(df)
+    big = (df["mcap_rank"] <= cfg["largest"]) | (df.index.isin(current) & (df["mcap_rank"] <= cfg["largest"] * (1 + cfg["buffer"])))
+    field = df[big & ~df.index.isin(out)]
+    value = field["float_value" if "float_value" in field else "mcap"]
+    order = pd.DataFrame({"k": key[field.index], "v": value, "c": field.index.astype(str)}).sort_values(["k", "v", "c"])
+    sell = capped(field.loc[buffered(order.index, current, n)], n, cfg["per_sector"])
+    if "why" not in sell or not market:  # the history's frames carry no card lines
+        return sell
+    used = sorted({c for f in ("value", "quality") for c in FAMILIES[f][market]})
+    fin = df["financial"].astype(bool)
+    risk = df["distress"].where(~fin).rank(pct=True, ascending=False)
+    lines = {code: card_lines(row, used, market)[1] for code, row in sell.iterrows()}
+    reason = {code: f"财务困境概率在全市场非金融股中排前 {math.ceil(risk[code] * 100)}%"
+              if pd.notna(risk.get(code)) and risk[code] <= 0.5 else "" for code in sell.index}  # the grades are on the card
+    return sell.assign(weak=pd.Series(lines), reason=pd.Series(reason))
+
+
+def build(df: pd.DataFrame, market: str, today: date, current: dict[str, pd.Index] = NONE) -> pd.DataFrame:
     """The day's three ratings, one row each (COLUMNS): the buys, their bench (it replaces buys the results review
-    removes), the Hold names and theirs, the Sell names, and your vetoes (kept out of Buy and Hold); each rating's
-    re-check date is 12 months on, its horizon."""
+    removes), the Sell names, the Hold names and theirs, and your vetoes (kept out of Buy and Hold); `current`: the
+    ratings of the newest earlier report (rated()), which the buffer keeps. A name has one rating: Sell leaves out the
+    buys and their bench, Hold also the Sell names. Each rating's re-check date is 12 months on, its horizon."""
     cfg = CONFIG["lists"]
     vetoes = {c: v for c, v in verdicts.active(market, today, df["period"].astype(str)).items() if v["verdict"] == "veto"}
     df = df.assign(lot=df["lot"] if "lot" in df else LOT[market])
     df["lot_cost"] = df["price"] * df["lot"]
     order = ranked(df)  # ties: score.ranked
-    buys, bench = positions(order[~order.index.isin(list(vetoes))], cfg["buys"], market)
+    buys, bench = positions(order[~order.index.isin(list(vetoes))], cfg["buys"], market, current["buy"])
     bench = ranked(bench)  # each replaces a removed buy of its sector (review.apply)
-    held = holds(order, cfg["holds"] + cfg["bench"], buys.index.union(bench.index).union(list(vetoes)))
-    sell = sells(order, cfg["sells"])
+    taken = buys.index.union(bench.index)
+    sell = sells(order, cfg["sells"], taken, current["sell"], market)
+    held = holds(order, cfg["holds"], taken.union(sell.index).union(list(vetoes)), current["hold"])
     k, due = cfg["holds"], anniversary(today).isoformat()
     parts = [buys.assign(list="buy", rank=range(1, len(buys) + 1)),
              bench.assign(list="next", rank=range(len(buys) + 1, len(buys) + len(bench) + 1)),

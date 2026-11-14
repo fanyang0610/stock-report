@@ -19,7 +19,7 @@ def card(row: dict, market: str, role: str) -> str:
     where = {"buy": f"评级买入，第 {rank} 名（预计跑赢大盘：评分最高的 20 只之一）", "next": "买入候补（有买入被剔除时替补）",
              "hold": f"评级持有，第 {rank} 名（评分居中、不偏涨也不偏跌：大公司里股价最稳的 10 只之一；{row.get('reason')}）",
              "hold_next": "持有候补（有持有被剔除时替补）",
-             "sell": f"评级卖出，第 {rank} 名（预计跑输大盘：市值前 400 中评分最低的 10 只之一）",
+             "sell": f"评级卖出，第 {rank} 名（预计跑输大盘：市值前 400 中又贵、质量又差、财务困境风险又高的 10 只之一；{row.get('reason')}）",
              "research": "个股研究（你单独查询的股票，不一定在今日名单上）"}[role]
     graded = pd.notna(row.get("g_value"))
     lines = [f"股票：{row['code']} {row['name']}（{MARKET_NAMES[market]}，行业：{row.get('sector') or '未知'}）", f"名单：{where}",

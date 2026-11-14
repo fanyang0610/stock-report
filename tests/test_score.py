@@ -278,7 +278,9 @@ def test_ev_needs_the_cash_line_and_a_missing_debt_line_is_no_debt(tmp_path, mon
 def rated(n: int = 100) -> pd.DataFrame:
     """n names scored 0..1 by position (the last is the best), all among the largest, 6 sectors, volatility rising
     with the position modulo 7."""
-    df = universe(n).assign(score=np.linspace(0, 1, n), mcap_rank=np.arange(n, 0, -1), distress=0.0, sta=0.0)
+    x = np.linspace(0, 1, n)
+    df = universe(n).assign(score=x, f_value=x, f_quality=x, f_momentum=x, mcap_rank=np.arange(n, 0, -1), distress=0.0,
+                            sta=0.0)
     return df.assign(sector=[f"s{k % 6}" for k in range(n)], vol_1y=[0.10 + (k % 7) / 100 for k in range(n)])
 
 
@@ -301,10 +303,60 @@ def test_hold_is_the_steadiest_prices_in_the_middle_fifth_of_the_score(monkeypat
     assert (lists.holds(df, 6, pd.Index([]))["mcap_rank"] <= 50).all()
 
 
-def test_sell_is_the_lowest_scores_among_the_largest(monkeypatch):
+def test_sell_is_expensive_low_quality_and_distressed_not_the_lowest_score(monkeypatch):
     monkeypatch.setitem(CONFIG["lists"], "largest", 90)  # C0..C9 are the 10 smallest: not rated
     s = lists.sells(rated(), 5)
     assert s.index.tolist() == ["C10", "C11", "C12", "C13", "C14"] and s["sector"].value_counts().max() <= 2
+    df = rated()
+    df.loc["C10", "f_momentum"] = 1.0  # value and quality as low, momentum high: still a Sell (momentum isn't asked)
+    df.loc["C11", ["f_value", "f_quality"]] = 0.9  # a washed-out price on a cheap, sound company: not a Sell
+    df.loc["C11", "f_momentum"] = 0.0
+    df.loc["C25", "distress"] = 9.0  # the likeliest to fail (safety 0), value and quality a quarter up: first
+    s = lists.sells(df, 5)
+    assert s.index[0] == "C25" and "C10" in s.index and "C11" not in s.index
+    fin = df.assign(financial=df.index == "C25")  # no failure logit for a financial: its safety at the middle
+    assert lists.junk(fin)["C25"] == pytest.approx((df.loc["C25", "f_value"] * 2 + 0.5) / 3)
+    s = lists.sells(df, 5, out=pd.Index(["C25"]))  # a buy or its bench isn't rated Sell too
+    assert "C25" not in s.index and len(s) == 5
+
+
+def test_the_buffer_keeps_a_current_name_until_it_falls_past_120_percent_of_the_cut():
+    order = pd.Index([f"N{k}" for k in range(20)])
+    b = lists.buffered(order, pd.Index(["N10", "N12"]), 10)  # new names in the top 8 first, current ones in the top 12
+    assert b[:10].tolist() == [f"N{k}" for k in range(8)] + ["N10", "N8"] and "N12" not in b[:10]
+    assert lists.buffered(order, pd.Index(["N1"]), 1)[0] == "N1"  # one place: the current name stays while second
+    assert lists.buffered(order, pd.Index(["N2"]), 1)[0] == "N0"  # third: it goes
+    assert lists.buffered(order, pd.Index([]), 3).equals(order)  # nothing rated before: the order as it is
+
+
+def test_a_current_buy_keeps_its_sectors_place_within_the_buffer():
+    df = picks_field()  # a: 3 places, b: 1
+    buys, bench = lists.positions(df, 4, "us", pd.Index(["B1", "A4"]))  # A4 fifth of a (past ceil(3.6) = 4): out
+    assert buys.index.tolist() == ["A0", "A1", "A2", "B1"] and set(bench.index) == {"A3", "B0"}  # B1 second of b: kept
+    buys, _ = lists.positions(df, 4, "us", pd.Index(["B2", "A3"]))  # B2 third of b: out; A3 fourth of a: kept, and
+    assert buys.index.tolist() == ["A0", "A1", "B0", "A3"]  # only a's top floor(2.4) = 2 new names come before it
+
+
+def test_a_current_hold_stays_in_a_band_widened_by_the_buffer(monkeypatch):
+    monkeypatch.setitem(CONFIG["lists"], "largest", 400)
+    df = rated()
+    df.loc["C62", "vol_1y"] = 0.001  # the steadiest, at the 37th percentile from the top: outside the middle fifth
+    assert "C62" not in lists.holds(df, 6, pd.Index([])).index
+    assert lists.holds(df, 6, pd.Index([]), pd.Index(["C62"])).index[0] == "C62"  # rated Hold before: within 36%-64%
+    df.loc["C66", "vol_1y"] = 0.001  # the 34th percentile: past the widened band, even when rated before
+    assert "C66" not in lists.holds(df, 6, pd.Index([]), pd.Index(["C66"])).index
+
+
+def test_the_previous_ratings_are_the_newest_earlier_reports(tmp_path, monkeypatch):
+    log = pd.DataFrame({"date": ["2026-10-22", "2026-10-23", "2026-10-23", "2026-10-23", "2026-10-23", "2026-10-24"],
+                        "market": ["cn", "cn", "cn", "cn", "us", "cn"],
+                        "bucket": ["buy", "buy", "removed", "sell", "buy", "buy"],
+                        "ticker": ["000001", "600519", "000002", "000003", "AAPL", "000004"]})
+    log.to_csv(tmp_path / "picks.csv", index=False)
+    monkeypatch.setattr(lists, "PICKS", tmp_path / "picks.csv")
+    got = lists.rated("cn", DAY)  # before 2026-10-24, the newest: 10-23's; the review's removal isn't a rating
+    assert got["buy"].tolist() == ["600519"] and got["sell"].tolist() == ["000003"] and got["hold"].empty
+    assert lists.rated("hk", DAY)["buy"].empty and lists.rated("cn", date(2026, 10, 1))["buy"].empty
 
 
 def test_the_ratings_leave_out_the_holdings_check():

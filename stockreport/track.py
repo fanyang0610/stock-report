@@ -23,7 +23,7 @@ from stockreport import lists
 from stockreport.config import CONFIG, DATA
 
 log = logging.getLogger(__name__)
-PICKS_LOG = DATA / "picks.csv"
+PICKS_LOG = lists.PICKS
 SENT_LOG = DATA / "sent.csv"  # the buys of each report sent to you
 SENT = ["date", "market", "ticker", "name", "listed"]  # sent on `date`, from the market's lists of `listed`
 COLUMNS = ["date", "market", "bucket", "ticker", "name", "price", "price_date", "score", "rank"]

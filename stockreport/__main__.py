@@ -60,7 +60,7 @@ def build_market(market: str, today: date) -> None:
     if "prices" in failed:
         raise RuntimeError(f"{market.upper()} daily prices not updated; the report keeps the newest earlier lists")
     df, info = scored(market, today)
-    out_lists = lists.build(df, market, today)
+    out_lists = lists.build(df, market, today, lists.rated(market, today))
     try:  # the results review's sources and passages (no DeepSeek: the review runs when you ask for a report)
         review.gather(market, out_lists, today)
     except Exception:

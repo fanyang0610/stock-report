@@ -1606,3 +1606,56 @@ history a month's market value is set against the years before it at their own s
 of the rows, and US 80%, against 95% and 96% live.
 
 Rerun: as section 23 (`frame`, then `run`).
+
+## 27. Stage 17: the buffer and the new Sell (2026-11-15; backtest/qvm.py)
+
+The history run again for stage 17 (docs/PLAN.md, "Lists"): each month's three lists keep the month before's names
+within the buffer (lists.buffered: MSCI's and CSI's 20%), Sell is the expensive, low-quality and distressed
+(lists.junk) instead of the score's bottom, and a name has one rating (Hold leaves out the Sell names). The rules were
+set from the published evidence before this run and nothing was changed after it; the numbers fill the 预期 lines and
+decide nothing (AGENTS.md rules 3 and 12). "Before" is stage 16's code on the same frames (it reproduces section 26
+exactly); "new Sell, no buffer" is this code with the buffer set to 0, to tell the two changes apart. The score is
+stage 16's in all three. The history has no failure logit (no history of liabilities and cash), so its Sell is chosen
+on the value and quality families only, the third part at the middle for every stock.
+
+| 12 months from each month end, after costs | CN (510300): before → no buffer → after | US (SPY) | HK (2800) |
+|---|---|---|---|
+| 20 names over the fund (windows ahead) | +1.0% (48%) → same → **+1.7% (51%)** | +2.5% (59%) → same → **+2.4% (60%)** | +3.6% (61%) → same → **+3.3% (58%)** |
+| the picks: 20 names over the neutral basket (ahead) | −2.2% (33%) → **−1.5% (32%)** | −0.5% (49%) → **−0.6% (47%)** | +3.6% (62%) → **+3.3% (63%)** |
+| 20 names: worst 12 months (the fund's) | −27.1% → **−24.8%** (−27.3%) | −15.1% → **−18.4%** (−10.6%) | −28.0% → **−29.3%** (−39.6%) |
+| Hold 10 over the fund (ahead); volatility (the fund's) | +0.5% (58%) → same → **+0.7% (60%)**; 14.1% → 14.6% (18.9%) | −6.5% (29%) → **−6.6% (30%)**; 14.1% → 14.2% (16.4%) | +0.1% (44%) → **−0.1% (45%)**; 15.0% → 14.5% (21.5%) |
+| **Sell 10 over the fund (windows behind)** | +3.4% (51%) → +4.9% (59%) → **+4.0% (57%)** | −1.7% (59%) → +3.1% (45%) → **+5.1% (38%)** | +3.2% (63%) → +10.7% (58%) → **+9.2% (59%)** |
+| Sell: 10th / 90th percentile over the fund | −15.4% / +31.5% → **−21.0% / +42.3%** | −18.6% / +13.9% → **−15.7% / +22.7%** | −26.4% / +42.8% → **−31.2% / +65.5%** |
+| Sell: volatility (the fund's) | 28.4% → 31.2% → **32.0%** (18.9%) | 21.5% → 23.2% → **23.2%** (16.4%) | 32.3% → 33.1% → **33.5%** (21.5%) |
+| Sell: each held year's largest fall, median; the worst | −18.1%; −33.8% → **−20.9%; −39.6%** | −12.7%; −34.7% → **−14.0%; −26.1%** | −23.2%; −47.7% → **−20.8%; −61.1%** |
+
+**The buffer.** It changes the Buy and Hold history little (Buy CN +0.7, US −0.1, HK −0.3 points a year; Hold within
+0.2), as it should: it only keeps a name a while longer near its cut. The neutral basket has no score in it and is
+unchanged (CN +3.2%, US +3.0%, HK +0.0% over the fund).
+
+**The new Sell.** In this history the expensive, low-quality names beat the fund on average, by more than the score's
+bottom did: CN +4.0%, US +5.1%, HK +9.2% a year. In CN and HK they still trailed the fund in most windows (57%, 59%)
+with the average lifted by a few large gains (the 90th percentile +42% and +66% over the fund); in the US they were
+ahead in 62%. The buffer isn't the cause (without it: +4.9%, +3.1%, +10.7%).
+
+**Why the history can't judge this list.** Three things, each of which flatters exactly this list:
+- Survivors only. The frames hold today's listings (CN: Eastmoney drops delisted A-shares; US and HK today's names), so
+  every company that went bankrupt, was delisted or taken private for little is missing, and those are
+  overwhelmingly expensive, loss-making, highly indebted companies: the Sell list's kind. Shumway ("The delisting bias
+  in CRSP data", JF 1997) found US delistings for performance lost about 30% in the delisting month alone, returns
+  that survivor-only data never shows. A loss-making name that is still listed today is one that recovered.
+- No failure logit. The live Sell's third part, the likeliest to fail (Campbell, Hilscher and Szilagyi 2008), isn't in
+  the history; what is left is value and quality, and quality's low-volatility part (a seventh of it) then favours
+  the most volatile names in Sell, which are the survivors' biggest rebounds.
+- A decade led by expensive growth. US quality ran against its published direction here (−9.9% a year, section 26),
+  so in this sample "low quality" earned more; US value's spread was +0.7%.
+The published evidence for the rule (Novy-Marx 2013; Asness, Frazzini and Pedersen 2019; Campbell, Hilscher and
+Szilagyi 2008) uses CRSP data with the dead companies and their delisting returns, over 40-50 years.
+
+**What the report says.** The Sell 预期 line gives these figures as they are, that trailing isn't falling, that the
+history leaves out the dead companies, which are the kind the Sell list picks, so it flatters this list most, and that
+it has no failure probability, so its Sell is chosen on value and quality alone. A test with the dead companies would
+need a US history that keeps delisted names and their last returns (the SEC frames keep dead filers, but the price
+history here has none); none is free for CN or HK.
+
+Rerun: as section 23 (`frame`, then `run`); the "no buffer" column with `buffer = 0.0` in config.toml.

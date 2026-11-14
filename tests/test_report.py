@@ -69,7 +69,7 @@ def test_report_dry_run(tmp_path, monkeypatch):
     assert lines[1].startswith("评级：买入 = 预计跑赢大盘；持有 = 评分居中、不偏涨也不偏跌")  # the three ratings first
     cn = summary.split("【A股】")[1].split("【美股】")[0]
     assert "预期：历史模拟（简化版）：买入平均每年比沪深300ETF多赚 2.5%" in cn and "买入 20 只，每只等额，持有到 2027-10-24" in cn
-    assert "基金同期 -20%）。持有少赚 0.4%、波动小于基金；卖出 70% 的时候跑输、平均少赚 4.0%。" in cn
+    assert "选股本身少赚 0.5%），最差一年 -18%，基金同期 -20%。持有少赚 0.4%、波动小于基金；卖出：模拟只含存活的公司，检验不了。" in cn
     assert "注意：今日部分数据获取失败（prices）" in cn and "持有 10 只：" + "、".join(hold["name"]) in cn
     assert "卖出 10 只：" + "、".join(sell["name"]) in cn and cn.splitlines()[2].count("、") == 19  # the 20 buys by name
     hk = summary.split("【港股】")[1]
@@ -83,7 +83,7 @@ def test_report_dry_run(tmp_path, monkeypatch):
     assert "预期：历史模拟（简化版）：买入平均每年比标普500基金多赚 2.5%" in us and f"{buys.iloc[0]['code']} " in us
     assert "从美股市值前 800 只里选" in html
     assert "一般 12%（沪深300ETF 10%），最差 30%（沪深300ETF同期 28%）" in html  # each held year's own fall
-    assert "对照组合用同样的行业名额" in html and "20 只又比对照组合少赚 0.5%" in html  # the neutral basket, back pages
+    assert "对照组合不挑股票" in html and "20 只又比对照组合少赚 0.5%" in html  # the neutral basket, in the 预期 line
     need = buys["lot_cost"].max() / 0.05  # one lot of every buy at equal amounts: the dearest lot over its 5%
     assert f"买齐这 20 只约需 {need / 1e4:,.1f} 万元" in html
     assert not any(w in summary + html for w in ("建议配置", "指数基金", "标普500指数基金", "只买 20 只", "指数权重", "从标普500"))

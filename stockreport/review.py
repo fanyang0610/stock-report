@@ -391,7 +391,7 @@ def apply(rows: pd.DataFrame, market: str, states: dict | None, confirmed: dict 
         if kind == "buy" and len(keep):  # ties keep the lists' order (score.ranked)
             keep = keep.assign(weight=1 / len(keep)).sort_values(
                 "score", ascending=False, kind="stable", key=lambda x: x.round(DIGITS))
-        elif len(keep):  # the steadiest first, as lists.holds orders them
+        elif len(keep):  # shown steadiest first (lists.holds puts a buffered current Hold ahead)
             keep = keep.sort_values(["vol_1y", "code"], kind="stable")
         keep["rank"] = range(1, len(keep) + 1)
         out += [keep, pd.DataFrame(removed)]

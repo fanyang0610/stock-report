@@ -6,7 +6,9 @@ and its 10 and 5 highest scores held 12 months after a round trip of costs again
 (lists.holds, lists.sells: the live rules), held the same way, with how far each stays from the fund. Stage 7: each
 held year's own largest fall, and a neutral basket (the 20 names' sector places, every name that can be bought in the
 sector, equal amounts within it) to split the 20 names' lead over the fund into the picks and the places with equal
-amounts.
+amounts. Stage 17: each month's lists keep the month before's names within the buffer (lists.buffered), and Sell is
+the live rule's expensive, low-quality names (lists.junk; the history has no distress inputs, so its safety part sits
+at the middle).
 - Portfolios: the app's buy rule each month (lists.positions: each sector's places by its share of the free-float
   value, its best scores, equal amounts, the screen) on the whole snapshot (the 800 largest; HK all that pass the
   floors). Free float then: CN market value × today's CSI 300 float factor (the median outside it; float_factors), HK
@@ -173,25 +175,21 @@ class Paths:
         return [e[:7] for e in ends], np.asarray(port, float), fund
 
 
-def portfolios(f: pd.DataFrame, market: str) -> dict[str, pd.Series]:
-    """Each month's 20-name list: code -> weight (lists.positions, in score order)."""
-    out = {}
-    for d, g in f.groupby("date"):
-        buys, _ = lists.positions(g.set_index("code").sort_values("score", ascending=False), CONFIG["lists"]["buys"], market)
-        out[d] = buys["weight"]
-    return out
-
-
-def ratings(f: pd.DataFrame, market: str) -> dict[str, dict[str, pd.Series]]:
-    """Each month's Hold and Sell names (the live rules, lists.holds and lists.sells; Hold leaves out that month's
-    buys and their bench): code -> equal weight."""
-    out, cfg = {"hold": {}, "sell": {}}, CONFIG["lists"]
+def month_lists(f: pd.DataFrame, market: str) -> dict[str, dict[str, pd.Series]]:
+    """Each month's three ratings by the live rules (lists.positions, lists.sells, lists.holds; a name has one rating),
+    the buffer keeping the month before's names, as the build keeps the newest earlier report's: rating -> month ->
+    code -> weight (equal; the buys in score order)."""
+    out, cfg, current = {"buy": {}, "hold": {}, "sell": {}}, CONFIG["lists"], lists.NONE
     for d, g in f.groupby("date"):
         g = g.set_index("code")
-        buys, bench = lists.positions(g.sort_values("score", ascending=False), cfg["buys"], market)
-        held = lists.holds(g, cfg["holds"], buys.index.union(bench.index))
-        for kind, names in (("hold", held), ("sell", lists.sells(g, cfg["sells"]))):
+        buys, bench = lists.positions(g.sort_values("score", ascending=False), cfg["buys"], market, current["buy"])
+        taken = buys.index.union(bench.index)
+        sell = lists.sells(g, cfg["sells"], taken, current["sell"])
+        held = lists.holds(g, cfg["holds"], taken.union(sell.index), current["hold"]).iloc[:cfg["holds"]]
+        out["buy"][d] = buys["weight"]
+        for kind, names in (("hold", held), ("sell", sell)):
             out[kind][d] = pd.Series(1 / max(len(names), 1), index=names.index)
+        current = {"buy": buys.index, "hold": held.index, "sell": sell.index}
     return out
 
 
@@ -293,7 +291,8 @@ def run_market(market: str) -> None:
     print(f"\n==== {market.upper()}: {len(dates)} month ends {dates[0]}..{dates[-1]}, fund {ETF[market]}, round trip {cost:.1%}")
     t = families(f)
     print("-- top fifth − bottom fifth, mean 12-month return\n" + t.round(3).to_string())
-    lists20 = portfolios(f, market)
+    rated = month_lists(f, market)
+    lists20 = rated.pop("buy")
     for n in SIZES:
         w, monthly, fund = evaluate(paths, largest(lists20, n), cost)
         ex = w["ret"] - w["fund"]
@@ -320,7 +319,7 @@ def run_market(market: str) -> None:
           f"the 20 names over it {basket['picks']:+.1%} (ahead {basket['picks_beat']:.0%}); largest fall "
           f"{basket['drawdown']:.1%}; {said(basket)}")
     result_ratings = {}
-    for kind, picks in ratings(f, market).items():
+    for kind, picks in rated.items():
         w, monthly, fund = evaluate(paths, picks, cost)
         ex = w["ret"] - w["fund"]
         r = {"excess": ex.mean(), "beat": (ex > 0).mean(), "half": ex.abs().median(), "p10": ex.quantile(0.1),

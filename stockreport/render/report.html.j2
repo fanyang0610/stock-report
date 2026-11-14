@@ -142,7 +142,7 @@
   {% else %}<p class="muted">今天没有符合条件的股票。</p>
   {% endfor %}
 
-  <h3>卖出<span class="count">{{ m.sells | length }} 只，预计跑输大盘：市值前 400 里评分最低的，复查 {{ m.recheck }}</span></h3>
+  <h3>卖出<span class="count">{{ m.sells | length }} 只，预计跑输大盘：市值前 400 里又贵、质量差、困境风险高的，复查 {{ m.recheck }}</span></h3>
   <p class="small muted">{{ m.expect.sell }}</p>
   {% for p in m.sells %}
   <div class="card sell">

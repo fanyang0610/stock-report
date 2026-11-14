@@ -823,6 +823,50 @@
     (its 筛选成长评级 key shows "-") and says momentum is a quarter of the score; a follow-up once stage 13 lands. The
     US annual history misses some foreign filers' newer annual reports (Toyota's ends in fiscal 2020, TSMC's in 2024):
     a data follow-up for fetch/. Stage 17 (the lists and their words) follows the review.
+- Stage 17 (screening lists and words; the method review of 2026-11-13, findings S2, S3, S4): done 2026-11-15. On
+  stage 16's score (its branch merged first). lists.py: the buffer (lists.buffered, lists.rated: a name rated in the
+  newest earlier report in data/picks.csv stays until it falls past 120% of its list's cut: MSCI's quality indexes,
+  CSI's), Sell as the expensive, low-quality and distressed (lists.junk: the value and quality families and the
+  failure logit, equal thirds; Novy-Marx 2013, quality minus junk, Campbell-Hilscher-Szilagyi 2008), a name with one
+  rating (Sell leaves out the buys and their bench, Hold the Sell names too); report.py: the 预期 line's split into the
+  places with equal amounts and the picks, the guide and back pages for both changes; backtest/qvm.py runs the same
+  rules month to month. The reasons and sources: "Lists", "Cards", "Report".
+  - Turnover on the week of snapshots (2026-11-07 … 11-13, exits over six days, before → after): Buy CN 10 → 4, US 8
+    → 5, HK 10 → 3; Hold CN 6 → 4, US 10 → 5, HK 15 → 8; Sell (the new rule) CN 5 → 5, US 2 → 2, HK 4 → 3 (the old rule
+    7 US, 5 HK, 4 CN). The table and what still leaves: "Lists", the buffer.
+  - Sell on 2026-11-13, before → after: 4 of 10 kept in CN and HK, 3 in the US; the names and why: "Lists", Sell. The
+    new names are the expensive, loss-making names with a high failure risk (US Bloom Energy, Rocket Lab, Snowflake,
+    Moderna, Carvana; CN 中国东航, 芯原股份, 江淮汽车; HK 博泰车联, 融创中国), several held up by momentum in the old score;
+    the ones out had fallen hardest (momentum 0.02-0.49), which is what made them the score's bottom.
+  - The history again (BACKTEST.md section 27; it decides nothing, and fills the 预期 lines): 20 names over the fund
+    CN +1.0% → +1.7%, US +2.5% → +2.4%, HK +3.6% → +3.3% (the buffer alone); the picks over the neutral basket CN −2.2
+    → −1.5, US −0.5 → −0.6, HK +3.6 → +3.3; Hold within 0.2 points. Sell over the fund CN +3.4% → +4.0% (behind the
+    fund in 57% of windows), US −1.7% → +5.1% (38%), HK +3.2% → +9.2% (59%): the expensive, low-quality names beat the
+    fund in this history, by more than the score's bottom did, and the buffer isn't why (without it +4.9%, +3.1%,
+    +10.7%). The history can't judge this list: it holds today's listings only, and the dead companies it lacks are
+    the Sell list's kind (Shumway 1997: US delistings for performance lost ~30% in their last month); it has no
+    failure logit; and US quality ran against its published direction over this decade (−9.9% a year). The rule
+    follows the published evidence (CRSP with delisting returns over 40-50 years), and the Sell 预期 line now says
+    all three things in plain words.
+  - The fresh-context stage review (one, on Sonnet): 272 tests pass; the code as planned; no rule chosen on the
+    history or for a name; the figures match the logs (12+ checked, the turnover table recomputed). Its points,
+    answered: (1) the docs said Hold's widened band was 38%-62% while the code (20% of the band's width a side) gives
+    36%-64%: the texts fixed (lists.py, this plan, the back page); (2) the Sell 预期 line said "最偏乐观", which can
+    read the wrong way round, and the summary printed Sell beating the fund with no warning: both now say plainly that
+    this history can't test the Sell list and why (the PDF keeps the figures); (3) for 1-4 places the buffer is one
+    place, wider than 20%: written into "Lists", the least a buffer can be; (4) Sell names a sceptic will question:
+    Snowflake up 98% in 6 months (momentum is left out by design, said on page 1), Boeing with a one-off trailing
+    profit, Ares (an asset manager outside the financials definition, so the failure logit applies to its
+    consolidated funds' debt). Not patched (no rule for a name); Ares' classification is a universe question for a
+    later look, recorded here.
+  - The full `run` (2026-11-15, the 11-13 closes; 39 minutes with the weekend's refreshes; no fetch failed) rendered
+    all three markets (17 pages; summary 3,571 bytes after the review's rewording) and I read every page: page 1's 预期 lines give the split (CN:
+    行业名额加等额买入多赚 3.2%，选股本身少赚 1.5%), each market's 买入组合的预期 says it in full, the Sell heading and
+    its 预期 line read as above, each Sell card opens with its failure risk's place, and the back pages give Sell's
+    rule with its sources and the buffer. A first render had the Sell cards without their reason (the run had imported
+    report.py before the card change); re-rendered from the same lists, which today's snapshot re-scored with this
+    code reproduces exactly. Kept from 11-14's published lists (main's four-family code, so these counts mix stage 16
+    with the buffer): Buy CN 16, US 15, HK 17; Hold 3, 4, 6; Sell 6, 2, 5. 272 tests.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1100,6 +1144,47 @@ momentum drive the score (fixed in stage 1 after the stage review).
     history measures 12 months; NAPS holds a year). The lists are rebuilt each day, so a rating can change sooner; the
     newest report has the current one. (Before stage 5 a buy's re-check came sooner if its rank fell; with no holdings
     check there is nothing to re-check before the year ends.)
+- **The buffer (stage 17).** A name rated in the market's newest earlier report keeps its rating until it falls well past
+  the cut, as the index providers keep their constituents. The method review of 2026-11-13 (finding S2) counted, from
+  2026-11-07 to 11-13, US Buy keeping 16 of 20, Hold 5 of 10, Sell 6 of 10, HK Buy 16, Hold 6: too fast for a 12-month
+  rating, and much of it was noise (燕京啤酒's E/P percentile among 17 food-and-drink peers went 0.94 → 1.0 on a 0.2%
+  move; Hold, the steadiest prices in the middle fifth of a score that moves daily, turns over most).
+  - The rule (lists.buffered), borrowed from MSCI's Quality Indexes (methodology, May 2025, section 3.1.1: "buffer rules
+    are applied at 20% of the fixed number of securities"; the World index's 300 names: ranks up to 240 enter first, the
+    current names ranked 241-360 next, then the rest by rank) and CSI's indexes (the CSI 300: new names in the top 240
+    first, current ones in the top 360). For a list of n places: the names within the first floor(0.8 n) come first,
+    then the current names within ceil(1.2 n), then the rest in order; the first n are the list. Why this one: it is
+    the rule both providers whose practice the lists already follow publish (MSCI for the sector-relative factor
+    grades, CSI for the CN free float), it keeps a fixed count, and it needs no score units (a score band would need a
+    width the research doesn't give). Some MSCI indexes use wider bands (the EM 50: new names in the top 35 of 50,
+    current ones kept to 65th); 20% is the one MSCI uses for its quality indexes and CSI for its main ones.
+  - Where it applies: Buy within each sector's places (k places: a current buy stays while within the sector's best
+    ceil(1.2 k); rounded up so a one-place sector keeps its name while it is first or second, the bench's place; with
+    3 places only the sector's 2 best new names come before a current one). For the 1-4 places most sectors have,
+    20% is less than one name, so the slack is one place (a 25-100% buffer): the least a buffer can be; from 5 places
+    on it is the providers' 20%. Hold and Sell on their order of 10 (the
+    new top 8 first, the current names within 12), and on their fields: a current Hold stays in a middle band widened
+    by 20% of its width (0.04 a side: 36% to 64% of the score from the top) and among the 480 largest, a current Sell among the 480
+    largest. Not buffered: the screen, HK's small caps and partnerships (protections, not ranks), each sector's number
+    of places (it follows free float), your vetoes and the review's removals.
+  - The previous ratings (lists.rated): data/picks.csv, which keeps every report's three ratings (each day's last
+    build, after the review), the market's newest date before the build's day: point in time, and a buy the review
+    removed isn't rated (its replacement is). No earlier report (a new market, a cleared file): nothing is kept. The
+    history run applies the same rule month to month.
+  - The week of snapshots (2026-11-07 … 11-13, re-scored with this code, each day's lists built from the day before's;
+    exits over the six days, names kept day by day, and kept from the first day to the last):
+
+    | | Buy before | Buy after | Hold before | Hold after | Sell, new rule, no buffer | Sell after |
+    |---|---|---|---|---|---|---|
+    | CN | 10 (20/20/17/16/19/18); 15 of 20 | 4 (20/20/20/18/19/19); 16 | 6 (7/10/9/9/10/9); 6 of 10 | 4 (8/10/10/10/10/8); 6 | 5 (10/10/10/9/8/8); 8 of 10 | 5; 8 |
+    | US | 8 (18/18/18/19/19/20); 17 | 5 (19/17/20/19/20/20); 16 | 10 (5/8/10/9/9/9); 3 | 5 (6/9/10/10/10/10); 6 | 2 (10/10/9/9/10/10); 9 | 2; 9 |
+    | HK | 10 (19/17/19/18/19/18); 17 | 3 (20/20/20/18/20/19); 18 | 15 (8/8/8/7/7/7); 6 | 8 (9/8/10/8/7/10); 5 | 4 (10/10/10/8/9/9); 8 | 3; 7 |
+
+    (Sell under the old rule: CN 4 exits, US 7, HK 5.) The buffer halves the daily exits of Buy and Hold; what still
+    leaves is a real move (a buy past its sector's buffer: 伯特利, 沪电股份, 燕京啤酒, Royalty Pharma, Smith & Nephew,
+    Yum China, Five Below, 中国铁塔, 德翔海运) or a sector losing a place to free float (广发证券, 腾讯控股, both to
+    the bench). Over a whole week the overlap moves less (CN Buy 15 → 16, HK 17 → 18, US Buy 17 → 16 and HK Hold 6 →
+    5 by which names the buffer held): the buffer stops a name leaving on noise, not one that keeps falling.
 - **Buys (stage 3's redo):** 20 names from the whole scored market, equal amounts:
   - what can't be bought (it stays scored and can be rated Sell; the screen keeps it off Hold too):
     - Quantitative Value's screen (Gray and Carlisle, step 1: avoid a permanent loss): the 5% of each market's
@@ -1146,8 +1231,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
     - HK: HK-listed value (Yahoo's listed-class shares × price): an A+H company's A shares can't be bought in Hong Kong,
       and total value would give financials 37% instead of 29%. HK has no free free-float source (the Hang Seng's own
       weights aren't published per stock; Yahoo's floatShares counts all classes and puts ICBC at 62%);
-  - picks: each sector's places go to its best scores; the next one is the sector's bench, which replaces a buy the
-    review removes;
+  - picks: each sector's places go to its best scores, a current buy kept within the buffer (above); the next one is
+    the sector's bench, which replaces a buy the review removes;
   - exact ties (2026-11-02): a tie goes to the larger free-float value, then the lower code (score.ranked), for the
     buys, the bench and the market rank; the Sell list is that order reversed (the lowest first, so of tied names
     the smaller); Hold's ties in volatility go to the lower code. Scores are compared at 12 decimals: equal means can differ in a float's last bit (中航光电 and
@@ -1172,7 +1257,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
   - Spot checks on 2026-11-01 (examples, not targets): see Status.
 - **Hold (stage 5):** the 10 steadiest prices among the 400 largest names in the middle fifth of the market's score
   (from the top, the 40th to the 60th percentile), at most 2 per sector, not in Quantitative Value's screen, not a buy
-  or a buy's bench, not vetoed (lists.holds). The next 5 in that order are Hold's bench, which replaces a Hold name the review removes.
+  or a buy's bench, not a Sell (stage 17: a name has one rating), not vetoed (lists.holds); a current Hold kept within
+  the buffer (above). The next 5 in that order are Hold's bench, which replaces a Hold name the review removes.
   - Why the middle fifth, not the whole middle three fifths: its names lean neither to the top nor to the bottom (in the
     sorts the second and fourth fifths lean a little), the market-perform reading of a Hold.
   - Why the steadiest price (the lowest 1-year volatility of daily returns, the quality family's low-volatility measure
@@ -1201,8 +1287,52 @@ momentum drive the score (fixed in stage 1 after the stage review).
     place: the middle fifth starts at 318); HK 交通银行, 招商银行,
     中国电信, 光大环境, 信和置业, 中国中车, 中国神华, 中国飞鹤, 中国旺旺, 福耀玻璃 (19-29%). Score ranks 323-470 of 796 (CN),
     336-469 of 794 (US), 163-223 of 390 (HK).
-- **Sell:** the 10 lowest scores among the 400 largest, at most 2 per sector (lists.sells; the avoid list until stage 5,
-  the same rule), each card with its weakest components and risks. A hard red flag only adds to its card.
+- **Sell (stage 17):** the 10 most expensive, lowest-quality and most distressed among the 400 largest, at most 2 per
+  sector, not a buy or a buy's bench (lists.sells, lists.junk): the lowest mean of three percentiles, the value family,
+  the quality family and safety (1 − the percentile of Campbell-Hilscher-Szilagyi's failure logit, signals.distress,
+  among the market's non-financials; missing, as for every financial, at the middle, as a missing component is); ties
+  to the smaller free float. A current Sell kept within the buffer (above). The card's 为什么卖出 gives (beside the grades)
+  the failure risk's place when in the riskier half (财务困境概率在全市场非金融股中排前 N%), the two weakest value and
+  quality components and the risks; a hard red flag only adds to it.
+  - Why (the method review of 2026-11-13, finding S3): until stage 17 Sell was the score's 10 lowest, and the score
+    holds momentum, so its bottom is the year's losers. Losers rebound sharply when markets turn (Daniel and Moskowitz,
+    "Momentum crashes", JFE 2016: the published reason; the history only showed the same, Sell beating the fund on
+    average: before stage 16 CN +3.0%, US +1.5%; after it CN +3.4%, US −1.7%, HK +3.2%, BACKTEST.md sections 24, 26). A Sell should be a name expected
+    to lag for a reason that persists, and the published short sides are the expensive and the poor-quality: the short
+    leg of Novy-Marx's profitable value ("The other side of value", JFE 2013: the most expensive, least profitable
+    stocks earn the least, and combining the two ranks sorts better than either), of Asness, Frazzini and Pedersen's
+    quality minus junk ("Quality minus junk", RAST 2019: junk, the low-profitability, low-safety and low-growth side,
+    trails, and their safety includes the Ohlson and Altman failure scores), and Campbell, Hilscher and Szilagyi
+    ("In search of distress risk", JF 2008: the stocks likeliest to fail have earned abnormally low returns, the
+    distress anomaly). The value and quality families are the score's own, so a Sell is judged within its sector as a
+    Buy is; the failure logit is the one the buys' screen already uses (one estimate across markets, CHS's sign and
+    weights; in CN and HK it ranks the same signs of distress without an estimate of its own there).
+  - Why not the accruals (sta) as well: they enter quality already as its cash backing (profit not backed by operating
+    cash), and Sloan's accrual effect has faded in large caps since its publication (Green, Hand and Soliman,
+    "Going, going, gone?", Management Science 2011); the 400 largest are large caps.
+  - Why equal thirds: the score weighs its families equally for the same reason (no published weights to prefer), and
+    Novy-Marx combines his two ranks equally.
+  - On 2026-11-13's snapshots (before, the score's bottom; after, the new rule without the week's buffer; #: the place
+    among the 400 largest on the new measure, value / quality / momentum family percentiles, the failure logit's place
+    among the market's non-financials):
+    - CN in: 中国东航 (#1; 0.03 / 0.03 / 0.21; failure top 1%: a loss, debt 88%), 芯原股份 (#2; PB 22, down 56% in 6
+      months; top 1%), 江淮汽车 (#7; momentum 0.82, so the old score put it 626th of 794; top 1%), 晶科能源 (#9),
+      东阳光 (#13), 昆仑万维 (#16; momentum 0.80). Out: 南方航空 (#4, but 交通运输's two places went to 中国东航 and
+      中国国航), 芯源微 (#10, 电子's two to 芯原股份 and 中科飞测), 通威股份 (#21), 迈为股份 (#31), 赛力斯 (#44: value 0.41),
+      中控技术 (#73: failure top 48%): each at the old score's very bottom on momentum (0.02-0.17). Kept: 中国国航, 百利天恒,
+      中科飞测, 上纬新材.
+    - US in: Bloom Energy (#1; P/E 115, EV/EBIT 107; momentum 0.90), Rocket Lab (#2; P/S 53, a loss), Snowflake (#3;
+      8-year return on assets −15%), Moderna (#4; a loss), Constellation Energy (#5), Carvana (#8; EV/EBIT 401),
+      Lumentum (#10; a loss). Out: Vistra (#12), Rocket Companies (#15), Tesla (#26: quality 0.42), Enbridge (#27),
+      Intel (#40), Spotify (#66: quality 0.39, failure top 57%), SLB (#93: failure top 81%). Kept: Ares, Roblox,
+      Boeing. The new names are the expensive, loss-making or thinly profitable names the old score's momentum held
+      up (0.58-0.90); the old ones had fallen (momentum 0.02-0.49) and are less likely to fail.
+    - HK in: 博泰车联 (#1; failure top 2%), 黑芝麻智能 (#2), 蔚来 (#5), 英诺赛科 (#9), 映恩生物 (#15), 融创中国 (#16; debt
+      95%, failure top 1%). Out: 小鹏集团 (#6, but 非日常生活消费品's two places went to 博泰车联 and 蔚来), 山东黄金 (#27),
+      德康农牧 (#31), 中国光大控股 (#46), 晶泰控股 (#50), 理想汽车 (#51), all at momentum 0.02-0.10. Kept: 中国东方航空,
+      亚盛医药, 极智嘉, 钧达股份.
+  - What it can't promise: the history can't test it (BACKTEST.md section 27: without the failure logit there, and with
+    only today's listings, the dead companies such a list exists to catch are missing). The report says so.
 - **No holdings check (stage 5).** Until 2026-11-02 the lists included a check of your holdings by NAPS's 12-month rule
   (data/holdings.csv and `hold`), then a neutral hold rating of the names sent to you. You said it is not our concern
   ("this has nothing to do what i hold in my portfolio"): both are removed, with the holding rule. How you split your
@@ -1226,11 +1356,20 @@ momentum drive the score (fixed in stage 1 after the stage review).
   over the index fund, the share of 12-month windows it beat the fund, its worst 12 months and each held year's own
   largest fall from a peak at month-end marks (the median year's and the worst year's, against the fund's over the same
   months; stage 7: before, the overlapping portfolio's over the whole history, which no single buyer holds; now on the
-  back pages), marked as simulated; the details and the published evidence are on the back pages (stage 4). Stage 5:
+  back pages), marked as simulated; the details and the published evidence are on the back pages (stage 4). Stage 17
+  (the method review's finding S4): the line also splits the lead, in plain words, into what the neutral basket (the
+  对照组合: the same sector places, every name that can be bought, equal amounts) earned over the fund, the effect of
+  the places and the equal amounts, and what the 20 picks added over it, the picking (CN 2026-11-15: the basket +3.2%,
+  the picks −1.5%, ahead 32% of the time); the summary's line gives both figures. Until then the line credited the
+  whole lead to the picks and the split was only on the back pages. Stage 5:
   under the Hold heading the Hold 10's average over the fund, their volatility against the fund's and their held-year
   falls; under the Sell heading the share of windows the Sell 10 trailed the fund, their average over it, their own
   average return and that the history leaves out delisted companies, which flatters Sell most (BACKTEST.md section
-  24).
+  24). Stage 17: that this history can't test the Sell list (the dead companies are the kind it picks, so the survivors
+  make it look better than it is; no failure logit there, so its Sell is chosen on value and quality only), and that
+  the list rests on the published research with the dead companies (BACKTEST.md section 27); the summary's line says
+  卖出：模拟只含存活的公司，检验不了 (the figures are in the PDF; with them the summary ran past its size and lost the
+  Hold and Sell line).
 
 ### Report (stage 4)
 - The reader isn't an investment expert, so the decision comes first and the method last.
@@ -1238,7 +1377,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
   name with the amount and the date they are held to, what changed since the market's last report sent to you before
   today (data/sent.csv; counts, and the names gone when 8 or fewer), the 10 Hold and the 10 Sell names, the 预期 line in
   one sentence for all three; then a five-line guide (the three ratings in plain words, relative to the market and
-  without anyone's portfolio; the three lists; the grades in words; the review; no guarantee).
+  without anyone's portfolio, and that a rated name changes only when it falls well past the cut (stage 17); the three
+  lists, Sell as the expensive, poor-quality and distressed (stage 17); the grades in words; the review; no guarantee).
 - Market pages: the 预期 line in plain words; the money one board lot of every buy takes at equal amounts (stage 7:
   the dearest lot over its share of the money, 5%: on 2026-11-07 CN 89.6 万元 for 中际旭创's, US 2.85 万美元 for
   ASML's, HK 86.0 万港元 for 长飞光纤光缆's; arithmetic, worded as not advice); then each buy's card (rank, name, ticker,
@@ -1246,10 +1386,11 @@ momentum drive the score (fixed in stage 1 after the stage review).
   "审核：近期公告、新闻和定期报告未见重大风险" on the risk line; the AI note), 新 on a name new since the last report; 审核剔除 and your vetoes; then Hold and Sell, each opening with
   its 预期 line, as cards with the same fields (为什么持有, 为什么卖出; stage 5).
   US cards are named by Eastmoney's Chinese short name (美光科技), with the English name beside it.
-- Back pages: how the score and the lists are built, the three ratings, the review rules, where the words come from,
-  the 预期 details (the 10 and 5 name ranges, the overlapping portfolio's largest fall, the neutral basket's split of
-  the lead into the picks and the equal amounts with the places (stage 7), the history's limits, families running
-  against the research) and the published evidence.
+- Back pages: how the score and the lists are built, the three ratings (stage 17: Sell's rule with its sources, why
+  momentum is left out, and the buffer), the review rules, where the words come from, the 预期 details (the 10 and 5
+  name ranges, the overlapping portfolio's largest fall, the history's limits, families running against the research;
+  the neutral basket's split, here from stage 7, moved into the 预期 line itself in stage 17) and the published
+  evidence.
 - The business line (verified 2026-11-01; all 200 names of the day found, CN 72, HK 62, US 66):
   - CN: Eastmoney's F10 company table RPT_F10_BASIC_ORGINFO, MAIN_BUSINESS (主营业务, often a short list of products:
     卫星化学 "(聚)丙烯、丙烯酸及酯、乙二醇…的生产和销售"); HK: RPT_HKF10_INFO_ORGPROFILE, MAIN_BUSINESS ("主要从事保险业务");
@@ -1307,6 +1448,10 @@ momentum drive the score (fixed in stage 1 after the stage review).
   (month-end marks) against the fund's over the same months; a neutral basket (the same sector places, every name in
   the sector that can be bought, equal amounts within it) to split the 20 names' lead into the picks and the equal
   amounts with the places (BACKTEST.md section 25). It decides nothing.
+- Stage 17: each month's lists keep the month before's names within the buffer (lists.buffered), as the build keeps
+  the newest earlier report's; Sell is the live rule (lists.junk), on value and quality only, as the history has no
+  failure logit (its safety part sits at the middle); a name has one rating there too (Hold leaves out the Sell names).
+  It fills the 预期 lines and decides nothing (BACKTEST.md section 27).
 - The CN frames are point-in-time by report date but hold only companies still listed (Eastmoney drops delisted ones),
   with restated 扣非 figures; US and HK hold today's listings. So every market's numbers are flattered, and the report
   says so (corrected in stage 1: this line said CN had delisted names).
@@ -2067,6 +2212,16 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
     change and why; the family rank correlations and the buys' median profit growth against the market's, before and
     after; the history run again (BACKTEST.md section 26); pytest passes; a full `run`; the fresh-context stage review;
     status; committed.
+17. **Screening lists and words** (the method review of 2026-11-13, findings S2, S3, S4; adopted 2026-11-13). A buffer:
+    a rated name keeps its rating until it falls past 120% of its list's cut (MSCI's quality indexes, CSI's indexes),
+    against the newest earlier report's ratings (data/picks.csv); Sell as the expensive, low-quality and distressed
+    (the value and quality families and the failure logit: Novy-Marx 2013, quality minus junk, Campbell-Hilscher-
+    Szilagyi 2008) instead of the score's bottom; the 预期 line splitting the lead into the places with equal amounts
+    and the picks ("Lists", "Cards"). Not changed: the score, the screen, the sector places, equal amounts. Done when:
+    this plan has each change with its source; a week of snapshots shows each list's day-to-day turnover before and
+    after; Sell before and after on the newest snapshot with the names that change and why; Sell's history rerun
+    (BACKTEST.md section 27) with its survivor caveat; tests for the buffer and the new Sell; pytest passes; a full
+    `run`; the fresh-context stage review; status; committed.
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
 - The backtest snapshots and the stage-1 harness (index funds, costs, month-end frames).
@@ -2121,6 +2276,12 @@ horse race over the past 40 years" (JPM 2012); Jegadeesh and Livnat, "Post-earni
 revenue surprises" (FAJ 2006); Ertimur, Livnat and Martikainen, "Differential market reactions to revenue and expense
 surprises" (RAST 2003); Gu, Kelly and Xiu, "Empirical asset pricing via machine learning" (RFS 2020); Chen and McCoy,
 "Missing values handling for machine learning portfolios" (arXiv 2207.13071, 2024).
+Stage 17: MSCI Quality Indexes Methodology (May 2025, section 3.1.1, buffer rules at 20% of the fixed number of
+securities) and MSCI EM 50 Index Methodology (August 2019, section 3.1.1); CSI's index methodologies (the CSI 300's
+240/360 buffer); Novy-Marx, "The other side of value: the gross profitability premium" (JFE 2013); Asness, Frazzini and
+Pedersen, "Quality minus junk" (RAST 2019); Campbell, Hilscher and Szilagyi (JF 2008, above); Daniel and Moskowitz,
+"Momentum crashes" (JFE 2016); Green, Hand and Soliman, "Going, going, gone? The apparent demise of the accruals
+anomaly" (Management Science 2011); Shumway, "The delisting bias in CRSP data" (JF 1997).
 
 ## Decisions kept from the old plan
 - Python 3.12 + uv. The old Swift project is archived read-only at ~/Developer/EquitySignalsClawbot-legacy.
