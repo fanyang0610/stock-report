@@ -23,6 +23,39 @@ def test_cn_general_statements():
     assert fy["gp"] == pytest.approx(fy["revenue"] - fy["cogs"]) and fy["shares"] == pytest.approx(1250081601)
     assert fy["equity"] == pytest.approx(244637811032.18) and fy["ocf"] == pytest.approx(61522204989.35)
     assert df.loc[df["period"] == "2026-09-30", "months"].iloc[0] == 9
+    # the income of non-operating assets kept apart: 财务费用's interest income plus the finance subsidiary's 利息收入
+    q = df[df["period"] == "2026-09-30"].iloc[0]
+    assert q["interest_income"] == pytest.approx(402102001.51 + 2312908859.91) and q["invest_income"] == pytest.approx(230947.61)
+    assert q["nonop"] > 0 and fy["nonop"] > 0
+
+
+def test_operating_profit_without_the_income_of_non_operating_assets():
+    from stockreport.research import sheet
+    # CN (茅台, 2026 Q1-Q3, 亿元): 营业利润 889.80 - 投资收益 0.00 - 公允价值变动 1.21 - interest income 27.15 + interest 0.32
+    cn_row = {"op_income": 889.80, "pretax": 890.18, "interest": 0.32, "invest_income": 0.0, "fv_change": 1.21,
+              "interest_income": 4.02 + 23.13}
+    assert sheet.ebit("cn", cn_row) == pytest.approx(889.80 - 1.21 - 27.15 + 0.32)
+    # HK (Tencent 2025, 亿元): pretax 2772.5 + finance costs 151.3 - interest income 169.1 - associates 237.4
+    hk_row = {"op_income": 2415.6, "pretax": 2772.5, "interest": 151.3, "interest_income": 169.1, "invest_income": 237.4}
+    assert sheet.ebit("hk", hk_row) == pytest.approx(2517.3)
+    assert sheet.ebit("us", {"op_income": 104.0, "pretax": 179.0, "interest": 2.0}) == 104.0  # Amazon's gains out
+    assert sheet.ebit("cn", {"op_income": None, "pretax": 10.0, "interest": 1.0}) == 11.0  # without the lines: as before
+    years = pd.DataFrame({"op_income": [100.0, None], "pretax": [90.0, 50.0], "interest": [5.0, 2.0],
+                          "invest_income": [20.0, None], "fv_change": [None, None], "interest_income": [3.0, None]})
+    assert list(sheet.ebit("cn", years)) == [82.0, 52.0]
+    # a line empty in the latest report is zero there, not the last period's (五粮液's fair-value line)
+    st = pd.DataFrame({"period": ["2024-09-30", "2024-12-31", "2025-09-30"], "months": [9, 12, 9],
+                       "fv_change": [-7.0, -8.0, None]})
+    assert sheet.ttm(st, "fv_change", sparse=True) == pytest.approx(-1.0) and sheet.ttm(st, "fv_change") == -8.0
+
+
+def test_hk_statements_keep_associates_and_interest_income_apart():
+    rows = [{"REPORT_DATE": "2025-12-31 00:00:00", "DATE_TYPE_CODE": "001", "STD_ITEM_NAME": n, "AMOUNT": v}
+            for n, v in (("除税前溢利", 2772.5), ("融资成本", 151.3), ("利息收入", 169.1), ("应占联营公司溢利", 237.4),
+                         ("联营公司权益", 3424.1), ("合营公司权益", 63.0), ("指定以公允价值记账之金融资产", 5638.0))]
+    fy = hk.statement_rows(rows, {}).iloc[0]
+    assert fy["interest_income"] == 169.1 and fy["invest_income"] == 237.4
+    assert fy["nonop"] == pytest.approx(3487.1)  # stakes at book; fair-value assets stay out, their gains in profit
 
 
 def test_cn_bank_statements():
@@ -66,14 +99,17 @@ def test_us_statements_and_ttm():
     fy = df[df["period"] == "2026-09-26"].iloc[0]
     assert fy["revenue"] == 478834e6 and fy["ni"] == 132175e6 and fy["cur_assets"] == 173857e6
     assert fy["buyback"] == 86390e6 and fy["debt"] == pytest.approx(80111e6) and fy["eps"] == pytest.approx(8.98)
+    assert fy["nonop"] > 50e9  # its long-term marketable securities, outside cash and operating income
     latest = us.latest("AAPL", payload, date(2026, 11, 8))
     assert latest["period"] == "2026-09-26" and latest["revenue"] == 478834e6 and latest["revenue_prior"] == 416161e6
 
 
 def test_nasdaq_consensus_and_flows():
     n = json.loads((DATA / "research_nasdaq_sample.json").read_text())
-    c = us.parse_consensus(n["forecast"], n["target"], n["ratings"])
+    c = us.parse_consensus(n["forecast"], n["target"], n["ratings"], n["surprise"])
     assert c["eps"]["2027"] == pytest.approx(9.7) and c["target_mean"] == pytest.approx(340.14) and c["ratings"]["buy"] == 15
+    assert [a["quarter"] for a in c["actuals"]] == ["2026-09", "2026-06", "2026-03", "2025-12"]
+    assert sum(a["eps"] for a in c["actuals"]) == pytest.approx(8.81)
     f = us.parse_flows(n["short"], n["insider"])
     assert f["short"][0]["shares"] == 131591865 and f["insider"]["sells"] == (26, 46)
 
@@ -118,6 +154,22 @@ def test_a_20f_filer_takes_its_last_fiscal_year_as_trailing():
     assert x["period"] == "2025-12-31" and x["basis"] == "FY" and x["revenue"] == 309.1 and x["revenue_prior"] == 290.4
     assert x["ni_prior"] == 101.0 and x["capex"] == 60.1 and x["equity"] == 194.0 and x["notice"] == "2026-02-04"
     assert us.from_annual(st.iloc[:0]) == {}
+
+
+def test_a_20f_filers_trailing_twelve_months_from_yahoos_interim_figures():
+    # TSMC (TWD bn): Yahoo's trailing values at 2026-09-30; interest from four quarters, one missing: none
+    from stockreport.research import facts
+    y = json.loads((DATA / "research_yahoo_trailing_tsm_sample.json").read_text())
+    t = sources.parse_trailing(y)
+    assert t["period"] == "2026-09-30" and t["currency"] == "TWD" and t["basis"] == "TTM (Yahoo)"
+    assert t["ni"] == pytest.approx(2527.57e9, rel=1e-4) and t["revenue"] == pytest.approx(4944.82e9, rel=1e-4)
+    assert t["capex"] == pytest.approx(1651.44e9, rel=1e-4) and t["interest"] is None
+    assert t["equity"] == pytest.approx(6997.9e9, rel=1e-4) and t["shares"] == pytest.approx(25.93e9, rel=1e-3)
+    st = pd.DataFrame({"period": ["2024-12-31", "2025-12-31"], "months": [12, 12], "currency": ["TWD", "TWD"],
+                       "revenue": [2894.3e9, 3809.1e9], "ni": [1173.3e9, 1717.9e9]})
+    assert facts.trailing_or_annual(st, t) is t
+    assert facts.trailing_or_annual(st, t | {"currency": "USD"})["basis"] == "FY"  # another currency: the fiscal year
+    assert facts.trailing_or_annual(st, {})["period"] == "2025-12-31"
 
 
 def test_an_adr_counts_shares_in_its_own_units():

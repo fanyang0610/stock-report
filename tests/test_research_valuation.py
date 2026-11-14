@@ -122,35 +122,63 @@ def test_weights_pass_to_the_methods_that_ran():
 
 
 def test_forecast_paths_follow_the_consensus_then_fade():
-    # consensus EPS +10% a year for two years, no revenue consensus: revenue grows with profit and the margin holds;
-    # growth then falls in equal steps to g by year 10 and the margin reaches the own 8-year median (20%) by year 5
+    # consensus revenue and EPS +10% a year for two years: the margin holds; growth then falls in equal steps to g by
+    # year 10 and the margin reaches the own 8-year median (20%) by year 5
     f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0}}, "summary": {},
          "history": [{"ebit_margin": 0.2}] * 8}
     k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1}
-    p = value.paths(f, k, "ordinary", {"eps": [1.1, 1.21], "revenue": [None, None]}, 0.02)
+    p = value.paths(f, k, "ordinary", {"eps": [1.1, 1.21], "revenue": [110.0, 121.0], "eps0": 1.0}, 0.02)
     assert p["growth"][:2] == pytest.approx([0.1, 0.1]) and p["growth"][9] == pytest.approx(0.02)
     assert p["growth"][2] == pytest.approx(0.1 - 0.08 / 8) and p["margin"][:2] == pytest.approx([0.15, 0.15])
     assert p["margin"][2] == pytest.approx(0.15 + 0.05 / 3) and p["margin"][4:] == pytest.approx([0.2] * 6)
     assert value.paths(f, k, "loss_making", {"eps": [], "revenue": []}, 0.02)["target_margin"] == 0.1  # industry
 
 
+def test_consensus_margins_on_the_consensus_basis():
+    # adjusted consensus EPS 1.375 against 1.25 adjusted trailing (reported 1.0): operating income grows 10% with
+    # revenue, the margin holds at 15% (from reported profit it would jump to 15% x 1.375 = 20.6%); a second window
+    # past the revenue consensus ends the consensus years (NVIDIA's 79%), its profit forecast unused
+    f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0}}, "summary": {}, "history": [{"ebit_margin": 0.15}] * 8}
+    k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1, "base_growth": 0.05}
+    p = value.paths(f, k, "ordinary", {"eps": [1.375, 2.5], "revenue": [110.0, None], "eps0": 1.25}, 0.02)
+    assert p["consensus_years"] == 1 and p["margin"][:2] == pytest.approx([0.15, 0.15]) and p["growth"][1] == 0.05
+
+
+def test_trailing_eps_on_the_consensus_basis(monkeypatch):
+    from datetime import date
+    monkeypatch.setattr(value.yahoo, "load_fx", lambda: {"USD": 0.14, "TWD": 4.5})  # units per CNY
+    q = [{"quarter": m, "eps": e} for m, e in (("2025-12", 7.54), ("2026-03", 8.55), ("2026-06", 8.38), ("2026-09", 7.48))]
+    f = {"consensus": {"source": "Nasdaq", "currency": "USD", "actuals": q}, "latest": {"period": "2026-09-30"},
+         "valuation": {"ttm": {"ni": 26.3e9}}}
+    k = {"shares": 0.897e9, "currency": "USD"}
+    assert value.trailing_eps(f, k) == (pytest.approx(31.95), "Nasdaq's last four quarters")  # Lilly's, not GAAP's 29.3
+    late = f | {"latest": {"period": "2026-06-30"}}  # quarters that end after the trailing figures: the reported basis
+    assert value.trailing_eps(late, k)[0] == pytest.approx(26.3 / 0.897)
+    tsm = f | {"consensus": f["consensus"] | {"actuals": [r | {"eps": r["eps"] / 2} for r in q]}}  # USD per ADR
+    assert value.trailing_eps(tsm, k | {"currency": "TWD"})[0] == pytest.approx(31.95 / 2 * 4.5 / 0.14)
+    cn = {"consensus": {"source": "Eastmoney 研报一致预期"}, "latest": {"period": "2026-09-30"}, "valuation": {"ttm": {"ni": 10.0}}}
+    assert value.trailing_eps(cn, {"shares": 4.0})[0] == 2.5
+    assert value.month_end("2026-02") == date(2026, 2, 28)
+
+
 def test_growth_beyond_the_consensus_is_the_base_rate():
     # one revenue consensus year (+20%), profit +30% then +25%: year 2 grows revenue at the size class's median (5%),
-    # not with profit (Chan, Karceski and Lakonishok 2003), its margin following profit; years 3-5 at 5%; then down to g
+    # not with profit (Chan, Karceski and Lakonishok 2003); years 3-5 at 5%; then down to g
     f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0}}, "summary": {}, "history": [{"ebit_margin": 0.2}] * 8}
     k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1, "base_growth": 0.05}
-    p = value.paths(f, k, "ordinary", {"eps": [1.3, 1.625], "revenue": [120.0, None]}, 0.02)
+    p = value.paths(f, k, "ordinary", {"eps": [1.3, 1.625], "revenue": [120.0, None], "eps0": 1.0}, 0.02)
     assert p["growth"][:5] == pytest.approx([0.2, 0.05, 0.05, 0.05, 0.05])
     assert p["growth"][5:] == pytest.approx([0.05 - 0.03 * i / 5 for i in range(1, 6)])
-    assert p["margin"][1] == pytest.approx(15 * 1.625 / (120 * 1.05))  # operating income grows with profit
+    m1 = 15 * 1.3 / 120  # operating income grows with profit in the consensus year, then moves to the median
+    assert p["margin"][:2] == pytest.approx([m1, m1 + (0.2 - m1) / 4])
 
 
 def test_sales_growth_keeps_its_measured_share_and_established_margins_stay():
-    # persistence 0.2: year 2 (no revenue consensus) 5% + 0.2 x (20% - 5%) = 8%, years 3-5 5% + 0.2 x 3% = 5.6%
+    # persistence 0.2: years 2-5 (past the revenue consensus) 5% + 0.2 x (20% - 5%) = 8%
     f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0}}, "summary": {}, "history": [{"ebit_margin": 0.06}] * 8}
     k = {"ebit": 6.0, "shares": 10.0, "ind_margin": 0.1, "mature_margin": 0.085, "base_growth": 0.05, "growth_persistence": 0.2}
     p = value.paths(f, k, "fast_grower", {"eps": [1.3, 1.625], "revenue": [120.0, None]}, 0.02)
-    assert p["growth"][:5] == pytest.approx([0.2, 0.08, 0.056, 0.056, 0.056])
+    assert p["growth"][:5] == pytest.approx([0.2, 0.08, 0.08, 0.08, 0.08])
     assert p["target_margin"] == 0.06  # profitable every year: its own margin, not mature peers'
     young = f | {"history": [{"ebit_margin": -0.01}] + [{"ebit_margin": 0.06}] * 7}
     assert value.paths(young, k, "fast_grower", {"eps": [], "revenue": []}, 0.02)["target_margin"] == 0.085

@@ -17,7 +17,7 @@ them into the target, the scenarios and the rating. Every choice below is a publ
 
 import math
 import re
-from datetime import date
+from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
@@ -83,7 +83,7 @@ def inputs(f: dict) -> dict:
     mcap, debt = v["market_cap_report"], 0.0 if fin else (b["debt"] or 0.0)
     beta = ind["beta"] if fin else dcf.relever(ind["unlevered_beta_cash"], debt / mcap, tax_m)
     coe = dcf.capm(rf, beta, c["erp"])
-    ebit = sheet.ebit(market, t["pretax"], t["interest"], t.get("op_income"))
+    ebit = sheet.ebit(market, t)
     cover = ebit / t["interest"] if ebit is not None and (t["interest"] or 0) > 0 else None
     fx = yahoo.load_fx()
     table = "financial" if fin else "large" if convert(fx, mcap, cur, "USD") >= LARGE_USD else "smaller"
@@ -105,6 +105,7 @@ def inputs(f: dict) -> dict:
             "market_return_listing": rf_list + damodaran.country(COUNTRY[market])["erp"],
             "ind_margin": ind.get("op_margin"), "ind_sales_to_capital": ind.get("sales_to_capital"),
             "debt": debt, "cash": 0.0 if fin else (b["cash"] or 0.0), "minority": b["minority"] or 0.0,
+            "nonop": 0.0 if fin else (b.get("nonop") or 0.0),
             "shares": v["shares"], "fx": v["fx_quote_to_report"], "ebit": ebit}
 
 
@@ -190,6 +191,33 @@ def forward(by_year: dict, fy_month: int, today: date, offset: int) -> float | N
     return total if months == 12 else None
 
 
+def month_end(label: str) -> date:
+    """The last day of a "YYYY-MM" or "YYYY-MM-DD" quarter label's month."""
+    y, m = int(label[:4]), int(label[5:7])
+    return date(y + m // 12, m % 12 + 1, 1) - timedelta(days=1)
+
+
+def trailing_eps(f: dict, k: dict) -> tuple[float | None, str]:
+    """The last twelve months' EPS on the consensus's own basis, in the reporting currency, so the consensus years
+    grow from the figure they are forecast against. Nasdaq's (Zacks's) and Yahoo's consensus are mostly the companies'
+    adjusted figures (Lilly's leave out acquired research and amortization, NVIDIA's and Amazon's their stakes' gains):
+    the source's own four latest quarters, when they end with the trailing figures (within 20 days: 52-53-week years).
+    Eastmoney's 研报一致预期 forecasts reported profit to shareholders (归母净利润) per share: the trailing profit.
+    Without either, the trailing reported profit, said."""
+    c, v = f["consensus"], f["valuation"]
+    reported = v["ttm"]["ni"] / k["shares"] if v["ttm"].get("ni") is not None else None
+    if c["source"].startswith("Eastmoney"):
+        return reported, "reported (归母净利润 per share, the consensus's own basis)"
+    rows = ([(r["quarter"], r["eps"]) for r in c.get("actuals") or []] if c["source"] == "Nasdaq" else
+            [(r["quarter"], r.get("actual")) for r in c.get("surprises") or [] if r.get("quarter")])
+    rows = sorted(rows)[-4:]
+    end = date.fromisoformat(f["latest"]["period"])
+    if len(rows) == 4 and all(e is not None for _, e in rows) and abs((month_end(rows[-1][0]) - end).days) <= 20 \
+            and 250 <= (month_end(rows[-1][0]) - month_end(rows[0][0])).days <= 290:
+        return convert(yahoo.load_fx(), sum(e for _, e in rows), c["currency"], k["currency"]), f"{c['source']}'s last four quarters"
+    return reported, "reported (no trailing figures on the consensus's own basis)"
+
+
 def consensus_years(f: dict, k: dict, today: date) -> dict:
     """The consensus in the reporting currency: EPS and (Yahoo's) revenue over the two 12-month windows after the
     trailing figures end (PLAN.md: years 1-2; their growth is then a true 12 months'), the next 12 months from today
@@ -201,8 +229,9 @@ def consensus_years(f: dict, k: dict, today: date) -> dict:
            for y, d in yy.items() if d.get("revenue")}
     end = date.fromisoformat(f["latest"]["period"])
     base = date(end.year + end.month // 12, end.month % 12 + 1, 1)
+    eps0, basis = trailing_eps(f, k)
     out = {"eps": [], "revenue": [], "from": base.isoformat(), "ntm_eps": forward(eps, fy_month, today, 0),
-           "ntm_revenue": forward(rev, fy_month, today, 0)}
+           "ntm_revenue": forward(rev, fy_month, today, 0), "eps0": eps0, "eps0_basis": basis}
     for i in range(2):
         e = forward(eps, fy_month, base, 12 * i)
         if e is None:
@@ -221,9 +250,11 @@ def consensus_years(f: dict, k: dict, today: date) -> dict:
 
 
 def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
-    """Ten years of revenue growth and margins: the consensus years first (revenue from Yahoo's revenue consensus;
-    operating income moving with the consensus profit), then the margin moving to its target by year 5 (the Ginzu's
-    default). Beyond the analysts' revenue forecasts, growth is the base rate (k["base_growth"]: the median 5-year
+    """Ten years of revenue growth and margins: the consensus years first, each a 12-month window both the revenue
+    consensus (Yahoo's) and the profit consensus cover (a margin needs both: a window past the revenue forecasts ends
+    them, where NVIDIA's second year put 50% more profit on base-rate revenue, a 79% margin), its operating income the
+    trailing one (stock-based pay a cost) grown as the consensus EPS grows from the trailing EPS on its own basis
+    (trailing_eps); then the margin moving to its target by year 5 (the Ginzu's default). Beyond the analysts' revenue forecasts, growth is the base rate (k["base_growth"]: the median 5-year
     revenue growth of companies of the same size, Mauboussin's base rates) plus the share of the last year's excess over
     it that sales growth keeps (k["growth_persistence"], measured in the market's own history: Chan, Karceski and
     Lakonishok 2003 find sales growth persists in part and profit growth not beyond chance), to year 5, then falls in
@@ -235,24 +266,16 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     the rest their own 8-year median. With no consensus: the
     3-year revenue trend, faded."""
     t, s = f["valuation"]["ttm"], f["summary"]
-    rev0, ni0, ebit0, shares = t["revenue"], t["ni"], k["ebit"], k["shares"]
-    pre = None if t.get("pretax") is None else t["pretax"] + (t.get("interest") or 0)
-    if ni0 and ebit0 and pre and pre > 0 and ebit0 != pre:  # profit on the same operating basis as ebit0 (sheet.ebit):
-        ni0 = ni0 * ebit0 / pre  # Amazon's trailing profit carries its stake's gains, its consensus years hardly any
+    rev0, ebit0, eps0 = t["revenue"], k["ebit"], cons.get("eps0")
     m0, base, keep = ebit0 / rev0, k.get("base_growth"), k.get("growth_persistence") or 0.0
     after = lambda g: base + keep * (g - base)  # a year beyond the revenue consensus
-    growth, margin, prev_r, prev_e = [], [], rev0, (ni0 / shares if ni0 else None)
+    growth, margin, prev_r = [], [], rev0
     for e, r in zip(cons["eps"], cons["revenue"]):
-        pg = e / prev_e - 1 if prev_e and prev_e > 0 and e > 0 else None
-        last = growth[-1] if growth else s.get("rev_cagr_3y")
-        rg = r / prev_r - 1 if r and prev_r > 0 else (after(last) if last is not None else base) if base is not None \
-            else pg  # profit growth isn't revenue's
-        if rg is None:
+        if not r or prev_r <= 0:  # a margin needs the revenue and the profit of the same 12 months
             break
-        growth.append(rg)
-        level = rev0 * math.prod(1 + g for g in growth)
-        margin.append(ebit0 * (e * shares / ni0) / level if ni0 and ni0 > 0 and e > 0 else m0)
-        prev_r, prev_e = r or level, e
+        growth.append(r / prev_r - 1)
+        margin.append(ebit0 * e / eps0 / r if eps0 and eps0 > 0 and e > 0 else m0)
+        prev_r = r
     if not growth:
         growth = [s.get("rev_cagr_3y") or s.get("rev_cagr_5y") or g_term]
         margin = [m0]
@@ -302,7 +325,7 @@ def dcf_value(f: dict, k: dict, path: dict, s2c: float, roic_term: float, cost_s
     res = dcf.fcff(f["valuation"]["ttm"]["revenue"], path["growth"], path["margin"],
                    dcf.steps(k["tax_effective"], k["tax_marginal"]), [s2c] * dcf.YEARS, cost, g,
                    k["stable_cost"] + cost_shift, max(roic_term + cost_shift, k["stable_cost"] + cost_shift), k["tax_marginal"])
-    equity = dcf.equity_value(res["operating"], k["debt"], k["minority"], k["cash"])
+    equity = dcf.equity_value(res["operating"], k["debt"], k["minority"], k["cash"], k["nonop"])
     return equity / k["shares"] / k["fx"], res
 
 

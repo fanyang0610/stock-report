@@ -25,7 +25,12 @@ ITEMS = {
     "lt_debt": [["长期贷款"], ["应付票据(非流动)"]], "equity": ["股东权益", "归属于母公司股东权益"],
     "pref": [["优先股"], ["永久资本证券", "永续资本证券", "其他权益工具"]],
     "minority": ["少数股东权益", "非控股股东权益"], "retained": ["保留溢利(累计亏损)"],
-    "contract_liab": [["合约负债"], ["递延收入(流动)"]], "cip": ["在建工程"]}
+    "contract_liab": [["合约负债"], ["递延收入(流动)"]], "cip": ["在建工程"],
+    # the income of stakes and cash, outside operating profit (sheet.ebit), and the stakes at book; a fair-value change
+    # has no line of its own (Tencent's sits in 其他收益 with its investments' gains, BYD Electronic's 其他收益 is
+    # mostly operating), so financial assets at fair value stay out of the bridge as their gains stay in profit
+    "interest_income": ["利息收入"], "invest_income": [["应占联营公司溢利"], ["应占合营公司溢利"]],
+    "nonop": [["联营公司权益"], ["合营公司权益"]]}
 DATE_TYPES = {"001": 12, "002": 6, "003": 3, "004": 9}  # annual, interim, and quarterly reporters' Q1 and Q3 (year to date)
 
 

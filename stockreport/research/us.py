@@ -53,7 +53,17 @@ EXTRA_INSTANT = {
     "minority": (["MinorityInterest"], ["NoncontrollingInterests"]),
     "contract_liab": (["ContractWithCustomerLiabilityCurrent", "ContractWithCustomerLiability", "DeferredRevenueCurrent"],
                       ["CurrentContractLiabilities", "ContractLiabilities"]),
+    # non-operating stakes and long-term investments at book (their income is outside operating income, which is the
+    # DCF's EBIT): the total where tagged, else its parts (Amazon's private stakes, Apple's long-term securities)
+    "lt_invest": (["LongTermInvestments"], []),
+    "inv_equity": (["EquityMethodInvestments"], ["InvestmentsAccountedForUsingEquityMethod",
+                                                 "InvestmentsInAssociatesAccountedForUsingEquityMethod"]),
+    "inv_securities": (["MarketableSecuritiesNoncurrent", "AvailableForSaleSecuritiesDebtSecuritiesNoncurrent"],
+                       ["OtherNoncurrentFinancialAssets"]),
+    "inv_private": (["EquitySecuritiesWithoutReadilyDeterminableFairValueAmount"], []),
+    "inv_other": (["OtherLongTermInvestments", "EquitySecuritiesFvNiNoncurrent"], []),
 }
+INVEST_PARTS = ("inv_equity", "inv_securities", "inv_private", "inv_other")
 
 
 def parse_statements(code: str, payload: dict) -> pd.DataFrame:
@@ -84,6 +94,8 @@ def parse_statements(code: str, payload: dict) -> pd.DataFrame:
         parts = ("debt_total", "st_borrow") if row["debt_total"] is not None else ("lt_debt", "st_debt", "st_borrow")
         debts = [row[k] for k in parts if row[k] is not None]
         row["debt"] = sum(debts) if debts else None
+        parts = [row[k] for k in INVEST_PARTS if row[k] is not None]
+        row["nonop"] = row["lt_invest"] if row["lt_invest"] is not None else sum(parts) if parts else None
         rows.append(row)
     return pd.DataFrame(rows).reindex(columns=STATEMENT).sort_values("period").reset_index(drop=True)
 
@@ -134,9 +146,13 @@ def data(http: Http, path: str) -> dict:
     return http.get("https://api.nasdaq.com/api/" + path, params={"assetclass": "stocks"}).json().get("data") or {}
 
 
-def parse_consensus(forecast: dict, target: dict, ratings: dict) -> dict:
-    """Nasdaq: EPS by fiscal year (the year it ends in) with the estimate count, the consensus target and range, and
-    the buy / hold / sell counts behind it."""
+def parse_consensus(forecast: dict, target: dict, ratings: dict, surprise: dict | None = None) -> dict:
+    """Nasdaq: EPS by fiscal year (the year it ends in) with the estimate count, the consensus target and range, the
+    buy / hold / sell counts behind it, and the last four quarters' reported EPS on the consensus's own basis (Zacks's:
+    before items it deems non-recurring, mostly the companies' adjusted figures; Snowflake's are GAAP), which
+    value.consensus_years measures the consensus's growth from."""
+    actual = [{"quarter": datetime.strptime(r["fiscalQtrEnd"], "%b %Y").strftime("%Y-%m"), "eps": num(r.get("eps"))}
+              for r in ((surprise or {}).get("earningsSurpriseTable") or {}).get("rows") or []]
     rows = (forecast.get("yearlyForecast") or {}).get("rows") or []
     eps = {str(datetime.strptime(r["fiscalEnd"], "%b %Y").year): num(r.get("consensusEPSForecast")) for r in rows}
     count = {str(datetime.strptime(r["fiscalEnd"], "%b %Y").year): num(r.get("noOfEstimates")) for r in rows}
@@ -144,13 +160,18 @@ def parse_consensus(forecast: dict, target: dict, ratings: dict) -> dict:
     return {"source": "Nasdaq", "eps": eps, "estimates": count, "analysts": max(count.values(), default=None),
             "target_mean": num(ov.get("priceTarget")), "target_low": num(ov.get("lowPriceTarget")),
             "target_high": num(ov.get("highPriceTarget")),
-            "ratings": {k: num(ov.get(k)) for k in ("buy", "hold", "sell")}, "rating": ratings.get("meanRatingType")}
+            "ratings": {k: num(ov.get(k)) for k in ("buy", "hold", "sell")}, "rating": ratings.get("meanRatingType"),
+            "actuals": actual}
 
 
 def consensus(code: str) -> dict:
     http, sym = nasdaq(), code.replace(".", "-")
+    try:
+        surprise = data(http, f"company/{sym}/earnings-surprise")
+    except RuntimeError:  # without it the consensus stands, its basis unmeasured (value.consensus_years says so)
+        surprise = {}
     return parse_consensus(data(http, f"analyst/{sym}/earnings-forecast"), data(http, f"analyst/{sym}/targetprice"),
-                           data(http, f"analyst/{sym}/ratings"))
+                           data(http, f"analyst/{sym}/ratings"), surprise)
 
 
 def parse_flows(short: dict, insider: dict) -> dict:

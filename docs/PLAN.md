@@ -752,6 +752,68 @@
   it is in HKEXnews' inactive list and not in HKEX's List of Securities since HSBC took it private, so the router
   can't take it. No search page was full (5 rows at most of 20). A parser test on the saved search rows of Meituan,
   BYD, Tencent Music and Tencent; 266 tests. The stage review found no blocker.
+- Stage 13 (research inputs on one basis; the review of 2026-11-13, R5): done 2026-11-14. Three faults, each found
+  per source before the fix:
+  - The consensus years' margins. Two causes. (1) The basis: Nasdaq's (Zacks's) consensus is mostly the companies'
+    adjusted EPS and was grown from GAAP trailing profit; Zacks's own last four quarters differ from GAAP by -42%
+    (Amazon, its Anthropic gains out) to +9% (Lilly) and -14% (NVIDIA, its stakes' gains out); Yahoo's (HK) likewise
+    (Tencent's 29.34 against 25.90 reported); Eastmoney's 研报一致预期 is reported 归母 profit, the trailing basis
+    already. Now the operating income grows as the consensus EPS grows from the trailing EPS on the source's own basis
+    (value.trailing_eps: the source's four quarters ending with the trailing figures, Nasdaq's earnings-surprise
+    table, else Yahoo's earnings history, else the reported profit, said); stock-based pay stays a cost, in the
+    trailing operating income. It replaces the 2026-11-12 rescaling of trailing profit by operating over pretax
+    profit, which would have turned wrong for CN once its operating profit leaves out investment income. (2) The
+    window: Yahoo's revenue consensus covers this and next fiscal year, so a second 12-month window from a mid-year
+    trailing end had the consensus profit on base-rate revenue (NVIDIA 79%, Lilly 60%). A consensus year now needs
+    both forecasts for the same 12 months: one year for most (trailing figures ending at a third quarter), two where
+    they end at a fiscal year (Apple, Micron). Growth past it is the base rate plus the kept share of the last
+    consensus year's excess, to year 5, as "Forecast" says; the extra model year had taken that share twice.
+  - A 20-F filer's trailing twelve months (us.from_annual took the last fiscal year): now Yahoo's trailing values to
+    the latest quarter, else its four quarters (sources.parse_trailing; the 6-Ks' results), as the screening counts
+    them, when they end after the last fiscal year in the statements' currency (facts.trailing_or_annual;
+    crosscheck.ttm_from_second says so); else the fiscal year as before. TSMC's P/E 40.8 -> 27.4 (the screening's
+    27.41), its consensus years start in October 2026; Alibaba's US line 14.8 -> 21.3 (twelve months to June 2026);
+    Novo Nordisk 11.9 -> 10.7.
+  - Operating profit and the equity bridge ("Valuation and target price"). Checked first what Eastmoney's tables
+    carry. CN general layout, every company tried (茅台, 五粮液, 比亚迪, 神华, 恒瑞, 君实, 百济, 2017 and 2026): 投资收益,
+    公允价值变动收益, 财务费用's 利息收入 and 利息费用, a finance subsidiary's 利息收入 (茅台), and the balance's 长期股权投资,
+    其他权益工具投资, 其他非流动金融资产, 债权投资, 其他债权投资 (可供出售, 持有至到期 before 2019); all set apart. Banks',
+    insurers' and brokers' layouts carry investment income as their business: not set apart (in HK too; their
+    operating profit, which their book-equity valuation doesn't use, is now 营业利润 plus interest, 0.1-1.3% off). HK (腾讯, 比亚迪电子,
+    中国平安, 港交所, 中电, 1167): 利息收入, 融资成本, 应占联营/合营公司溢利 and 联营/合营公司权益 are lines; a fair-value
+    change isn't (腾讯's 其他收益 holds its investments' gains, 比亚迪电子's is mostly operating, 16.7bn of its 39.1bn
+    operating profit), so HK takes out interest income and associates' share, adds the associates at book, and leaves
+    financial assets at fair value out of the bridge while their gains stay in profit (stated: 腾讯's CNY 564bn
+    portfolio at fair value is valued only through those gains). US: operating income was already the EBIT
+    (2026-11-12), but nothing was in the bridge; now SEC's long-term investments (else equity-method stakes,
+    long-term marketable securities, private stakes, other long-term investments) at book: Apple 80.2bn, Alibaba
+    CNY 332bn. `dcf.equity_value`'s `nonop` is fed; EV/EBIT's EV leaves the same assets out.
+  - Not changed, stated: the US bridge is the last annual report's (Amazon's private stakes 16.9bn at December 2025
+    against 143.7bn in its September 10-Q; a 20-F filer's debt and cash too, against its trailing figures to the
+    latest quarter: TSMC's December 2025 balance); a 20-F filer's year-on-year lines are empty where Yahoo keeps no
+    trailing figures a year back (TSMC); a US filer without reported operating income falls back to pretax profit,
+    which would carry the stakes' gains the bridge also adds (none of the 13); a CN company's wealth products in 其他流动资产 earn 投资收益 now set apart, but
+    the asset isn't separable from the line; the multiples' P/E (own GAAP history) is still applied to the
+    consensus's own-basis EPS, a mix for stage 15's "one main method per type".
+  - Before / after on the 25 cached companies, the same prices and consensus (only the new fields fetched; Nasdaq's
+    surprise tables, Yahoo's trailing figures, Eastmoney's new lines). One rating changes: TSMC 持有 -> 买入 (fair value
+    637 -> 661, its excess +55% against a 50% band; the trailing year to September). The large moves: NVIDIA's DCF
+    +48% (175 -> 258, fair value +16%, 持有): its second year was a model year at 79%, now growth 24% a year to
+    year 5 from its one consensus year's 82%; Palantir +24% and Snowflake +34% (both 卖出) the same way; 腾讯 -12% (624
+    -> 552, 买入): operating profit 303 -> 278bn without associates' share and interest income, associates at book
+    +330bn, consensus growth from Yahoo's own trailing EPS (first-year margin 32% where it was 40%). The rest move
+    6.4% or less (Alibaba's DCF +6.4%). Consensus-year margins above the company's 10-year best, each with its reason: at or below the trailing
+    margin (NVIDIA 65/62, Palantir 43/32, TSMC 55/51, 百济 20/-16: its first profitable year), or both forecasts imply
+    it (Apple 34/33 in its second year: EPS +10% on revenue +8%; Lilly 50/41: EPS +47% on revenue +19%; Micron 84 and 88/75: EPS +133% on revenue +107% in its
+    upcycle; Amazon 16/11: EPS +38% on revenue +16%). 百济's P/E 101 -> 68 is its third-quarter report, fetched
+    with the statements, not a rule.
+  - Tests: the consensus basis and the window rule, the trailing EPS per source, the CN, HK and US operating profit,
+    the CN and HK parsers' new lines (Moutai's and Tencent's), Apple's long-term securities, Nasdaq's surprise table
+    and TSMC's Yahoo trailing figures on saved samples; the sales-growth test now takes the share once. 272 pass.
+  - The fresh-context stage review (one, on Sonnet) found no number from DeepSeek and no rule for one name. Fixed
+    from it: a CN or HK line a report leaves empty (五粮液's 公允价值变动收益 since 2024) took the last period that had
+    one in the trailing twelve months; such a line is now zero that period (sheet.ttm's sparse lines). Corrected in
+    this entry: financial firms' operating profit, Alibaba's move, Apple's reason, the 20-F balance date.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1480,8 +1542,8 @@ and the target price are code's: DeepSeek is told them and can't change them.
 
 The exact tests, fixed in stage 10 (research/value.kind_of), tried in this order: the listing type and industry (bank,
 insurer, broker, REIT); pre-revenue: HKEX's "-B" (chapter 18A biotech; STAR's "-U" where a name keeps it, but CNINFO's
-names drop it) or operating costs over twice the revenue; loss-making: an operating loss (pretax profit + interest
-expense) over the last twelve months; holding: Damodaran's "Diversified"; cyclical: Damodaran's Materials or Energy
+names drop it) or operating costs over twice the revenue; loss-making: an operating loss (operating profit as "Valuation
+and target price" defines it per market) over the last twelve months; holding: Damodaran's "Diversified"; cyclical: Damodaran's Materials or Energy
 sector, or his Semiconductor, Semiconductor Equip, Shipbuilding & Marine and Transportation industries (the plan's
 materials, chemicals, energy, shipping, memory chips), with an operating margin whose worst of the last 10 years fell
 below half its median (a downturn that halved margins; no published cut-off was found, so "half" is code's reading of
@@ -1495,7 +1557,13 @@ ordinary. The 60% is also a judgement of "most of its profit".
 #### Forecast (code)
 - Years 1-2: the consensus (revenue and EPS), the best free forecast at that horizon and known to run optimistic, its
   long-term growth more so (La Porta 1996; Chan, Karceski and Lakonishok 2003). With no consensus (small caps), the
-  company's own trend faded toward the market's base rate.
+  company's own trend faded toward the market's base rate. Since stage 13: a consensus year is a 12-month window from
+  the trailing figures' end that both the revenue consensus (Yahoo's, this and next fiscal year) and the EPS
+  consensus cover, since a margin needs both; for a company whose trailing figures end mid-year that is one year.
+  Its operating income is the trailing one (stock-based pay a cost, as every later year) grown as the consensus EPS
+  grows from the trailing EPS on the consensus's own basis: the source's last four reported quarters (Nasdaq's, i.e.
+  Zacks's, mostly the companies' adjusted figures; Yahoo's for HK), Eastmoney's reported 归母 profit per share for CN
+  (value.trailing_eps).
 - Years 3-10: growth fades to the long-run rate, no higher than the risk-free rate (Damodaran); margins move from
   today's toward the company's own 8-year median (mature) or the industry's (young or loss-making); reinvestment by its
   sales-to-capital ratio. Since 2026-11-12 (your gap check, below): beyond the analysts' revenue forecasts, growth is
@@ -1507,8 +1575,9 @@ ordinary. The 60% is also a judgement of "most of its profit".
   for large firms); the share is measured in each market's own history (rating.persistence: the slope of the next 5
   years' revenue growth above the size fifth's median on the past 3 years', over the deciles' medians): CN 0.09, HK
   0.03, US 0.22, so a 20-point excess keeps 2, 0.6 and 4 points. Before, the last consensus year's growth faded over
-  eight years (比亚迪 near 20% for years). A year without a revenue consensus grows the same way from the year before,
-  not with the consensus profit (profit growth from a margin recovery isn't revenue growth). The margin: a fast grower
+  eight years (比亚迪 near 20% for years). Past the revenue consensus, revenue grows that way from the last consensus
+  year, not with the consensus profit (profit growth from a margin recovery isn't revenue growth), and the margin
+  moves from the last consensus year's to its target. The margin: a fast grower
   keeps its own median when it has the 5 years any company needs for that and none was a loss (an established margin);
   only a fast grower with a loss year takes mature peers', as the young do (2026-11-12: 比亚迪, with 10 profitable years
   at 3.0-7.5%, took 8.5% from the auto sector's profitable members, mostly parts makers, as its 乘用车 industry has 7
@@ -1528,6 +1597,18 @@ ordinary. The 60% is also a judgement of "most of its profit".
   relevered for the company's debt; debt cost from the interest-cover rating table; the long-run return on capital
   fades to the cost of capital, except that a company whose returns stayed above it through its whole history keeps
   part of that edge (Morningstar's quantitative moat idea, measured from data).
+- Operating profit (sheet.ebit; since stage 13 on one basis with the equity bridge, Damodaran's treatment of
+  non-operating assets: their income out of EBIT, the assets at book in the bridge, cash apart). US filers: the
+  operating income they report (SEC's OperatingIncomeLoss), with long-term investments at book (SEC's
+  LongTermInvestments, else equity-method stakes, long-term marketable securities, private stakes and other long-term
+  investments). CN general companies: 营业利润 less 投资收益, 公允价值变动收益 and interest income (财务费用's and a
+  finance subsidiary's 利息收入), plus interest expense, with 长期股权投资, 其他权益工具投资, 其他非流动金融资产,
+  债权投资 and 其他债权投资 (可供出售 and 持有至到期 before 2019) at book; 交易性金融资产 count as cash. HK: pretax
+  profit plus finance costs less interest income and the share of associates' and joint ventures' profit, with those
+  stakes at book; a fair-value change has no line of its own in Eastmoney's HK tables (Tencent's sits in 其他收益
+  with its investments' disposal gains; BYD Electronic's 其他收益 is mostly operating), so financial assets at fair
+  value stay out of the bridge while their gains stay in profit. Banks, insurers and brokers: their investments are
+  their business, unchanged. EV/EBIT's EV leaves the same assets out.
 - Multiples: P/E, EV/EBIT, P/B or P/S as the type uses, against the stock's own 5-10-year range and its peers' median,
   applied to next year's consensus.
 - The fair value: the methods weighted as the type says, a year from now (an absolute method's value rolled forward 12
@@ -1933,6 +2014,13 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
     `track`'s section; README. Done when: ~40 test messages route correctly with DeepSeek mocked and once live
     (Chinese, English, Japanese, codes, partial names, typos, A+H, vague, unsupported, two names); the stage review;
     then, with your OK (rule 9), the listener is restarted and one test round-trip goes out; status; committed.
+13. **Research inputs on one basis** (docs/REVIEW-2026-11-13.md, finding R5; adopted 2026-11-13; done 2026-11-14,
+    Status). The consensus years' margins on the earnings basis the consensus is forecast on; a 20-F filer's trailing
+    twelve months from the second source's interim figures; operating profit without the income of non-operating
+    assets, the assets at book in the equity bridge, in every market where the tables carry the lines. Done when: no
+    consensus-year margin above the company's 10-year best without a stated reason; TSMC's research and screening P/E
+    within 5%; the 25 cached companies rebuilt with a before/after table; a test per parser or formula change.
+    Stages 14-17 of the review file are proposals until you adopt each.
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
 - The backtest snapshots and the stage-1 harness (index funds, costs, month-end frames).
