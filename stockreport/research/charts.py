@@ -98,9 +98,10 @@ def history(rows: list[dict], kind: str) -> str:
 
 
 def football(val: dict, names: dict) -> str:
-    """Each method's value a year from now as a bar, the fair value's bear to bull as a band, the price, the fair value,
-    the 12-month target and the street's target as lines."""
-    rows = [(names[m], val["methods"][m]["target"], w) for m, w in val["weights"].items()]
+    """Each method's value a year from now as a bar (the main one first, then the cross-checks), the fair value's bear to
+    bull as a band, the price, the fair value, the 12-month target and the street's target as lines."""
+    rows = [(names[val["main"]], val["methods"][val["main"]]["target"], "主要方法")]
+    rows += [(names[x["method"]], x["target"], "交叉检验") for x in val.get("cross") or []]
     rows += [("悲观 — 乐观情景", None, None)]
     fair, lo, hi_ = (val.get(f"fair_{a}") or val[b] for a, b in (("value", "target"), ("bear", "bear"), ("bull", "bull")))
     marks = [val["price"], val["target"], fair, lo, hi_] + [r[1] for r in rows if r[1] is not None]
@@ -111,7 +112,7 @@ def football(val: dict, names: dict) -> str:
     body = ""
     for i, (label, t, w) in enumerate(rows):
         yy = PAD[1] + 10 + i * 26
-        body += f'<text x="{LABEL - 6}" y="{yy + 13}" text-anchor="end" fill="{INK}">{escape(label)}{f"（{w:.0%}）" if w else ""}</text>'
+        body += f'<text x="{LABEL - 6}" y="{yy + 13}" text-anchor="end" fill="{INK}">{escape(label)}{f"（{w}）" if w else ""}</text>'
         if t is not None:
             body += (f'<rect x="{LABEL}" y="{yy}" width="{max(x(t) - LABEL, 1):.1f}" height="18" fill="#c7d2fe"/>'
                      f'<text x="{x(t) + 4:.1f}" y="{yy + 13}" fill="{INK}">{t:,.0f}</text>')

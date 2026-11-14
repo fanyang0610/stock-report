@@ -3,15 +3,20 @@ valuation method's value per share, from the fact sheet and Damodaran's data (PL
 them into the target, the scenarios and the rating. Every choice below is a published default, cited where it is made:
 - Rates are in the reporting currency (the cash flows' currency, so r and g are in one currency): its government's
   10-year yield (ChinaBond, US Treasury, HK government bond; other currencies: the US yield, said).
-- Equity risk premium: Damodaran's for the company's country (his company list); the benchmark's expected return is
-  the listing market's premium over the reporting currency's yield (the currency the target grows in). Beta: his industry's unlevered beta corrected for cash, from the US table for
-  US companies and the global table for the rest (his practice and the Ginzu's "Industry (Global)"; his China-region
-  averages give the whole market a beta of 1.75), relevered at the company's market debt to equity with the statutory
-  tax rate; banks, insurers and brokers use the industry's levered beta (debt is their raw material).
+- Cost of equity (stage 15): the reporting currency's yield plus the listing market's implied premium (research/
+  market.py: the return at which the market's members are worth their price under this model's own cash-flow rules,
+  less the yield) plus Damodaran's country risk premium for the company's country (his company list) over the listing
+  market's, at a beta of 1: the stock's implied return is set against its market's (firm-level implied returns predict
+  returns, Lee, So and Wang 2021; beta doesn't sort them, Fama and French 1992, Frazzini and Pedersen 2014). The
+  benchmark's expected return is the listing market's premium over the reporting currency's yield (the currency the
+  target grows in). The absolute view keeps the pre-stage-15 rates: CAPM with Damodaran's published premium and his
+  industry's unlevered beta corrected for cash (the US table for US companies, the global table for the rest; his
+  China-region averages give the whole market a beta of 1.75), relevered at the company's market debt to equity with
+  the statutory tax rate; banks, insurers and brokers the industry's levered beta (debt is their raw material).
 - Debt cost: the yield plus the default spread of the synthetic rating from interest cover (his large-firm table above
   USD 5bn of market value, else the smaller-firm one).
-- Stable period (the simple Ginzu's defaults, stage 14's three stages): the cost of capital of a mature company
-  (yield + the mature-market premium); growth at the yield (Damodaran's cap), lower only where the terminal value
+- Stable period (the simple Ginzu's defaults, stage 14's three stages): the cost of capital at a beta of 1 (yield +
+  the premium, its country risk kept: the market's aggregate is valued the same way); growth at the yield (Damodaran's cap), lower only where the terminal value
   fails the sensitivity test (dcf.tested_growth); the return on new capital above its cost for the years a graded
   moat gives (moat: how long and how far the return beat its cost, the market's measured fade, at most Morningstar's
   15-year stage II), then equal to it."""
@@ -38,20 +43,19 @@ STAGE2 = 15  # Morningstar's longest stage II (excess returns fading to the cost
 CONVERGENCE = 5  # the simple Ginzu's default year of margin convergence
 CYCLICAL_SECTORS = {"Materials", "Energy"}  # with these industries: the plan's materials, energy, chemicals, shipping, memory
 CYCLICAL_INDUSTRIES = {"Semiconductor", "Semiconductor Equip", "Shipbuilding & Marine", "Transportation"}
-FLOOR = {"markets": {"cn", "hk"}, "kinds": {"bank", "insurer"}, "peers": 5}  # your decision of 2026-11-09
 PRE_REVENUE = re.compile(r"-[A-Z]*[UB][A-Z]*$")  # HKEX "-B" (chapter 18A biotech), STAR "-U" where a name keeps it (CNINFO drops it)
-WEIGHTS = {  # PLAN.md's type table
-    "ordinary": {"dcf": .5, "pe_own": .25, "pe_peers": .25},
-    "fast_grower": {"dcf": .6, "evs_peers": .2, "peg_peers": .2},
-    "loss_making": {"dcf": .5, "evs_peers": .5},
-    "cyclical": {"dcf_normal": 1 / 3, "pe_normal": 1 / 3, "pb_roe": 1 / 3},
-    "income": {"ddm": .5, "dcf": .25, "yield_own": .25},
-    "reit": {"ddm": .5, "yield_own": .5},
-    "bank": {"excess_return": .5, "pb_own": .5},
-    "insurer": {"excess_return": .5, "pb_own": .5},
-    "broker": {"pb_roe": .5, "pb_own": .5},
-    "holding": {"dcf": .5, "pb_own": .5},
-    "pre_revenue": {},
+METHODS = {  # PLAN.md's type table: the main method first (the fair value), then the cross-checks
+    "ordinary": ["dcf", "pe_own", "pe_peers"],
+    "fast_grower": ["dcf", "evs_peers", "peg_peers"],
+    "loss_making": ["dcf", "evs_peers"],
+    "cyclical": ["dcf_normal", "pe_normal", "pb_roe"],
+    "income": ["ddm", "dcf", "yield_own"],
+    "reit": ["ddm", "yield_own"],
+    "bank": ["excess_return", "pb_own"],
+    "insurer": ["excess_return", "pb_own"],
+    "broker": ["pb_roe", "pb_own"],
+    "holding": ["dcf", "pb_own"],
+    "pre_revenue": [],
 }
 
 
@@ -73,64 +77,65 @@ def convert(fx, value, src: str | None, dst: str) -> float | None:
     return value * float(fx.get(dst, math.nan)) / float(fx.get(src, math.nan))
 
 
-def inputs(f: dict) -> dict:
-    """The discount rates and the balance-sheet bridge, in the reporting currency."""
-    v, dam, market, kind = f["valuation"], f["damodaran"] or {}, f["market"], f["kind"]
+def country_of(f: dict) -> str:
+    """Damodaran's country for the company (his company list); without a match a CNY reporter is China-based, else
+    the listing market's country."""
+    dam = f.get("damodaran") or {}
+    if damodaran.country(dam.get("country") or ""):
+        return dam["country"]
+    return "China" if f["valuation"]["report_currency"] == "CNY" else COUNTRY[f["market"]]
+
+
+def priced_in(f: dict) -> str:
+    """The market whose implied premium prices the stock: its listing market, but Hong Kong for a China-based issuer
+    listed in the US (offshore Chinese equity is priced there: ADRs convert into their HK lines; the HK market's members
+    are 81% mainland companies by value)."""
+    return "hk" if f["market"] == "us" and country_of(f) in ("China", "Hong Kong") else f["market"]
+
+
+def inputs(f: dict, mkt: dict | None) -> dict:
+    """The discount rates and the balance-sheet bridge, in the reporting currency. `mkt`: the implied return of the
+    market that prices the stock (priced_in; market.implied); without it, Damodaran's published premium, said."""
+    v, market, kind = f["valuation"], f["market"], f["kind"]
+    dam, home_market = f["damodaran"] or {}, priced_in(f)
     cur, fin, t, b = v["report_currency"], kind in FINANCIAL, v["ttm"], v["balance"]
     rf, rf_date = rate(RATE_OF.get(cur, "us"))
-    country = dam["country"] if damodaran.country(dam.get("country") or "") else COUNTRY[market]
-    c = damodaran.country(country)
+    country = country_of(f)
+    c, home = damodaran.country(country), damodaran.country(COUNTRY[home_market])
+    erp_market = mkt["erp"] if mkt else home["erp"]
+    erp = erp_market + c["crp"] - home["crp"]  # the company's country risk over its market's (Damodaran's)
     ind, tax_m = industry(dam, kind), 0.0 if kind == "reit" else MARGINAL_TAX.get(country, 0.25)
     mcap, debt = v["market_cap_report"], 0.0 if fin else (b["debt"] or 0.0)
     beta = ind["beta"] if fin else dcf.relever(ind["unlevered_beta_cash"], debt / mcap, tax_m)
-    coe = dcf.capm(rf, beta, c["erp"])
+    coe = rf + erp  # the market's own return, its country risk apart: the return the price implies is set against it
     ebit = sheet.ebit(market, t)
     cover = ebit / t["interest"] if ebit is not None and (t["interest"] or 0) > 0 else None
     fx = yahoo.load_fx()
     table = "financial" if fin else "large" if convert(fx, mcap, cur, "USD") >= LARGE_USD else "smaller"
     rows = damodaran.load("ratings").query("table == @table").to_dict("records")
     rating, spread = dcf.spread(cover, rows)
-    stable = rf + c["erp"] - c["crp"]  # a mature company's cost of capital: the yield + the mature-market premium
-    rf_list, _ = rate(market)
+    rf_list, _ = rate(home_market)
     tax_eff = (min(max(1 - t["ni"] / t["pretax"], 0.0), 0.5) if t["pretax"] and t["pretax"] > 0 and t["ni"] is not None
                else 0.0)
     if kind == "reit":  # its profit carries property revaluations: no interest cover, rating or debt cost from it
         rating, spread = None, None
+    cost = lambda e: e if fin else None if spread is None else dcf.wacc(mcap, debt, e, rf + spread, tax_m)
+    coe_pub = dcf.capm(rf, beta, c["erp"])
     return {"currency": cur, "rf": rf, "rf_date": rf_date, "rf_note": None if cur in RATE_OF else f"{cur}: the US yield used",
-            "country": country, "erp": c["erp"], "mature_erp": c["erp"] - c["crp"], "industry": ind["name"],
+            "country": country, "priced_in": home_market, "erp": erp, "erp_market": erp_market, "crp": c["crp"] - home["crp"], "industry": ind["name"],
+            "market": dict(mkt) if mkt else {"r": None, "note": "the market's implied return couldn't be solved: Damodaran's published premium"},
             "region": ind["region"], "beta_source": "levered industry beta" if fin else "unlevered beta (cash-corrected), relevered",
-            "beta": beta, "debt_to_equity": debt / mcap, "cost_equity": coe, "rating": rating, "cost_debt": None if spread is None else rf + spread,
+            "beta": beta, "beta_note": "the absolute view's (published premium)", "debt_to_equity": debt / mcap, "cost_equity": coe, "rating": rating, "cost_debt": None if spread is None else rf + spread,
             "interest_cover": None if kind == "reit" else cover, "tax_effective": tax_eff, "tax_marginal": tax_m,
-            "wacc": coe if fin else None if spread is None else dcf.wacc(mcap, debt, coe, rf + spread, tax_m), "stable_cost": stable,
-            "g": rf, "market_return": rf + damodaran.country(COUNTRY[market])["erp"],
-            "market_return_listing": rf_list + damodaran.country(COUNTRY[market])["erp"],
+            "wacc": cost(coe), "stable_cost": coe,  # a beta of 1 from year 1, its country risk kept, as the market's aggregate
+            "stable_wacc": cost(coe),  # so the DCF's cost of capital doesn't step: the WACC at it in every year
+            "g": rf, "market_return": rf + erp_market, "market_return_listing": rf_list + erp_market,
+            "published": {"erp": c["erp"], "cost_equity": coe_pub, "wacc": cost(coe_pub), "stable_cost": rf + c["erp"] - c["crp"], "stable_wacc": rf + c["erp"] - c["crp"],
+                          "market_return": rf + home["erp"]},  # Damodaran's published premium: the absolute view
             "ind_margin": ind.get("op_margin"), "ind_sales_to_capital": ind.get("sales_to_capital"),
             "debt": debt, "cash": 0.0 if fin else (b["cash"] or 0.0), "minority": b["minority"] or 0.0,
             "nonop": 0.0 if fin else (b.get("nonop") or 0.0),
             "shares": v["shares"], "fx": v["fx_quote_to_report"], "ebit": ebit}
-
-
-def implied_floor(f: dict, k: dict, today: date) -> dict:
-    """CN and HK banks and insurers: the cost of equity is at least their industry's implied one (Gebhardt, Lee and
-    Swaminathan 2001's implied cost of capital, in its stable-growth form: each member's COE that makes the justified
-    P/B equal its P/B on next year's consensus ROE, trailing where none; the median of the same industry in the day's
-    snapshot, at least 5 members), so a discount the market has priced for years isn't assumed to close within the
-    12 months; the stable cost too. The CAPM figure is kept beside it."""
-    if f["market"] not in FLOOR["markets"] or f["kind"] not in FLOOR["kinds"]:
-        return k
-    snap, p = sheet.snapshot(f["market"], today), f.get("peers") or {}
-    if snap.empty or not p:
-        return k
-    grp = snap[snap[p["by"]] == p["group"]]
-    roe = (grp["eps_e1"] / grp["bps"]).where((grp["eps_e1"] > 0) & (grp["bps"] > 0)).fillna(grp["roe"])
-    r = dcf.implied_cost_equity(roe, grp["pb"], k["g"]).where(grp["pb"] > 0).dropna()
-    floor = {"implied_cost_equity": float(r.median()) if len(r) else None, "members": len(r), "group": p["group"],
-             "cost_equity_capm": k["cost_equity"], "stable_cost_capm": k["stable_cost"]}
-    if len(r) < FLOOR["peers"] or floor["implied_cost_equity"] <= k["cost_equity"]:
-        return k | {"floor": floor | {"applied": False}}
-    c = floor["implied_cost_equity"]
-    stable = max(k["stable_cost"], c)
-    return k | {"cost_equity": c, "wacc": c, "stable_cost": stable, "floor": floor | {"applied": True}}
 
 
 def history(f: dict, key: str, n: int) -> pd.Series:
@@ -336,10 +341,10 @@ def moat(series: pd.Series, cost: float, stable: float, keep: float) -> dict:
 
 def dcf_value(f: dict, k: dict, path: dict, s2c: float, ronic: list[float], cost_shift=0.0, g_term=None) -> tuple[float, dict]:
     g = k["g"] if g_term is None else g_term
-    cost = dcf.steps(k["wacc"] + cost_shift, k["stable_cost"] + cost_shift)
+    cost = dcf.steps(k["wacc"] + cost_shift, k["stable_wacc"] + cost_shift)
     res = dcf.fcff(f["valuation"]["ttm"]["revenue"], path["growth"], path["margin"],
                    dcf.steps(k["tax_effective"], k["tax_marginal"]), [s2c] * dcf.YEARS, cost, g,
-                   k["stable_cost"] + cost_shift, [r + cost_shift for r in ronic], k["tax_marginal"])
+                   k["stable_wacc"] + cost_shift, [r + cost_shift for r in ronic], k["tax_marginal"])
     equity = dcf.equity_value(res["operating"], k["debt"], k["minority"], k["cash"], k["nonop"])
     return equity / k["shares"] / k["fx"], res
 

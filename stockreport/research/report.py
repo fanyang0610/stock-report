@@ -25,7 +25,7 @@ from stockreport.research import facts as fact_sheet
 log = logging.getLogger(__name__)
 NAMES_CN = {"dcf": "现金流折现（DCF）", "dcf_normal": "现金流折现（正常化利润率）", "pe_own": "市盈率 × 自身历史",
             "pe_peers": "市盈率 × 同行", "pe_normal": "自身市盈率 × 正常化盈利", "pb_own": "市净率 × 自身历史",
-            "pb_roe": "合理市净率（平均 ROE）", "evs_peers": "企业价值/销售额 × 同行", "peg_peers": "PEG × 同行",
+            "pb_roe": "超额收益模型（平均 ROE）", "evs_peers": "企业价值/销售额 × 同行", "peg_peers": "PEG × 同行",
             "ddm": "股息折现（两阶段）", "yield_own": "股息率 × 自身 5 年均值", "excess_return": "超额收益模型（账面权益）"}
 TYPES = {"ordinary": "普通盈利企业", "fast_grower": "快速成长企业", "loss_making": "亏损但有收入", "pre_revenue": "尚无收入（未盈利生物科技等）",
          "bank": "银行", "insurer": "保险", "broker": "券商 / 资管", "cyclical": "周期性企业", "income": "高股息成熟企业 / 公用事业",
@@ -172,8 +172,10 @@ def context(f: dict, v: dict, doc: dict) -> dict:
     return {
         "f": f, "v": v, "w": w, "ok": ok, "doc": doc, "q": q, "rc": rc, "cur": CUR.get(q, q), "rcur": CUR.get(rc, rc),
         "market_name": MARKET_NAME[f["market"]], "market_names": MARKET_NAME, "type_name": TYPES.get(v.get("type"), v.get("type")),
-        "methods": [{"name": NAMES_CN[m], "weight": wt, **v["methods"][m]} for m, wt in (v.get("weights") or {}).items()],
-        "forecast": compare.forecast(f, v), "screen": doc["screen"],
+        "methods": [{"name": NAMES_CN[m], "role": "主要方法" if m == v.get("main") else "交叉检验", **v["methods"][m]}
+                    for m in ([v["main"]] + [x["method"] for x in v.get("cross") or []] if v.get("main") else [])],
+        "cross": [x | {"name": NAMES_CN[x["method"]]} for x in v.get("cross") or []],
+        "forecast": compare.forecast(f, v), "screen": doc["screen"], "basis": compare.basis(f, v, INDEX_NAME[(v.get("inputs") or {}).get("priced_in") or f["market"]]),
         "charts": {"price": charts.price(daily, f["code"], index_code, INDEX_NAME[f["market"]]) if daily is not None else "",
                    "history": charts.history(f["history"], f["kind"]),
                    "football": charts.football(v, NAMES_CN) if v.get("target") else "",
@@ -205,11 +207,11 @@ def summary(f: dict, v: dict, doc: dict, limit: int = 4000) -> str:
     else:
         lines.append(f"评级：{v['rating']}　12 个月目标价 {price(v['target'], q)}（现价 {price(v['price'], q)}，"
                      f"{pct(v['target'] / v['price'] - 1, True, 0)}），预期回报 {pct(v['expected_return'], True)}（含股息），"
-                     f"大盘预期 {pct(v['market_return'])}")
+                     f"大盘现价隐含 {pct(v['market_return'])}")
         if number(v.get("fair_value")):
-            lines.append(f"合理价值 {price(v['fair_value'], q)}（{pct(v['fair_value'] / v['price'] - 1, True, 0)}），超额回报 "
-                         f"{pct(v['fair_excess'], True)} 对比评级门槛 ±{v['uncertainty']['band']:.0%}；股价一般约 3 年向合理价值"
-                         f"靠拢，所以 12 个月目标价只计入约三分之一的差距")
+            lines.append(f"合理价值 {price(v['fair_value'], q)}（{pct(v['fair_value'] / v['price'] - 1, True, 0)}）；股价一般约 3 年"
+                         f"向合理价值靠拢，所以 12 个月目标价只计入约三分之一的差距")
+        lines += ["评级依据：" + x for x in compare.basis(f, v, INDEX_NAME[(v.get("inputs") or {}).get("priced_in") or f["market"]])]
     for o in doc.get("others") or []:  # the issuer's other line (A+H)
         x = (f"{MARKET_NAME[o['market']]} {o['code']}：{o['rating']}" + (
             f"，目标价 {price(o['target'], o['currency'])}（现价 {price(o['price'], o['currency'])}，"

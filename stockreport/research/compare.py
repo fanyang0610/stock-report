@@ -4,15 +4,27 @@
   view is its rating when the stock is on the day's lists, else its fifth of the market's score (偏多 / 中性 / 偏空).
 - Drivers, named from how the two are built: momentum and revisions weigh in the screening and not in a valuation; the
   screening ranks within the sector and research against the whole market; a fast grower's 10 years of cash flows
-  against trailing and next-year figures; a cyclical's normalized against current earnings; a floored cost of equity;
-  news or filings the numbers can't see (the review's findings).
+  against trailing and next-year figures; a cyclical's normalized against current earnings; news or filings the numbers can't see (the review's findings).
 - The street: what its target needs in our DCF (the cost of capital, 5-year revenue growth, long-run margin) or, for
-  a financial, the ROE it implies, against ours; the adjusted (non-GAAP) basis; the floor.
-Each driver is a sentence with fact keys ({wacc}); words.py fills them in and DeepSeek writes the paragraph from them."""
+  a financial, the ROE it implies, against ours; the adjusted (non-GAAP) basis.
+Each driver is a sentence with fact keys ({wacc}); words.py fills them in and DeepSeek writes the paragraph from them.
+- The rating's basis (stage 15; page 1 and the WeChat summary, by code): the return the price implies against the
+  market's, the methods' state (unresolved: what the cross-check would need in the main method's terms), the checks
+  that blocked a Buy or widened the band, the tail scenarios and the absolute view."""
 
-from stockreport.research import CUR, pct, times
+from stockreport.research import CUR, pct, price, times
+from stockreport.research.rating import ABSOLUTE
 
 VIEW = {"买入": 1, "偏多": 1, "持有": 0, "中性": 0, "卖出": -1, "偏空": -1}
+METHOD = {"dcf": "现金流折现", "dcf_normal": "正常化现金流折现", "pe_own": "自身历史市盈率", "pe_peers": "同行市盈率",
+          "pe_normal": "正常化盈利的市盈率", "pb_own": "自身历史市净率", "pb_roe": "平均 ROE 的超额收益模型",
+          "evs_peers": "同行企业价值/销售额", "peg_peers": "同行 PEG", "ddm": "股息折现", "yield_own": "自身 5 年平均股息率",
+          "excess_return": "超额收益模型"}
+CHECK = {"quality_screen": "去劣筛选", "checklist_veto": "买入前清单", "dividend_uncovered": "股息的现金覆盖",
+         "beneish": "Beneish M 值", "earnings_signals": "财报异常信号"}
+SIGNAL = {"receivables_faster": "应收快于营收", "inventory_faster": "存货快于营收", "cash_below_profit_widening": "现金流低于利润且差距扩大"}
+QUALITY = {"roe_10y": "10 年平均 ROE", "fcf_5y": "5 年自由现金流", "interest_cover": "利息保障倍数", "gross_margin_avg": "长期毛利率",
+           "ocf_to_profit_5y": "经营现金流 / 净利润", "net_margin_avg": "长期净利率", "share_growth_5y": "5 年股本扩张"}
 MARGIN_SOURCE = {"10-year average": "自身 10 年平均", "profitable peers' median": "盈利同行的中位数", "industry": "行业平均",
                  "own 8-year median": "自身 8 年中位数"}
 
@@ -51,8 +63,6 @@ def screening(facts: dict, val: dict, market_pe: float | None, findings: list[di
             drivers.append("快速成长：筛选看当前和明年的数字，研究看十年现金流，增长能持续多久决定价值")
         if kind == "cyclical":
             drivers.append("周期：研究用正常化利润（{target_margin} 的长期利润率），筛选用当前利润，周期高点时两者差得最远")
-        if ((val.get("inputs") or {}).get("floor") or {}).get("applied"):
-            drivers.append("资本成本：研究用行业隐含的股权成本 {cost_equity}（CAPM 为 {capm_cost_equity}），市场多年来按这个水平定价")
         if not drivers:
             drivers.append("估值：研究的合理价值超额回报 {fair_excess}，筛选的价值项只占四分之一（价值评级 {scr_value}）")
     return {"view": view, "agreement": agreement, "drivers": drivers, "keys": keys,
@@ -71,8 +81,6 @@ def street(facts: dict, val: dict) -> list[str]:
     if kind in ("bank", "insurer", "broker") and need.get("implied_roe") is not None:
         out.append("回报率：市场的目标价对应长期 ROE {street_roe}（按我们的股权成本 {cost_equity}），我们假设长期 ROE {roe_term}；"
                    "现价隐含的股权成本是 {implied_coe}")
-    if k.get("floor", {}).get("applied"):
-        out.append("资本成本：中资银行和保险用行业隐含的股权成本 {cost_equity}，不用 CAPM 的 {capm_cost_equity}")
     margin = need.get("implied_margin")
     if d and margin is not None and abs(margin - d["path"]["target_margin"]) >= 0.03:
         out.append("利润率：我们的现金流折现要达到市场的目标价，长期营业利润率需要 {street_margin}，我们用 {target_margin}（{margin_source}）")
@@ -81,8 +89,8 @@ def street(facts: dict, val: dict) -> list[str]:
         out.append("增长：市场的目标价需要未来 5 年营收每年增长 {street_growth}（其余假设不变），我们预测 {forecast_growth}；"
                    "同等规模的公司里能做到的占 {base_street}")
     if d and need.get("implied_wacc") is not None and k.get("wacc") and abs(need["implied_wacc"] - k["wacc"]) >= 0.01:
-        out.append("折现率：市场的目标价相当于资本成本 {street_wacc}，我们用 {wacc}（无风险利率 {rf} 加股权风险溢价 {erp} 乘贝塔 {beta}）；"
-                   "现价隐含 {implied_wacc}")
+        out.append("折现率：市场的目标价相当于资本成本 {street_wacc}，我们用 {wacc}（无风险利率 {rf} 加大盘现价隐含的股权风险溢价 {erp}，"
+                   "按本模型的现金流规则求出）；现价隐含 {implied_wacc}")
     c = facts["consensus"]
     if facts["market"] == "us" and kind != "reit" and (  # a REIT's consensus is FFO by convention (stage 9's note)
             (c.get("basis_gap_yahoo") or 0) > 0.2 or (facts["summary"].get("sbc_to_revenue") or 0) > 0.1):
@@ -129,3 +137,81 @@ def forecast(facts: dict, val: dict) -> dict:
     return {"columns": cols, "rows": rows, "currency": k.get("currency"), "unit": CUR.get(k.get("currency"), ""),
             "consensus": fy, "consensus_currency": c.get("currency"), "source": c.get("source"), "analysts": c.get("analysts"),
             "margin_source": MARGIN_SOURCE.get((d or {}).get("path", {}).get("margin_source"))}
+
+
+def needs(x: dict, main: str, shares: dict) -> str:
+    """What the main method would need to reach a cross-check's value, in its own terms (with the base rate: the share
+    of companies of the same size that grew that fast)."""
+    n, share = x.get("needs") or {}, shares.get(x["method"])
+    if main in ("dcf", "dcf_normal"):
+        parts = ([f"未来 5 年营收每年增长 {pct(n['implied_growth_5y'], True)}" + (f"（同等规模公司中做到的占 {pct(share, digits=0)}）"
+                  if share is not None else "")] if n.get("implied_growth_5y") is not None else []) + \
+                ([f"长期营业利润率 {pct(n['implied_margin'])}"] if n.get("implied_margin") is not None else [])
+        return "或".join(parts)
+    if main in ("excess_return", "pb_roe") and n.get("implied_roe") is not None:
+        return f"长期 ROE {pct(n['implied_roe'])}"
+    if main == "ddm" and n.get("implied_dividend_growth_5y") is not None:
+        return f"未来 5 年股息每年增长 {pct(n['implied_dividend_growth_5y'], True)}"
+    return ""
+
+
+def basis(f: dict, v: dict, index: str) -> list[str]:
+    """The rating's basis on page 1, each line by code with its figures."""
+    if v.get("target") is None:
+        return []
+    k, rv, q = v.get("inputs") or {}, v.get("reverse") or {}, v["currency"]
+    mk, u, main = k.get("market") or {}, v["uncertainty"], v["main"]
+    shares = (v.get("base_rates") or {}).get("share_at_least") or {}
+    r = rv.get("implied_return")
+    implied = (f"现价隐含年回报 {pct(r) if r is not None else '低于 1%'}，" if main in ABSOLUTE else "")
+    out = [implied + f"要求回报 {pct(k['cost_equity'])}（{index}现价隐含的股权风险溢价 "
+           f"{pct(k['erp_market'])}" + (f"，国别风险差 {pct(k['crp'], True)}" if abs(k.get("crp") or 0) >= 0.0005 else "") +
+           f"，加无风险利率 {pct(k['rf'], digits=2)}）；按{METHOD[main]}，合理价值的超额回报 {pct(v['fair_excess'], True)}，评级门槛 ±{u['band']:.0%}"
+           if mk.get("r") is not None else f"大盘的隐含回报未能求出，用 Damodaran 公布的股权风险溢价 {pct(k['erp'])}"]
+    for m in v.get("main_skipped") or []:
+        out.append(f"{METHOD[m]}给不出正的价值（股权价值为负按 0 计），合理价值由{METHOD[main]}给出")
+    if v["state"] == "unresolved":
+        x = max(v["cross"], key=lambda c: abs(c["gap"] - v["fair_excess"]))
+        need = needs(x, main, shares)
+        out.append(f"方法分歧未决：{METHOD[main]}看{v['main_view']}，交叉检验看{v['checks_view']}（{METHOD[x['method']]} "
+                   f"{price(x['target'], q)}）" + (f"；{METHOD[main]}要达到它，需要{need}" if need else "") +
+                   "。分歧不靠平均消除，评级持有，等待能分出对错的数据")
+    else:
+        far = [c for c in v.get("cross") or [] if c["view"] != v["main_view"]]
+        for x in far[:1]:
+            need = needs(x, main, shares)
+            out.append(f"交叉检验：{METHOD[x['method']]} {price(x['target'], q)}（看{x['view']}）" +
+                       (f"；{METHOD[main]}要达到它，需要{need}" if need else ""))
+    for a in (v.get("acts") or {}).get("block") or []:
+        if v["state"] == "blocked":
+            out.append(f"{CHECK[a['check']]}：{explain(a, f)}，不给买入（{METHOD[main]}看买入）")
+    for a in (v.get("acts") or {}).get("widen") or []:
+        out.append(f"{CHECK[a['check']]}：{explain(a, f)}，评级门槛放宽一档至 ±{u['band']:.0%}")
+    for t in v.get("tail") or []:
+        line = {"vie": "VIE（协议控制）结构失效", "delisting": "美国退市"}[t["risk"]]
+        if t["value"] is None:
+            out.append(f"尾部情景：{line}——美国存托股可转换为港股 {t['line']}，不按价值损失计")
+        elif t.get("breakeven") is not None:
+            out.append(f"尾部情景：{line}，以价值归零为界；一年内发生的概率超过 {pct(t['breakeven'], digits=0)} 时，评级会降一档")
+        else:
+            out.append(f"尾部情景：{line}，以价值归零为界（已是卖出）")
+    a = v.get("absolute") or {}
+    if a.get("fair_value") is not None:
+        out.append(f"绝对视角（Damodaran 公布的股权风险溢价 {pct(a['erp'])}、行业贝塔 {k['beta']:.2f}，股权成本 {pct(a['cost_equity'])}）："
+                   f"合理价值 {price(a['fair_value'], q)}，超额回报 {pct(a['gap'], True)}，看{a['view']}")
+    return out
+
+
+def explain(a: dict, f: dict) -> str:
+    """A check's finding in words."""
+    c = f["checks"]
+    if a["check"] == "quality_screen":
+        return "未通过：" + "、".join(QUALITY.get(x, x) for x in c["quality_screen"]["failed"])
+    if a["check"] == "earnings_signals":
+        e = c.get("earnings_signals") or {}
+        return "、".join(SIGNAL[x] for x in SIGNAL if e.get(x))
+    if a["check"] == "beneish":
+        return f"{c['beneish']['m_score']:.2f}，高于 -1.78（快速增长也会抬高它）"
+    if a["check"] == "checklist_veto":
+        return "自由现金流连续 3 年为负"
+    return f"近 5 年有 {c['income']['uncovered_years_5y']} 年股息高于自由现金流"

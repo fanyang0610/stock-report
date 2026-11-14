@@ -69,6 +69,20 @@ def fcff(revenue0: float, growth: list[float], margin: list[float], tax: list[fl
             "terminal_value": tv, "pv_terminal": tv * disc[-1], "pv_flows": pv, "operating": pv + tv * disc[-1]}
 
 
+def fcfe(book0: float, roe: list[float], growth: list[float], cost: float, g_term: float, ronic: list[float]) -> dict:
+    """fcff's rules in equity terms (a market's aggregate, research/market.py): each year's profit is its ROE on the
+    opening book, the book grows at `growth` (the reinvestment growth needs, as revenue over sales to capital in fcff) and
+    the rest is paid out; then the stable period as in fcff: the year-10 ROE on the book in place, new capital earning
+    `ronic`, then its cost (terminal). With ROE equal to the cost every year the value is the book."""
+    book, factor, pv = book0, 1.0, 0.0
+    for r, g in zip(roe, growth):
+        factor /= 1 + cost
+        pv += (r - g) * book * factor
+        book *= 1 + g
+    tv = terminal(roe[-1] * book, g_term, cost, ronic)
+    return {"value": pv + tv * factor, "pv_flows": pv, "pv_terminal": tv * factor}
+
+
 def terminal(nopat: float, g: float, cost: float, ronic: list[float]) -> float:
     """The stable period's value a year before `nopat` (year 11's) is earned, in Morningstar's last two stages: the
     years excess returns last, each new unit of capital earning that year's `ronic` (growth g takes g / RONIC of

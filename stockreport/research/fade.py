@@ -196,3 +196,25 @@ def excess_keep(market: str) -> float:
     annual rate (the fade of CFROI towards the market's in Credit Suisse HOLT's model, measured here)."""
     kept, _ = excess_kept(return_table(market), hurdle(market), EXCESS_YEARS)
     return float(min(max(kept, 0.0), 1.0) ** (1 / EXCESS_YEARS))
+
+
+def base_rates(market: str, revenue_now: float, rates: dict[str, float | None], years: int = 5) -> dict:
+    """Mauboussin and Callahan's base rates: of the companies in the same fifth by revenue (its rank in each start
+    year), how many grew revenue at least as fast over `years`; the median company's growth (the market's norm); and
+    the same fifth's median in the latest complete window (today's conditions: the DCF's growth beyond the consensus)."""
+    p = revenue_table(market)
+    cols, rows = sorted(p.columns), []
+    for a, b in zip(cols, cols[years:]):
+        start, end = p[a], p[b]
+        ok = (start > 0) & (end > 0)
+        rows.append(pd.DataFrame({"g": (end[ok] / start[ok]) ** (1 / years) - 1, "end": b,
+                                  "fifth": (start.rank(pct=True)[ok] * 5).clip(upper=4.999).astype(int)}))
+    if not rows:
+        return {}
+    d, latest = pd.concat(rows), p[cols[-2]].dropna()  # the last full year's cross-section (the newest may be partial)
+    fifth = min(int((latest < revenue_now).mean() * 5), 4)
+    same, now = d[d["fifth"] == fifth]["g"], d[(d["fifth"] == fifth) & (d["end"] == cols[-2])]["g"]  # cols[-1] may be partial
+    return {"years": f"{cols[0]}-{cols[-1]}", "fifth": fifth + 1, "count": len(same), "median": float(same.median()),
+            "fifth_recent": float(now.median()) if len(now) else None, "recent_window": f"{int(cols[-2]) - years}-{cols[-2]}",
+            "market_median": float(d["g"].median()), "recent_median": float(rows[-1]["g"].median()),
+            "share_at_least": {name: float((same >= x).mean()) if x is not None else None for name, x in rates.items()}}

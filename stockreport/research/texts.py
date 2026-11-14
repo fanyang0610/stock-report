@@ -150,11 +150,25 @@ def cut_hk(text: str) -> dict[str, str]:
     return out
 
 
-def read(market: str, filing: dict) -> dict[str, str]:
+def read(market: str, filing: dict) -> tuple[dict[str, str], bool]:
+    """The annual report's cut sections, and whether it describes a VIE structure (vie)."""
     text = filings.text(market, filing["url"])
     if not text:
-        return {}
-    return cut_cn(text) if market == "cn" else cut_hk(text) if market == "hk" else cut_us(text, filing["title"])
+        return {}, False
+    cut = cut_cn(text) if market == "cn" else cut_hk(text) if market == "hk" else cut_us(text, filing["title"])
+    return cut, vie(text)
+
+
+VIE = ("variable interest entit", "contractual arrangement", "structure contract", "协议控制", "合约安排")
+
+
+def vie(text: str) -> bool:
+    """The report describes a VIE / contractual-arrangement structure: 10 mentions or more, a section of its own
+    (Tencent's 2025 annual report 36, Alibaba's 20-F 184, BYD Electronic's, Ping An's and Link's none, one passing
+    mention elsewhere). research/judge.py reads it for China-based issuers only: US banks' VIEs are securitization
+    vehicles."""
+    t = text.lower()
+    return sum(t.count(m) for m in VIE) >= 10
 
 
 def release(titles: list[dict], today: date) -> dict | None:
@@ -174,17 +188,18 @@ def release(titles: list[dict], today: date) -> dict | None:
 
 def sections(market: str, code: str, today: date) -> dict:
     """The latest annual report's cut sections (cached weekly): {doc, date, url, market (of the document), parts,
-    release, note}."""
+    release, note, vie}."""
     def make():
-        out = {"doc": None, "date": None, "url": None, "market": market, "parts": {}, "release": None, "note": None}
+        out = {"doc": None, "date": None, "url": None, "market": market, "parts": {}, "release": None, "note": None, "vie": None}
         filing = filings.periodic(market, code, today, annual=True)
         if filing:
-            out |= {"doc": filing["title"], "date": filing["date"], "url": filing["url"], "parts": read(market, filing)}
+            parts, structure = read(market, filing)
+            out |= {"doc": filing["title"], "date": filing["date"], "url": filing["url"], "parts": parts, "vie": structure}
         if not out["parts"] and market == "cn":  # unreadable fonts: the issuer's HK annual report, in English
             for _, o in listings.issuer(market, code).query("market == 'hk'").iterrows():
-                if (h := filings.periodic("hk", o["code"], today, annual=True)) and (parts := read("hk", h)):
+                if (h := filings.periodic("hk", o["code"], today, annual=True)) and (got := read("hk", h))[0]:
                     out |= {"doc": f"{h['title']}（H 股 {o['code']}）", "date": h["date"], "url": h["url"], "market": "hk",
-                            "parts": parts, "note": "A 股年报的 PDF 文字无法读取，改读 H 股英文年报"}
+                            "parts": got[0], "vie": got[1], "note": "A 股年报的 PDF 文字无法读取，改读 H 股英文年报"}
                     break
         if not out["parts"]:
             out["note"] = "未取到可读的年报" if not filing else "年报的 PDF 文字无法读取"
