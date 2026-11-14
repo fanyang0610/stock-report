@@ -768,10 +768,11 @@
   Atlassian, BNT, CRH, Flutter, Frontline, IREN; Toyota's 2019 us-gaap profit JPY 1.88tn beside 2020's IFRS 2.04tn),
   and Nebius's years to 2021 are Yandex's (already so before, then in RUB). TSMC's FY2025 (net profit TWD 1,697.6bn,
   filed 2026-04-16) is in the history. Not changed: the research report's statements (research/us.py reads companyfacts
-  itself, so its TSMC history still stops at 2024; it now gets the current basis, Toyota's IFRS years); stage 16's
+  itself, so its TSMC history stopped at 2024 until the follow-up below; it now gets the current basis, Toyota's IFRS years); stage 16's
   STALE_YEARS still applies to the two left. Parser tests on a cut of TSMC's 2025 instance and the basis rules; 269
   tests. The fresh-context stage review found no blocker; its points are in this entry (research's TSMC gap is a
-  follow-up: research/us.py would pass its companyfacts through sec.complete).
+  follow-up: research/us.py would pass its companyfacts through sec.complete). Done 2026-11-14: research/us.py passes
+  its companyfacts through sec.complete; `research TSM --facts` reads 11 years to 2025-12-31.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1461,7 +1462,10 @@ repeats today's count on every year: per-year shares come from 股本 with later
 Eastmoney's HK F10 tables (annual, interim and quarterly), whose amounts are CNY at each period end's rate for every
 company (SHKP's FY2026 profit CNY 18.61bn = HKD 21.43bn x 0.8686): converted back at that rate. No Eastmoney statements
 for HK REITs (Link): Yahoo's 5 annual years are the only source, said on the sheet. US from SEC companyfacts with the
-concepts the accounting checks need. The second source of the reported figures is Yahoo's annual series in all three
+concepts the accounting checks need, completed as the screening's annual history is (sec.complete, 2026-11-14): when
+companyfacts lacks the newest 10-K/20-F/40-F, that filing's XBRL instance adds the year, so the report starts from the
+same latest year (TSMC's FY2025). Its per-share units are not read, so that year's EPS row is blank; nothing uses it
+(EPS is profit over shares). The second source of the reported figures is Yahoo's annual series in all three
 markets; of the price and market value, Tencent's quote (qt.gtimg.cn answers for CN, HK and US). Not found free and
 verified: HK Southbound holdings and HKEX short selling (Eastmoney's tables answered no data; HKEX's page is a form);
 US and HK segments come from the filings' text in stage 11. Damodaran's company list (indname.xls) classifies 12,301 CN,
