@@ -597,3 +597,22 @@ def test_excess_return_kept_net_of_the_market_drift():
                      index=years).T
     kept, n = fade.excess_kept(t, 0.05, 5)
     assert n == 5 and kept == pytest.approx((0.125 - 0.05 + 0.01) / 0.15)
+
+
+def test_a_growth_firm_in_a_cyclical_industry_is_typed_by_its_growth():
+    # margins 30% with a halved year (10%) in Damodaran's Semiconductor industry: NVIDIA's shape (revenue 7 -> 216 over
+    # 10 years, its 5-year averages 52% a year apart) is a fast grower; Micron's (flat, then a 4x price spike in the
+    # last year: 15% a year across the cycle) stays cyclical, as does a Materials producer growing as fast as NVIDIA
+    margins = [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.1, 0.3, 0.3, 0.3]
+    def f(revenue, sector="Information Technology", industry="Semiconductor"):
+        return {"kind": "general", "market": "us", "name": "X", "damodaran": {"sector": sector, "industry": industry},
+                "valuation": {"ttm": {"revenue": revenue[-1]}}, "history": [{"ebit_margin": m, "revenue": r}
+                for m, r in zip(margins[-len(revenue):], revenue)], "summary": {"rev_cagr_3y": (revenue[-1] / revenue[-4]) ** (1 / 3) - 1}}
+    k = {"ebit": 30.0}
+    nvda = [6.9, 9.7, 11.7, 10.9, 16.7, 26.9, 27.0, 60.9, 130.5, 215.9]
+    mu = [20.3, 30.4, 23.4, 21.4, 27.7, 30.8, 15.5, 25.1, 37.4, 133.2]
+    assert value.cycle_growth(f(nvda)) == pytest.approx((92.24 / 11.18) ** 0.2 - 1, rel=1e-3)
+    assert value.kind_of(f(nvda), k, None)[0] == "fast_grower"
+    assert value.kind_of(f(mu), k, None)[0] == "cyclical" and value.cycle_growth(f(mu)) < value.FAST
+    assert value.kind_of(f(nvda, "Materials", "Chemical (Basic)"), k, None)[0] == "cyclical"  # revenue is a price
+    assert value.kind_of(f(nvda[-6:]), k, None)[0] == "cyclical"  # under 10 years: the cycle can't be measured

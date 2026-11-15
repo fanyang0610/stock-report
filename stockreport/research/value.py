@@ -168,17 +168,33 @@ def kind_of(f: dict, k: dict, norm: float | None) -> tuple[str, str]:
         return "loss_making", "an operating loss over the last twelve months"
     if dam.get("industry") == "Diversified":
         return "holding", "Damodaran's industry: diversified holding"
-    m = history(f, "ebit_margin", 10)
+    m, growing = history(f, "ebit_margin", 10), ""
     if (dam.get("sector") in CYCLICAL_SECTORS or dam.get("industry") in CYCLICAL_INDUSTRIES) and len(m) >= 5 \
             and m.min() < m.median() / 2:
-        return "cyclical", f"a cyclical industry and a margin that fell below half its median (low {m.min():.0%}, median {m.median():.0%})"
+        g = cycle_growth(f)
+        if dam.get("sector") in CYCLICAL_SECTORS or g is None or g < FAST:
+            return "cyclical", f"a cyclical industry and a margin that fell below half its median (low {m.min():.0%}, median {m.median():.0%})"
+        growing = f"a cyclical industry, but revenue up {g:.0%} a year across the cycle (a growth firm, not a mature cyclical); "
     if (s.get("rev_cagr_3y") or 0) >= FAST:
-        return "fast_grower", f"revenue up {s['rev_cagr_3y']:.0%} a year over 3 years (Lynch's fast growers: 20-25%)"
+        return "fast_grower", growing + f"revenue up {s['rev_cagr_3y']:.0%} a year over 3 years (Lynch's fast growers: 20-25%)"
     payout = payout_5y(f)
     if dam.get("sector") == "Utilities" or (payout and payout >= 0.6 and norm is not None and (s.get("rev_cagr_5y") or 0) < norm):
         return "income", (f"utility" if dam.get("sector") == "Utilities" else
                           f"5-year payout {payout:.0%} and revenue growth below the market's median ({norm:.1%})")
     return "ordinary", "a profitable business without a special type"
+
+
+def cycle_growth(f: dict) -> float | None:
+    """Revenue growth across a cycle: the last 5 fiscal years' average revenue over the 5 before's, a year (Damodaran:
+    a cycle is "between 5 and 10 years"; averages, so one year's price spike doesn't set it: Micron's FY2026 revenue,
+    4 times FY2025's, gives 15% a year, NVIDIA's 52%). Normalizing is "most appropriate for cyclical firms in mature
+    businesses" ("Investment Valuation", ch. 22): a company in an economy-driven cyclical industry growing as fast as
+    Lynch's fast growers across the cycle is typed by its growth (its own margin median then carries the cycle, as
+    Damodaran values NVIDIA). A commodity producer's revenue is its price ("Ups and Downs", 2009: commodity companies
+    are normalized on the price), so Materials and Energy stay cyclical whatever their revenue did (lithium's 2021-23
+    price put 赣锋锂业 at 41% a year). None without 10 years."""
+    r = history(f, "revenue", 10)
+    return float((r.tail(5).mean() / r.head(5).mean()) ** (1 / 5) - 1) if len(r) == 10 and r.head(5).mean() > 0 else None
 
 
 def payout_5y(f: dict) -> float | None:
