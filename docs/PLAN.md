@@ -1003,6 +1003,18 @@
     Electronic" (01211 is BYD's H line) and "3.7 times". Answered: the 12-month fair value is the main method's value
     rolled forward a year, as before; the counts by currency are reported because the review asked for them, not as
     the measure (above).
+- The US caches (2026-11-15, a fix found by the check of stage 15's 25 valuations): all 12 US `consensus.json` and
+  `statements.csv.gz` files were written before stage 13. The consensus lacked Nasdaq's last four quarters, so
+  `value.trailing_eps` fell back to GAAP profit for every US name and stage 13's basis rule was off; the statements
+  lacked the non-operating assets, so none were in the equity bridge. A cache without the field is now refetched
+  however fresh (facts.predates; a failed SEC refresh keeps the cache, as `cached` does). Rebuilt the same day on the
+  same prices: every US `eps0_basis` is Nasdaq's last four quarters; Amazon's trailing EPS 12.46 -> 7.28 (its
+  Anthropic gains out), its first-year margin 9.1% -> 15.5%, fair value 127 -> 173 (卖出, -42% against 40%); Alibaba
+  78.5 -> 107 (CNY 332bn of stakes at book now in the bridge; +4%, 持有), Apple 285 -> 290 (80.2bn), Lilly 831 -> 794,
+  NVIDIA 370 -> 376, TSMC 616 -> 605 (ratings unchanged). One rating moves, from the newer consensus rather than the
+  basis: Realty Income 持有 -> 买入
+  (Nasdaq's FFO forecasts revised to 4.44 / 4.58 from 4.52 / 4.67, so the dividend model's 5-year growth is 2.6% where
+  it was 1.1%; fair value 58.9 -> 67.8, +14% against a 10% band).
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a

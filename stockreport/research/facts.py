@@ -88,6 +88,14 @@ def units(price: float, shares: float, quote: dict, listed: float | None) -> flo
     return r if abs(r - 1) > 0.2 else 1.0
 
 
+def predates(path, key: str) -> bool:
+    """A cache written before a field it must carry existed (stage 13: the US statements' non-operating assets, Nasdaq's
+    quarters the consensus's basis is measured on): refetched however fresh, else stage 13's rules run on GAAP."""
+    if not path.exists():
+        return False
+    return key not in (load(path) if path.suffix == ".json" else pd.read_csv(path, nrows=0).columns)
+
+
 def gather(market: str, code: str, today: date) -> dict:
     f, S, D = folder(market, code), days("statements"), days("daily")
     g = {"street": cached(f / "street.json", D, lambda: sources.summary(market, code, today)),
@@ -101,16 +109,23 @@ def gather(market: str, code: str, today: date) -> dict:
         g["valuation"] = cached(f / "valuation.csv.gz", D, lambda: cn.valuation(code))
         g["flows"] = cached(f / "flows.json", D, lambda: cn.flows(code, today))
     elif market == "us":
-        if not (fresh(f / "statements.csv.gz", S) and fresh(f / "latest.json", S)):
-            payload = us.companyfacts(code)  # several MB, parsed in memory and not kept
-            save(f / "statements.csv.gz", us.parse_statements(code, payload))
-            save(f / "latest.json", us.latest(code, payload, today))
+        st = f / "statements.csv.gz"
+        if not (fresh(st, S) and fresh(f / "latest.json", S)) or predates(st, "nonop"):
+            try:
+                payload = us.companyfacts(code)  # several MB, parsed in memory and not kept
+                save(st, us.parse_statements(code, payload))
+                save(f / "latest.json", us.latest(code, payload, today))
+            except Exception as e:  # as cached(): a failed refresh keeps the cache there is (rule 4)
+                if not (st.exists() and (f / "latest.json").exists()):
+                    raise
+                log.warning("%s SEC statements: refresh failed (%s); the cache is used", code, e)
         g["statements"], g["latest"] = load(f / "statements.csv.gz"), load(f / "latest.json")
         if not g["latest"]:  # a 20-F filer: no quarterly reports, and its newest annual report can be missing from
             g["statements"], g["from_second"] = newer_years(g["statements"], g["second"])  # SEC's data for months
             g["latest"] = trailing_or_annual(g["statements"], optional(f / "trailing.json", S, lambda: sources.trailing(
                 market, code), f"{code} Yahoo trailing figures"))
-        g["consensus"] = optional(f / "consensus.json", S, lambda: us.consensus(code), f"{code} Nasdaq consensus")
+        c = f / "consensus.json"
+        g["consensus"] = optional(c, -1 if predates(c, "actuals") else S, lambda: us.consensus(code), f"{code} Nasdaq consensus")
         g["flows"] = cached(f / "flows.json", D, lambda: us.flows(code))
         g["segments"] = optional(f / "segments.csv.gz", S, lambda: segments.us(code, today), f"{code} segments")
     else:
