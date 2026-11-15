@@ -1215,7 +1215,8 @@
     Mastercard and Berkshire fail (their SEC statements carry no single share count: several classes); HSBC and
     Standard Chartered have no Damodaran match on their HK lines and come out as loss-makers, not banks (不评级);
     extreme model views worth a check: 中芯国际 at 1% of its price (capital-intensive, its return on capital below its
-    cost), Broadcom 0.23 (typed cyclical on an acquisition year's margin), Tesla 0.11, 中国石化 2.3 and 中国海洋石油 1.6.
+    cost), Broadcom 0.23 (typed cyclical on an acquisition year's margin), AMD 0.11 (ordinary: fair value 60.7 against
+    534, extreme uncertainty), Tesla 0.11, 中国石化 2.3 and 中国海洋石油 1.6.
   - Model views against the street, stated: 五粮液 买入 (the street's target 74.5 at the price, 14 of 15 buy or add;
     the consensus for 2027 was cut 29% in 90 days, the price fell 4%); NVIDIA 买入 at 454 (the street's 248; its price
     -28% in 3 months while next year's consensus rose 23%: page 1's sluggish-forecast line); Alibaba 买入 (its line
@@ -1235,7 +1236,21 @@
   - Tests: the US cash under a filer's own tag, the normal year's capital on one balance sheet, a 20-F filer's home,
     an H line with its A line's consensus, the return on capital and sales to capital without the stakes, the FCFE
     payout and the main method, the cycle growth and the type, the price run ahead of the forecasts and page 1's line.
-    301 pass. App Python 11,775 lines (11,653 before): value.py 467, the 400 a guide.
+    301 pass. App Python 11,780 lines (11,653 before): value.py 472, the 400 a guide.
+  - The fresh-context stage review (one, on Sonnet): every number it checked in this entry matched the files (the
+    table and its counts by fix, 五粮液's FCFE payout, NVIDIA's, Alibaba's and 平安 H's valuations, page 1's lines), the
+    code follows the method sections, and no rule is written for a name; 301 pass. Answered here from it: three rules
+    took their final shape after a measurement showed a result, said as such: fix 5 itself followed NVIDIA's value
+    after fix 6, the commodity exception followed the snapshot measurement (lithium, gold and oil producers retyped,
+    whose revenue is a price: "Ups and Downs"), and the shorter history's halves followed 寒武纪 and 海光; each is a
+    fault the measurement found in a rule against its evidence (normalizing applies to mature businesses, a commodity
+    company's revenue is its price), applied to every company, not a threshold moved to place a name: the 20% is the
+    project's fast-grower line since stage 10, and NVIDIA (52%) and Micron (15%) sit far from it. NVIDIA's and
+    Alibaba's 买入 are model views resting on one decision each (NVIDIA's type; Alibaba's capital without its stakes,
+    0.74 against 0.80), and 五粮液's on the margin's recovery: stated above with the street's. Apple's operating capital
+    of 7-55bn (a return of 572%, sales to capital 34) is its capital without the 80bn of securities whose income EBIT
+    leaves out: consistent with the definition, its value moves 6%. Fix 2's test is in the cost-of-equity test (a
+    20-F filer's home). Fixed from it: the AMD remark (above), AMD among the extreme views, the line count.
   - Sources, as read: Damodaran's valuation lectures (spring 2023 session 11 slides; his "Valuations" packet with the
     S&P 500 dividend model) and "Investment Valuation" ch. 22 (2nd ed. PDF) at their PDFs; Lee, So and Wang's abstract
     at Stanford GSB; Guay, Kothari and Shu as their abstract's record; NVIDIA's FY2026 10-K XBRL instance at SEC.
@@ -1983,8 +1998,9 @@ price ("Ups and Downs", 2009: commodity companies are normalized on the price fi
 cyclical (measured without that exception on the 2026-11-14 snapshots, lithium's 2021-23 price made 赣锋锂业 and
 天华新能 grow 41-61% a year across the cycle, Diamondback 37%, Agnico Eagle 24%). Such a growth firm is typed by its
 growth (fast grower, else on), its own margin median carrying the cycle (Damodaran values NVIDIA as a growth story
-with a target margin below its peak). Applied to the snapshots' members of these industries with a halved margin: US
-2 of 21 (NVIDIA 43% a year on the history tables, AMD 30%), HK 3 of 15, CN 29 of 79 (chip makers and their equipment,
+with a target margin below its peak). Applied to the snapshots' members of these industries whose margin halved in
+the history tables (data/stage19/cycle.py; a fact sheet's own operating margin can differ: AMD's never halves there,
+so it was never cyclical): US 2 of 21 (NVIDIA 43% a year on those tables, AMD 30%), HK 3 of 15, CN 29 of 79 (chip makers and their equipment,
 and China's solar makers, which Damodaran files under Semiconductor and whose revenue is also a price: a limit,
 stated); with 6-9 years of revenue, the two halves of them, annualized between their centres (a young chip maker
 isn't a mature business either: 寒武纪 55% a year, 海光 74%), and with fewer the company stays cyclical; fast grower: 3-year revenue growth of 20% a year or more (Lynch's fast growers
