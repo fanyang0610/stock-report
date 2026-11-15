@@ -371,11 +371,12 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
 
 
 def sales_to_capital(f: dict, k: dict) -> tuple[float, str]:
-    """Revenue over invested capital (equity + debt - cash), its 5-year median when invested capital is positive in
-    at least 3 of them; else the industry's."""
+    """Revenue over invested capital (equity + debt - cash - the stakes valued apart, as sheet.history's return on
+    capital: their revenue isn't in revenue), its 5-year median when invested capital is positive in at least 3 of
+    them; else the industry's."""
     h = f["history"][-5:]
     s2c = [x["revenue"] / ic for x in h if x.get("revenue") and x.get("equity") is not None
-           and (ic := x["equity"] + (x.get("debt") or 0) - (x.get("cash") or 0)) > 0]
+           and (ic := x["equity"] + (x.get("debt") or 0) - (x.get("cash") or 0) - (x.get("nonop") or 0)) > 0]
     return (float(np.median(s2c)), "own 5-year median") if len(s2c) >= 3 else (k["ind_sales_to_capital"], "industry")
 
 
