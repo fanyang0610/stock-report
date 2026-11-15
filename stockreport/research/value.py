@@ -194,9 +194,14 @@ def cycle_growth(f: dict) -> float | None:
     Lynch's fast growers across the cycle is typed by its growth (its own margin median then carries the cycle, as
     Damodaran values NVIDIA). A commodity producer's revenue is its price ("Ups and Downs", 2009: commodity companies
     are normalized on the price), so Materials and Energy stay cyclical whatever their revenue did (lithium's 2021-23
-    price put 赣锋锂业 at 41% a year). None without 10 years."""
+    price put 赣锋锂业 at 41% a year). With 6-9 years, the two halves of them (3 or 4 years each, a year apart from the
+    centre of one to the other's per year counted: a young chip maker isn't a mature business either); None with
+    fewer than 6."""
     r = history(f, "revenue", 10)
-    return float((r.tail(5).mean() / r.head(5).mean()) ** (1 / 5) - 1) if len(r) == 10 and r.head(5).mean() > 0 else None
+    half = len(r) // 2
+    if half < 3 or not r.head(half).mean() > 0:
+        return None
+    return float((r.tail(half).mean() / r.head(half).mean()) ** (1 / (len(r) - half)) - 1)
 
 
 def payout_5y(f: dict) -> float | None:

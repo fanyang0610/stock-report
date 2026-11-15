@@ -615,7 +615,9 @@ def test_a_growth_firm_in_a_cyclical_industry_is_typed_by_its_growth():
     assert value.kind_of(f(nvda), k, None)[0] == "fast_grower"
     assert value.kind_of(f(mu), k, None)[0] == "cyclical" and value.cycle_growth(f(mu)) < value.FAST
     assert value.kind_of(f(nvda, "Materials", "Chemical (Basic)"), k, None)[0] == "cyclical"  # revenue is a price
-    assert value.kind_of(f(nvda[-6:]), k, None)[0] == "cyclical"  # under 10 years: the cycle can't be measured
+    assert value.kind_of(f(nvda[-5:]), k, None)[0] == "cyclical"  # under 6 years: the cycle can't be measured
+    # 7 years: the first 3 against the last 3, 4 years apart
+    assert value.cycle_growth(f(nvda[-7:])) == pytest.approx((sum(nvda[-3:]) / sum(nvda[-7:-4])) ** 0.25 - 1)
 
 
 def test_page_one_says_when_the_price_ran_ahead_of_the_forecasts():
