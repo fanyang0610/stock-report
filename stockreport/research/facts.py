@@ -10,6 +10,7 @@ from datetime import date
 
 import pandas as pd
 
+from stockreport.config import CONFIG
 from stockreport.fetch import filings, nasdaq, yahoo
 from stockreport.research import (STATEMENT, cached, checks, cn, damodaran, days, folder, fresh, hk, listings, load,
                                   save, segments, sheet, sources, stamp, us)
@@ -110,7 +111,7 @@ def gather(market: str, code: str, today: date) -> dict:
         g["flows"] = cached(f / "flows.json", D, lambda: cn.flows(code, today))
     elif market == "us":
         st = f / "statements.csv.gz"
-        if not (fresh(st, S) and fresh(f / "latest.json", S)) or predates(st, "nonop"):
+        if not (fresh(st, S) and fresh(f / "latest.json", S)) or predates(st, "nonop") or predates(st, "securities"):
             try:
                 payload = us.companyfacts(code)  # several MB, parsed in memory and not kept
                 save(st, us.parse_statements(code, payload))
@@ -120,6 +121,7 @@ def gather(market: str, code: str, today: date) -> dict:
                     raise
                 log.warning("%s SEC statements: refresh failed (%s); the cache is used", code, e)
         g["statements"], g["latest"] = load(f / "statements.csv.gz"), load(f / "latest.json")
+        g["statements"], g["cash_from_second"] = us.with_securities(g["statements"], g["second"], CONFIG["crosscheck"]["large"])
         if not g["latest"]:  # a 20-F filer: no quarterly reports, and its newest annual report can be missing from
             g["statements"], g["from_second"] = newer_years(g["statements"], g["second"])  # SEC's data for months
             g["latest"] = trailing_or_annual(g["statements"], optional(f / "trailing.json", S, lambda: sources.trailing(
@@ -351,6 +353,7 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         "filings_12m": {"count": len(titles), "management": [t for t in titles if re.search(MANAGEMENT, t["title"])][:10],
                         "auditor": [t for t in titles if re.search(AUDITOR, t["title"])][:5]},
         "crosscheck": {"single_source": g["single"], "years_from_second": g.get("from_second") or [],
+                       "cash_from_second": g.get("cash_from_second") or [],
                        "ttm_from_second": (g.get("latest") or {}).get("basis") == "TTM (Yahoo)",
                        "shares_per_unit": None if market != "us" or per == 1.0 else per} | check |
                       sheet.quote_check({"price": price, "mcap": mcap}, g["tencent"]),

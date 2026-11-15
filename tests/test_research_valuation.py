@@ -495,9 +495,10 @@ def test_a_cyclical_normalized_on_its_capital():
     # margins of 10% and 30% (average 20%); today's capital 500 (equity 400 + debt 200 - cash 50 - stakes 50): normal
     # operating profit 20% x 500 = 100 on a normal revenue of 100 / 20% = 500, whatever the trailing revenue (1000 at a
     # price peak); new capital earns the normal 20% (sales to capital 1)
-    h = [{"ebit_margin": m, "revenue": 100.0, "equity": 80.0, "debt": 30.0, "cash": 10.0, "nonop": 0.0}  # capital 100
-         for m in (0.1, 0.3) * 5]
-    f ={"history": h, "valuation": {"book_common": 400.0, "ttm": {"revenue": 1000.0}}, "summary": {}}
+    h = [{"ebit_margin": m, "revenue": 100.0, "equity": 80.0, "debt": 30.0, "cash": 10.0, "nonop": 0.0,  # capital 100
+          "period": f"{2016 + i}-12-31"} for i, m in enumerate((0.1, 0.3) * 5)]
+    f = {"history": h, "valuation": {"book_common": 400.0, "ttm": {"revenue": 1000.0}, "balance": {"period": "2025-12-31"}},
+         "summary": {}, "latest": {"period": "2025-12-31"}}
     k = {"debt": 200.0, "cash": 50.0, "nonop": 50.0, "ebit": 300.0, "shares": 10.0, "ind_margin": 0.1,
          "base_growth": 0.05, "growth_shares": [0.3] * 5} | KEEP
     nm = value.normal(f, k)
@@ -510,6 +511,9 @@ def test_a_cyclical_normalized_on_its_capital():
     assert p["revenue0"] == pytest.approx(500) and p["sales_to_capital"] == pytest.approx(1.0)
     assert p["growth"][:5] == pytest.approx([0.05] * 5) and p["growth"][9] == pytest.approx(0.02)
     assert p["margin"] == pytest.approx([0.2] * 10)
+    # a US filer's equity from a later 10-Q, its cash and debt from the 10-K: the 10-K's equity too (one balance sheet)
+    later = f | {"latest": {"period": "2026-06-30"}, "history": h[:-1] + [h[-1] | {"equity": 300.0}]}
+    assert value.normal(later, k)["capital"] == 400
     low = f | {"history": h[:4]}  # under 5 years of returns: the margin variant on the trailing revenue
     assert value.normal(low, k)["revenue"] == 1000.0 and value.normal(low, k)["roc"] is None
 

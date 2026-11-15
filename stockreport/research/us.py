@@ -91,6 +91,7 @@ def parse_statements(code: str, payload: dict) -> pd.DataFrame:
             row["gp"] = row["revenue"] - row["cogs"]
         if row["cash"] is not None and row["st_invest"] is not None:
             row["cash"] += row["st_invest"]
+        row["securities"] = row["st_invest"]
         parts = ("debt_total", "st_borrow") if row["debt_total"] is not None else ("lt_debt", "st_debt", "st_borrow")
         debts = [row[k] for k in parts if row[k] is not None]
         row["debt"] = sum(debts) if debts else None
@@ -98,6 +99,24 @@ def parse_statements(code: str, payload: dict) -> pd.DataFrame:
         row["nonop"] = row["lt_invest"] if row["lt_invest"] is not None else sum(parts) if parts else None
         rows.append(row)
     return pd.DataFrame(rows).reindex(columns=STATEMENT).sort_values("period").reset_index(drop=True)
+
+
+def with_securities(st: pd.DataFrame, second: pd.DataFrame | None, large: float) -> tuple[pd.DataFrame, list[str]]:
+    """Cash with the short-term investments a filer tags with its own extension, which SEC's companyfacts (the standard
+    taxonomies only) leaves out: NVIDIA's FY2026 10-K puts 52bn of securities under nvda:MarketableSecuritiesAndEquity-
+    SecuritiesFVNI, so its cash read 10.6bn. A year with no short-term investments in the standard tags whose second
+    source's (Yahoo's) cash and short-term investments for the same year end is more than `large` above it (the
+    cross-check's large gap: a line missing, not a difference of definition) takes the second source's, said."""
+    if second is None or not len(second) or "cash" not in second or "securities" not in st:
+        return st, []
+    st, years = st.copy(), []
+    ends = pd.to_datetime(second["period"])
+    for i, row in st[(st["months"] == 12) & st["securities"].isna() & st["cash"].notna()].iterrows():
+        near = second[((ends - pd.Timestamp(row["period"])).abs() <= pd.Timedelta(days=10)) & second["cash"].notna()]
+        if len(near) and near["cash"].iloc[-1] > row["cash"] * (1 + large):
+            st.loc[i, "cash"] = float(near["cash"].iloc[-1])
+            years.append(row["period"])
+    return st, years
 
 
 def latest(code: str, payload: dict, today: date) -> dict:

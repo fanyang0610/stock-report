@@ -191,6 +191,17 @@ def test_a_20f_filers_newest_year_from_the_second_source():
     assert facts.newer_years(st, second.iloc[:1])[1] == []
 
 
+def test_us_cash_with_securities_under_the_filers_own_tag():
+    # NVIDIA FY2026: no short-term investments in SEC's standard tags (its own nvda: tag holds 51.95bn), Yahoo's cash and
+    # short-term investments 62.56bn; a year whose securities are tagged, or within the large gap, keeps SEC's cash
+    st = pd.DataFrame({"period": ["2024-01-28", "2025-01-26", "2026-01-25", "2026-01-25"], "months": [12, 12, 12, 9],
+                       "cash": [26.0, 43.2, 10.6, 10.6], "securities": [18.7, None, None, None]})
+    second = pd.DataFrame({"period": ["2024-01-31", "2025-01-31", "2026-01-31"], "cash": [40.0, 44.0, 62.56]})
+    out, years = us.with_securities(st, second, 0.05)
+    assert years == ["2026-01-25"] and out["cash"].tolist() == [26.0, 43.2, 62.56, 10.6]
+    assert us.with_securities(st, None, 0.05)[1] == []
+
+
 def us_segments(name: str) -> pd.DataFrame:
     from stockreport.research import segments
     facts = segments.parse_instance((DATA / f"segments_us_{name}_sample.xml").read_bytes())  # trimmed 10-K / 20-F

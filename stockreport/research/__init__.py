@@ -20,11 +20,12 @@ ROOT = DATA / "research"
 # three markets' statements so the checks and the fact sheet read one layout. equity is the parent's, with its preferred
 # shares and perpetual securities (pref), which book value per common share leaves out. invest_income, fv_change and
 # interest_income are the income of the non-operating assets (nonop: stakes and financial investments at book, cash
-# apart) that sheet.ebit takes out of operating profit where a market's tables carry them.
+# apart) that sheet.ebit takes out of operating profit where a market's tables carry them. securities (US): the short-term
+# investments SEC's standard tags carry, already in cash (empty: none tagged; us.with_securities).
 KEYS = ["revenue", "cogs", "gp", "sga", "rd", "op_income", "interest", "pretax", "tax", "ni", "ni_core", "eps", "da",
         "ocf", "capex", "div_paid", "buyback", "sbc", "assets", "cur_assets", "cur_liab", "cash", "receivables",
         "inventory", "ppe", "goodwill", "intangibles", "liabilities", "debt", "lt_debt", "equity", "pref", "minority",
-        "retained", "shares", "contract_liab", "cip", "invest_income", "fv_change", "interest_income", "nonop"]
+        "retained", "shares", "contract_liab", "cip", "invest_income", "fv_change", "interest_income", "nonop", "securities"]
 STATEMENT = ["period", "months", "currency", "notice"] + KEYS
 
 

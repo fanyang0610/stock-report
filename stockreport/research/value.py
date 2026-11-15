@@ -282,7 +282,11 @@ def normal(f: dict, k: dict) -> dict | None:
     capital = lambda x: x["equity"] + (x.get("debt") or 0) - (x.get("cash") or 0) - (x.get("nonop") or 0)
     roc = [x["ebit_margin"] * x["revenue"] / c for x in f["history"][-10:] if x.get("ebit_margin") is not None
            and x.get("revenue") and x.get("equity") is not None and (c := capital(x)) > 0]
-    now = capital({"equity": f["valuation"]["book_common"] or 0.0, "debt": k["debt"], "cash": k["cash"], "nonop": k["nonop"]})
+    v = f["valuation"]  # today's capital on one balance sheet: a US filer's equity is its latest 10-Q's, its cash, debt
+    equity = v["book_common"] or 0.0  # and stakes its 10-K's, whose year end then gives the equity too (NVIDIA's cash
+    if (f.get("latest") or {}).get("period") != v["balance"].get("period"):  # earned since counted as capital)
+        equity = next((x["equity"] for x in f["history"] if x["period"] == v["balance"]["period"] and x.get("equity")), equity)
+    now = capital({"equity": equity, "debt": k["debt"], "cash": k["cash"], "nonop": k["nonop"]})
     if len(roc) < MOAT_YEARS or now <= 0 or float(np.mean(roc)) <= 0:
         return {"source": "10-year average margin x trailing revenue", "margin": float(margin), "revenue": rev0,
                 "ebit": rev0 * margin, "roc": None, "capital": None, "years": len(roc)}
