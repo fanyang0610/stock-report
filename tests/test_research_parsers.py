@@ -191,6 +191,21 @@ def test_a_20f_filers_newest_year_from_the_second_source():
     assert facts.newer_years(st, second.iloc[:1])[1] == []
 
 
+def test_an_h_line_takes_its_a_lines_consensus():
+    # 平安 H: Eastmoney's A-line forecasts (CNY, its brokers' reports for the range), Yahoo's targets and ratings (on the
+    # H price); without an A line, Yahoo's as before
+    from stockreport.research import facts
+    street = {"estimates": {"0y": {"end": "2026-12-31", "eps": 7.02}, "+1y": {"end": "2027-12-31", "eps": 8.88}},
+              "est_currency": "CNY", "target_mean": 80.0, "analysts": 20, "ratings": {"buy": 15}}
+    a = {"source": "Eastmoney 研报一致预期", "eps": {"2026": 6.52, "2027": 7.53}, "analysts": 27, "target_high": 89.8,
+         "reports": [{"date": "2026-11-01", "eps": {"2026": 6.4}}]}
+    out = facts.consensus("hk", {"street": street, "consensus": a}, 2025)
+    assert out["eps"] == {"2026": 6.52, "2027": 7.53} and out["currency"] == "CNY" and len(out["reports"]) == 1
+    assert out["target_mean"] == 80.0 and out["analysts"] == 20 and out["eps_yahoo"]["2026"] == 7.02
+    alone = facts.consensus("hk", {"street": street, "consensus": None}, 2025)
+    assert alone["source"] == "Yahoo" and alone["eps"]["2027"] == 8.88 and "reports" not in alone
+
+
 def test_us_cash_with_securities_under_the_filers_own_tag():
     # NVIDIA FY2026: no short-term investments in SEC's standard tags (its own nvda: tag holds 51.95bn), Yahoo's cash and
     # short-term investments 62.56bn; a year whose securities are tagged, or within the large gap, keeps SEC's cash

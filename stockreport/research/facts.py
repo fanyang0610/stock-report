@@ -139,8 +139,11 @@ def gather(market: str, code: str, today: date) -> dict:
         g["statements"], g["consensus"], g["flows"] = st, None, {}
         g["segments"] = optional(f / "segments.csv.gz", S, lambda: segments.hk(code, today, st), f"{code} segments")
         a_line = listings.issuer(market, code).query("market == 'cn'")
-        if len(a_line):  # an A+H issuer's dividends as declared, per fiscal year, from its A line's 分红
-            g["a_dividends"] = cached(f / "a_dividends.json", S, lambda: cn.dividends(a_line["code"].iloc[0]))
+        if len(a_line):  # an A+H issuer's dividends as declared, per fiscal year, from its A line's 分红, and one
+            a = a_line["code"].iloc[0]  # consensus for both lines: the A line's (Eastmoney's, the deeper: 平安's A line
+            g["a_dividends"] = cached(f / "a_dividends.json", S, lambda: cn.dividends(a))  # had 6.52 / 7.53 for
+            g["consensus"] = optional(folder("cn", a) / "consensus.json", S, lambda: cn.consensus(a, today),  # 2026-27,
+                                      f"{a} Eastmoney consensus")  # its H line Yahoo's 7.02 / 8.88: 14.8% vs 22.2%
     g["filings"] = cached(f / "filings.json", S, lambda: filings.recent(market, code, today, 365, routine=True) or [])
     return g
 
@@ -159,8 +162,10 @@ def consensus(market: str, g: dict, last_fy: int) -> dict:
     street, c = g["street"], g["consensus"] or {}
     yahoo_eps = sources.eps_years(street.get("estimates") or {})
     eps = {y: v for y, v in (c.get("eps") or yahoo_eps).items() if int(y) > last_fy and v is not None}
-    main = c if c else street  # HK: Yahoo is the consensus source; CN and US: Eastmoney and Nasdaq, Yahoo beside them
-    out = {"source": c.get("source", "Yahoo"), "eps": eps, "currency": "CNY" if market == "cn" else
+    eastmoney = c.get("source", "").startswith("Eastmoney")  # CN, and an A+H issuer's H line (its A line's)
+    main = c if c and market != "hk" else street  # HK: Yahoo's targets and ratings are its own line's (an A line's
+    # target is on the A price); CN and US: Eastmoney's and Nasdaq's, Yahoo beside them
+    out = {"source": c.get("source", "Yahoo"), "eps": eps, "currency": "CNY" if eastmoney else
            street.get("est_currency") if market == "hk" else "USD", "analysts": main.get("analysts"),
            "eps_yahoo": {y: v for y, v in yahoo_eps.items() if int(y) > last_fy}, "ratings": main.get("ratings"),
            "target_mean": main.get("target_mean"), "target_high": main.get("target_high"), "target_low": main.get("target_low"),
@@ -178,7 +183,7 @@ def consensus(market: str, g: dict, last_fy: int) -> dict:
     y0 = min(set(eps) & set(out["eps_yahoo"]), default=None)
     out["basis"] = BASIS.get(out["source"])
     out["basis_gap_yahoo"] = abs(eps[y0] - out["eps_yahoo"][y0]) / abs(out["eps_yahoo"][y0]) if y0 and out["eps_yahoo"][y0] else None
-    if market == "cn":
+    if eastmoney:
         out["reports"] = c.get("reports", [])
     return out
 
