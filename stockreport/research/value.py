@@ -78,11 +78,13 @@ def convert(fx, value, src: str | None, dst: str) -> float | None:
 
 
 def country_of(f: dict) -> str:
-    """Damodaran's country for the company (his company list); without a match a CNY reporter is China-based, else
-    the listing market's country."""
+    """Damodaran's country for the company (his company list); without a match a 20-F or 40-F filer's home (Yahoo's
+    profile: a foreign private issuer's business is abroad, and his list carries its home listing, not the ADR: TSMC
+    is Taiwan's, Novo Nordisk Denmark's), else a CNY reporter is China-based, else the listing market's country."""
     dam = f.get("damodaran") or {}
-    if damodaran.country(dam.get("country") or ""):
-        return dam["country"]
+    for name in (dam.get("country"), f.get("home")):
+        if damodaran.country(name or ""):
+            return name
     return "China" if f["valuation"]["report_currency"] == "CNY" else COUNTRY[f["market"]]
 
 

@@ -145,7 +145,7 @@ def parse_summary(payload: dict, today: date) -> dict:
                              "grade": m.get("toGrade"), "action": m.get("action"), "target": m.get("currentPriceTarget")}
                             for m in moves[:10]],
         "sector": profile.get("sector"), "industry": profile.get("industry"), "employees": profile.get("fullTimeEmployees"),
-        "business": (profile.get("longBusinessSummary") or "")[:600]}
+        "country": profile.get("country"), "business": (profile.get("longBusinessSummary") or "")[:600]}
 
 
 def summary(market: str, code: str, today: date) -> dict:

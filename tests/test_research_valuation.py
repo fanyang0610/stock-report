@@ -349,6 +349,12 @@ def test_cost_of_equity_is_the_markets_implied_return(monkeypatch):
     china = value.inputs(f, {"r": 0.10, "erp": 0.08, "country": "China"})  # HK's China-based group: its premium already
     assert china["cost_equity"] == pytest.approx(0.016 + 0.08) and china["crp"] == 0  # carries China's risk
     assert value.inputs(f, None)["erp_market"] == pytest.approx(0.0501)  # no implied return: the published premium
+    # a 20-F filer missing from Damodaran's list (his list has TSMC's home listing, not the ADR): its home, not the US
+    countries["Taiwan"] = {"erp": 0.0501, "crp": 0.0078}
+    tw = f | {"home": "Taiwan", "valuation": f["valuation"] | {"report_currency": "TWD"}}
+    assert value.country_of(tw) == "Taiwan" and value.priced_in(tw) == "us"
+    assert value.inputs(tw, {"r": 0.07, "erp": 0.05})["crp"] == pytest.approx(0.0078 - 0.0023)
+    assert value.country_of(tw | {"home": "Atlantis"}) == "United States"  # a home Damodaran doesn't list: the listing's
 
 
 def test_excess_return_on_the_average_roe():

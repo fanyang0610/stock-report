@@ -124,6 +124,7 @@ def gather(market: str, code: str, today: date) -> dict:
         g["statements"], g["cash_from_second"] = us.with_securities(g["statements"], g["second"], CONFIG["crosscheck"]["large"])
         if not g["latest"]:  # a 20-F filer: no quarterly reports, and its newest annual report can be missing from
             g["statements"], g["from_second"] = newer_years(g["statements"], g["second"])  # SEC's data for months
+            g["foreign"] = True
             g["latest"] = trailing_or_annual(g["statements"], optional(f / "trailing.json", S, lambda: sources.trailing(
                 market, code), f"{code} Yahoo trailing figures"))
         c = f / "consensus.json"
@@ -340,7 +341,7 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         "code": code, "market": market, "built": stamp(), "kind": kind, "listed": listed,
         "name": (me["name"].iloc[0] if len(me) and pd.notna(me["name"].iloc[0]) else None) or (me["name_en"].iloc[0] if len(me) else code),
         "listings": lst.replace({float("nan"): None}).to_dict("records"), "other_listings": others, "industry": industry,
-        "damodaran": dam, "business": street.get("business"), "employees": street.get("employees"),
+        "damodaran": dam, "home": street.get("country") if g.get("foreign") else None, "business": street.get("business"), "employees": street.get("employees"),
         "price": px, "valuation": valuation, "summary": sheet.summary(a, kind, market), "history": sheet.history(a, dps, kind, market),
         "latest": g["latest"] if market == "us" else sheet.latest_vs_prior(st),
         "audit_opinion": a.iloc[-1].get("opinion") if "opinion" in a else None,
