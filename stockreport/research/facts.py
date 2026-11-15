@@ -89,6 +89,11 @@ def units(price: float, shares: float, quote: dict, listed: float | None) -> flo
     return r if abs(r - 1) > 0.2 else 1.0
 
 
+def listed_value(code: str) -> float | None:
+    """A US line's market value in Nasdaq's screener (units' second source)."""
+    return nasdaq.load_list().drop_duplicates("code").set_index("code")["mcap"].get(code) if nasdaq.LIST.exists() else None
+
+
 def predates(path, key: str) -> bool:
     """A cache written before a field it must carry existed (stage 13: the US statements' non-operating assets, Nasdaq's
     quarters the consensus's basis is measured on): refetched however fresh, else stage 13's rules run on GAAP."""
@@ -114,8 +119,12 @@ def gather(market: str, code: str, today: date) -> dict:
         if not (fresh(st, S) and fresh(f / "latest.json", S)) or predates(st, "nonop") or predates(st, "securities"):
             try:
                 payload = us.companyfacts(code)  # several MB, parsed in memory and not kept
-                save(st, us.parse_statements(code, payload))
-                save(f / "latest.json", us.latest(code, payload, today))
+                quote = g["tencent"] or {}
+                mv = quote.get("mcap") or listed_value(code)
+                line = mv / quote["price"] if mv and quote.get("price") else None  # the line's count, in its units
+                table, last = us.with_classes(us.parse_statements(code, payload), us.latest(code, payload, today), payload, line)
+                save(st, table)
+                save(f / "latest.json", last)
             except Exception as e:  # as cached(): a failed refresh keeps the cache there is (rule 4)
                 if not (st.exists() and (f / "latest.json").exists()):
                     raise
@@ -248,6 +257,8 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     daily = g["prices"]["daily"]
     px = sources.price_facts(daily, code, sources.INDEX[market][1])
     dps = dividends(market, g, a.iloc[-1]["period"][:4], today, quote_cur, report_cur)
+    if st["shares"].isna().all():  # rule 5: no count, no per-share figure
+        raise RuntimeError(f"{code}: no share count in its statements")
     shares = st.dropna(subset=["shares"])["shares"].iloc[-1]
     if market == "us" and g["latest"].get("shares"):  # the latest filing's cover count
         shares = g["latest"]["shares"]
@@ -264,8 +275,7 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     else:
         a["shares"] = sheet.split_basis(a, g["prices"]["splits"]).values
     if market == "us":  # an ADR or another share class: shares in the line's own units
-        listed = nasdaq.load_list().drop_duplicates("code").set_index("code")["mcap"].get(code) if nasdaq.LIST.exists() else None
-        per = units(price, shares, g["tencent"], listed)
+        per = units(price, shares, g["tencent"], listed_value(code))
         shares, a["shares"] = shares / per, a["shares"] / per
     fin = kind in checks.FINANCIAL  # banks', insurers' and brokers' debt, cash and operating cash flow are their business
     check, a = sheet.crosscheck(a, None if g["single"] else g["second"], fin)  # a figure > 5% off is left out

@@ -181,6 +181,52 @@ def test_an_adr_counts_shares_in_its_own_units():
     assert facts.units(413.35, 25.93e9, {}, None) == 1.0
 
 
+def xbrl(ni: dict, eps: dict) -> "ET.Element":
+    """A filing's XBRL instance in miniature: net income per period, basic EPS per period and share class."""
+    import xml.etree.ElementTree as ET
+    ctx, facts = [], []
+    for i, ((s, e), v) in enumerate(ni.items()):
+        ctx.append(f'<xbrli:context id="n{i}"><xbrli:period><xbrli:startDate>{s}</xbrli:startDate>'
+                   f'<xbrli:endDate>{e}</xbrli:endDate></xbrli:period></xbrli:context>')
+        facts.append(f'<us-gaap:NetIncomeLoss contextRef="n{i}">{v}</us-gaap:NetIncomeLoss>')
+    for i, ((s, e, m), v) in enumerate(eps.items()):
+        ctx.append(f'<xbrli:context id="e{i}"><xbrli:entity><xbrli:segment><xbrldi:explicitMember dimension='
+                   f'"us-gaap:StatementClassOfStockAxis">{m}</xbrldi:explicitMember></xbrli:segment></xbrli:entity>'
+                   f'<xbrli:period><xbrli:startDate>{s}</xbrli:startDate><xbrli:endDate>{e}</xbrli:endDate>'
+                   f'</xbrli:period></xbrli:context>')
+        facts.append(f'<us-gaap:EarningsPerShareBasic contextRef="e{i}">{v}</us-gaap:EarningsPerShareBasic>')
+    return ET.fromstring('<xbrli:xbrl xmlns:xbrli="http://www.xbrl.org/2003/instance" xmlns:xbrldi="http://xbrl.org/'
+                         '2006/xbrldi" xmlns:us-gaap="http://fasb.org/us-gaap/2025">' + "".join(ctx + facts) + "</xbrli:xbrl>")
+
+
+def test_a_multi_class_filers_count_in_its_listed_lines_units(monkeypatch):
+    # Visa-like: class A listed, class B earns 1.55 times A's EPS (its conversion rate), class C 4 times. The line's
+    # market value over its price is 1.87bn class A shares. Years 2021-2023 come from an older 10-K with renamed members,
+    # where class A counted 2.40bn and B 1.55bn: B is nearer the line, the year shared with the newer 10-K picks A.
+    monkeypatch.setattr(us.sec, "make_http", lambda: None)
+    y = lambda n: (f"{n - 1}-10-01", f"{n}-09-30")
+    q = ("2026-10-01", "2026-12-31")
+    filings = {
+        "Q": xbrl({q: 6.0e9}, {q + ("A",): 3.2, q + ("B",): 4.96, q + ("C",): 12.8}),
+        "K25": xbrl({y(n): v for n, v in ((2025, 20.0e9), (2024, 19.6e9), (2023, 18.0e9))},
+                    {y(n) + (m,): e for n, ea in ((2025, 10.5), (2024, 9.8), (2023, 8.8)) for m, e in (("A", ea), ("B", ea * 1.55), ("C", ea * 4))}),
+        "K23": xbrl({y(n): v for n, v in ((2023, 18.0e9), (2022, 16.0e9), (2021, 14.4e9))},
+                    {y(n) + (m,): e for n, ea in ((2023, 8.8), (2022, 7.2), (2021, 6.0)) for m, e in (("OldA", ea), ("OldB", ea * 1.55))}),
+    }
+    ni = [{"start": s, "end": e, "val": 1, "accn": a, "form": f} for a, f, (s, e) in (
+        ("Q", "10-Q", q), ("K25", "10-K", y(2025)), ("K23", "10-K", y(2023)))]
+    payload = {"cik": 1, "facts": {"us-gaap": {"NetIncomeLoss": {"units": {"USD": ni}}}}}
+    st = pd.DataFrame({"period": [f"{n}-09-30" for n in range(2020, 2026)], "months": 12, "shares": None})
+    got, last = us.with_classes(st, {"shares": None}, payload, 1.87e9, fetch=lambda http, cik, accn: filings[accn])
+    assert last["shares"] == pytest.approx(6.0e9 / 3.2)  # the latest quarter's, in class A units
+    counts = dict(zip(got["period"].str[:4], got["shares"]))
+    assert counts["2025"] == pytest.approx(20.0e9 / 10.5) and counts["2023"] == pytest.approx(18.0e9 / 8.8)
+    assert counts["2021"] == pytest.approx(2.4e9)  # class A's, not B's 1.55bn nearer the line
+    assert pd.isna(counts["2020"])  # no 10-K reports it
+    full = st.assign(shares=1e9)  # a count in companyfacts: nothing fetched
+    assert us.with_classes(full, {"shares": 1e9}, payload, 1.87e9, fetch=None)[0] is full
+
+
 def test_a_20f_filers_newest_year_from_the_second_source():
     import pandas as pd
     from stockreport.research import facts

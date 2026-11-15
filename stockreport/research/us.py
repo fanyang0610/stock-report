@@ -4,6 +4,9 @@ liabilities, receivables, inventory, PP&E, SG&A, depreciation, interest, debt, r
 pay), the trailing twelve months against a year earlier, and Nasdaq's analyst pages (yearly EPS consensus, the price
 target and rating counts), short interest and insider trades."""
 
+import math
+import re
+import xml.etree.ElementTree as ET
 from datetime import date, datetime
 
 import pandas as pd
@@ -75,6 +78,7 @@ def parse_statements(code: str, payload: dict) -> pd.DataFrame:
     tax, col = payload["facts"][taxonomy], 0 if taxonomy == "us-gaap" else 1
     series = {k: sec.annual(tax, names[col], unit) for k, names in EXTRA.items()}
     series |= {k: sec.annual(tax, names[col], unit, instant=True) for k, names in EXTRA_INSTANT.items()}
+    series["avg_shares"] = sec.annual(tax, [sec.BASIC_SHARES] if col == 0 else ["WeightedAverageShares"], "shares")
     series["eps"] = sec.annual(tax, ["EarningsPerShareDiluted", "EarningsPerShareBasic"] if col == 0 else
                                ["DilutedEarningsLossPerShare", "BasicEarningsLossPerShare"], f"{unit}/shares")
     rows = []
@@ -86,7 +90,7 @@ def parse_statements(code: str, payload: dict) -> pd.DataFrame:
             "gp": b.get("gp"), "op_income": b.get("op_income"), "ni": b.get("ni_common") or b.get("ni"),
             "ni_core": b.get("ni_cont"), "ocf": b.get("ocf"), "capex": b.get("capex"), "div_paid": b.get("div"),
             "assets": b.get("assets"), "liabilities": b.get("liabilities"), "equity": b.get("equity"), "pref": b.get("pref") if b.get("pref") is not None else get("pref2"),
-            "shares": b.get("shares")}
+            "shares": b.get("shares") if b.get("shares") is not None else get("avg_shares")}
         if row["gp"] is None and None not in (row["revenue"], row["cogs"]):
             row["gp"] = row["revenue"] - row["cogs"]
         if row["cash"] is not None and row["st_invest"] is not None:
@@ -134,6 +138,110 @@ def latest(code: str, payload: dict, today: date) -> dict:
             "shares": f.get("shares_cover") or f.get("shares_basic")} | extra | {
         f"{k}{s}": f.get(f"{src}_{w}") for k, src in (("revenue", "revenue"), ("ni", "np"), ("gp", "gp"), ("ocf", "ocf"))
         for s, w in (("", "ttm"), ("_prior", "prior"))}
+
+
+CLASS_AXIS, EPS = "StatementClassOfStockAxis", ("EarningsPerShareBasic", "EarningsPerShareBasicAndDiluted")
+NI_COMMON = ["NetIncomeLossAvailableToCommonStockholdersBasic", "NetIncomeLoss"]
+
+
+def denominators(root: ET.Element) -> dict[tuple, dict[str, float]]:
+    """(start, end) -> {share class: net income to common / the class's basic EPS}: each class's EPS denominator in
+    its own units, from a filing's XBRL instance. Under the two-class method every class's EPS is its conversion rate
+    times the one income per as-converted share (Visa's B-1 earns 1.55 times its class A, its C 4.0 times; Berkshire's
+    A 1,500 times its B), so each figure is the whole company counted in that class's units."""
+    local = lambda tag: tag.rsplit("}", 1)[-1]
+    ctx = {}
+    for c in root.iter():
+        if local(c.tag) == "context":
+            dims = {m.get("dimension", "").rsplit(":", 1)[-1]: m.text for m in c.iter() if local(m.tag) == "explicitMember"}
+            per = {local(p.tag): p.text for p in c.iter() if local(p.tag) in ("startDate", "endDate")}
+            if "startDate" in per:
+                ctx[c.get("id")] = ((per["startDate"], per["endDate"]), dims)
+    ni, eps = {}, {}
+    for e in root:
+        name, (period, dims) = local(e.tag), ctx.get(e.get("contextRef"), (None, None))
+        if period is None or not (e.text or "").strip():
+            continue
+        if name in NI_COMMON and not dims:
+            ni.setdefault(period, {})[name] = float(e.text)
+        elif name in EPS and set(dims) == {CLASS_AXIS} and float(e.text):
+            eps.setdefault(period, {}).setdefault(dims[CLASS_AXIS], float(e.text))
+    out = {}
+    for period, by in eps.items():
+        n = next((ni[period][k] for k in NI_COMMON if k in ni.get(period, {})), None)
+        counts = {m: n / v for m, v in by.items() if n is not None and n / v > 0}
+        if counts:
+            out[period] = counts
+    return out
+
+
+def instance(http, cik: int, accn: str) -> ET.Element:
+    """A filing's XBRL instance, parsed in memory and not kept: the inline filing's extracted _htm.xml, else the
+    filing's own instance (before 2019)."""
+    base = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accn.replace('-', '')}/"
+    names = [i["name"] for i in http.get(base + "index.json").json()["directory"]["item"]]
+    xml = [n for n in names if n.endswith("_htm.xml")] or [
+        n for n in names if n.endswith(".xml") and not re.search(r"(_cal|_def|_lab|_pre|FilingSummary)\.xml$", n)]
+    if not xml:
+        raise RuntimeError(f"no XBRL instance in {base}")
+    return ET.fromstring(http.get(base + xml[0]).content)
+
+
+def member(counts: dict[str, dict[str, float]], ref: float) -> str:
+    """The class whose count is closest to `ref`, judged on the newest period that has one."""
+    c = counts[max(counts)]
+    return min(c, key=lambda m: abs(math.log(c[m] / ref)))
+
+
+def with_classes(st: pd.DataFrame, last: dict, payload: dict, line: float | None, fetch=instance):
+    """A filer with several share classes tags its counts per class (Visa's A, B-1, B-2, B-3 and C; Berkshire's A and B),
+    which SEC's companyfacts leaves out: the latest filing and the 10-Ks give each class's EPS denominator
+    (denominators()), and the class in the listed line's units is the one whose count is closest to the line's market
+    value over its price (`line`: facts.units' test). An older 10-K takes the class closest to the count of the year it
+    shares with the newer one (each 10-K reports three years), so a conversion rate changing over a decade can't
+    switch the class. The latest count is the latest quarter's (else the latest period's), as latest() takes the
+    quarter's weighted average. Only when the latest year or the latest filing has no count, for the years without one."""
+    a = st["months"] == 12
+    if not line or not a.any() or (pd.notna(st.loc[a, "shares"].iloc[-1]) and last.get("shares")):
+        return st, last
+    gaap, cik, http = payload.get("facts", {}).get("us-gaap", {}), int(payload["cik"]), sec.make_http()
+    filings = {}  # accession -> (the latest period end it reports, form)
+    for n in NI_COMMON:
+        for f in gaap.get(n, {}).get("units", {}).get("USD", []):
+            if f.get("form") in ("10-K", "10-Q"):
+                filings[f["accn"]] = max(filings.get(f["accn"], ("", "")), (f["end"], f["form"]))
+    if not filings:
+        return st, last
+    newest = max(filings, key=lambda k: filings[k])
+    got = {newest: denominators(fetch(http, cik, newest))}
+    end, last = filings[newest][0], dict(last)
+    ending = sorted((sec.days(s, e), (s, e)) for s, e in got[newest] if e == end)
+    if ending and not last.get("shares"):
+        c = got[newest][ending[0][1]]
+        last["shares"] = c[member({end: c}, line)]
+    on = lambda day, table: next((v for y, v in table.items() if abs(sec.days(day, y)) <= 7), None)
+    years, want = {}, set(st.loc[a & st["shares"].isna(), "period"])
+    tenk = sorted(((e, k) for k, (e, form) in filings.items() if form == "10-K"), reverse=True)
+    while want and tenk:
+        oldest = min(years) if years else None
+        pick = next((k for e, k in tenk if oldest is None or abs(sec.days(e, oldest)) <= 7), None)
+        if pick is None:
+            break
+        tenk = [x for x in tenk if x[0] < filings[pick][0]]
+        d = got.get(pick) or denominators(fetch(http, cik, pick))
+        annual = {e: c for (s, e), c in d.items() if 350 <= sec.days(s, e) <= 380}
+        if not annual:
+            break
+        shared = {e: c for e, c in annual.items() if on(e, years)}
+        cls = member(shared, on(max(shared), years)) if shared else member(annual, line)
+        for e, c in annual.items():
+            if cls in c and on(e, years) is None:
+                years[e] = c[cls]
+        want = {p for p in want if on(p, years) is None}
+        if len(annual) < 2:  # nothing to chain the next one on
+            break
+    st = st.assign(shares=st["shares"].where(st["shares"].notna() | ~a, st["period"].map(lambda p: on(p, years))))
+    return st, last
 
 
 def from_annual(st: pd.DataFrame) -> dict:
