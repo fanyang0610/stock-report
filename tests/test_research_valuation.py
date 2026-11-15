@@ -198,6 +198,21 @@ def test_dividend_cover_over_five_years():
     assert judge.cover({"history": years[:4] + [{"fcf": None, "div_paid": -100.0}]}) is None  # a REIT reports no capex
 
 
+def test_an_income_stock_paying_far_below_its_fcfe_is_valued_on_free_cash_flow():
+    # 五粮液's shape: 5 years of FCF 145 against dividends 87 (60%), no debt: Damodaran's FCFE model (the DCF) is the
+    # main method; dividends 81% of FCFE stay with the dividend model; debt repaid lowers FCFE (more paid out of it)
+    def f(fcf, div, debt=(0.0, 0.0)):
+        h = [{"debt": debt[0]}] + [{"fcf": fcf / 5, "div_paid": -div / 5, "debt": None} for _ in range(5)]
+        h[-1]["debt"] = debt[1]
+        return {"history": h}
+    assert judge.fcfe_payout(f(145.0, 87.0)) == pytest.approx(0.6)
+    assert judge.main_order(f(145.0, 87.0), "income") == (["dcf", "ddm", "yield_own"], pytest.approx(0.6))
+    assert judge.main_order(f(100.0, 81.0), "income") == (value.METHODS["income"], None)
+    assert judge.fcfe_payout(f(100.0, 81.0, (64.0, 0.0))) == pytest.approx(81 / 36)  # FCFE 100 - 64 repaid: above 110%
+    assert judge.main_order(f(-10.0, 50.0), "income")[1] == float("inf")  # no free cash flow to pay it from
+    assert judge.main_order(f(145.0, 87.0), "reit") == (value.METHODS["reit"], None)  # a REIT's FCF isn't measured
+
+
 def test_tail_scenario_breakeven():
     f = {"damodaran": {"country": "China"}, "market": "us", "valuation": {"report_currency": "CNY"}, "other_listings": []}
     u = {"buy": 0.20, "sell": 0.20}  # the gaps at which it is 买入 and 卖出

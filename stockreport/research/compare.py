@@ -186,6 +186,9 @@ def basis(f: dict, v: dict, index: str) -> list[str]:
     if mk.get("r") is not None and mk.get("financial") is not None and gp.get("financial") and gp.get("other"):
         out.append(f"分组比较：{place}{home}金融股现价隐含年回报 {pct(gp['financial'])}，{home}其他公司 {pct(gp['other'])}。两组的差距是"
                    f"市场对行业的定价（金融股按账面估值），本股只和{group}比，不替市场判断哪一组更便宜")
+    if v.get("fcfe_payout") is not None:  # the income type valued on its free cash flow (Damodaran's 80-110% rule)
+        out.append(f"近 5 年股息为股权自由现金流的 {pct(v['fcfe_payout'], digits=0) if v['fcfe_payout'] != float('inf') else '无穷倍'}"
+                   f"（Damodaran：低于 80% 或高于 110% 时不用股息折现，留存的现金也属于股东），合理价值由{METHOD[main]}给出")
     for m in v.get("main_skipped") or []:
         out.append(f"{METHOD[m]}给不出正的价值（股权价值为负按 0 计），合理价值由{METHOD[main]}给出")
     if v["state"] == "unresolved":

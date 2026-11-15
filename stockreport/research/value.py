@@ -43,6 +43,7 @@ STAGE2 = 15  # Morningstar's longest stage II (excess returns fading to the cost
 CONVERGENCE = 5  # the simple Ginzu's default year of margin convergence
 CYCLICAL_SECTORS = {"Materials", "Energy"}  # with these industries: the plan's materials, energy, chemicals, shipping, memory
 CYCLICAL_INDUSTRIES = {"Semiconductor", "Semiconductor Equip", "Shipbuilding & Marine", "Transportation"}
+DDM_FIT = (0.8, 1.1)  # dividends 80-110% of FCFE over 5 years: the dividend model, else the FCFE model (Damodaran)
 PRE_REVENUE = re.compile(r"-[A-Z]*[UB][A-Z]*$")  # HKEX "-B" (chapter 18A biotech), STAR "-U" where a name keeps it (CNINFO drops it)
 METHODS = {  # PLAN.md's type table: the main method first (the fair value), then the cross-checks
     "ordinary": ["dcf", "pe_own", "pe_peers"],

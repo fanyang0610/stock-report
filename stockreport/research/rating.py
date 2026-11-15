@@ -286,7 +286,7 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     out = {"code": f["code"], "market": market, "name": f["name"], "built": stamp(), "price": v["price"],
            "currency": v["quote_currency"], "type": kind, "type_reason": why, "inputs": k, "consensus": cons}
     found = {} if status == "不评级" else methods(f, k, kind, cons, today)
-    order = value.METHODS[kind]
+    order, fcfe_payout = judge.main_order(f, kind)  # an income stock paying far from its FCFE: the FCFE model
     main = main_of(found, order)
     if main is None or status:
         return finish(out | {"rating": status or "不评级", "reason": reason or "no method could value it", "methods": found})
@@ -327,7 +327,7 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         except Exception as e:
             log.warning("%s sections for the tail scenario: %s", code, e)
     skipped = [m for m in order[:order.index(main)] if m in found]
-    out |= {"rating": j["rating"], "state": j["state"], "main": main, "main_skipped": skipped, "main_view": j["main_view"], "checks_view": j["checks_view"],
+    out |= {"rating": j["rating"], "state": j["state"], "main": main, "main_skipped": skipped, "fcfe_payout": fcfe_payout, "main_view": j["main_view"], "checks_view": j["checks_view"],
             "cross": j["cross"], "acts": acts, "uncertainty": u, "scenarios": cases, "target": target12, "fair_value": target,
             "price_to_fair": (1 + k["market_return"]) / (1 + k["market_return"] + j["fair_excess"]) if 1 + k["market_return"] + j["fair_excess"] > 0 else None,
             "fair_excess": j["fair_excess"], "expected_return": expected, "excess_return": expected - k["market_return"],

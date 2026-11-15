@@ -101,6 +101,34 @@ def cover(f: dict) -> float | None:
     return sum(x["fcf"] for x in h) / paid if len(h) == 5 and paid > 0 else None
 
 
+def fcfe_payout(f: dict) -> float | None:
+    """Dividends paid over free cash flow to equity across the last 5 fiscal years (FCFE: operating cash flow less
+    capex plus the debt raised over them, when the debt is reported at both ends); None when either isn't reported (a
+    REIT's property purchases aren't capex), infinity when the FCFE isn't positive."""
+    h = f["history"][-6:]
+    five = [x for x in h[-5:] if x.get("fcf") is not None and x.get("div_paid")]
+    if len(five) < 5:
+        return None
+    fcfe = sum(x["fcf"] for x in five)
+    if len(h) == 6 and h[0].get("debt") is not None and h[-1].get("debt") is not None:
+        fcfe += h[-1]["debt"] - h[0]["debt"]
+    return sum(abs(x["div_paid"]) for x in five) / fcfe if fcfe > 0 else math.inf
+
+
+def main_order(f: dict, kind: str) -> tuple[list[str], float | None]:
+    """The type's methods, main first (value.METHODS), and for the income type the dividends' share of FCFE when it
+    moves the main method: Damodaran's rule of thumb, "if dividends are less than 80% of FCFE or dividends are greater
+    than 110% of FCFE over a 5-year period, use the FCFE model" (valuation lectures, "Given cash flows to equity,
+    should I discount dividends or FCFE?"): the dividend model "understates the value because dividends are less than
+    FCFE" (his S&P 500 example), the cash kept being the holders' too. The DCF stands in for the FCFE model: the same
+    free cash flow, with the cash kept at book in the bridge (五粮液 paid 60% of its FCFE over 2021-25 and holds
+    ¥28.8 a share of net cash the dividend model never pays out)."""
+    order, ratio = value.METHODS[kind], fcfe_payout(f) if kind == "income" else None
+    if ratio is None or value.DDM_FIT[0] <= ratio <= value.DDM_FIT[1]:
+        return order, None
+    return ["dcf"] + [m for m in order if m != "dcf"], ratio
+
+
 def judge(main: str, found: dict, order: list[str], price: float, dividend: float, market_return: float, b: dict,
           acts: dict) -> dict:
     """The rating: the main method's view, the cross-checks against it, then the blocks."""
