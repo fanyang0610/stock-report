@@ -178,7 +178,8 @@ def consensus(market: str, g: dict, last_fy: int) -> dict:
     if e0.get("end"):  # Yahoo's revenue and EPS range by fiscal year; revenue only when +1y's end differs from 0y's
         year, same = int(e0["end"][:4]), e1.get("end") == e0.get("end")  # (Yahoo repeats 0y's end for AAPL)
         out["yahoo_years"] = {str(y): {"revenue": None if same else e.get("revenue"), "eps_low": e.get("eps_low"),
-                                       "eps_high": e.get("eps_high")} for y, e in ((year, e0), (year + 1, e1)) if e}
+                                       "eps_high": e.get("eps_high"), "eps_90d": e.get("eps_90d")}
+                              for y, e in ((year, e0), (year + 1, e1)) if e}
         out["revenue_currency"] = street.get("report_currency")  # Yahoo's: BeiGene's A line reports in USD there
     y0 = min(set(eps) & set(out["eps_yahoo"]), default=None)
     out["basis"] = BASIS.get(out["source"])

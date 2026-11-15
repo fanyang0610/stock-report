@@ -129,6 +129,31 @@ def main_order(f: dict, kind: str) -> tuple[list[str], float | None]:
     return ["dcf"] + [m for m in order if m != "dcf"], ratio
 
 
+LAG = 0.20  # a divergence this large could move a rating by itself (the low level's 20% discount): page 1 says so
+
+
+def lag(f: dict) -> dict | None:
+    """The price's move over 3 months against the revision of next year's consensus over the same 90 days (Yahoo's
+    trend, the one free revision history in every market), when the price moved by LAG or more and the consensus
+    didn't follow (they diverge by LAG or more the price's way: a price held while forecasts fell isn't this case). An implied return
+    reads today's price against forecasts that adjust slowly: analysts' forecasts lag the information in past
+    returns, a predictable error in implied costs of capital (Guay, Kothari and Shu 2011, as their abstract states
+    it), so after a fall the implied return rises before the consensus moves (NVIDIA -28% in 3 months while its next
+    year's consensus rose 24%). Lee, So and Wang find implied-cost-of-capital proxies best in the time series and
+    characteristic proxies best in the cross-section, the use the rating makes of them."""
+    c, ret = f["consensus"], (f.get("price") or {}).get("ret_3m")
+    years = [y for y, d in (c.get("yahoo_years") or {}).items() if d.get("eps_90d") and (c.get("eps_yahoo") or {}).get(y)]
+    if ret is None or not years:
+        return None
+    y = max(years)
+    before, now = c["yahoo_years"][y]["eps_90d"], c["eps_yahoo"][y]
+    if before <= 0 or now <= 0:
+        return None
+    gap = (1 + ret) / (now / before) - 1
+    far = abs(ret) >= LAG and abs(gap) >= LAG and (gap < 0) == (ret < 0)
+    return {"year": y, "price_3m": ret, "revision_3m": now / before - 1, "gap": gap} if far else None
+
+
 def judge(main: str, found: dict, order: list[str], price: float, dividend: float, market_return: float, b: dict,
           acts: dict) -> dict:
     """The rating: the main method's view, the cross-checks against it, then the blocks."""

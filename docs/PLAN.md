@@ -2012,9 +2012,19 @@ type, the skills' checks acting, and discrete risks as a scenario (research/mark
   their HK lines, and CNY reporters are 81% of the HK snapshot's value on 2026-11-14; Damodaran's China-over-US country premium, 0.7
   point, is far from the 6.8 points between the two markets' premiums: Alibaba's US line at the US premium got a 3.9%
   CNY cost of equity and +146%). Beta 1 because the rating sets the stock's implied return against its market's:
-  firm-level implied returns predict returns (Lee, So and Wang 2021, "Evaluating Firm-Level Expected-Return Proxies"),
-  beta doesn't sort them (Fama and French 1992; Frazzini and Pedersen 2014, the flat security market line), and with
-  a premium of 8.45% a beta of 1.37 (Tencent's industry) would add 3.1 points to a return its price already matches.
+  beta doesn't sort returns (Fama and French 1992; Frazzini and Pedersen 2014, the flat security market line), and
+  with a premium of 8.45% a beta of 1.37 (Tencent's industry) would add 3.1 points to a return its price already
+  matches. Implied returns are the weaker proxy across stocks: "implied-costs-of-capital metrics perform best in time
+  series" and "characteristic-based proxies perform best in the cross-section" (Lee, So and Wang 2021, "Evaluating
+  Firm-Level Expected-Return Proxies", their abstract, read at the source; stage 15 had cited them as showing that
+  firm-level implied returns predict returns, which the abstract doesn't say of the cross-section). The rating uses
+  them across stocks at one date, the cross-sectional use; their known error is sluggish forecasts: analysts'
+  forecasts lag the information in past returns, a predictable error in implied costs of capital (Guay, Kothari and
+  Shu 2011, as their abstract's record states it; the paper wasn't reachable). So since stage 19 page 1 says when the
+  price moved 20% or more in 3 months and next year's consensus (Yahoo's 90-day trend, every market) didn't follow,
+  the two 20% or more apart the price's way (judge.lag; 20%: a divergence that alone could move a rating at the low
+  level's 20% discount): the implied return may be too high after a fall (NVIDIA -28% while its consensus rose 23%,
+  Micron, Alibaba, BYD's H line on 2026-11-15) or too low after a rise, until the forecasts are revised.
   Measured: CAPM betas at the implied premium instead change one rating of the 25 (Snowflake 持有 -> 卖出, at its band's
   edge). The benchmark: the same market's premium over the reporting currency's yield (interest parity, as before).
 - The stock's implied return (rating.implied): the equity return at which the main method's value today equals the

@@ -338,6 +338,8 @@ def build(market: str, code: str, today: date | None = None) -> dict:
                          "gap": None if absolute is None else judge.gap(absolute, price, dividend, pub["market_return"]),
                          "view": None if absolute is None else judge.view(judge.gap(absolute, price, dividend, pub["market_return"]), u, pub["market_return"])},
             "tail": judge.tail(f, sections, target, price, dividend, k["market_return"], u, j["rating"]),
+            "forecast_lag": judge.lag(f),  # the price far from where the consensus moved: page 1 says the implied
+            # return may move with the forecasts (sluggish forecasts)
             "base_rates": fade.base_rates(market, cur_rev, {"forecast": ours, "implied": rev.get("implied_growth_5y"),
                                                        "street": needs.get("implied_growth_5y")} |
                                           {x["method"]: (x.get("needs") or {}).get("implied_growth_5y") for x in j["cross"]}) if cur_rev else {},

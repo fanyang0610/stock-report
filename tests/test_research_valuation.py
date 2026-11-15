@@ -616,3 +616,19 @@ def test_a_growth_firm_in_a_cyclical_industry_is_typed_by_its_growth():
     assert value.kind_of(f(mu), k, None)[0] == "cyclical" and value.cycle_growth(f(mu)) < value.FAST
     assert value.kind_of(f(nvda, "Materials", "Chemical (Basic)"), k, None)[0] == "cyclical"  # revenue is a price
     assert value.kind_of(f(nvda[-6:]), k, None)[0] == "cyclical"  # under 10 years: the cycle can't be measured
+
+
+def test_page_one_says_when_the_price_ran_ahead_of_the_forecasts():
+    # NVIDIA: -28% in 3 months while next year's consensus rose from 12.82 to 15.83 (+23%): 41% apart the price's way
+    def f(ret, before, now):
+        return {"price": {"ret_3m": ret}, "consensus": {"eps_yahoo": {"2027": 9.3, "2028": now},
+                "yahoo_years": {"2027": {"eps_90d": 8.96}, "2028": {"eps_90d": before}}}}
+    lag = judge.lag(f(-0.275, 12.82, 15.83))
+    assert lag["year"] == "2028" and lag["gap"] == pytest.approx(0.725 / (15.83 / 12.82) - 1)
+    assert judge.lag(f(-0.275, 12.82, 10.0)) is None  # the consensus followed the price down (22%): 7% apart
+    assert judge.lag(f(-0.04, 5.23, 3.69)) is None  # forecasts cut 29%, the price held: not a price run ahead
+    assert judge.lag(f(0.30, 10.0, 10.0))["gap"] == pytest.approx(0.30)  # a rise the forecasts didn't follow
+    from stockreport.research import compare
+    v = {"target": 1.0, "inputs": {"erp": 0.05}, "reverse": {}, "currency": "USD", "uncertainty": {}, "main": "pe_own",
+         "state": "resolved", "fair_excess": 0.0, "forecast_lag": lag}
+    assert any("近 3 个月股价 -27.5%" in x and "偏高" in x for x in compare.basis({}, v, "S&P 500"))

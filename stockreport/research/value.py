@@ -6,8 +6,10 @@ them into the target, the scenarios and the rating. Every choice below is a publ
 - Cost of equity (stage 15): the reporting currency's yield plus the listing market's implied premium (research/
   market.py: the return at which the market's members are worth their price under this model's own cash-flow rules,
   less the yield) plus Damodaran's country risk premium for the company's country (his company list) over the listing
-  market's, at a beta of 1: the stock's implied return is set against its market's (firm-level implied returns predict
-  returns, Lee, So and Wang 2021; beta doesn't sort them, Fama and French 1992, Frazzini and Pedersen 2014). The
+  market's, at a beta of 1: the stock's implied return is set against its market's (beta doesn't sort returns, Fama
+  and French 1992, Frazzini and Pedersen 2014; implied costs of capital track expected returns best in the time
+  series and characteristic proxies best in the cross-section, Lee, So and Wang 2021, so the rating's cross-sectional
+  use is the weaker one, and page 1 says when the price has run ahead of the forecasts: judge.lag). The
   benchmark's expected return is the listing market's premium over the reporting currency's yield (the currency the
   target grows in). The absolute view keeps the pre-stage-15 rates: CAPM with Damodaran's published premium and his
   industry's unlevered beta corrected for cash (the US table for US companies, the global table for the rest; his

@@ -208,6 +208,11 @@ def basis(f: dict, v: dict, index: str) -> list[str]:
             out.append(f"{CHECK[a['check']]}：{explain(a, f)}，不给买入（{METHOD[main]}看买入）")
     for a in (v.get("acts") or {}).get("widen") or []:
         out.append(f"{CHECK[a['check']]}：{explain(a, f)}，不确定性上调一档至{LEVEL[u['level']]}")
+    lag = v.get("forecast_lag")
+    if lag:  # sluggish forecasts (Guay, Kothari and Shu 2011): the implied return leans on a consensus not yet revised
+        out.append(f"近 3 个月股价 {pct(lag['price_3m'], True)}，{lag['year']} 年一致预期同期 {pct(lag['revision_3m'], True)}，"
+                   f"两者背离 {pct(abs(lag['gap']), digits=0)}：分析师预测调整慢于股价，现价隐含回报可能"
+                   + ("因预测尚未下调而偏高" if lag["gap"] < 0 else "因预测尚未上调而偏低") + "（Guay、Kothari 和 Shu 2011），评级可能随预测修正而变动")
     for t in v.get("tail") or []:
         line = {"vie": "VIE（协议控制）结构失效", "delisting": "美国退市"}[t["risk"]]
         if t["value"] is None:
