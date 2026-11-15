@@ -123,6 +123,29 @@ def test_yahoo_annual_and_summary():
     assert set(sources.eps_years(s["estimates"])) == {"2026", "2027"}
 
 
+def test_an_unclassified_listing_takes_its_snapshot_industrys_damodaran_industry(monkeypatch):
+    # HK: 8 classified 综合性银行 all Bank (Money Center): HSBC, which Damodaran's list lacks, is one; a group of 4 classified
+    # is too few, and one without a majority (Nasdaq's "Business Services": 3 of 7) gives nothing
+    banks = [f"0{i:04d}" for i in range(1, 9)]
+    co = pd.DataFrame({"market": "hk", "code": banks + ["00100", "00101", "00102", "00103"] + [f"1{i:04d}" for i in range(7)],
+                       "industry": ["Bank (Money Center)"] * 8 + ["Insurance (Life)"] * 4 + ["Retail (General)"] * 3 +
+                       ["Transportation"] * 2 + ["Financial Svcs. (Non-bank & Insurance)"] * 2, "sector": "x", "region": "China"})
+    rows = lambda ind: pd.DataFrame({"industry": [ind], "firms": [50], "beta": [0.7]})
+    tables = {"companies": co, "industries_Global": pd.concat([rows("Bank (Money Center)"), rows("Retail (General)")]),
+              "industries_China": rows("Bank (Money Center)").assign(firms=5)}
+    monkeypatch.setattr(damodaran, "load", lambda name: tables[name])
+    snap = pd.DataFrame({"code": banks + ["00005", "00100", "00101", "00102", "00103", "00200"] + [f"1{i:04d}" for i in range(7)] + ["09988"],
+                         "industry_type": ["综合性银行"] * 9 + ["人寿与健康保险"] * 5 + ["多品类零售"] * 8})
+    hsbc = damodaran.industry_like("hk", "00005", snap, "United Kingdom")
+    assert hsbc["industry"] == "Bank (Money Center)" and hsbc["region"] == "Global" and hsbc["beta"] == 0.7
+    assert hsbc["country"] is None and hsbc["inferred"].startswith("8 of the 8")
+    assert damodaran.industry_like("hk", "00200", snap, "Hong Kong") == {}  # 4 classified: too few
+    assert damodaran.industry_like("hk", "09988", snap, "China") == {}  # 3 of 7: no majority
+    assert damodaran.industry_like("hk", "99999", snap, None) == {}  # not in the snapshot
+    from stockreport.research import facts
+    assert facts.kind_of("hk", pd.DataFrame(), hsbc["industry"], None) == "bank"
+
+
 def test_damodaran_tables():
     r = damodaran.ratings((DATA / "damodaran_ratings_sample.xls").read_bytes())
     assert set(r["table"]) == {"large", "financial", "smaller", "infrastructure"}

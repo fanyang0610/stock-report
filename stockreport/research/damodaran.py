@@ -145,13 +145,41 @@ def industry_of(market: str, code: str) -> dict:
     if hit.empty:
         return {}
     row = hit.iloc[0]
-    region = {"United States": "US", "China": "China"}.get(row["region"], "Global")
-    stats = lambda reg: (t := load(f"industries_{reg}"))[t["industry"] == row["industry"]]
+    return industry_row(row["industry"], row["sector"], row["region"]) | {"country": row["country"]}
+
+
+def industry_row(industry: str, sector: str, region: str) -> dict:
+    region = {"United States": "US", "China": "China"}.get(region, "Global")
+    stats = lambda reg: (t := load(f"industries_{reg}"))[t["industry"] == industry]
     found = stats(region)
     if found.empty or not found.iloc[0]["firms"] >= MIN_FIRMS:  # a thin regional sample (China's REITs: none): global
         region, found = "Global", stats("Global")
-    return {"industry": row["industry"], "sector": row["sector"], "country": row["country"], "region": region} | (
-        found.iloc[0].drop("industry").to_dict() if len(found) else {})
+    return {"industry": industry, "sector": sector, "region": region} | (found.iloc[0].drop("industry").to_dict() if len(found) else {})
+
+
+SNAPSHOT_INDUSTRY = {"hk": "industry_type"}  # the snapshot's finest industry field per market (Eastmoney's for HK)
+
+
+def industry_like(market: str, code: str, snap: pd.DataFrame, home: str | None) -> dict:
+    """For a listing Damodaran doesn't classify (on any of its issuer's lines): the industry a majority of its market's
+    classified members sharing its industry in the day's snapshot carry, when at least 5 do (HSBC and Standard
+    Chartered: 8 of HK's 8 综合性银行 he classifies are Bank (Money Center)); its region from its home (Yahoo's
+    profile). {} when no industry has a majority, said in the fact sheet as before."""
+    key = SNAPSHOT_INDUSTRY.get(market, "industry")
+    if snap.empty or key not in snap or not (snap["code"] == code).any():
+        return {}
+    mine = snap.loc[snap["code"] == code, key].iloc[0]
+    co = load("companies")
+    co = co[co["market"] == market]
+    peers = co[co["code"].isin(snap.loc[snap[key] == mine, "code"])]
+    counts = peers["industry"].value_counts()
+    if pd.isna(mine) or len(counts) == 0 or counts.iloc[0] < 5 or counts.iloc[0] * 2 <= len(peers):
+        return {}
+    name = counts.index[0]
+    sector = peers.loc[peers["industry"] == name, "sector"].iloc[0]
+    region = {"United States": "United States", "China": "China"}.get(home or "", "Global")
+    return industry_row(name, sector, region) | {
+        "country": None, "inferred": f"{counts.iloc[0]} of the {len(peers)} classified members of its snapshot industry ({mine})"}
 
 
 def country(name: str) -> dict:

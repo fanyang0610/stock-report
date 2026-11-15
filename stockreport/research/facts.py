@@ -11,7 +11,7 @@ from datetime import date
 import pandas as pd
 
 from stockreport.config import CONFIG
-from stockreport.fetch import filings, nasdaq, yahoo
+from stockreport.fetch import filings, nasdaq, sec, yahoo
 from stockreport.research import (STATEMENT, cached, checks, cn, damodaran, days, folder, fresh, hk, listings, load,
                                   save, segments, sheet, sources, stamp, us)
 
@@ -87,6 +87,12 @@ def units(price: float, shares: float, quote: dict, listed: float | None) -> flo
         return 1.0
     r = shares * price / mv
     return r if abs(r - 1) > 0.2 else 1.0
+
+
+def us_classes(code: str) -> list[str]:
+    """The issuer's other US lines: the tickers SEC files under the same CIK (BRK.A beside BRK.B)."""
+    ciks = sec.load_ciks() if sec.CIKS.exists() else pd.Series(dtype=float)
+    return [c for c, k in ciks.items() if k == ciks.get(code) and c != code] if code in ciks else []
 
 
 def listed_value(code: str) -> float | None:
@@ -241,6 +247,9 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         dam = damodaran.industry_of(market, code)
         for _, o in listings.issuer(market, code).iterrows():  # an A+H issuer may be classified under its other line
             dam = dam or damodaran.industry_of(o["market"], o["code"])
+        for other in us_classes(code) if market == "us" else []:  # another share class's line (Berkshire's BRK.A)
+            dam = dam or damodaran.industry_of("us", other)
+        dam = dam or damodaran.industry_like(market, code, sheet.snapshot(market, today), g["street"].get("country"))
     except Exception as e:
         log.warning("damodaran: %s", e)
         dam = {}
