@@ -93,6 +93,15 @@ def priced_in(f: dict) -> str:
     return "hk" if f["market"] == "us" and country_of(f) in ("China", "Hong Kong") else f["market"]
 
 
+def group_of(f: dict) -> tuple[bool, bool | None]:
+    """The members a stock is set against (stage 18; market.implied): those of the market that prices it valued in its
+    form (banks, insurers and brokers on book; the rest), and in Hong Kong those of its home (China-based or not), so
+    Link isn't set against mainland issuers' premium nor 茅台 against banks priced at 0.8 times book. China-based:
+    Damodaran's country is China or the cash flows are CNY (a red chip incorporated in Hong Kong), as for the members."""
+    china = country_of(f) == "China" or f["valuation"]["report_currency"] == "CNY"
+    return f["kind"] in FINANCIAL, china if priced_in(f) == "hk" else None
+
+
 def inputs(f: dict, mkt: dict | None) -> dict:
     """The discount rates and the balance-sheet bridge, in the reporting currency. `mkt`: the implied return of the
     market that prices the stock (priced_in; market.implied); without it, Damodaran's published premium, said."""
@@ -102,8 +111,9 @@ def inputs(f: dict, mkt: dict | None) -> dict:
     rf, rf_date = rate(RATE_OF.get(cur, "us"))
     country = country_of(f)
     c, home = damodaran.country(country), damodaran.country(COUNTRY[home_market])
-    erp_market = mkt["erp"] if mkt else home["erp"]
-    erp = erp_market + c["crp"] - home["crp"]  # the company's country risk over its market's (Damodaran's)
+    ref = damodaran.country(mkt.get("country") or COUNTRY[home_market]) if mkt else home  # the group's home: China for
+    erp_market = mkt["erp"] if mkt else home["erp"]  # HK's China-based members, whose premium already carries its risk
+    erp = erp_market + c["crp"] - ref["crp"]  # the company's country risk over its group's (Damodaran's)
     ind, tax_m = industry(dam, kind), 0.0 if kind == "reit" else MARGINAL_TAX.get(country, 0.25)
     mcap, debt = v["market_cap_report"], 0.0 if fin else (b["debt"] or 0.0)
     beta = ind["beta"] if fin else dcf.relever(ind["unlevered_beta_cash"], debt / mcap, tax_m)
@@ -122,7 +132,7 @@ def inputs(f: dict, mkt: dict | None) -> dict:
     cost = lambda e: e if fin else None if spread is None else dcf.wacc(mcap, debt, e, rf + spread, tax_m)
     coe_pub = dcf.capm(rf, beta, c["erp"])
     return {"currency": cur, "rf": rf, "rf_date": rf_date, "rf_note": None if cur in RATE_OF else f"{cur}: the US yield used",
-            "country": country, "priced_in": home_market, "erp": erp, "erp_market": erp_market, "crp": c["crp"] - home["crp"], "industry": ind["name"],
+            "country": country, "priced_in": home_market, "erp": erp, "erp_market": erp_market, "crp": c["crp"] - ref["crp"], "industry": ind["name"],
             "market": dict(mkt) if mkt else {"r": None, "note": "the market's implied return couldn't be solved: Damodaran's published premium"},
             "region": ind["region"], "beta_source": "levered industry beta" if fin else "unlevered beta (cash-corrected), relevered",
             "beta": beta, "beta_note": "the absolute view's (published premium)", "debt_to_equity": debt / mcap, "cost_equity": coe, "rating": rating, "cost_debt": None if spread is None else rf + spread,
@@ -254,6 +264,33 @@ def consensus_years(f: dict, k: dict, today: date) -> dict:
     return out
 
 
+def normal(f: dict, k: dict) -> dict | None:
+    """A cyclical's normal year (stage 18), Damodaran's normalization by scaled averages ("Investment Valuation", ch.
+    22): "average the firm's return on investment or profit margins over prior periods ... a firm with an average
+    return on capital of 12 percent over prior periods and a current capital invested of $1,000 million would have
+    normalized operating income of $120 million". The margin variant applies it to today's revenue, which for a firm
+    whose revenue moves with its price (his commodity companies, normalized on the price first; memory makers) is
+    itself the cycle: Micron's FY2027 consensus revenue is 7 times FY2025's. So capital, which a price spike doesn't
+    inflate: the 10-year average pre-tax return on operating capital (equity + debt - cash - the non-operating assets
+    the bridge values apart, sheet.history's capital) x that capital today. Its revenue is that profit at the 10-year
+    average margin, so new capital earns the normal return (sales to capital = normal revenue / capital: "we also have
+    to normalize return on capital, reinvestment", Damodaran, "Ups and Downs", 2009). Without 5 years' returns or with
+    no capital today, the margin variant on the trailing revenue. None when the cycle's average margin is a loss."""
+    margin, rev0 = history(f, "ebit_margin", 10).mean(), f["valuation"]["ttm"]["revenue"]
+    if not margin > 0:
+        return None
+    capital = lambda x: x["equity"] + (x.get("debt") or 0) - (x.get("cash") or 0) - (x.get("nonop") or 0)
+    roc = [x["ebit_margin"] * x["revenue"] / c for x in f["history"][-10:] if x.get("ebit_margin") is not None
+           and x.get("revenue") and x.get("equity") is not None and (c := capital(x)) > 0]
+    now = capital({"equity": f["valuation"]["book_common"] or 0.0, "debt": k["debt"], "cash": k["cash"], "nonop": k["nonop"]})
+    if len(roc) < MOAT_YEARS or now <= 0 or float(np.mean(roc)) <= 0:
+        return {"source": "10-year average margin x trailing revenue", "margin": float(margin), "revenue": rev0,
+                "ebit": rev0 * margin, "roc": None, "capital": None, "years": len(roc)}
+    ebit = float(np.mean(roc)) * now
+    return {"source": "10-year average return on capital x today's capital", "margin": float(margin),
+            "revenue": ebit / margin, "ebit": ebit, "roc": float(np.mean(roc)), "capital": now, "years": len(roc)}
+
+
 def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     """Ten years of revenue growth and margins: the consensus years first, each a 12-month window both the revenue
     consensus (Yahoo's) and the profit consensus cover (a margin needs both: a window past the revenue forecasts ends
@@ -282,6 +319,20 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
         growth.append(r / prev_r - 1)
         margin.append(ebit0 * e / eps0 / r if eps0 and eps0 > 0 and e > 0 else m0)
         prev_r = r
+    n = len(growth)
+    nm = normal(f, k) if kind == "cyclical" else None
+    if nm:  # the consensus years as earned, then the normal year growing at the base rate: no consensus excess
+        # carried on ("double counting growth, once by normalizing earnings and again by using a higher growth rate",
+        # "Ups and Downs"; the measured shares are every company's, and a cyclical's consensus year is its cycle)
+        earned, r = [], rev0
+        for g_, m_ in zip(growth, margin):
+            r *= 1 + g_
+            earned.append((r, r * m_))
+        g0 = base if base is not None else g_term
+        return {"growth": [g0] * CONVERGENCE + [g0 + (g_term - g0) * t_ / (dcf.YEARS - CONVERGENCE) for t_ in range(1, 6)],
+                "margin": [nm["margin"]] * dcf.YEARS, "target_margin": nm["margin"], "consensus_years": n,
+                "revenue0": nm["revenue"], "earned": earned, "normal": nm, "margin_source": "10-year average",
+                "sales_to_capital": nm["revenue"] / nm["capital"] if nm["capital"] else None}
     shares = k.get("growth_shares") or [0.0] * CONVERGENCE
     if not growth:
         growth = [s.get("rev_cagr_3y") or s.get("rev_cagr_5y") or g_term]
@@ -334,26 +385,42 @@ def moat(series: pd.Series, cost: float, stable: float, keep: float) -> dict:
         return {"track": float((series > cost).mean()) if len(series) else None, "edge": None, "keep": keep,
                 "start": stable, "ronic": [], "years": 0, "moat": False}
     track, edge = float((series > cost).mean()), float(series.median() - stable)
+    return faded(track, edge, keep, stable)
+
+
+def faded(track: float, edge: float, keep: float, stable: float) -> dict:
     ronic = [stable + track * edge * keep ** (dcf.YEARS + j) for j in range(1, STAGE2 + 1)]
     return {"track": track, "edge": edge, "keep": keep, "start": stable + track * edge * keep ** dcf.YEARS,
-            "ronic": ronic, "years": STAGE2, "moat": True}
+            "ronic": ronic, "years": STAGE2, "moat": True, "stable": stable}
+
+
+def moat_case(m: dict, case: str | None) -> dict:
+    """The moat in a scenario (stage 18): "off", the excess returns end with the explicit years (Morningstar's no-moat
+    stage II of about a year); "on", they last as long as the edge allows (a track of 1: the odds that they go on
+    come true); else as graded."""
+    if case == "off" and m["moat"]:
+        return m | {"start": m["stable"], "ronic": [], "years": 0, "moat": False}
+    if case == "on" and m["moat"]:
+        return faded(1.0, m["edge"], m["keep"], m["stable"])
+    return m
 
 
 def dcf_value(f: dict, k: dict, path: dict, s2c: float, ronic: list[float], cost_shift=0.0, g_term=None) -> tuple[float, dict]:
     g = k["g"] if g_term is None else g_term
     cost = dcf.steps(k["wacc"] + cost_shift, k["stable_wacc"] + cost_shift)
-    res = dcf.fcff(f["valuation"]["ttm"]["revenue"], path["growth"], path["margin"],
+    res = dcf.fcff(path.get("revenue0") or f["valuation"]["ttm"]["revenue"], path["growth"], path["margin"],
                    dcf.steps(k["tax_effective"], k["tax_marginal"]), [s2c] * dcf.YEARS, cost, g,
-                   k["stable_wacc"] + cost_shift, [r + cost_shift for r in ronic], k["tax_marginal"])
+                   k["stable_wacc"] + cost_shift, [r + cost_shift for r in ronic], k["tax_marginal"], earned=path.get("earned"))
     equity = dcf.equity_value(res["operating"], k["debt"], k["minority"], k["cash"], k["nonop"])
     return equity / k["shares"] / k["fx"], res
 
 
-def peer_medians(f: dict, today: date) -> dict:
+def peer_medians(f: dict, today: date, q: float = 0.5) -> dict:
     """The peers' medians in the day's snapshot, the company left out: P/E, EV/Sales, PEG (forward P/E over consensus
     growth) and the profitable members' operating margin (the mature firms' margin a young company's target takes,
     Damodaran's advice). The group is the fact sheet's industry when it has at least 10 members (Damodaran's floor for
-    an industry average, damodaran.MIN_FIRMS; Apple's industry is IBM, Dell, HP and Super Micro), else its sector."""
+    an industry average, damodaran.MIN_FIRMS; Apple's industry is IBM, Dell, HP and Super Micro), else its sector.
+    `q`: another quantile of the multiples (a stand-in multiple's scenarios take the peers' quartiles, stage 18)."""
     snap, p = sheet.snapshot(f["market"], today), f.get("peers") or {}
     if snap.empty or not p:
         return {}
@@ -367,6 +434,8 @@ def peer_medians(f: dict, today: date) -> dict:
     peg = (g["fwd_pe"] / (g["fwd_growth"] * 100)).where((g["fwd_growth"] > 0) & (g["fwd_pe"] > 0))
     margin = (g["ebit"] / g["revenue_ttm"]).where(g["revenue_ttm"] > 0)
     profitable = margin[margin > 0]
-    return {"by": by, "group": group, "count": len(g), "pe": g["pe"].where(g["pe"] > 0).median(), "ev_sales": evs.median(),
-            "peg": peg.median(), "profitable": len(profitable),
-            "mature_margin": float(profitable.median()) if len(profitable) >= damodaran.MIN_FIRMS else None}
+    return {"by": by, "group": group, "count": len(g), "pe": g["pe"].where(g["pe"] > 0).quantile(q), "ev_sales": evs.quantile(q),
+            "peg": peg.quantile(q), "profitable": len(profitable),
+            "mature_margin": float(profitable.median()) if len(profitable) >= damodaran.MIN_FIRMS else None,
+            "mature_quartiles": [float(profitable.quantile(0.25)), float(profitable.quantile(0.75))]
+            if len(profitable) >= damodaran.MIN_FIRMS else None}

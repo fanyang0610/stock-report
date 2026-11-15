@@ -31,7 +31,7 @@ ABSOLUTE = {"dcf", "dcf_normal", "excess_return", "pb_roe", "ddm"}  # the method
 CONVERGE = 3  # years for the price to reach fair value: Morningstar's "generally within three years" (Equity Research
 # Methodology, 2020); value-to-price predicts abnormal returns for up to three years (Ali, Hwang and Trombley 2003)
 TABLE_CURRENCY = {"cn": "CNY", "us": "USD", "hk": "CNY"}  # Eastmoney's HK amounts are CNY (stage 9)
-NAMES = {"dcf": "DCF (FCFF, 10 years)", "dcf_normal": "DCF, margins normalized", "pe_own": "P/E against own history",
+NAMES = {"dcf": "DCF (FCFF, 10 years)", "dcf_normal": "DCF, normalized on capital", "pe_own": "P/E against own history",
          "pe_peers": "P/E against peers", "pe_normal": "own P/E on normalized EPS", "pb_own": "P/B against own history",
          "pb_roe": "excess-return model on average ROE", "evs_peers": "EV/Sales against peers", "peg_peers": "PEG against peers",
          "ddm": "dividend discount (two-stage)", "yield_own": "yield against own 5-year average",
@@ -52,17 +52,25 @@ def methods(f: dict, k: dict, kind: str, cons: dict, today: date, eps_factor: fl
     fwd_book = book + eps_ntm * shares * (1 - payout) if book else None
     per = lambda total: max(total, 0.0) / shares / fx
     window = "median" if kind == "cyclical" else "median_5y"  # a full cycle for a cyclical; else brokers' latest 5 years
-    multiple = lambda key: own[key].get(window) or own[key].get("median")
-    peers = value.peer_medians(f, today) if w & {"pe_peers", "evs_peers", "peg_peers"} else {}
+    q = k.get("quantile")  # a scenario: the multiples' quartile in place of their median (stage 18)
+    pick = lambda key, at: own[key].get(at.replace("median", f"q{round(q * 100)}") if q else at)
+    multiple = lambda key: pick(key, window) or pick(key, "median")
+    peers = value.peer_medians(f, today, q or 0.5) if w & {"pe_peers", "evs_peers", "peg_peers"} else {}
+    case = lambda m: value.moat_case(m, k.get("moat_case"))  # a scenario: the moat off or on
+    quartiles = lambda h: (h.quantile(0.75) - h.quantile(0.25)) / 2  # half the interquartile range: a quartile's move
     if {"dcf", "dcf_normal"} & set(w):
-        roic = value.moat(value.history(f, "roic", 10), k["wacc"], k["stable_wacc"], k["excess_keep"])
+        roic = case(value.moat(value.history(f, "roic", 10), k["wacc"], k["stable_wacc"], k["excess_keep"]))
         g_dcf = dcf.tested_growth(lambda x: dcf.terminal(1.0, x, k["stable_wacc"], roic["ronic"]), k["g"])
         path = value.paths(f, k, kind, cons | {"eps": eps}, g_dcf)
         m = value.history(f, "ebit_margin", 10)
-        if shift and len(m) >= 3:  # bear / bull: the long-run margin one standard deviation lower / higher
-            d = min(m.std(), abs(path["target_margin"])) * shift
+        peers_q = k.get("mature_quartiles") if path["margin_source"] == "profitable peers' median" else None
+        if shift and (len(m) >= 3 or peers_q):  # a scenario: the long-run margin at its source's 25th / 75th percentile:
+            # its own 10 years', or the mature peers' whose median it takes (a young firm's losses say how it got here,
+            # not where its margin settles: Damodaran's target margin)
+            d = min((peers_q[1] - peers_q[0]) / 2 if peers_q else quartiles(m), abs(path["target_margin"])) * shift
             path["margin"] = [x + d * min(i + 1, value.CONVERGENCE) / value.CONVERGENCE for i, x in enumerate(path["margin"])]
-        s2c, s2c_source = value.sales_to_capital(f, k)
+        s2c, s2c_source = (path["sales_to_capital"], "normal: new capital earns the cycle's average return") \
+            if path.get("sales_to_capital") else value.sales_to_capital(f, k)
         x, res = value.dcf_value(f, k, path, s2c, roic["ronic"], g_term=g_dcf)
         x = max(x, 0.0)
         out["dcf_normal" if kind == "cyclical" else "dcf"] = {
@@ -108,9 +116,9 @@ def methods(f: dict, k: dict, kind: str, cons: dict, today: date, eps_factor: fl
         x = per(res["value"])
         return {"value": x, "target": x * roll, "roe": roes, "roe_term": roes[-1], "fade": fade_, "moat": moat, "g": g_er,
                 "payout": payout, "pv_terminal_share": res["pv_terminal"] / res["value"] if res["value"] else None}
-    spread = lambda base: min(roe_hist.std(), abs(base)) * shift if shift and len(roe_hist) >= 3 else 0.0
+    spread = lambda base: min(quartiles(roe_hist), abs(base)) * shift if shift and len(roe_hist) >= 3 else 0.0
     if "excess_return" in w and book and eps:
-        moat = value.moat(roe_hist, coe, k["stable_cost"], k["excess_keep"])  # graded, as for the DCF's return on capital
+        moat = case(value.moat(roe_hist, coe, k["stable_cost"], k["excess_keep"]))  # graded, as the DCF's return on capital
         roes, b = [], book
         for e in eps:
             roes.append(e * shares / b)
@@ -122,15 +130,16 @@ def methods(f: dict, k: dict, kind: str, cons: dict, today: date, eps_factor: fl
         # capitalized the average for ever before)
         hist = value.history(f, "roe", 10 if kind == "cyclical" else 8)
         if len(hist):
-            roe, moat = float(hist.mean()), value.moat(hist, coe, k["stable_cost"], k["excess_keep"])
+            roe, moat = float(hist.mean()), case(value.moat(hist, coe, k["stable_cost"], k["excess_keep"]))
             x = on_book([roe + (moat["start"] - roe) * i / (dcf.YEARS - 1) for i in range(dcf.YEARS)], moat, spread(roe), 0)
             extra = excess(eps, roe * book / shares, coe, 1)  # the consensus years' earnings above (below) the average
             x["value"] = max(x["value"] + extra / fx, 0.0)
             out["pb_roe"] = x | {"roe_avg": roe, "excess_earnings": extra / fx, "target": x["value"] * roll}
     if "pe_normal" in w and multiple("pe"):
         nm = value.history(f, "net_margin", 10).mean()
+        year = value.normal(f, k)  # the normal year's revenue (stage 18; the trailing revenue carries the cycle)
         if not np.isnan(nm) and nm > 0:
-            e = t["revenue"] * nm / shares * eps_factor
+            e = (year["revenue"] if year else t["revenue"]) * nm / shares * eps_factor
             extra = excess(eps, e, coe, 0)
             out["pe_normal"] = {"multiple": multiple("pe"), "eps": e, "net_margin": nm, "excess_earnings": extra / fx,
                                 "target": max(multiple("pe") * e + extra, 0.0) / fx}
@@ -258,8 +267,12 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     today = today or date.today()
     path = folder(market, fact_sheet.normal(market, code)) / "facts.json"
     f = load(path) if path.exists() and load(path)["built"][:10] == today.isoformat() else fact_sheet.build(market, code, today)
-    k, v = value.inputs(f, markets.implied(value.priced_in(f), today)), f["valuation"]
-    k["mature_margin"] = value.peer_medians(f, today).get("mature_margin")  # the young's target margin (value.paths)
+    priced, (fin, home) = value.priced_in(f), value.group_of(f)
+    k, v = value.inputs(f, markets.implied(priced, today, fin, home)), f["valuation"]
+    k["groups"] = {key: (markets.implied(priced, today, key == "financial", home) or {}).get("r")  # page 1: the gap between
+                   for key in ("financial", "other")}  # the forms, so the sector view is said, not hidden in every rating
+    pm = value.peer_medians(f, today)  # the young's target margin (value.paths) and its quartiles (the scenarios)
+    k["mature_margin"], k["mature_quartiles"] = pm.get("mature_margin"), pm.get("mature_quartiles")
     t = v["ttm"]
     cur_rev = value.convert(yahoo.load_fx(), t["revenue"], k["currency"], TABLE_CURRENCY[market]) if t["revenue"] else None
     rates = fade.base_rates(market, cur_rev, {}) if cur_rev else {}
@@ -278,14 +291,18 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     if main is None or status:
         return finish(out | {"rating": status or "不评级", "reason": reason or "no method could value it", "methods": found})
     target, price = found[main]["target"], v["price"]
+    def at(e: float = 1.0, s: int = 0, **scenario) -> float:  # the main method with one input moved; a case it can't
+        x = (methods(f, k | scenario, kind, cons, today, e, s, only={main}).get(main) or {}).get("target")  # value: the
+        return target if x is None else x  # base (a value of 0 stands)
     lo, hi = cons["range"] or (1.0, 1.0)
-    def shifted(e: float, s: int) -> float:  # a shifted case the main method can't value: the base (a value of 0 stands)
-        x = (methods(f, k, kind, cons, today, e, s).get(main) or {}).get("target")
-        return target if x is None else x
-    bear, bull = shifted(lo, -1), shifted(hi, +1)
+    q = rates.get("fifth_recent_quartiles") if k.get("base_growth") is not None else None
+    cases = {"analysts": (at(lo), at(hi)), "margin": (at(s=-1), at(s=+1)), "moat": (at(moat_case="off"), at(moat_case="on")),
+             "growth": (at(base_growth=q[0]), at(base_growth=q[1])) if q else (target, target),
+             "multiple": (at(quantile=0.25), at(quantile=0.75)) if main not in ABSOLUTE else (target, target)}
+    bear, bull = judge.scenarios(target, cases)
     dividend = value.next_dividend(f, k, cons)
     acts = judge.checks(f, kind)
-    u = judge.band(target, bear, bull, bool(acts["widen"]))
+    u = judge.uncertainty(target, bear, bull, bool(acts["widen"]), k["market_return"])
     j = judge.judge(main, found, order, price, dividend, k["market_return"], u, acts)
     carry = price * (1 + k["cost_equity"]) - dividend  # the price a year on, earning its cost of equity
     move = lambda x: converge(x, carry)
@@ -311,15 +328,16 @@ def build(market: str, code: str, today: date | None = None) -> dict:
             log.warning("%s sections for the tail scenario: %s", code, e)
     skipped = [m for m in order[:order.index(main)] if m in found]
     out |= {"rating": j["rating"], "state": j["state"], "main": main, "main_skipped": skipped, "main_view": j["main_view"], "checks_view": j["checks_view"],
-            "cross": j["cross"], "acts": acts, "uncertainty": u, "target": target12, "fair_value": target,
+            "cross": j["cross"], "acts": acts, "uncertainty": u, "scenarios": cases, "target": target12, "fair_value": target,
+            "price_to_fair": (1 + k["market_return"]) / (1 + k["market_return"] + j["fair_excess"]) if 1 + k["market_return"] + j["fair_excess"] > 0 else None,
             "fair_excess": j["fair_excess"], "expected_return": expected, "excess_return": expected - k["market_return"],
             "methods": found, "bear": move(bear), "bull": move(bull), "fair_bear": bear, "fair_bull": bull,
             "market_return": k["market_return"], "dividend_next": dividend, "reverse": rev, "sensitivity": sensitivity(f, k, found),
             "absolute": {"fair_value": absolute, "cost_equity": pub["cost_equity"], "erp": pub["erp"],
                          "market_return": pub["market_return"],
                          "gap": None if absolute is None else judge.gap(absolute, price, dividend, pub["market_return"]),
-                         "view": None if absolute is None else judge.view(judge.gap(absolute, price, dividend, pub["market_return"]), u["band"])},
-            "tail": judge.tail(f, sections, target, price, dividend, k["market_return"], u["band"], j["rating"]),
+                         "view": None if absolute is None else judge.view(judge.gap(absolute, price, dividend, pub["market_return"]), u, pub["market_return"])},
+            "tail": judge.tail(f, sections, target, price, dividend, k["market_return"], u, j["rating"]),
             "base_rates": fade.base_rates(market, cur_rev, {"forecast": ours, "implied": rev.get("implied_growth_5y"),
                                                        "street": needs.get("implied_growth_5y")} |
                                           {x["method"]: (x.get("needs") or {}).get("implied_growth_5y") for x in j["cross"]}) if cur_rev else {},
@@ -355,7 +373,7 @@ def show(r: dict) -> str:
                      (f"  value {x['value']:.2f}" if x.get("value") is not None else "") + extra)
     s, u, a = r["street"], r["uncertainty"], r["absolute"]
     lines.append(f"  fair value {r['fair_value']:.2f} (bear {r['fair_bear']:.2f} / bull {r['fair_bull']:.2f}): excess {pct(r['fair_excess'])}"
-                 f" against a band of ±{u['band']:.0%} ({r['state']}; main {r['main_view']}, checks {r['checks_view']}); 12-month target "
+                 f", price/fair {r['price_to_fair'] or 0:.2f} against {1 - u['discount']:.2f} / {1 + u['premium']:.2f} ({u['level']}; {r['state']}; main {r['main_view']}, checks {r['checks_view']}); 12-month target "
                  f"{r['target']:.2f}, expected {pct(r['expected_return'])} vs market {r['market_return']:.1%}")
     rv = r["reverse"]
     lines.append(f"  implied return {'-' if rv.get('implied_return') is None else f"{rv['implied_return']:.2%}"} against a required "

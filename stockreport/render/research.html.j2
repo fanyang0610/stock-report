@@ -65,10 +65,10 @@
     <div><b>{{ F.price(v.target, r.q) }}</b><span>12 个月目标价</span></div>
     <div><b>{{ F.price(v.price, r.q) }}</b><span>现价（{{ f.price.date }}）</span></div>
     <div><b>{{ F.pct(v.expected_return, True) }}</b><span>预期回报（含股息）</span></div>
-    <div><b>{{ F.pct(v.market_return) }}</b><span>大盘现价隐含回报</span></div>
+    <div><b>{{ F.pct(v.market_return) }}</b><span>同组公司现价隐含回报</span></div>
     <div><b>{{ F.price(v.fair_value, r.q) if v.fair_value is number else '-' }}</b><span>合理价值（约 3 年内收敛）</span></div>
-    <div><b>{{ F.pct(v.fair_excess, True) if v.fair_excess is number else '-' }}</b><span>合理价值的超额回报（相对大盘）</span></div>
-    <div><b>±{{ F.pct(v.uncertainty.band, False, 0) }}</b><span>评级门槛：上面的超额回报须超过（不确定性越大越宽）</span></div>
+    <div><b>{{ F.pct(v.fair_excess, True) if v.fair_excess is number else '-' }}</b><span>合理价值的超额回报（相对同组公司）</span></div>
+    <div><b>{{ '%.2f' % v.price_to_fair if v.price_to_fair is number else '-' }} 倍</b><span>现价 ÷ 合理价值：{{ '%.2f' % (1 - v.uncertainty.discount) }} 倍以下买入，{{ '%.2f' % (1 + v.uncertainty.premium) }} 倍以上卖出（不确定性越大越宽）</span></div>
     <div><b>{{ '{:,.2f}'.format(v.bear) }} — {{ F.price(v.bull, r.q) }}</b><span>12 个月悲观 — 乐观</span></div>
   </div>
   {% else %}<div class="nums"><div style="grid-column: span 4"><b>没有目标价</b><span>{{ v.reason }}</span></div></div>{% endif %}
@@ -254,8 +254,8 @@
 <div><h3>折现率和长期假设（{{ k.currency }}）</h3>
 <table class="kv small">
 <tr><td>无风险利率（10 年国债，{{ k.rf_date }}）</td><td class="num">{{ F.pct(k.rf, False, 2) }}</td></tr>
-{% if k.market and k.market.r is number %}<tr><td>大盘现价隐含回报（{{ k.market.members }} 只）</td><td class="num">{{ F.pct(k.market.r, False, 2) }}</td></tr>{% endif %}
-<tr><td>股权风险溢价（大盘隐含{% if k.crp %}，国别差 {{ F.pct(k.crp, True, 2) }}{% endif %}）</td><td class="num">{{ F.pct(k.erp, False, 2) }}</td></tr>
+{% if k.market and k.market.r is number %}<tr><td>同组公司现价隐含回报（{{ k.market.members }} 只）</td><td class="num">{{ F.pct(k.market.r, False, 2) }}</td></tr>{% endif %}
+<tr><td>股权风险溢价（同组公司隐含{% if k.crp %}，国别差 {{ F.pct(k.crp, True, 2) }}{% endif %}）</td><td class="num">{{ F.pct(k.erp, False, 2) }}</td></tr>
 <tr><td>要求回报（股权成本）</td><td class="num">{{ F.pct(k.cost_equity) }}</td></tr>
 <tr><td>绝对视角：公布溢价 · 行业贝塔</td><td class="num">{{ F.pct(k.published.erp, False, 2) }} · {{ '%.2f' | format(k.beta) }}</td></tr>
 {% if k.wacc %}<tr><td>资本成本（WACC）· 债务评级</td><td class="num">{{ F.pct(k.wacc) }} · {{ k.rating }}</td></tr>{% endif %}

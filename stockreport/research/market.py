@@ -14,14 +14,15 @@ review of 2026-11-13, R1). In equity terms, so banks and insurers count with the
   return (value.moat on the market's own ROE history, weighted by today's book, faded by fade.excess_keep), then its
   cost; stable growth at the yield unless the sensitivity test lowers it (dcf.tested_growth).
 The yield is the members' reporting currencies' 10-year yields weighted by value (the cash flows' currency), so the
-premium is the return less it. By construction the market is at its price at this return."""
+premium is the return less it. By construction the market is at its price at this return. Since stage 18 a stock is
+set against its group's (select: financials or not, and in Hong Kong China-based or not), each at its own price."""
 
 from datetime import date
 from functools import lru_cache
 
 import pandas as pd
 
-from stockreport.research import dcf, fade, sheet, value
+from stockreport.research import damodaran, dcf, fade, sheet, value
 
 HISTORY_YEARS, MEDIAN_YEARS = 10, 8  # the moat's record and the ROE's own median, as for a company (value.moat, paths)
 
@@ -62,11 +63,41 @@ def worth(a: dict, p: dict, r: float, excess_keep: float) -> dict:
     return dcf.fcfe(a["book"], p["roe"], growth, r, g, moat["ronic"]) | {"g": g, "moat": moat}
 
 
-@lru_cache(maxsize=6)
-def implied(market: str, today: date) -> dict | None:
-    """{r, rf, erp, ...}: the market's implied return and premium today; None without a snapshot or a solution (the
-    caller falls back to Damodaran's published premium, said)."""
-    a = aggregate(sheet.snapshot(market, today), market)
+def china(snap: pd.DataFrame, market: str) -> pd.Series:
+    """China-based members (value.group_of's test on each): Damodaran's country (his company list) is China, or
+    they report in CNY: red chips such as CNOOC, CITIC and China Resources Land are incorporated in Hong Kong, where
+    he lists them, but their business and cash flows are the mainland's."""
+    co = damodaran.load("companies").query("market == @market").drop_duplicates("code").set_index("code")["country"]
+    ccy = snap["report_currency"] if "report_currency" in snap else snap["currency"] if "currency" in snap else None
+    cny = ccy.eq("CNY") if ccy is not None else pd.Series(market == "cn", index=snap.index)
+    return snap["code"].map(co).eq("China") | cny
+
+
+def select(snap: pd.DataFrame, market: str, financial: bool | None, home: bool | None) -> pd.DataFrame:
+    """The members of a stock's group (stage 18): those valued in its form (the screening's financials, whose balance
+    sheet is the product, against the rest) and, in Hong Kong, of its home (China-based or not); None: all."""
+    keep = pd.Series(True, index=snap.index)
+    if financial is not None:
+        keep &= snap["financial"].astype(bool) == financial
+    if home is not None:
+        keep &= china(snap, market) == home
+    return snap[keep]
+
+
+@lru_cache(maxsize=24)
+def implied(market: str, today: date, financial: bool | None = None, home: bool | None = None) -> dict | None:
+    """{r, rf, erp, ...}: the implied return and premium today of the market's members in a stock's group (select; all
+    by default), so a stock is set against the companies valued in its form and priced with its home's risk: on
+    2026-11-14 CN's financials implied 12.8% and the rest 6.3%, HK's China-based members 11.5% and the rest 7.7%
+    (the review of stage 15; Gebhardt, Lee and Swaminathan 2001: industry membership is one of the four things a
+    firm's implied cost of capital depends on). A group under Damodaran's floor for an average (10 members) takes its
+    form's across homes, then the market's. None without a snapshot or a solution (the caller falls back to Damodaran's
+    published premium, said)."""
+    snap = sheet.snapshot(market, today)
+    s = select(snap, market, financial, home) if len(snap) else snap
+    if (financial, home) != (None, None) and (len(s) < damodaran.MIN_FIRMS):
+        return implied(market, today, financial, None) if home is not None else implied(market, today)
+    a = aggregate(s, market)
     if a is None:
         return None
     base = fade.base_rates(market, float("inf"), {}).get("fifth_recent")  # the largest fifth: the market is its largest
@@ -76,8 +107,8 @@ def implied(market: str, today: date) -> dict | None:
     if r is None:
         return None
     w = worth(a, p, r, keep)
-    snap = sheet.snapshot(market, today)
     return {"r": r, "rf": a["rf"], "erp": r - a["rf"], "members": a["members"], "covered": a["covered"],
+            "financial": financial, "china": home, "country": "China" if home else value.COUNTRY[market],
             "snapshot": snap["snap_date"].iloc[0], "pb": 1 / a["book"], "pe": 1 / a["earnings"] if a["earnings"] > 0 else None,
             "pe_next": 1 / a["earnings_next"] if a["earnings_next"] > 0 else None, "roe_next": p["roe"][0],
             "roe_median": p["roe_target"], "roe_history": {str(k): v for k, v in a["roe_history"].items()},

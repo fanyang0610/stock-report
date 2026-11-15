@@ -41,12 +41,16 @@ def steps(start: float, end: float) -> list[float]:
 
 
 def fcff(revenue0: float, growth: list[float], margin: list[float], tax: list[float], sales_to_capital: list[float],
-         cost: list[float], g_term: float, wacc_term: float, ronic: list[float], tax_term: float, nol: float = 0.0) -> dict:
+         cost: list[float], g_term: float, wacc_term: float, ronic: list[float], tax_term: float, nol: float = 0.0,
+         earned: list[tuple[float, float]] | None = None) -> dict:
     """Value of the operating assets: ten years of free cash flow to the firm, then the stable period growing at
     g_term (terminal). Reinvestment is next year's revenue change over the sales-to-capital ratio (one year's lag,
     Ginzu's default); in the stable period it is g / the return on new capital of NOPAT: `ronic` for the years excess
     returns last, then the cost of capital (growth adds no value). A tax loss carried forward shields operating income
-    until used."""
+    until used. `earned`: the first years' (revenue, operating income) as forecast, while the paths describe a normal
+    year (a cyclical's consensus years: their income above or below normal is residual income, Damodaran's
+    normalization; the reinvestment and the later years follow the normal path, so a price-driven peak takes no
+    capital it won't keep)."""
     rev = [revenue0]
     for g in growth:
         rev.append(rev[-1] * (1 + g))
@@ -58,6 +62,9 @@ def fcff(revenue0: float, growth: list[float], margin: list[float], tax: list[fl
         left = left - e if e < 0 else max(left - e, 0)
     nxt = rev[2:] + [rev_term]
     reinvest = [(nxt[t] - rev[t + 1]) / sales_to_capital[t] for t in range(YEARS)]
+    shown = rev[1:]
+    for t, (r, e) in enumerate(earned or []):
+        shown[t], ebit[t], nopat[t] = r, e, e if e <= 0 else e * (1 - tax[t])
     flows = [n - r for n, r in zip(nopat, reinvest)]
     factor, disc = 1.0, []
     for c in cost:
@@ -65,7 +72,7 @@ def fcff(revenue0: float, growth: list[float], margin: list[float], tax: list[fl
         disc.append(factor)
     tv = terminal(rev_term * margin[-1] * (1 - tax_term), g_term, wacc_term, ronic)
     pv = sum(f * d for f, d in zip(flows, disc))
-    return {"revenue": rev[1:], "ebit": ebit, "nopat": nopat, "reinvestment": reinvest, "fcff": flows, "discount": disc,
+    return {"revenue": shown, "ebit": ebit, "nopat": nopat, "reinvestment": reinvest, "fcff": flows, "discount": disc,
             "terminal_value": tv, "pv_terminal": tv * disc[-1], "pv_flows": pv, "operating": pv + tv * disc[-1]}
 
 

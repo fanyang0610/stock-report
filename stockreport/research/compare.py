@@ -62,7 +62,7 @@ def screening(facts: dict, val: dict, market_pe: float | None, findings: list[di
         if kind == "fast_grower":
             drivers.append("快速成长：筛选看当前和明年的数字，研究看十年现金流，增长能持续多久决定价值")
         if kind == "cyclical":
-            drivers.append("周期：研究用正常化利润（{target_margin} 的长期利润率），筛选用当前利润，周期高点时两者差得最远")
+            drivers.append("周期：研究用正常化利润（自身 10 年平均资本回报率乘现有资本，一致预期年份高出的部分另计），筛选用当前利润，周期高点时两者差得最远")
         if not drivers:
             drivers.append("估值：研究的合理价值超额回报 {fair_excess}，筛选的价值项只占四分之一（价值评级 {scr_value}）")
     return {"view": view, "agreement": agreement, "drivers": drivers, "keys": keys,
@@ -155,6 +155,17 @@ def needs(x: dict, main: str, shares: dict) -> str:
     return ""
 
 
+LEVEL = {"low": "低", "medium": "中", "high": "高", "very high": "很高", "extreme": "极高"}  # Morningstar's levels
+MARKET = {"cn": "A股", "hk": "港股", "us": "美股"}  # the market whose members a stock's group is drawn from
+
+
+def threshold(v: dict) -> str:
+    """Price over fair value against the level's two sides (stage 18: Morningstar's table)."""
+    u, r = v["uncertainty"], v.get("price_to_fair")
+    return (f"现价相当于合理价值的 {r:.2f} 倍" if r is not None else "合理价值为零") + \
+        f"；不确定性{LEVEL[u['level']]}，{1 - u['discount']:.2f} 倍以下买入、{1 + u['premium']:.2f} 倍以上卖出"
+
+
 def basis(f: dict, v: dict, index: str) -> list[str]:
     """The rating's basis on page 1, each line by code with its figures."""
     if v.get("target") is None:
@@ -164,10 +175,17 @@ def basis(f: dict, v: dict, index: str) -> list[str]:
     shares = (v.get("base_rates") or {}).get("share_at_least") or {}
     r = rv.get("implied_return")
     implied = (f"现价隐含年回报 {pct(r) if r is not None else '低于 1%'}，" if main in ABSOLUTE else "")
-    out = [implied + f"要求回报 {pct(k['cost_equity'])}（{index}现价隐含的股权风险溢价 "
+    home = {True: "内地", False: "非内地"}.get(mk.get("china"), "")
+    place = MARKET.get(k.get("priced_in"), index) + "中"
+    group = home + {True: "金融股", False: "非金融公司"}.get(mk.get("financial"), "成分")
+    out = [implied + f"要求回报 {pct(k['cost_equity'])}（{place}{group}现价隐含的股权风险溢价 "
            f"{pct(k['erp_market'])}" + (f"，国别风险差 {pct(k['crp'], True)}" if abs(k.get("crp") or 0) >= 0.0005 else "") +
-           f"，加无风险利率 {pct(k['rf'], digits=2)}）；按{METHOD[main]}，合理价值的超额回报 {pct(v['fair_excess'], True)}，评级门槛 ±{u['band']:.0%}"
+           f"，加无风险利率 {pct(k['rf'], digits=2)}）；按{METHOD[main]}，合理价值的超额回报 {pct(v['fair_excess'], True)}，{threshold(v)}"
            if mk.get("r") is not None else f"大盘的隐含回报未能求出，用 Damodaran 公布的股权风险溢价 {pct(k['erp'])}"]
+    gp = k.get("groups") or {}
+    if mk.get("r") is not None and mk.get("financial") is not None and gp.get("financial") and gp.get("other"):
+        out.append(f"分组比较：{place}{home}金融股现价隐含年回报 {pct(gp['financial'])}，{home}其他公司 {pct(gp['other'])}。两组的差距是"
+                   f"市场对行业的定价（金融股按账面估值），本股只和{group}比，不替市场判断哪一组更便宜")
     for m in v.get("main_skipped") or []:
         out.append(f"{METHOD[m]}给不出正的价值（股权价值为负按 0 计），合理价值由{METHOD[main]}给出")
     if v["state"] == "unresolved":
@@ -186,7 +204,7 @@ def basis(f: dict, v: dict, index: str) -> list[str]:
         if v["state"] == "blocked":
             out.append(f"{CHECK[a['check']]}：{explain(a, f)}，不给买入（{METHOD[main]}看买入）")
     for a in (v.get("acts") or {}).get("widen") or []:
-        out.append(f"{CHECK[a['check']]}：{explain(a, f)}，评级门槛放宽一档至 ±{u['band']:.0%}")
+        out.append(f"{CHECK[a['check']]}：{explain(a, f)}，不确定性上调一档至{LEVEL[u['level']]}")
     for t in v.get("tail") or []:
         line = {"vie": "VIE（协议控制）结构失效", "delisting": "美国退市"}[t["risk"]]
         if t["value"] is None:

@@ -1,12 +1,20 @@
-"""Research stage 15: the rating from the main method's fair value (PLAN.md "Rating"), the way the investment-research
+"""Research stages 15 and 18: the rating from the main method's fair value (PLAN.md "Rating"), the way the investment-research
 skill asks: one main method per type with the others as cross-checks, the skills' checks acting on the rating, and
 discrete risks as a scenario, never in the discount rate.
-- The gap: (fair value - price + next year's dividend) / price - the market's expected return, the market's being its
-  implied return (market.py), so a stock priced like the market comes out at 0. 买入 at +band or more, 卖出 at -band
-  or worse, else 持有.
-- The band: the main method's bear-to-bull half-range, rounded up to 5 points, at least the brokers' 10% and at most
-  Morningstar's 75%; an earnings red flag moves it to the next step of Morningstar's margins of safety (20, 30, 40, 50,
-  75% at low to extreme uncertainty).
+- The gap: (fair value - price + next year's dividend) / price - the market's expected return, the market's being the
+  implied return of the stock's group (market.py), so a stock priced like its group comes out at 0.
+- The rating (stage 18): Morningstar's two-sided table on price over fair value (Uncertainty Rating Methodology Update
+  FAQ, 2022): 5 stars at a 20 / 30 / 40 / 50 / 75% discount, 1 star at a 25 / 35 / 55 / 75 / 300% premium at low /
+  medium / high / very high / extreme uncertainty. Price over fair value is today's price against the 12-month fair
+  value plus its dividend brought back a year at the market's return, (1 + m) / (1 + m + gap): 买入 at or below 1 -
+  the discount, 卖出 at or above 1 + the premium, else 持有. Until stage 18 a symmetric 10-75% band on the gap.
+- The level: Morningstar's bear and bull are the outcomes with a 25% chance of worse and of better, and "the distance
+  between the bull and bear cases in relation to the fair value estimate was used to assign an uncertainty rating".
+  Each scenario input of the main method moves to its own quartile (rating.build: the analysts' range, the margin or
+  ROE, growth beyond the consensus, the moat off or on, a stand-in multiple's quartiles), and their effects are
+  combined as independent (the root of the sum of squares: moving every input to its quartile at once is a far rarer
+  case than 1 in 4). The level is the lowest whose 5-star discount covers the bear-to-bull half-range (Morningstar
+  publishes no cut-offs: code's reading); an earnings red flag moves it one level up.
 - Cross-checks: each other method's gap the same way. When most of them (more than half, each on its own gap, nothing
   averaged) rate the opposite way (买入 against 卖出), the state is unresolved and the rating 持有, with what the cross-check would need in the main method's terms (the
   skill: explain the economic reason, never average it away, keep it unresolved rather than force a rating).
@@ -26,8 +34,8 @@ from collections import Counter
 from stockreport.research import value
 from stockreport.research.checks import FINANCIAL
 
-BAND = (0.10, 0.75)  # at least the brokers' 10%, at most Morningstar's margin of safety for extreme uncertainty
-STEPS = [0.20, 0.30, 0.40, 0.50, 0.75]  # Morningstar's margins of safety for its top rating, low to extreme uncertainty
+LEVELS = [("low", 0.20, 0.25), ("medium", 0.30, 0.35), ("high", 0.40, 0.55), ("very high", 0.50, 0.75),
+          ("extreme", 0.75, 3.00)]  # Morningstar's Uncertainty Ratings: the discount for 5 stars, the premium for 1 star
 QUALITY_TYPES = {"ordinary", "fast_grower", "cyclical", "income", "holding"}  # established businesses: the screen's
 # indicators apply (financials skip them; a REIT's profit carries revaluations and it grows on new equity; a loss-maker
 # fails them by construction: quality-screen asks other measures of the immature)
@@ -35,19 +43,34 @@ UNCOVERED = 3  # dividends above free cash flow in most of the last 5 years: "re
 CHINA = {"China", "Hong Kong"}
 
 
-def view(gap: float, band: float) -> str:
-    return "买入" if gap >= band else "卖出" if gap <= -band else "持有"
+def view(gap: float, u: dict, market_return: float) -> str:
+    """买入 / 持有 / 卖出 from price over fair value (today's: the 12-month value and dividend a year back at the
+    market's return) against the level's discount and premium."""
+    worth = 1 + market_return + gap  # (fair value + dividend) / price
+    ratio = (1 + market_return) / worth if worth > 0 else math.inf
+    return "买入" if ratio <= 1 - u["discount"] + 1e-12 else "卖出" if ratio >= 1 + u["premium"] - 1e-12 else "持有"
 
 
 def gap(value: float, price: float, dividend: float, market_return: float) -> float:
     return (value - price + dividend) / price - market_return
 
 
-def band(target: float, bear: float, bull: float, widen: bool) -> dict:
-    spread = (max(bull, target, bear) - min(bull, target, bear)) / 2 / target if target > 0 else math.inf
-    b = min(max(math.ceil(spread * 20 - 1e-9) / 20, BAND[0]), BAND[1]) if math.isfinite(spread) else BAND[1]
-    wide = next((s for s in STEPS if s > b + 1e-9), BAND[1]) if widen else b
-    return {"scenario_half_range": spread, "band": wide, "band_scenarios": b}
+def scenarios(target: float, inputs: dict[str, tuple[float, float]]) -> tuple[float, float]:
+    """Bear and bull from each input's value at its 25th and 75th percentile, combined as independent effects."""
+    down = math.sqrt(sum(max(target - min(v), 0.0) ** 2 for v in inputs.values()))
+    up = math.sqrt(sum(max(max(v) - target, 0.0) ** 2 for v in inputs.values()))
+    return max(target - down, 0.0), target + up
+
+
+def uncertainty(target: float, bear: float, bull: float, widen: bool, market_return: float) -> dict:
+    """The level from the bear-to-bull half-range, a red flag one level up; with the gaps at which it is 买入 and 卖出
+    at the market's return (for the report: +buy or more, -sell or worse)."""
+    half = (max(bull, target, bear) - min(bull, target, bear)) / 2 / target if target > 0 else math.inf
+    i = next((n for n, (_, d, _p) in enumerate(LEVELS) if half <= d + 1e-9), len(LEVELS) - 1)
+    name, d, p = LEVELS[min(i + bool(widen), len(LEVELS) - 1)]
+    m = 1 + market_return
+    return {"level": name, "level_scenarios": LEVELS[i][0], "discount": d, "premium": p, "scenario_half_range": half,
+            "buy": m / (1 - d) - m, "sell": m - m / (1 + p)}
 
 
 def checks(f: dict, kind: str) -> dict:
@@ -85,8 +108,8 @@ def judge(main: str, found: dict, order: list[str], price: float, dividend: floa
     rows = [{"method": m, "target": found[m]["target"], "gap": gap(found[m]["target"], price, dividend, market_return)}
             for m in order if m != main and m in found and found[m].get("target") is not None]
     for r in rows:
-        r["view"] = view(r["gap"], b["band"])
-    first = view(g, b["band"])
+        r["view"] = view(r["gap"], b, market_return)
+    first = view(g, b, market_return)
     opposite = {"买入": "卖出", "卖出": "买入"}.get(first)
     votes = Counter(r["view"] for r in rows)
     others = max(votes, key=lambda v: (votes[v], v == "持有")) if rows else None  # the view most of them give (ties: 持有)
@@ -103,7 +126,7 @@ def exposed(f: dict) -> bool:
     return value.country_of(f) in CHINA and f["market"] != "cn"
 
 
-def tail(f: dict, sections: dict | None, fair: float, price: float, dividend: float, market_return: float, b: float,
+def tail(f: dict, sections: dict | None, fair: float, price: float, dividend: float, market_return: float, b: dict,
          rating: str) -> list[dict]:
     """The discrete risks that apply, each with its value if it happens and the yearly chance at which the rating
     would fall a step (the fair value's gap with that chance of the tail's value, against the band)."""
@@ -114,7 +137,7 @@ def tail(f: dict, sections: dict | None, fair: float, price: float, dividend: fl
         out.append({"risk": "vie", "value": 0.0})
     if f["market"] == "us":
         out.append({"risk": "delisting", "value": None if hk else 0.0, "line": hk[0]["code"] if hk else None})
-    floor = {"买入": b, "持有": -b}.get(rating)  # the gap at which it falls a step
+    floor = {"买入": b["buy"], "持有": -b["sell"]}.get(rating)  # the gap at which it falls a step
     for x in out:
         x["breakeven"] = None
         if x["value"] is not None and floor is not None:

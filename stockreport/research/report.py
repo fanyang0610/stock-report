@@ -23,7 +23,7 @@ from stockreport.research import (CUR, charts, compare, folder, load, money, num
 from stockreport.research import facts as fact_sheet
 
 log = logging.getLogger(__name__)
-NAMES_CN = {"dcf": "现金流折现（DCF）", "dcf_normal": "现金流折现（正常化利润率）", "pe_own": "市盈率 × 自身历史",
+NAMES_CN = {"dcf": "现金流折现（DCF）", "dcf_normal": "现金流折现（正常化利润）", "pe_own": "市盈率 × 自身历史",
             "pe_peers": "市盈率 × 同行", "pe_normal": "自身市盈率 × 正常化盈利", "pb_own": "市净率 × 自身历史",
             "pb_roe": "超额收益模型（平均 ROE）", "evs_peers": "企业价值/销售额 × 同行", "peg_peers": "PEG × 同行",
             "ddm": "股息折现（两阶段）", "yield_own": "股息率 × 自身 5 年均值", "excess_return": "超额收益模型（账面权益）"}
@@ -207,7 +207,7 @@ def summary(f: dict, v: dict, doc: dict, limit: int = 4000) -> str:
     else:
         lines.append(f"评级：{v['rating']}　12 个月目标价 {price(v['target'], q)}（现价 {price(v['price'], q)}，"
                      f"{pct(v['target'] / v['price'] - 1, True, 0)}），预期回报 {pct(v['expected_return'], True)}（含股息），"
-                     f"大盘现价隐含 {pct(v['market_return'])}")
+                     f"同组公司现价隐含 {pct(v['market_return'])}")
         if number(v.get("fair_value")):
             lines.append(f"合理价值 {price(v['fair_value'], q)}（{pct(v['fair_value'] / v['price'] - 1, True, 0)}）；股价一般约 3 年"
                          f"向合理价值靠拢，所以 12 个月目标价只计入约三分之一的差距")

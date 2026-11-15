@@ -216,5 +216,7 @@ def base_rates(market: str, revenue_now: float, rates: dict[str, float | None], 
     same, now = d[d["fifth"] == fifth]["g"], d[(d["fifth"] == fifth) & (d["end"] == cols[-2])]["g"]  # cols[-1] may be partial
     return {"years": f"{cols[0]}-{cols[-1]}", "fifth": fifth + 1, "count": len(same), "median": float(same.median()),
             "fifth_recent": float(now.median()) if len(now) else None, "recent_window": f"{int(cols[-2]) - years}-{cols[-2]}",
+            "fifth_recent_quartiles": [float(now.quantile(0.25)), float(now.quantile(0.75))] if len(now) else None,  # the
+            # scenarios' growth (stage 18: Morningstar's bear and bull are the 25th and 75th percentile outcomes)
             "market_median": float(d["g"].median()), "recent_median": float(rows[-1]["g"].median()),
             "share_at_least": {name: float((same >= x).mean()) if x is not None else None for name, x in rates.items()}}

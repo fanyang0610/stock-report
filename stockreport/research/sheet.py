@@ -112,7 +112,7 @@ def history(a: pd.DataFrame, dps: dict[str, float], kind: str, market: str = "cn
     h["dps"] = h["period"].str[:4].map(dps)
     h[{"bank": FIN_OFF, "insurer": FIN_OFF, "broker": FIN_OFF, "reit": ["ocf_to_profit"]}.get(kind, [])] = np.nan
     keep = ["period", "currency", "revenue", "gp", "op_income", "ni", "ni_core", "eps", "dps", "ocf", "capex", "fcf",
-            "div_paid", "buyback", "assets", "equity", "debt", "cash", "net_debt", "goodwill", "shares", "gross_margin",
+            "div_paid", "buyback", "assets", "equity", "debt", "cash", "nonop", "net_debt", "goodwill", "shares", "gross_margin",
             "op_margin", "ebit_margin", "net_margin", "roe", "roa", "roic", "ocf_to_profit", "npl", "provision_cover", "car", "cet1", "nim",
             "solvency"]
     return h.reindex(columns=keep).dropna(axis=1, how="all").replace({np.nan: None}).to_dict("records")
@@ -156,8 +156,10 @@ def stats(series: pd.Series, now: float | None) -> dict:
         return {"now": now, "months": len(s)}
     mean, sd, recent = float(s.mean()), float(s.std()), series.tail(60).dropna()
     recent = recent[recent > 0]
+    five = len(recent) >= 12  # the quartiles: a stand-in multiple's scenarios (stage 18)
     return {"now": now, "months": len(s), "mean": mean, "median": float(s.median()), "sd": sd, "min": float(s.min()), "max": float(s.max()),
-            "median_5y": float(recent.median()) if len(recent) >= 12 else None,
+            "median_5y": float(recent.median()) if five else None, "q25": float(s.quantile(0.25)), "q75": float(s.quantile(0.75)),
+            "q25_5y": float(recent.quantile(0.25)) if five else None, "q75_5y": float(recent.quantile(0.75)) if five else None,
             "pct": float((s < now).mean()), "above_3sd": now > mean + 3 * sd}
 
 

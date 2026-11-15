@@ -22,7 +22,7 @@ from dotenv import dotenv_values
 
 from stockreport import quotes
 from stockreport.config import CONFIG, ROOT
-from stockreport.research import CUR, money, pct, price, times
+from stockreport.research import CUR, compare, money, pct, price, times
 from stockreport.research.compare import MARGIN_SOURCE
 
 log = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ BEAR = """任务：空头观点。你只代表看空的一方（另一位研究�
 每条：title 短标题（不超过 14 个字），text 1-3 句，最后一句说明这条担忧落空需要看到什么。
 JSON：{"bear":[{"title":"","text":"","src":[]}]}"""
 
-THESIS = """任务：结论页和观点。程序已给出评级 {rating}、12 个月目标价 {target}（现价 {price}），预期 12 个月回报 {expected_return}，大盘 {market_return}；合理价值 {fair_value}（{fair_upside}），评级看现价隐含回报 {implied_return} 和大盘现价隐含回报 {market_implied} 的比较（合理价值的超额回报 {fair_excess}），股价一般约 3 年向合理价值靠拢，所以 12 个月目标价只计入约三分之一的差距。评级状态为「方法分歧未决」或「不给买入」时（{rating_state}），结论要写明。
+THESIS = """任务：结论页和观点。程序已给出评级 {rating}、12 个月目标价 {target}（现价 {price}），预期 12 个月回报 {expected_return}，同组公司 {market_return}；合理价值 {fair_value}（{fair_upside}），评级看现价隐含回报 {implied_return} 和同组公司（同一市场、同一估值方式）现价隐含回报 {market_implied} 的比较（合理价值的超额回报 {fair_excess}），股价一般约 3 年向合理价值靠拢，所以 12 个月目标价只计入约三分之一的差距。评级状态为「方法分歧未决」或「不给买入」时（{rating_state}），结论要写明。
 下面附有已核对的业务、多头、空头三部分，以及程序列出的「与市场一致目标价不同的原因」和「与每日筛选的异同」。你的观点要和程序的评级一致，同时公平呈现两方。
 - conclusion：一句话结论（不超过 50 个字），写出 {rating}，说清为什么是这个评级。
 - points（3 条）：投资要点：你综合多空两方之后支持 {rating} 的理由，每条 title + 1-2 句；不要照抄多头或空头的条目。
@@ -109,9 +109,9 @@ def keys(f: dict, v: dict, extra: dict) -> dict[str, tuple[str, str]]:
         "price": ("现价", price(v["price"], q)),
         "upside": ("目标价相对现价", pct(ratio(v.get("target"), v["price"]), True)),
         "expected_return": ("预期 12 个月回报（含股息）", pct(v.get("expected_return"), True)),
-        "market_return": ("大盘预期 12 个月回报（现价隐含）", pct(v.get("market_return"))),
+        "market_return": ("同组公司预期 12 个月回报（现价隐含）", pct(v.get("market_return"))),
         "excess_return": ("预期 12 个月超额回报", pct(v.get("excess_return"), True)),
-        "band": ("评级门槛（估值不确定性）", "±" + pct((v.get("uncertainty") or {}).get("band"), digits=0) if v.get("uncertainty") else None),
+        "band": ("评级门槛（现价相对合理价值，估值不确定性越大越宽）", compare.threshold(v) if v.get("uncertainty") else None),
         "bear": ("悲观情景的 12 个月价格", price(v.get("bear"), q)), "bull": ("乐观情景的 12 个月价格", price(v.get("bull"), q)),
         "street_target": ("市场一致目标价", price(st.get("target"), q)),
         "street_upside": ("市场目标价相对现价", pct(st.get("upside"), True)),
@@ -121,8 +121,8 @@ def keys(f: dict, v: dict, extra: dict) -> dict[str, tuple[str, str]]:
         "street_bullish": ("其中看多（买入或增持）的机构数", f"{bullish:g}" if n_rated else None),
         "analysts": ("覆盖的分析师人数", f"{c['analysts']:g}" if c.get("analysts") else None),
         "wacc": ("我们用的资本成本", pct(k.get("wacc"))), "cost_equity": ("股权成本", pct(k.get("cost_equity"))),
-        "rf": ("无风险利率", pct(k.get("rf"), digits=2)), "erp": ("股权风险溢价（大盘现价隐含）", pct(k.get("erp"), digits=2)),
-        "market_implied": ("大盘现价隐含的年回报（按本模型的现金流规则）", pct((k.get("market") or {}).get("r"))),
+        "rf": ("无风险利率", pct(k.get("rf"), digits=2)), "erp": ("股权风险溢价（同组公司现价隐含）", pct(k.get("erp"), digits=2)),
+        "market_implied": ("同组公司（同一市场、同一估值方式）现价隐含的年回报（按本模型的现金流规则）", pct((k.get("market") or {}).get("r"))),
         "implied_return": ("本股现价隐含的年回报", pct(rev.get("implied_return"))),
         "rating_state": ("评级状态", {"unresolved": "方法分歧未决", "blocked": "未通过质量检查，不给买入", "resolved": "已决"}.get(v.get("state"))),
         "absolute_fair": ("绝对视角（Damodaran 公布的溢价）的合理价值", price((v.get("absolute") or {}).get("fair_value"), q)),

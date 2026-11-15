@@ -114,3 +114,12 @@ def test_cn_shares_on_todays_basis():
                       "shares": [1.386e9] * 3})
     latest = pd.Series({"period": "2025-09-30", "share_capital": 1.386e9})
     assert list(sheet.cn_shares(a, latest, 1.386e9, [("2021-06-10", 0.2)])) == pytest.approx([1.2e9, 1.2e9, 1.26e9])
+
+
+def test_cash_below_profit_needs_a_profit():
+    # operating cash flow at 80% then 60% of profit: below it and widening; a loss year with positive cash flow (a
+    # loss-maker funding itself) has cash above profit, whatever the ratio's sign says
+    a = pd.DataFrame({"revenue": [100.0, 110.0], "ni": [10.0, 10.0], "ocf": [8.0, 6.0], "capex": [1.0, 1.0]})
+    assert checks.earnings_signals(a)["cash_below_profit_widening"] is True
+    loss = a.assign(ni=[-10.0, -12.0], ocf=[8.0, 12.0])
+    assert checks.earnings_signals(loss)["cash_below_profit_widening"] is None

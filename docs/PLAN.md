@@ -1015,6 +1015,108 @@
   basis: Realty Income 持有 -> 买入
   (Nasdaq's FFO forecasts revised to 4.44 / 4.58 from 4.52 / 4.67, so the dividend model's 5-year growth is 2.6% where
   it was 1.1%; fair value 58.9 -> 67.8, +14% against a 10% band).
+- Stage 18 (research; the check of stage 15's 25 valuations, 2026-11-15, faults 1-3, after the US caches above): done
+  2026-11-15. Three rules, each with its published evidence in the method sections:
+  - A cyclical normalized on its capital ("As built", Cyclical; value.normal, dcf.fcff's `earned`): Damodaran's
+    average return on capital x today's capital, read at the source, where the margin was normalized on the consensus
+    revenue (Micron's price peak); the consensus years earned as forecast, then the normal year at the base rate, no
+    consensus excess carried on ("Ups and Downs": that double counts growth). The own-P/E check takes the same normal
+    revenue.
+  - Each stock set against its group ("Rating", the stock's group; market.select, value.group_of): the members valued
+    in its form (financials or not) and, in Hong Kong, of its home (China-based or not), each group at its own price
+    (1.0000 in every valuation.json); page 1 states the gap between the forms. CN 12.83% / 6.31%, US 8.21% / 6.54%,
+    HK China-based 15.00% / 9.05%, others 7.68% / 7.59%.
+  - Morningstar's two-sided table on price over fair value, the level from 25th / 75th percentile scenarios combined
+    as independent ("Rating"; judge.uncertainty, judge.scenarios): 5 stars at a 20-75% discount, 1 star at a
+    25-300% premium, where the project had a symmetric 10-75% band on the gap.
+  - Before / after on the 25, the same caches and prices (2026-11-15; the US after the patch above). Rating at stage
+    15 / after the patch / fix 1 / fix 2 / fix 3, one entry when it never moved:
+  | company | type | rating: 15 / 0 / 1 / 2 / 3 | fair value 15 -> 18 | 15: excess / band | 18: price / fair vs buy / sell (level) | group return |
+  |---|---|---|---|---|---|---|
+  | 五粮液 000858 | income | 持有 | 55.6 -> 76.5 | -29% / 15% | 0.99 vs 0.80 / 1.25 (low) | 6.3% |
+  | 比亚迪 002594 | fast_grower | 持有 | 83.1 -> 113 | -3% / 30% | 0.75 vs 0.70 / 1.35 (med) | 6.3% |
+  | 招商银行 600036 | bank | 买入 / 买入 / 买入 / 买入 / 持有 | 73.7 -> 55.3 | +68% / 15% | 0.84 vs 0.80 / 1.25 (low) | 12.8% |
+  | 恒瑞医药 600276 | ordinary | 卖出 | 25.4 -> 31.9 | -55% / 20% | 1.59 vs 0.70 / 1.35 (med) | 6.3% |
+  | 贵州茅台 600519 | ordinary | 持有 / 持有 / 持有 / 买入 / 持有 | 1,365 -> 1,823 | -10% / 20% | 0.82 vs 0.60 / 1.55 (high) | 6.3% |
+  | 中国神华 601088 | income | 卖出 / 卖出 / 卖出 / 持有 / 持有 | 38.9 -> 53.1 | -26% / 10% | 0.96 vs 0.80 / 1.25 (low) | 6.3% |
+  | 中国平安 601318 | insurer | 买入 / 买入 / 买入 / 持有 / 持有 | 87.2 -> 65.9 | +59% / 55% | 0.88 vs 0.70 / 1.35 (med) | 12.8% |
+  | 君实生物 688180 | loss_making | 卖出 | 18.6 -> 18.6 | -46% / 10% | 1.70 vs 0.80 / 1.25 (low) | 6.3% |
+  | 百济神州 688235 | ordinary | 持有 / 持有 / 持有 / 持有 / 卖出 | 110 -> 142 | -69% / 75% | 2.10 vs 0.60 / 1.55 (high) | 6.3% |
+  | 腾讯控股 00700 | ordinary | 持有 | 412 -> 467 | -2% / 20% | 0.89 vs 0.80 / 1.25 (low) | 9.1% |
+  | 领展房产基金 00823 | reit | 卖出 / 卖出 / 卖出 / 卖出 / 持有 | 21.7 -> 35.5 | -53% / 10% | 1.15 vs 0.80 / 1.25 (low) | 7.6% |
+  | 比亚迪股份 01211 | fast_grower | 持有 | 81.9 -> 93.9 | +18% / 35% | 0.74 vs 0.70 / 1.35 (med) | 9.1% |
+  | 中国平安 02318 | insurer | 买入 | 87.5 -> 71.7 | +67% / 40% | 0.78 vs 0.80 / 1.25 (low) | 15.0% |
+  | Apple AAPL | ordinary | 卖出 / 卖出 / 卖出 / 卖出 / 持有 | 285 -> 299 | -26% / 15% | 1.27 vs 0.70 / 1.35 (med) | 6.5% |
+  | Amazon AMZN | ordinary | 卖出 / 卖出 / 卖出 / 持有 / 卖出 | 127 -> 178 | -59% / 50% | 1.59 vs 0.70 / 1.35 (med) | 6.5% |
+  | Alibaba BABA | ordinary | 持有 | 78.5 -> 120 | -26% / 75% | 0.85 vs 0.80 / 1.25 (low) | 9.1% |
+  | JPMorgan JPM | bank | 持有 | 364 -> 309 | +0% / 40% | 1.19 vs 0.60 / 1.55 (high) | 8.2% |
+  | Eli Lilly LLY | fast_grower | 卖出 | 831 -> 820 | -48% / 40% | 1.83 vs 0.60 / 1.55 (high) | 6.5% |
+  | Micron MU | cyclical | 买入 / 买入 / 持有 / 持有 / 持有 | 1,640 -> 799 | +104% / 75% | 1.04 vs 0.70 / 1.35 (med) | 6.5% |
+  | NVIDIA NVDA | cyclical | 买入 / 买入 / 持有 / 买入 / 持有 | 370 -> 257 | +121% / 50% | 0.67 vs 0.50 / 1.75 (v.high) | 6.5% |
+  | Novo Nordisk NVO | fast_grower | 买入 | 92.8 -> 95.5 | +120% / 10% | 0.46 vs 0.70 / 1.35 (med) | 6.5% |
+  | Realty Income O | reit | 持有 / 买入 / 买入 / 买入 / 持有 | 58.9 -> 68.1 | -1% / 10% | 0.88 vs 0.80 / 1.25 (low) | 6.5% |
+  | Palantir PLTR | fast_grower | 卖出 | 36.8 -> 39.7 | -85% / 75% | 4.51 vs 0.60 / 1.55 (high) | 6.5% |
+  | Snowflake SNOW | loss_making | 持有 / 持有 / 持有 / 持有 / 卖出 | 100 -> 108 | -72% / 75% | 2.88 vs 0.50 / 1.75 (v.high) | 6.5% |
+  | TSMC TSM | ordinary | 买入 | 616 -> 624 | +50% / 15% | 0.67 vs 0.80 / 1.25 (low) | 6.5% |
+  - All 25: 7 / 10 / 8 -> 3 / 15 / 7 (Buy / Hold / Sell); CN 2 / 4 / 3 -> 0 / 6 / 3, HK 1 / 2 / 1 -> 1 / 3 / 0, US 4 /
+    4 / 4 -> 2 / 6 / 4. Reported, not the test of the change (rule 12).
+  - The large moves, each by rule. Fix 1: Micron's fair value 1,673 -> 786 (买入 -> 持有), its normal operating profit
+    20.2bn where the consensus years earn 231bn and 282bn, both checks now near its price (520, 857); NVIDIA 376 -> 249
+    (买入 -> 持有 at +46% against a 50% band): its normal year is about its trailing year, and its value falls with the
+    consensus year's excess no longer carried (year 2 at 6.8% where it was 29.5%, years 3-5 at 6.8% where 16.3%).
+    Fix 2, the group's return: the CN non-financials' 6.31% for the CN market's 8.48% raises 五粮液 (DDM 55.6 -> 76.5),
+    比亚迪, 恒瑞, 茅台 (1,365 -> 1,823: 持有 -> 买入 at +24% against 20%), 神华 (38.9 -> 53.1: 卖出 -> 持有) and 百济;
+    the CN financials' 12.83% lowers 招商银行 (73.7 -> 55.3, still 买入 at +21% against 10%) and 平安 A (87.2 -> 65.9:
+    买入 -> 持有); in Hong Kong Link's 7.59% (12.4% -> 7.2% in HKD) raises it 21.7 -> 35.5 (still 卖出 at -14% against
+    10%), the China-based non-financials' 9.05% raises Tencent, BYD's H line and Alibaba (107 -> 120 after the patch's
+    stakes), the China-based financials' 15.00% lowers 平安 H (87.5 -> 71.7, 买入); the US non-financials' 6.54%
+    moves Amazon to the band's edge (-40% against 40%: 卖出 -> 持有) and NVIDIA over it (+51% against 50%: 持有 -> 买入),
+    the US financials' 8.21% lowers JPMorgan 364 -> 309. Fix 3, Morningstar's table and the level: 招商银行 (0.84 of
+    fair value at low uncertainty, 5 stars at 0.80) and Realty Income (0.88) 买入 -> 持有, the low level's 20%
+    discount replacing the brokers' 10%; 茅台 买入 -> 持有 (0.82: medium from its scenarios, high with its earnings
+    signals, inventory faster than revenue and cash below a widening profit); NVIDIA 买入 -> 持有 (0.67 at very high:
+    the moat off -25%, its margin quartiles ±28%, plus its two red flags); Link 卖出 -> 持有 (1.15, 1 star at 1.25);
+    Apple 卖出 -> 持有 (1.27, medium: its moat off -24%); Amazon 持有 -> 卖出 (1.59 against medium's 1.35); 百济 (2.10,
+    high) and Snowflake (2.88, very high) 持有 -> 卖出: their margin scenarios now take the mature peers' quartiles,
+    the margin they are valued at, not their own loss history's swings, which had zeroed the bear case and set
+    "extreme" (1 star at 4 times fair value). Novo Nordisk stays 买入 at 0.46 of fair value with medium uncertainty
+    (the moat off -26%, growth ±14%): its value at no moat, 71, is still above its price of 41.6.
+  - A fault found and fixed in the stage: earnings-review's "cash flow below profit and widening" read a loss-maker's
+    positive cash flow as below profit (a negative ratio); it is measured only in years with a profit now. It set
+    Snowflake's level a step too high (very high -> extreme).
+  - Judgement calls, with their effect measured (nothing saved): carrying a cyclical's consensus excess on its normal
+    year at the measured shares (stage 14's rule) would make NVIDIA 442 and 买入 (0.39 of fair value at very high),
+    Micron 819 (持有); not adopted, as "Ups and Downs" counts it twice, and NVIDIA's type is the type test's (Damodaran's
+    semiconductor industry and a margin that halved in FY2023; he values NVIDIA itself as a growth story: a type
+    question, a follow-up). The scenario inputs added together instead of combined as independent: 百济, Lilly and
+    Snowflake 卖出 -> 持有 (extreme). Hong Kong's home by Damodaran's country alone (no CNY test: the red chips in the
+    "others" group, whose non-financials then imply 10.06%): Link 持有 -> 卖出, Alibaba 持有 -> 买入. The level as
+    the lowest whose 5-star discount covers the half-range: code's reading (Morningstar publishes no cut-offs).
+  - Not changed, stated: the analysts' range is its ends, wider than its quartiles; the moat's two cases are its two
+    outcomes; a bank's or insurer's scenarios are the analysts' range and its ROE's quartiles (and the moat where it
+    has one): its book grows by retention, so growth beyond the consensus isn't an input, and 平安 H's 买入 sits at
+    0.784 of fair value against low's 0.80 on that narrower set; HK's other financials are 12 members (above the 10-firm floor); China-based ADRs stay members of the US
+    groups while priced in Hong Kong themselves; sheet.history's return on capital still keeps the stakes in its capital
+    while its EBIT leaves their income out (stage 13; the cyclical's normal year takes them out on both sides, from the
+    statements' per-year stakes now kept in the history); NVIDIA's cash in the bridge misses its marketable securities in
+    the FY2026 10-K (10.6bn; the tag isn't one us.py reads); Amazon 卖出, Novo Nordisk 买入 and 恒瑞 卖出 are model
+    views against the street (41 buys; 0 buys; +49% with 21 buys), from Amazon's 8-year median margin, Novo's moat and
+    恒瑞's one consensus year without its pipeline; Micron's 799 rests on its two consensus years (231bn and 282bn of
+    operating profit against a normal 20.2bn): if the peak isn't delivered its value falls with it.
+  - Tests: the normal year (capital, the margin variant), the earned consensus years in the FCFF, the group selection
+    and China-based members, each group at its own price and the small-group fallback, the group's home for the
+    country premium, the levels and the two-sided view, the scenarios' combination, the moat off and on, the peers'
+    quartiles, the signal with a loss; the end-to-end sample's valuation.json rebuilt from its own fact sheet. 295 pass.
+    App Python 11,653 lines (11,485 before; the 9,500 is an estimate): value.py 441, words.py 427.
+  - Sources, as read: Damodaran's "Investment Valuation" ch. 22 and Morningstar's Uncertainty Rating FAQ (2022) in
+    full at their PDFs; "Ups and Downs" in a copy of the paper; Gebhardt, Lee and Swaminathan as their abstract; Morgan
+    Stanley's definitions as its disclosure page's excerpt.
+  - The fresh-context stage review (one, on Sonnet) found no correctness bug and no rule written for a name; every
+    number checked in this entry matched the files (the ratings by fix, price over fair value, levels, thresholds,
+    fair values, counts). Answered here from it: which sources were read where (above; it couldn't reach them); the
+    scenario design's judgement calls, with their measured alternatives (above); the financials' narrower scenario set
+    and 平安 H at the edge; 恒瑞's and Micron's dependence on one mechanism each; the line count. Fixed from it: none
+    needed in code; page 1 names the group by its market ("A股中金融股") where it had put it after the index's name.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1736,7 +1838,7 @@ and the target price are code's: DeepSeek is told them and can't change them.
 | Bank | industry | excess-return model on book equity; cross-check: P/B against its history | NIM, bad loans, provisions, capital |
 | Insurer | industry | the same excess-return model (embedded value isn't reliably free; said so); cross-check: P/B against its history | solvency, combined ratio, investment yield |
 | Broker / asset manager | industry | the excess-return model on the cycle's ROE (8-year average); cross-check: P/B against its history | dependence on market turnover |
-| Cyclical (materials, energy, shipping, chemicals, memory chips) | industry and a volatile margin history | DCF at the cycle's average margin; cross-checks: its own P/E on normalized earnings, the excess-return model on the 10-year average ROE | where in the cycle it stands |
+| Cyclical (materials, energy, shipping, chemicals, memory chips) | industry and a volatile margin history | DCF on a normal year (since stage 18: the cycle's average return on capital x today's capital, the consensus years above it as residual income); cross-checks: its own P/E on normalized earnings, the excess-return model on the 10-year average ROE | where in the cycle it stands |
 | Utility / high-dividend mature | industry and payout history | two-stage dividend discount on the dividend free cash flow covers; cross-checks: DCF, yield against its own history | payout cover, regulation |
 | REIT | listing type | dividend discount; cross-check: yield against its own history (P/FFO history and NAV aren't free) | occupancy, leverage, rates |
 | Holding company / conglomerate | industry | DCF; cross-check: P/B against its own history (no reliable free segment values for a sum of the parts; said so) | the discount's history |
@@ -1800,8 +1902,9 @@ were averaged with fixed weights (DCF 50%, multiples 50% for the ordinary; 60/40
   11 complete years). Survivors only: a company whose margin collapsed and that left the market is missing, so
   persistence above the median and recovery below it are both overstated. Our rates are slower than Fama and
   French's (their mean is fitted across firms; ours is the company's own median), except US margins below the
-  median, which recover as fast. Margins reached by year 5 as before: a cyclical's 10-year average (normalization is
-  the point) and the young's mature-peer margin (Damodaran's target margin for a company without its own). PLAN.md's
+  median, which recover as fast. Margins reached by year 5 as before: the young's mature-peer margin (Damodaran's
+  target margin for a company without its own); a cyclical's normal year since stage 18 ("As built", Cyclical; until
+  then its 10-year average margin by year 5 on the consensus revenue, with its excess growth carried on). PLAN.md's
   earlier "US 0.28 after 3 years" (Amazon's valuation, 2026-11-12) came from a script not kept and isn't reproduced
   (the review found 78-110% kept above the median): this measurement replaces it. The margin: a fast grower
   keeps its own median when it has the 5 years any company needs for that and none was a loss (an established margin);
@@ -1841,8 +1944,8 @@ were averaged with fixed weights (DCF 50%, multiples 50% for the ordinary; 60/40
   applied to next year's consensus.
 - The fair value: the type's main method a year from now (an absolute method's value rolled forward 12 months at the
   cost of equity less the dividend); the other methods (a multiple on the next 12 months' consensus) are its
-  cross-checks; bear / base / bull values from moving growth and margins by the analysts' spread or the company's own
-  history; a sensitivity grid.
+  cross-checks; bear / base / bull values from the main method's inputs at their 25th and 75th percentile, combined
+  (since stage 18, "Rating"); a sensitivity grid.
 - The 12-month target (since 2026-11-12): the price a year on if it earns its cost of equity (less the dividend) and
   closes a third of its log gap to the fair value, as prices converge on fair value "generally within three years"
   (Morningstar's Equity Research Methodology, 2020) and value-to-price predicts abnormal returns for up to three years
@@ -1856,7 +1959,8 @@ were averaged with fixed weights (DCF 50%, multiples 50% for the ordinary; 60/40
 
 #### Rating (code)
 Since stage 15 (docs/REVIEW-2026-11-13.md, R1 and R3, and the skills' section): the return today's price implies
-against the return the market's price implies, both under this model's own cash-flow rules, with one main method per
+against the return the market's price implies (since stage 18 its group's: the members valued in its form, in Hong
+Kong of its home), both under this model's own cash-flow rules, with one main method per
 type, the skills' checks acting, and discrete risks as a scenario (research/market.py, judge.py, rating.py).
 - The market's implied return (market.py). Damodaran's implied-premium method (his annual "Equity Risk Premiums": the
   rate at which the index's expected cash flows equal its level) on the market's members in the day's snapshot,
@@ -1875,8 +1979,31 @@ type, the skills' checks acting, and discrete risks as a scenario (research/mark
   values every company with new capital earning its cost after the moat's stage II; so the US market at 23 times
   earnings implies less than his rate, and CN and HK (15 and 10 times, banks at 0.5-1 times book) more. At his US rate
   the US market would be worth about 60% of its price under our rules.
-- The stock's cost of equity: the reporting currency's yield + the premium of the market that prices it + Damodaran's
-  country risk premium for the company's country over that market's, at a beta of 1 from year 1 (the stable cost too,
+- The stock's group (since stage 18; value.group_of, market.select): each stock is set against the implied return of
+  the members of the market that prices it valued in its form, the screening's financials (banks, insurers, brokers:
+  valued on book with an ROE path) against the rest (cash flows from margins and capital), and in Hong Kong those of
+  its home, China-based (Damodaran's country is China, or the member reports in CNY: red chips such as CNOOC, CITIC
+  and China Resources Land are incorporated in Hong Kong, where his company list puts them, but their business and
+  cash flows are the mainland's) or not. Each group is solved the same way on its own members and is worth its price
+  at its return; a group under Damodaran's 10-firm floor takes its form's across homes, then the market's. The
+  2026-11-14 snapshot: CN financials 12.83% (79 members, P/B 0.80) and the rest 6.31% (715, P/E 21.8); US 8.21%
+  (106) and 6.54% (686); HK China-based financials 15.00% (33), China-based others 9.05% (275), other financials
+  7.68% (12: HSBC, AIA, HKEX...) and other non-financials 7.59% (79: Link, CLP, Power Assets...), against 10.63% for
+  the whole of Hong Kong. Why: stage 15's premise is that a stock's rate is the market valued under the same rules
+  (R1), and a bank's book-and-ROE valuation and an industrial's cash-flow one are different rules; a firm's implied
+  cost of capital depends on its industry membership, with its book-to-market, forecast growth and the analysts'
+  dispersion (Gebhardt, Lee and Swaminathan 2001, "Toward an Implied Cost of Capital", its abstract: the four explain
+  about 60% of its cross-sectional variation); desks rate within a comparable universe (Morgan Stanley's rating
+  definitions, its disclosure page: the country's MSCI index or "the analyst's industry (or industry team's) coverage
+  universe"). One benchmark for all would be right only if
+  banks' high implied returns were unbiased, and Japanese and European banks at half of book in 2010-2020 had high
+  implied returns and poor realized ones as their ROE kept falling. In Hong Kong the mainland members' premium (CNY
+  cash flows at a 1.6% yield) set Link's HKD required return at 12.4%; its own group's is 7.6%. The gap between the
+  forms is the market's sector view: page 1 states it ("分组比较") and the rating only compares a stock within its
+  group, so it doesn't say which group is cheaper. Damodaran's country premium is taken over the group's home (China for
+  HK's China-based members, whose premium already carries it).
+- The stock's cost of equity: the reporting currency's yield + the premium of its group in the market that prices it +
+  Damodaran's country risk premium for the company's country over the group's home's, at a beta of 1 from year 1 (the stable cost too,
   its country risk kept, as the aggregate is valued); debt at its cost as before, so the DCF's cost of capital is the
   WACC at that equity return in every year (with a beta of 1 throughout there is nothing to step toward; stepping to an
   all-equity stable cost would discount a levered company's terminal value above its WACC, which the all-equity
@@ -1894,13 +2021,32 @@ type, the skills' checks acting, and discrete risks as a scenario (research/mark
   price, every rule that reads the cost (the moat's hurdle, the tested growth, the WACC) at that return, as the
   market's is solved; page 1 sets it against the required one. investment-research's central output, the return today's
   price gives, which the reverse DCF had only printed.
-- The rating's gap = (fair value − price + next year's dividend) ÷ price − the market's expected return: a stock priced
-  like its market comes out at 0. 买入 at +band or more, 卖出 at −band or worse, else 持有. The band: the main method's
-  bear-to-bull half-range, rounded up to 5 points, at least 10% and at most 75% (Morningstar's margins of safety, a 20,
-  30, 40, 50 or 75% discount for its top rating at low to extreme uncertainty; Chinese brokers' regulated standard, a
-  rating against the 沪深300 over 6-12 months). Until stage 15 the band was the larger of that and the methods'
-  half-range, so the methods' disagreement moved ratings (three of stage 14's four changes); the cap was 25% until
-  2026-11-12.
+- The rating's gap = (fair value − price + next year's dividend) ÷ price − its group's expected return: a stock priced
+  like its group comes out at 0. Since stage 18 the rating is Morningstar's two-sided table on price over fair value
+  (Morningstar, "Uncertainty Rating Methodology Update", FAQ, 2022, read at the source): 5 stars at a 20 / 30 / 40 / 50
+  / 75% discount and 1 star at a 25 / 35 / 55 / 75 / 300% premium at low / medium / high / very high / extreme
+  uncertainty. Price over fair value is today's: the 12-month fair value and its dividend brought back a year at the
+  group's return, (1 + m) / (1 + m + gap); 买入 at or below 1 − the discount, 卖出 at or above 1 + the premium, else
+  持有 (in the gap's terms at m = 6.5%, medium: 买入 at +46% or more, 卖出 at −28% or worse). Until stage 18 the
+  project applied 20-75% symmetrically to the gap with the brokers' 10% as a floor: its 买入 was looser than
+  Morningstar's (+30% where Morningstar asks +43% before the market's return; +75% where it asks +300%) and its 卖出
+  stricter in the middle; the low level's 20% discount replaces the 10% floor. The level: Morningstar's bear and bull
+  are outcomes with "a 25% probability that the company will perform better than the bull case and a 25% probability
+  that the company will perform worse than the bear case", and "the distance between the bull and bear cases in
+  relation to the fair value estimate was used to assign an uncertainty rating" (until its 2022 update, which suggests
+  the level from the stock's trailing 12-month volatility with an analyst's override; its cut-offs aren't published, so
+  the scenarios are kept). Each input of the main method moves to its own 25th / 75th percentile (rating.build): the
+  first forecast year's analysts' low and high (the range's ends, wider than its quartiles, as published); the
+  long-run margin (financials: ROE) by half the interquartile range of its source, its own 10 years, or the mature
+  peers' whose median a young company's target takes (a young firm's losses say how it got here, not where its margin
+  settles; until stage 18 one standard deviation of its own history, which zeroed Snowflake's bear case); growth
+  beyond the consensus at the size fifth's 25th and 75th percentile in the base rates' latest window (fade.base_rates)
+  in place of its median; the moat off (excess returns end with the explicit years) and on (its odds come true: a
+  track of 1); and a stand-in multiple's quartiles (its peers' or its own history's) in place of its median. Their
+  effects are combined as independent, the root of the sum of squares (moving every input to its quartile at once is a
+  far rarer case than 1 in 4: four inputs at their quartiles together are about a 1-in-10 case for their sum). The
+  level is the lowest whose 5-star discount covers the bear-to-bull half-range (code's reading of "distance in
+  relation to the fair value": a 5-star price is then at or below the bear case when the scenarios are symmetric).
 - One main method per type ("Which playbook"), the others cross-checks, each one's gap computed the same way. When most
   cross-checks (more than half, each rated on its own gap: nothing averaged) rate the opposite way (买入 against 卖出),
   the state is unresolved and the rating 持有; page 1
@@ -1916,10 +2062,11 @@ type, the skills' checks acting, and discrete risks as a scenario (research/mark
   less (Asness, Frazzini and Pedersen 2019, quality minus junk). investment-checklist's quick veto (3 straight years of
   negative free cash flow) and income-investment's blocking gate for the income type (dividends above free cash flow
   in 3 or more of the last 5 years: code's reading of "recurring"; a REIT's free cash flow isn't measured) block 买入
-  the same way. An earnings red flag widens the band to the
-  next of Morningstar's steps: Beneish's M-score above -1.78, or two or more of earnings-review's anomaly signals
-  (receivables or inventory faster than revenue, cash flow below profit and widening); a flag says the reported
-  earnings are less sure, not that they are wrong (fast growth alone raises M).
+  the same way. An earnings red flag moves the uncertainty level one up (Morningstar's analysts adjust the level for
+  risks the scenarios miss): Beneish's M-score above -1.78, or two or more of earnings-review's anomaly signals
+  (receivables or inventory faster than revenue, cash flow below profit and widening, measured only in years with a
+  profit since stage 18: a loss-maker's positive cash flow had read as cash below profit, Snowflake's); a flag says
+  the reported earnings are less sure, not that they are wrong (fast growth alone raises M).
 - The dividend model tests cash coverage (income-investment): its dividend is at most what free cash flow covered over
   the last 5 years (5-year free cash flow over dividends paid, none when that is negative); a REIT's isn't measured (property purchases aren't
   capex, FFO isn't free).
@@ -2020,24 +2167,45 @@ the plan left open, each a published default:
   that 五粮液 exposed (its 2025 dividend was 166% of a collapsed profit). A REIT's is the trailing year's. Since stage
   15 the dividend model's dividend is at most what free cash flow covered over the last 5 years ("Rating"). REIT: the dividend yield against its own 5-year average stands in for P/FFO
   history (FFO history isn't free); the bond leg of "yield against history and bonds" waits for a longer yield history.
-- Cyclical: DCF with normalized margins (the main method since stage 15), the own median P/E on normalized EPS
-  (trailing revenue x the 10-year average net margin) and the excess-return model on the 10-year average ROE (the
-  cross-checks; a third each until stage 15); the two normalized methods add the consensus
-  years' earnings above (a trough: below) normal, residual income that accrues to holders (first built without it,
-  they valued Micron as if its next two years earned its 10-year average). Broker: the excess-return model on the
+- Cyclical: the DCF on a normal year (the main method since stage 15), the own median P/E on normalized EPS (the
+  normal year's revenue x the 10-year average net margin) and the excess-return model on the 10-year average ROE (the
+  cross-checks; a third each until stage 15); all three add the consensus years' earnings above (a trough: below)
+  normal, residual income that accrues to holders (first built without it, the two checks valued Micron as if its next
+  two years earned its 10-year average). The normal year (since stage 18, value.normal), Damodaran's normalization by
+  scaled averages ("Investment Valuation", 3rd ed., ch. 22, read at the source: "Average the firm's return on
+  investment or profit margins over prior periods ... a firm with an average return on capital of 12 percent over prior
+  periods and a current capital invested of $1,000 million would have normalized operating income of $120 million";
+  for commodity firms, whose revenue moves with the price, he normalizes the price first and then the return on current
+  capital, his Aracruz example): the 10-year average pre-tax return on operating capital (equity + debt − cash − the
+  stakes the bridge values apart, as sheet.history counts capital) x that capital today. Its revenue is that profit
+  at the 10-year average margin, and new capital earns the same return (sales to capital = normal revenue / capital:
+  "we also have to normalize return on capital, reinvestment", Damodaran, "Ups and Downs: Valuing Cyclical and
+  Commodity Companies", 2009, read in a copy of the paper). The consensus years are earned as forecast (dcf.fcff's `earned`: their operating income,
+  the reinvestment of the normal path), then the normal year grows at the base rate to year 5 and to stable growth by
+  year 10: no consensus excess is carried on ("double counting growth, once by normalizing earnings and again by using
+  a higher growth rate", "Ups and Downs"; the measured growth shares are every company's, and a cyclical's consensus
+  year is its cycle). Without 5 years of returns or with no capital today, the margin variant on the trailing revenue.
+  Until stage 18 the DCF held the 10-year average margin on the consensus revenue and carried its excess growth on
+  through the measured shares: Micron's 276bn FY2027 revenue (7 times FY2025's, a memory price peak) grew to 553bn by
+  year 10 at 24.7%, a fair value of 1,640 against two normalized checks near its price. Now Micron's normal operating
+  profit is 29.4% x 68.8bn = 20.2bn (its trailing 99bn is a return of 144% on that capital) and NVIDIA's 108% x
+  205bn = 222bn (its trailing 198bn is 97%: no peak in its return on capital; its value falls with the growth no longer
+  carried). Broker: the excess-return model on the
   8-year average ROE (main) and P/B against history (cross-check). The excess-return model on an average ROE (since
   stage 15): the average in year 1 moving to the graded moat's year-10 return, then its fade, then none, as for banks;
   until stage 15 a justified P/B, (ROE - g) / (COE - g), capitalized the average for ever.
-- Bear / bull: the first forecast year's analysts' low and high (Yahoo's range around its own mean; CN: the brokers'
-  six months of reports, at least 3), and the long-run margin (financials: ROE) one standard deviation of its own 10
-  years lower and higher, at most the margin's own size, the main method's alone since stage 15. The band ("Rating"):
-  analysts' disagreement and earnings volatility enter it through bear and bull. A negative equity value from the DCF
+- Bear / bull (since stage 18, "Rating"): the main method's inputs each at its 25th and 75th percentile, combined as
+  independent: the first forecast year's analysts' low and high (Yahoo's range around its own mean; CN: the brokers'
+  six months of reports, at least 3), the long-run margin (financials: ROE) by half the interquartile range of its own
+  10 years or of the mature peers whose median it takes, at most the margin's own size, growth beyond the consensus at
+  the size fifth's quartiles, the moat off and on, a stand-in multiple's quartiles. Until stage 18 the analysts' range
+  and one standard deviation of the margin together, moved at once. A negative equity value from the DCF
   counts as 0 (limited liability: SNOW's DCF at its industry's 3.7% margin), the reverse then gives the margin the
   price assumes, and since stage 15 the next method gives the fair value (君实: EV/Sales).
-- Benchmark: the premium of the market that prices the stock over the yield of the reporting currency, the currency
-  the target grows in (by interest parity an HKD investor's return on a CNY reporter is its CNY return plus the yield
-  gap): Tencent and Ping An H are compared at 1.61% + Hong Kong's implied 8.45% (Damodaran's published 5.01% until
-  stage 15), not the HKD yield's.
+- Benchmark: the premium of the stock's group in the market that prices it over the yield of the reporting currency,
+  the currency the target grows in (by interest parity an HKD investor's return on a CNY reporter is its CNY return
+  plus the yield gap): Tencent is compared at 1.61% + Hong Kong's China-based non-financials' 7.35% (Hong Kong's 8.45%
+  until stage 18; Damodaran's published 5.01% until stage 15), Ping An H at 1.61% + 13.38%, not the HKD yield's.
 - Not in the equity bridge: cross-holdings (their profit is in pretax profit, so in EBIT), employee options, a debt
   concept stage 9 doesn't read (SNOW's convertible notes).
 - Reverse: the years 1-5 revenue growth that makes the DCF equal the price (fading as in the base case), and the cost
@@ -2367,6 +2535,14 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
     cap-weighted market comes out at its price by construction; the 25 cached companies rebuilt with a before/after
     table and the share of Buy / Hold / Sell by currency; the report's page 1 and the street comparison follow; a test
     per formula change.
+18. **Research stage 18** (the check of stage 15's 25 valuations, 2026-11-15, faults 0-3; adopted 2026-11-15; done
+    2026-11-15, Status). First a patch: US caches written before stage 13 are refetched. Then a cyclical normalized on
+    its capital (its revenue too, not only its margin, and no consensus excess carried on); each stock set against
+    its group (financials or not; in Hong Kong China-based or not), page 1 stating the gap between the forms; Morningstar's
+    two-sided table on price over fair value with the uncertainty level from 25th / 75th percentile scenarios. Done when:
+    the 12 US caches refetched as a patch; the three fixes with focused tests; the 25 cached companies rebuilt with a
+    before/after table by fix, each large move explained by rule; the stage review. Not adopted (follow-ups): the
+    dividend model's excess cash, the ADR country fallback, one consensus for an A/H pair, the beta-1 citations.
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
 - The backtest snapshots and the stage-1 harness (index funds, costs, month-end frames).
