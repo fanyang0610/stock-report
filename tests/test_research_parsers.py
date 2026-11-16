@@ -146,6 +146,18 @@ def test_an_unclassified_listing_takes_its_snapshot_industrys_damodaran_industry
     assert facts.kind_of("hk", pd.DataFrame(), hsbc["industry"], None) == "bank"
 
 
+def test_yahoo_figures_in_dollars_under_a_yuan_label():
+    # 中芯国际's A line, 2025: ours in CNY at that year's rates, Yahoo's its HK line's USD labelled CNY (6.67 to the dollar)
+    from stockreport.research import facts
+    fx = pd.Series({"CNY": 6.6705, "USD": 1.0})
+    a = pd.DataFrame({"period": ["2025-12-31"], "revenue": [67.32e9], "ni": [5.04e9], "equity": [150.8e9], "ocf": [20.08e9], "assets": [367.7e9]})
+    second = pd.DataFrame({"period": ["2025-12-31"], "revenue": [9.327e9], "ni": [0.685e9], "equity": [21.44e9], "ocf": [3.194e9], "assets": [52.27e9]})
+    assert facts.second_in_usd(a, second, "CNY", fx)
+    assert not facts.second_in_usd(a, second.assign(revenue=60e9, ni=4.9e9, equity=150e9, ocf=19e9, assets=360e9), "CNY", fx)  # agree
+    assert not facts.second_in_usd(a, second.assign(revenue=60e9), "CNY", fx)  # one figure apart: a definition, not units
+    assert not facts.second_in_usd(a, second, "USD", fx)
+
+
 def test_damodaran_tables():
     r = damodaran.ratings((DATA / "damodaran_ratings_sample.xls").read_bytes())
     assert set(r["table"]) == {"large", "financial", "smaller", "infrastructure"}

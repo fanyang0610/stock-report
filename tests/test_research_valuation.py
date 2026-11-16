@@ -646,12 +646,18 @@ def test_a_growth_firm_in_a_cyclical_industry_is_typed_by_its_growth():
                 for m, r in zip(margins[-len(revenue):], revenue)], "summary": {"rev_cagr_3y": (revenue[-1] / revenue[-4]) ** (1 / 3) - 1}}
     k = {"ebit": 30.0}
     nvda = [6.9, 9.7, 11.7, 10.9, 16.7, 26.9, 27.0, 60.9, 130.5, 215.9]
+    # stage 20: the halved year must be a downturn (revenue growth under the market's median, 6.7%): Broadcom's shape,
+    # -3% in its merger year (revenue +94%), is no cyclical; its 3-year growth types it
+    avgo = [6.8, 13.2, 17.6, 20.8, 22.6, 23.9, 27.4, 33.2, 35.8, 51.6, 63.9]
+    b = f(avgo) | {"history": [{"ebit_margin": m, "revenue": r} for m, r in zip([0.2, -0.03] + [0.3] * 9, avgo)]}
+    assert not value.downturn(b, 0.067) and value.kind_of(b, k, 0.067)[0] == "fast_grower"
+    assert value.downturn(f(nvda), 0.067) and not value.downturn(f(nvda), 0.0)  # NVIDIA flat FY2023 (+0.4%): a downturn, not a fall
     mu = [20.3, 30.4, 23.4, 21.4, 27.7, 30.8, 15.5, 25.1, 37.4, 133.2]
     assert value.cycle_growth(f(nvda)) == pytest.approx((92.24 / 11.18) ** 0.2 - 1, rel=1e-3)
     assert value.kind_of(f(nvda), k, None)[0] == "fast_grower"
     assert value.kind_of(f(mu), k, None)[0] == "cyclical" and value.cycle_growth(f(mu)) < value.FAST
     assert value.kind_of(f(nvda, "Materials", "Chemical (Basic)"), k, None)[0] == "cyclical"  # revenue is a price
-    assert value.kind_of(f(nvda[-5:]), k, None)[0] == "cyclical"  # under 6 years: the cycle can't be measured
+    assert value.kind_of(f(nvda[-5:]), k, 0.067)[0] == "cyclical"  # under 6 years: the cycle can't be measured
     # 7 years: the first 3 against the last 3, 4 years apart
     assert value.cycle_growth(f(nvda[-7:])) == pytest.approx((sum(nvda[-3:]) / sum(nvda[-7:-4])) ** 0.25 - 1)
 

@@ -171,10 +171,11 @@ def kind_of(f: dict, k: dict, norm: float | None) -> tuple[str, str]:
     if dam.get("industry") == "Diversified":
         return "holding", "Damodaran's industry: diversified holding"
     m, growing = history(f, "ebit_margin", 10), ""
-    if (dam.get("sector") in CYCLICAL_SECTORS or dam.get("industry") in CYCLICAL_INDUSTRIES) and len(m) >= 5 \
-            and m.min() < m.median() / 2:
+    commodity = dam.get("sector") in CYCLICAL_SECTORS
+    if (commodity or dam.get("industry") in CYCLICAL_INDUSTRIES) and len(m) >= 5 and m.min() < m.median() / 2 \
+            and (commodity or downturn(f, norm or 0.0)):
         g = cycle_growth(f)
-        if dam.get("sector") in CYCLICAL_SECTORS or g is None or g < FAST:
+        if commodity or g is None or g < FAST:
             return "cyclical", f"a cyclical industry and a margin that fell below half its median (low {m.min():.0%}, median {m.median():.0%})"
         growing = f"a cyclical industry, but revenue up {g:.0%} a year across the cycle (a growth firm, not a mature cyclical); "
     if (s.get("rev_cagr_3y") or 0) >= FAST:
@@ -184,6 +185,19 @@ def kind_of(f: dict, k: dict, norm: float | None) -> tuple[str, str]:
         return "income", (f"utility" if dam.get("sector") == "Utilities" else
                           f"5-year payout {payout:.0%} and revenue growth below the market's median ({norm:.1%})")
     return "ordinary", "a profitable business without a special type"
+
+
+def downturn(f: dict, norm: float) -> bool:
+    """A margin that fell below half its 10-year median in a year whose revenue grew less than the market's median
+    company's over 5 years (`norm`, the fast-grower test's): the downturn the cyclical test looks for. Damodaran's
+    cyclical firms are those whose revenues and earnings move with the economy, falling in its downturns ("Investment
+    Valuation", ch. 22); a halving in a year of fast-rising revenue is a merger's accounting or a young firm's ramp
+    (Broadcom's -3% in FY2016, the Avago-Broadcom merger year, revenue +94%), not the cycle (NVIDIA's FY2023, revenue
+    flat, and Micron's FY2023, -49%, are). For the economy-driven industries only: a commodity producer's margin also
+    halves when its input's price rises (a refiner's squeeze), its cycle all the same."""
+    h = [(x.get("revenue"), x.get("ebit_margin")) for x in f["history"]][-11:]
+    half = history(f, "ebit_margin", 10).median() / 2
+    return any(r is not None and p and e is not None and e < half and r / p - 1 < norm for (p, _), (r, e) in zip(h, h[1:]))
 
 
 def cycle_growth(f: dict) -> float | None:

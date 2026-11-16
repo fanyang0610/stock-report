@@ -89,6 +89,26 @@ def units(price: float, shares: float, quote: dict, listed: float | None) -> flo
     return r if abs(r - 1) > 0.2 else 1.0
 
 
+def second_in_usd(a: pd.DataFrame, second: pd.DataFrame, label: str, fx: pd.Series) -> bool:
+    """Yahoo's statements and estimates in US dollars under another currency's label: every figure the cross-check
+    compares in the latest year both report is ours over the label's rate to the dollar, within 15% (each year's
+    statements are translated at that year's rates, not today's). 中芯国际's A line: Yahoo's figures are its HK line's
+    USD, labelled CNY (ours 6.3-7.4 times them at 6.67 to the dollar), so the cross-check left its 2025 out and its
+    revenue estimates read 84% below its trailing revenue."""
+    if label == "USD" or second is None or not len(second) or label not in fx:
+        return False
+    s = second.assign(day=pd.to_datetime(second["period"]))
+    for i in range(len(a) - 1, -1, -1):
+        near = s[(s["day"] - pd.Timestamp(a.iloc[i]["period"])).abs() <= pd.Timedelta(days=10)]
+        if len(near):
+            ours, other = a.iloc[i], near.iloc[-1]
+            ratios = [ours[k] / other[k] for k in sheet.CHECK if k in other and pd.notna(ours.get(k)) and pd.notna(other[k])
+                      and ours[k] > 0 and other[k] > 0]
+            r = float(fx[label] / fx["USD"])
+            return len(ratios) >= 3 and all(r / 1.15 <= x <= r * 1.15 for x in ratios)
+    return False
+
+
 def us_classes(code: str) -> list[str]:
     """The issuer's other US lines: the tickers SEC files under the same CIK (BRK.A beside BRK.B)."""
     ciks = sec.load_ciks() if sec.CIKS.exists() else pd.Series(dtype=float)
@@ -287,7 +307,12 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         per = units(price, shares, g["tencent"], listed_value(code))
         shares, a["shares"] = shares / per, a["shares"] / per
     fin = kind in checks.FINANCIAL  # banks', insurers' and brokers' debt, cash and operating cash flow are their business
-    check, a = sheet.crosscheck(a, None if g["single"] else g["second"], fin)  # a figure > 5% off is left out
+    usd = not g["single"] and second_in_usd(a, g["second"], report_cur, fx)  # Yahoo's figures in its US dollars:
+    if usd:  # no figure to compare at one rate (each year's translation differs), and its estimates are in dollars
+        g["street"] = g["street"] | {"report_currency": "USD"}  # (consensus' revenue_currency)
+    check, a = sheet.crosscheck(a, None if g["single"] or usd else g["second"], fin)  # a figure > 5% off is left out
+    if usd:
+        check = {"second_in_usd": "Yahoo's figures are in US dollars under a CNY label: not compared"}
     mcap = price * shares
     t12 = ({"revenue": g["latest"].get("revenue"), "ni": g["latest"].get("ni"), "ocf": g["latest"].get("ocf")} if market == "us"
            else {k: sheet.ttm(st, k) for k in ("revenue", "ni", "ocf")})
