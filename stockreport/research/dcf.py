@@ -156,30 +156,21 @@ def implied_cost_equity(roe, pb, g):
     return g + (roe - g) / pb
 
 
-def excess_terminal(book: float, fade: list[float], cost: float, g: float) -> float:
-    """The stable period's excess returns a year before they start: the ROE of each year excess returns last
-    (`fade`) on a book growing at g, then ROE = the cost of equity (no excess: value = book)."""
-    pv, factor = 0.0, 1.0
-    for r in fade:
-        factor /= 1 + cost
-        pv += (r - cost) * book * factor
-        book *= 1 + g
-    return pv
-
-
-def excess_return(book0: float, roe: list[float], payout: list[float], cost: list[float], fade: list[float],
+def excess_return(book0: float, roe: list[float], growth: list[float], cost: list[float], fade: list[float],
                   cost_term: float, g_term: float) -> dict:
-    """Equity value = book + the present value of each year's excess return (ROE - COE) x opening book, book growing
-    by retained profit (Damodaran, "Investment Valuation", ch. 21); then the stable period: the years excess returns
-    last at the ROEs `fade`, then none (excess_terminal)."""
+    """Equity value = book + the present value of each year's excess return (ROE - COE) x opening book (Damodaran,
+    "Investment Valuation", ch. 21), the book growing at `growth` with the rest of the profit paid out; then the stable
+    period. Stage 20, one rule for the forms and the market's aggregate that sets the return (fcfe, whose value this is
+    at one cost): the book grows on the growth path, as capital follows revenue in fcff, and the year-10 ROE stays on
+    the book in place, new capital earning `fade` (the moat's returns on new capital), then the cost (terminal)."""
     book, factor, pv, rows = book0, 1.0, 0.0, []
-    for r, p, c in zip(roe, payout, cost):
+    for r, g, c in zip(roe, growth, cost):
         excess = (r - c) * book
         factor /= 1 + c
         pv += excess * factor
-        rows.append({"book": book, "roe": r, "excess": excess})
-        book *= 1 + r * (1 - p)
-    term = excess_terminal(book, fade, cost_term, g_term)
+        rows.append({"book": book, "roe": r, "excess": excess, "payout": 1 - g / r if r > 0 else None})
+        book *= 1 + g
+    term = terminal(roe[-1] * book, g_term, cost_term, fade) - book
     return {"value": book0 + pv + term * factor, "pv_excess": pv, "pv_terminal": term * factor, "book_end": book, "years": rows}
 
 

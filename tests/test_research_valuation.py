@@ -67,9 +67,9 @@ def test_justified_pb_and_excess_return_agree():
     # constant ROE, payout and cost: the excess-return model's value over book is the justified P/B with g = ROE x retention
     # (excess returns lasting 3,000 years stand for ever)
     roe, payout, coe = 0.12, 0.5, 0.09
-    r = dcf.excess_return(100, [roe] * 10, [payout] * 10, [coe] * 10, [roe] * 3000, coe, roe * (1 - payout))
+    r = dcf.excess_return(100, [roe] * 10, [roe * (1 - payout)] * 10, [coe] * 10, [roe] * 3000, coe, roe * (1 - payout))
     assert r["value"] / 100 == pytest.approx(dcf.justified_pb(roe, coe, roe * (1 - payout)))
-    assert dcf.excess_return(100, [coe] * 10, [payout] * 10, [coe] * 10, [], coe, 0.03)["value"] == pytest.approx(100)
+    assert dcf.excess_return(100, [coe] * 10, [0.05] * 10, [coe] * 10, [], coe, 0.03)["value"] == pytest.approx(100)
     assert r["years"][1]["book"] == pytest.approx(106) and r["years"][0]["excess"] == pytest.approx(3)
 
 
@@ -116,7 +116,6 @@ def test_terminal_value_fades_to_the_cost_of_capital():
     # no excess years: the Ginzu's NOPAT (1 - g / WACC) / (WACC - g) = NOPAT / WACC; one year at 20% then the cost
     assert dcf.terminal(10.0, 0.03, 0.08, []) == pytest.approx(10 * (1 - 0.03 / 0.08) / 0.05) == pytest.approx(125)
     assert dcf.terminal(10.0, 0.03, 0.08, [0.20]) == pytest.approx(10 * (1 - 0.03 / 0.2) / 1.08 + 10.3 / 0.08 / 1.08)
-    assert dcf.excess_terminal(100.0, [0.15, 0.12], 0.10, 0.02) == pytest.approx(5 / 1.1 + 2 * 1.02 / 1.1 ** 2)
 
 
 def test_stable_growth_passes_the_sensitivity_test():
@@ -246,6 +245,33 @@ def test_market_comes_out_at_its_price(monkeypatch):
     a = market.aggregate(snap, "cn")
     p = market.paths(a, 0.03, {"above": 0.9, "below": 0.6})
     assert market.worth(a, p, got["r"], 0.9)["value"] == pytest.approx(1.0, abs=1e-6)
+    market.implied.cache_clear()
+
+
+def test_market_carries_its_members_excess_growth(monkeypatch):
+    import pandas as pd
+    # stage 20: the members' DCFs carry the measured share of their excess revenue growth (value.paths), so the
+    # aggregate that sets their return does too: book-weighted revenue growth 13% over a 3% base, kept 30% then 10%
+    snap = pd.DataFrame({"code": ["a", "b"], "mcap": [300.0, 100.0], "ey": [0.08, 0.08], "by": [0.8, 0.8],
+                         "fwd_growth": [None, None], "rev_growth": [0.13, 0.13], "snap_date": "2026-11-14"})
+    history = pd.DataFrame({str(y): [0.10, 0.10] for y in range(2016, 2026)}, index=["a", "b"])
+    monkeypatch.setattr(market.sheet, "snapshot", lambda m, today: snap)
+    monkeypatch.setattr(market.fade, "return_table", lambda m: history)
+    monkeypatch.setattr(market.fade, "base_rates", lambda m, rev, rates: {"fifth_recent": 0.03})
+    monkeypatch.setattr(market.fade, "margin_keep", lambda m: {"above": 0.9, "below": 0.6})
+    monkeypatch.setattr(market.fade, "excess_keep", lambda m: 0.9)
+    monkeypatch.setattr(market.fade, "growth_shares", lambda m, past=1: [0.3, 0.1, 0.1, 0.1, 0.1])
+    monkeypatch.setattr(market.value, "rate", lambda m: (0.03, "2026-11-14"))
+    market.implied.cache_clear()
+    got = market.implied("cn", date(2026, 11, 14))
+    a = market.aggregate(snap, "cn")
+    p = market.paths(a, 0.03, {"above": 0.9, "below": 0.6}, [0.3, 0.1, 0.1, 0.1, 0.1])
+    assert p["early"] == pytest.approx([0.06, 0.04, 0.04, 0.04, 0.04]) and got["excess_growth"] == pytest.approx(0.10)
+    assert market.worth(a, p, got["r"], 0.9)["value"] == pytest.approx(1.0, abs=1e-6)
+    market.implied.cache_clear()
+    snap["rev_growth"] = None  # no growth over the base: a lower return prices the same members (their ROE beats it)
+    market.implied.cache_clear()
+    assert market.implied("cn", date(2026, 11, 14))["r"] < got["r"]
     market.implied.cache_clear()
 
 
@@ -384,9 +410,19 @@ def test_excess_return_on_the_average_roe():
     assert x["value"] == pytest.approx(100.0) and x["roe_avg"] == pytest.approx(0.08)
     assert rating.implied(f, k, "broker", cons, date(2026, 11, 14), "pb_roe") == pytest.approx(0.08, abs=1e-4)
     for h in f["history"]:
-        h["roe"] = 0.14  # 14% against 8%: above book, below the old perpetual justified P/B (0.14 - 2%) / (8% - 2%)
+        h["roe"] = 0.14  # 14% against 8%: the book in place earns 14% for ever (1.75 times book) and the retained profit more
     y = rating.methods(f, k, "broker", cons, date(2026, 11, 14), only={"pb_roe"})["pb_roe"]
-    assert 100.0 < y["value"] < 100.0 * dcf.justified_pb(0.14, 0.08, 0.02)
+    assert y["value"] > 100.0 * 0.14 / 0.08 and y["roe"] == [0.14] * 10
+
+
+def test_the_excess_return_model_is_the_aggregates_fcfe():
+    # stage 20: the forms and the market's aggregate on one rule. The same ROE path, book growth (its retention) and
+    # return on new capital give one value, so a bank priced like its group comes out at its price
+    roes, payout, coe, ronic = [0.10, 0.095, 0.09] + [0.088] * 7, 0.3, 0.13, [0.12, 0.11]
+    er = dcf.excess_return(100, roes, [r * (1 - payout) for r in roes], [coe] * 10, ronic, coe, 0.03)["value"]
+    eq = dcf.fcfe(100, roes, [r * (1 - payout) for r in roes], coe, 0.03, ronic)["value"]
+    assert er == pytest.approx(eq)
+    assert er < 100 * 0.10 / coe + 1  # below the cost for ever: under book, not lifted to it by year 10
 
 
 def test_rates_at_another_equity_return():

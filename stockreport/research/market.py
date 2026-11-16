@@ -7,9 +7,10 @@ review of 2026-11-13, R1). In equity terms, so banks and insurers count with the
 - the market per unit of its value: book (B/P), trailing earnings (E/P) and next year's (each member's trailing
   earnings grown by its consensus growth on the consensus's own basis, the screening's fwd_growth; none: trailing);
 - ROE: next year's, then its gap to the market's own 8-year median shrinks by the market's measured margin keep each
-  year (value.paths' margin rule; fade.margin_keep); the book grows at the largest fifth's base rate to year 5, then in
-  equal steps to stable growth by year 10 (value.paths' growth rule without a consensus excess); what the book's
-  growth doesn't need is paid out;
+  year (value.paths' margin rule; fade.margin_keep); the book grows at the largest fifth's base rate plus the measured
+  share of its excess revenue growth over it kept each year (the members' book-weighted trailing revenue growth;
+  fade.growth_shares, the members' DCFs carry theirs: stage 20) to year 5, then in equal steps to stable growth by
+  year 10 (value.paths' growth rule); what the book's growth doesn't need is paid out;
 - after year 10 the DCF's stable period: the year-10 ROE on the book in place, new capital earning the graded moat's
   return (value.moat on the market's own ROE history, weighted by today's book, faded by fade.excess_keep), then its
   cost; stable growth at the yield unless the sensitivity test lowers it (dcf.tested_growth).
@@ -35,6 +36,9 @@ def aggregate(snap: pd.DataFrame, market: str) -> dict | None:
         return None
     w = s["mcap"] / s["mcap"].sum()
     growth = s["fwd_growth"].where(s["ey"] > 0).fillna(0.0)
+    bw = (s["mcap"] * s["by"]).where(s["by"] > 0)  # book weights: the aggregate's revenue analog is its book
+    rg = s["rev_growth"].clip(-0.5, 2.0) if "rev_growth" in s else pd.Series(float("nan"), index=s.index)
+    ok = rg.notna() & bw.notna()
     ccy = s["currency"] if "currency" in s else s["report_currency"] if "report_currency" in s else pd.Series("CNY", index=s.index)
     yields = {c: value.rate(value.RATE_OF.get(c, "us"))[0] for c in ccy.dropna().unique()}
     t = fade.return_table(market)
@@ -44,22 +48,27 @@ def aggregate(snap: pd.DataFrame, market: str) -> dict | None:
     history = pd.Series({y: float((roes[y] * book).sum() / book[roes[y].notna()].sum()) for y in years})
     return {"members": len(s), "book": float((w * s["by"]).sum()), "earnings": float((w * s["ey"]).sum()),
             "earnings_next": float((w * s["ey"] * (1 + growth)).sum()), "rf": float((w * ccy.map(yields).fillna(yields.get("USD", 0.0))).sum()),
-            "roe_history": history, "covered": float(min(book[roes[y].notna()].sum() / book.sum() for y in years))}
+            "roe_history": history, "covered": float(min(book[roes[y].notna()].sum() / book.sum() for y in years)),
+            "revenue_growth": float((rg[ok] * bw[ok]).sum() / bw[ok].sum()) if ok.any() else None}
 
 
-def paths(a: dict, base: float, keep: dict) -> dict:
-    """Next year's ROE moving toward its own median at the measured keep; the book's growth at the base rate."""
+def paths(a: dict, base: float, keep: dict, shares: list[float] | None = None) -> dict:
+    """Next year's ROE moving toward its own median at the measured keep; the book's growth at the base rate plus the
+    measured share of the members' excess revenue growth over it kept in each of the next 5 years (stage 20: the
+    members' DCFs carry theirs, value.paths; `shares`: fade.growth_shares, on one year's excess)."""
     roe1, target = a["earnings_next"] / a["book"], float(a["roe_history"].tail(MEDIAN_YEARS).median())
     k = keep["above" if roe1 > target else "below"]
-    return {"roe": [target + (roe1 - target) * k ** t for t in range(dcf.YEARS)], "roe_target": target, "base": base}
+    excess = a["revenue_growth"] - base if a.get("revenue_growth") is not None and shares else 0.0
+    return {"roe": [target + (roe1 - target) * k ** t for t in range(dcf.YEARS)], "roe_target": target, "base": base,
+            "early": [base + x * excess for x in (shares or [0.0] * value.CONVERGENCE)], "excess": excess}
 
 
 def worth(a: dict, p: dict, r: float, excess_keep: float) -> dict:
     """The market's value per unit of its price at return r."""
     moat = value.moat(a["roe_history"], r, r, excess_keep)
     g = dcf.tested_growth(lambda x: dcf.terminal(1.0, x, r, moat["ronic"]), a["rf"])
-    growth = [p["base"]] * value.CONVERGENCE + [p["base"] + (g - p["base"]) * k / (dcf.YEARS - value.CONVERGENCE)
-                                                 for k in range(1, dcf.YEARS - value.CONVERGENCE + 1)]
+    g5 = p["early"][-1]
+    growth = p["early"] + [g5 + (g - g5) * k / (dcf.YEARS - value.CONVERGENCE) for k in range(1, dcf.YEARS - value.CONVERGENCE + 1)]
     return dcf.fcfe(a["book"], p["roe"], growth, r, g, moat["ronic"]) | {"g": g, "moat": moat}
 
 
@@ -101,7 +110,8 @@ def implied(market: str, today: date, financial: bool | None = None, home: bool 
     if a is None:
         return None
     base = fade.base_rates(market, float("inf"), {}).get("fifth_recent")  # the largest fifth: the market is its largest
-    p = paths(a, base if base is not None else a["rf"], fade.margin_keep(market))
+    shares = fade.growth_shares(market, 1) if a["revenue_growth"] is not None else None
+    p = paths(a, base if base is not None else a["rf"], fade.margin_keep(market), shares)
     keep = fade.excess_keep(market)
     r = dcf.solve(lambda x: -worth(a, p, x, keep)["value"], -1.0, a["rf"] + 0.005, 0.40)
     if r is None:
@@ -112,5 +122,5 @@ def implied(market: str, today: date, financial: bool | None = None, home: bool 
             "snapshot": snap["snap_date"].iloc[0], "pb": 1 / a["book"], "pe": 1 / a["earnings"] if a["earnings"] > 0 else None,
             "pe_next": 1 / a["earnings_next"] if a["earnings_next"] > 0 else None, "roe_next": p["roe"][0],
             "roe_median": p["roe_target"], "roe_history": {str(k): v for k, v in a["roe_history"].items()},
-            "base_growth": p["base"], "g": w["g"], "moat_track": w["moat"]["track"], "moat_edge": w["moat"]["edge"],
+            "base_growth": p["base"], "excess_growth": p["excess"], "g": w["g"], "moat_track": w["moat"]["track"], "moat_edge": w["moat"]["edge"],
             "pv_terminal_share": w["pv_terminal"] / w["value"], "value": w["value"]}

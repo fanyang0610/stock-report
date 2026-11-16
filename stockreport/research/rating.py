@@ -106,32 +106,43 @@ def methods(f: dict, k: dict, kind: str, cons: dict, today: date, eps_factor: fl
         out["ddm"] = {"value": x, "target": x * roll, "dividend": paid, "dividend_consensus": dps, "fcf_cover": cover,
                       "growth_5y": g1, "growth_stable": gt}
     roe_hist = value.history(f, "roe", 10)
+    def book_growth(g_end: float) -> list[float]:
+        """The book's growth: the market's aggregate's path (market.worth), the base rate of companies of this size to
+        year 5, then in equal steps to stable growth by year 10; the profit it doesn't need is paid out."""
+        b0 = k.get("base_growth") if k.get("base_growth") is not None else g_end
+        return [b0] * value.CONVERGENCE + [b0 + (g_end - b0) * j / (dcf.YEARS - value.CONVERGENCE)
+                                            for j in range(1, dcf.YEARS - value.CONVERGENCE + 1)]
     def on_book(roes: list[float], moat: dict, d: float, n: int) -> dict:
-        """Book equity plus its excess returns: the ROE path to year 10, then the graded moat's fade, then none. The
-        bear / bull case moves the long-run ROE by d, from the last of the n given years (none: every year)."""
+        """Book equity plus its excess returns: the ROE path to year 10, then the book in place at the year-10 ROE and
+        new capital at the graded moat's return, then the cost. The bear / bull case moves the long-run ROE by d, from
+        the last of the n given years (none: every year)."""
         roes = [r + d * min(max(i + 1 - n, 0) / (dcf.YEARS - n), 1.0) if n else r + d for i, r in enumerate(roes)]
         fade_ = [r + d for r in moat["ronic"]]
-        g_er = dcf.tested_growth(lambda x: 1 + dcf.excess_terminal(1.0, fade_, k["stable_cost"], x), g)
-        res = dcf.excess_return(book, roes, [payout] * dcf.YEARS, dcf.steps(coe, k["stable_cost"]), fade_, k["stable_cost"], g_er)
+        g_er = dcf.tested_growth(lambda x: dcf.terminal(1.0, x, k["stable_cost"], fade_), g)
+        growth = book_growth(g_er)
+        res = dcf.excess_return(book, roes, growth, dcf.steps(coe, k["stable_cost"]), fade_, k["stable_cost"], g_er)
         x = per(res["value"])
         return {"value": x, "target": x * roll, "roe": roes, "roe_term": roes[-1], "fade": fade_, "moat": moat, "g": g_er,
-                "payout": payout, "pv_terminal_share": res["pv_terminal"] / res["value"] if res["value"] else None}
+                "growth": growth, "payout": [y["payout"] for y in res["years"]],
+                "pv_terminal_share": res["pv_terminal"] / res["value"] if res["value"] else None}
     spread = lambda base: min(quartiles(roe_hist), abs(base)) * shift if shift and len(roe_hist) >= 3 else 0.0
     if "excess_return" in w and book and eps:
         moat = case(value.moat(roe_hist, coe, k["stable_cost"], k["excess_keep"]))  # graded, as the DCF's return on capital
         roes, b = [], book
-        for e in eps:
+        for e, gb in zip(eps, book_growth(g)):
             roes.append(e * shares / b)
-            b += e * shares * (1 - payout)
-        n = len(roes)
-        roes += [roes[-1] + (moat["start"] - roes[-1]) * (i - n) / (dcf.YEARS - n) for i in range(n + 1, dcf.YEARS + 1)]
-        out["excess_return"] = on_book(roes, moat, spread(moat["start"]), n)
+            b *= 1 + gb
+        n, own = len(roes), value.history(f, "roe", 8)  # then toward its own 8-year median at the market's measured
+        target = float(own.median()) if len(own) >= value.MOAT_YEARS else roes[-1]  # keep, as the market's aggregate
+        keep = k["margin_keep"]["above" if roes[-1] > target else "below"]  # (market.paths) and a margin (value.paths)
+        roes += [target + (roes[-1] - target) * keep ** (i - n) for i in range(n + 1, dcf.YEARS + 1)]
+        out["excess_return"] = on_book(roes, moat, spread(target), n)
     if "pb_roe" in w and book:  # the same model on the cycle's average ROE in place of the consensus (stage 15: it
-        # capitalized the average for ever before)
+        # capitalized the average for ever before; stage 20: the average is kept, as the DCF keeps a normal year's)
         hist = value.history(f, "roe", 10 if kind == "cyclical" else 8)
         if len(hist):
             roe, moat = float(hist.mean()), case(value.moat(hist, coe, k["stable_cost"], k["excess_keep"]))
-            x = on_book([roe + (moat["start"] - roe) * i / (dcf.YEARS - 1) for i in range(dcf.YEARS)], moat, spread(roe), 0)
+            x = on_book([roe] * dcf.YEARS, moat, spread(roe), 0)  # the cycle's average, as a normal year's return
             extra = excess(eps, roe * book / shares, coe, 1)  # the consensus years' earnings above (below) the average
             x["value"] = max(x["value"] + extra / fx, 0.0)
             out["pb_roe"] = x | {"roe_avg": roe, "excess_earnings": extra / fx, "target": x["value"] * roll}

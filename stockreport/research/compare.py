@@ -121,8 +121,8 @@ def forecast(facts: dict, val: dict) -> dict:
     er = m.get("excess_return")
     if er and shares:
         book, bvps = facts["valuation"]["book_common"], []
-        for i, roe in enumerate(er["roe"][:3]):
-            book += roe * book * (1 - er["payout"])
+        for g in er["growth"][:3]:
+            book *= 1 + g
             bvps.append(book / shares)
         rows += [("ROE", er["roe"][:3], "pct"), ("每股净资产", bvps, "per")]
         if len(eps) >= 2:
