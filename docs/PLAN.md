@@ -1354,7 +1354,7 @@
     fast grower, 65.8 -> 273 (卖出 -> 持有, 1.15); 中芯国际 1.35 -> 0.73 (卖出; 99 -> 184): with its revenue consensus read
     in dollars it grows 19% a year, and growth at 0.37 of sales per unit of capital that earns below its cost takes value
     away. The review's fix moves no rating: the financial groups' returns as before fix 3.
-  - Found, not fixed here (each a follow-up with its fix): Berkshire's DCF takes an EBIT of 101bn that carries its
+  - Found, not fixed here (each a follow-up with its fix; the first three fixed in stage 21): Berkshire's DCF takes an EBIT of 101bn that carries its
     investment gains (no operating-income tag) and adds 373bn of cash that is mostly insurance float, with its debt
     read as 0 (the cross-check left it out): value it as the financial its snapshot marks it (on book), or take the
     operating businesses' income and keep the float's assets in the business; UnitedHealth adds 54bn of investments
@@ -1382,6 +1382,72 @@
     members' moats off with the aggregate's kept is no like-for-like test; the moat on ROE, the like-for-like one, moves
     0.03); the constants (5 classified peers, the 15% band, 3 compared figures) are code's readings, written at their
     rules.
+- Stage 21 (research; stage 20's "found, not fixed" faults: float, and an A+H issuer's two types, 2026-11-21): done
+  2026-11-21. One commit per fix, each rule with its evidence in the method sections:
+  - Fix 1, minor: an insurance carrier's float ("Which playbook", "Valuation and target price"). Berkshire's DCF took an
+    EBIT of 101bn that carried its investment gains (it tags no operating income), added 373bn of cash that is mostly
+    float and read its debt as 0. A carrier by SEC's SIC (63) that Damodaran files under Financials or not at all, or
+    that reports no operating income, is an insurer, valued on book; one in an operating sector keeps its DCF with its
+    cash and investments in the business (Article 7: their income is in its operating income). Berkshire holding ->
+    insurer, 1,267 (0.48) -> 665 (0.93), 持有 both: 1.9 times its book of 356 a B share, on a consensus ROE of 6.4%
+    rising to its own 8-year median of 12.2% (GAAP, its equity gains in it), above its 8.2% cost for the moat's 15
+    years; the street's target 565. UnitedHealth 915 (0.39) -> 678 (0.53), still 买入: its 82bn of cash and investments
+    leave the bridge and enter its capital. What remains is the method's view: its margin, 4.2% in 2025 against an
+    8-year median of 8.2%, returns to it by year 8 at the US's measured recovery below the median (0.59 kept a year),
+    where today's price implies 6.3%; the street's target, 483, is above the price too (14 buys, 3 holds).
+  - Fix 2, minor: one type per A+H issuer ("Which playbook"): the line with the longer unbroken history, at equal
+    length the A line. 中国海油 A ordinary -> cyclical, 79.9 (0.40) -> 59.8 CNY (0.53), 持有 both; its H line 36.8 HKD
+    (31.3 CNY): the gap was 2.55 times in one currency, now 1.91: the A line's 8-year cycle average (on the H line's
+    10 years it would be 45.3, 1.45 times the H line's) and the two markets' returns, a cost of equity of 6.3% for the
+    A line and 8.9% for the H, by design (each line at the return its market prices: the A shares trade 64% above the
+    H). At equal length: 中国神华 H ordinary -> income, 63.0 (0.70) -> 38.5 HKD (1.11, the dividend model; its A line
+    53.1 CNY, 1.00); 中国石油 H ordinary -> cyclical, 16.2 (0.65) -> 12.2 HKD (0.86; its A line's operating profit, which
+    leaves its joint ventures' income out, halves in 2016; after the review its H line's 2017, revenue 0, makes the A
+    line's 10 years the longer). 中国移动: its A line's history jumps from 2011 to 2018, so after the review its H line's
+    10 years win and both lines are ordinary (at fix 2 both income); values unchanged, the DCF main either way (its
+    dividends 74% of FCFE, Damodaran's rule). 百济神州 A ordinary -> fast grower from its H line's 10 years (its A line's
+    2025 revenue reads 0; value unchanged). 宁德时代 H, 4 years, takes its A line's (ordinary, as before). No rating
+    moved.
+  - Before / after, every step rebuilt on 2026-11-21's data (prices of that day, the 2026-11-14 snapshot setting the
+    groups' returns; before: stage 20's code, 6f4d99c, from a frozen copy, identical to stage 20's "review" column;
+    fix 1, fix 2 and review the code after each commit; data/stage21/run.py, freeze.sh, step.sh, table.py, table.txt).
+    The 25: ratings 6 / 12 / 7 at every step, every value unchanged, 百济神州's type above. Every change among the 99
+    (the 25 and each market's largest 30), fair value in the quote currency (price over fair value):
+  | company | type: before -> after | rating | fair value: before / fix 1 / fix 2 / review | step |
+  |---|---|---|---|---|
+  | Berkshire BRK.B | holding -> insurer | 持有 | 1,267 (0.48) / 665 (0.93) / 665 / 665 | fix 1 |
+  | UnitedHealth UNH | ordinary | 买入 | 915 (0.39) / 678 (0.53) / 678 / 678 | fix 1 |
+  | 中国海油 600938 | ordinary -> cyclical | 持有 | 79.9 (0.40) / 79.9 / 59.8 (0.53) / 59.8 | fix 2 |
+  | 中国神华 01088 | ordinary -> income | 持有 | 63.0 (0.70) / 63.0 / 38.5 (1.11) / 38.5 | fix 2 |
+  | 中国石油 00857 | ordinary -> cyclical | 持有 | 16.2 (0.65) / 16.2 / 12.2 (0.86) / 12.2 | fix 2 |
+  | 中国移动 00941 | ordinary -> income -> ordinary | 持有 | 88.8 (0.93) throughout | fix 2, review |
+  | 中国移动 600941 | income -> ordinary | 买入 | 141.6 (0.79) throughout | review |
+  | 百济神州 688235 | ordinary -> fast grower | 卖出 | 141.3 (1.98) throughout | fix 2 |
+  - The largest 30, cap-weighted value over price (financials, others; Buy / Hold / Sell), before -> after: CN 1.15
+    (1.00, 1.28; 5/21/4) -> 1.12 (1.00, 1.23; 5/21/4), 中国海油; HK 1.13 (1.09, 1.17; 1/28/1) -> 1.10 (1.09, 1.10;
+    1/28/1), 中国神华 and 中国石油; US 1.25 (1.85, 1.20; 5/16/9) -> 1.21 (1.25, 1.20; 5/16/9), Berkshire and
+    UnitedHealth. Every move of 20% or more is one of the five value changes above, each by its rule.
+  - Found, not fixed here (each a follow-up with its fix): the shorter line's cycle average and medians still come
+    from its own years (中国海油 A 59.8 against 45.3 on the H line's 10): read the longer line's earlier years, one
+    company's accounts, where the two lines report in one currency; data faults in the history tables, which the type
+    now reads past but the rest of each line's valuation doesn't: 百济神州 A's 2025 revenue reads 0, 中国石油 H's 2017
+    revenue 0, 中国移动 A's history jumps from 2011 to 2018: drop a year whose revenue is 0 beside non-zero neighbours
+    and find why the A line's table holds 2010-11.
+  - Tests: an insurance carrier by SIC and HK industry, and its kind by Damodaran's sector and its operating income; a
+    float's cash and investments in its capital; an A+H line's type from the longer unbroken history (a gap and a year
+    reading 0 end it), the A line's at equal length, none from another kind. 309 pass. App Python 12,081 lines
+    (11,991 before): rating.py 455, facts.py 483 and value.py 492, the 400 a guide.
+  - The fresh-context stage review (one, on Sonnet): every figure checked matched the files; no recursion in
+    rating.one_type (facts.build never rates), rating.typed equivalent to the code it replaced. Answered: (1)
+    UnitedHealth's fact sheet showed its gross debt as net debt (3.3 times EBITDA), its cash blanked to keep it in the
+    capital: the cash and investments stay on the fact sheet and float_in_business keeps them in the capital and out
+    of the bridge and the EV (value.capital; net debt 49.6bn, 2.1 times; its value unchanged). (2) "No operating
+    income" read one filing's tag: now none in the trailing figures nor the last annual year; UnitedHealth, Elevance,
+    Cigna, Humana and Centene all tag it to 2026-09-30 (checked in SEC's companyfacts). (3) A history counted in rows:
+    now its latest unbroken run of years with revenue (中国移动 above). (4) The A line at equal length looked chosen
+    with 中国神华 and 中国石油 in view: argued from the templates and written as a code's choice ("Which playbook");
+    each other answer would leave one company with two types. Not changed: a line whose other line's fact sheet isn't
+    today's builds it (a failure leaves its own type, logged); the SIC table is read per fact sheet (one small file).
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
   fair value per stock, an earnings forecast, an implied return), and judged them on ship bars I proposed that no
@@ -2105,7 +2171,7 @@ and the target price are code's: DeepSeek is told them and can't change them.
 | Loss-making with revenue | operating loss | DCF to an industry target margin; cross-check: EV/Sales against peers (the fair value when the DCF's equity value is negative) | cash runway, path to profit |
 | Pre-revenue (biotech) | almost no revenue; CN "-U", HK "-B" | 不评级: a pipeline can't be valued from free data | cash runway, dilution |
 | Bank | industry | excess-return model on book equity; cross-check: P/B against its history | NIM, bad loans, provisions, capital |
-| Insurer | industry | the same excess-return model (embedded value isn't reliably free; said so); cross-check: P/B against its history | solvency, combined ratio, investment yield |
+| Insurer | industry; since stage 21 also an insurance carrier Damodaran files under Financials or not at all (below) | the same excess-return model (embedded value isn't reliably free; said so); cross-check: P/B against its history | solvency, combined ratio, investment yield |
 | Broker / asset manager | industry | the excess-return model on the cycle's ROE (8-year average); cross-check: P/B against its history | dependence on market turnover |
 | Cyclical (materials, energy, shipping, chemicals, memory chips) | industry and a volatile margin history, a mature business (since stage 19: not growing like a fast grower across the cycle, unless a commodity producer) | DCF on a normal year (since stage 18: the cycle's average return on capital x today's capital, the consensus years above it as residual income); cross-checks: its own P/E on normalized earnings, the excess-return model on the 10-year average ROE | where in the cycle it stands |
 | Utility / high-dividend mature | industry and payout history | two-stage dividend discount on the dividend free cash flow covers; cross-checks: DCF, yield against its own history (since stage 19 the DCF is main when 5 years' dividends were outside 80-110% of FCFE: Damodaran's FCFE rule, "Rating") | payout cover, regulation |
@@ -2113,7 +2179,17 @@ and the target price are code's: DeepSeek is told them and can't change them.
 | Holding company / conglomerate | industry | DCF; cross-check: P/B against its own history (no reliable free segment values for a sum of the parts; said so) | the discount's history |
 
 The exact tests, fixed in stage 10 (research/value.kind_of), tried in this order: the listing type and industry (bank,
-insurer, broker, REIT); pre-revenue: HKEX's "-B" (chapter 18A biotech; STAR's "-U" where a name keeps it, but CNINFO's
+insurer, broker, REIT; since stage 21 Damodaran's Reinsurance is an insurer, and an insurance carrier, a company whose
+balance sheet holds float, research/facts.carrier: SEC's SIC 6300-6399 for a US filer, the snapshot's 金融-保险
+industries in HK (CN's insurers are typed by their statements' template, as before), is an insurer when Damodaran files it under Financials or doesn't classify it, or
+when it reports no operating income: Damodaran values financial service firms on their equity, their debt and
+investments being raw material ("Valuing Financial Service Firms", 2009), and a carrier files under Regulation S-X
+Article 7, whose revenue captions include net investment income and realized gains, so without an operating income its
+pretax profit carries its investment gains. Berkshire (SIC 6331, Diversified in Financials) is one; a carrier he files
+under an operating sector stays in its type with its float's assets in the business, "Valuation and target price":
+UnitedHealth, Elevance, Cigna, Humana and Centene, Health Care. Scanned on the 2026-11-14 US snapshot: 13 of its 33
+carriers aren't Damodaran's insurers; Berkshire, Manulife, Sun Life, Prudential plc, RGA, Corebridge, Everest and
+RenaissanceRe are now insurers, the five health insurers keep a DCF); pre-revenue: HKEX's "-B" (chapter 18A biotech; STAR's "-U" where a name keeps it, but CNINFO's
 names drop it) or operating costs over twice the revenue; loss-making: an operating loss (operating profit as "Valuation
 and target price" defines it per market) over the last twelve months; holding: Damodaran's "Diversified"; cyclical: Damodaran's Materials or Energy
 sector, or his Semiconductor, Semiconductor Equip, Shipbuilding & Marine and Transportation industries (the plan's
@@ -2147,7 +2223,17 @@ isn't a mature business either: 寒武纪 55% a year, 海光 74%), and with fewe
 grow 20-25% a year, "One Up on Wall Street"); income: Damodaran's Utilities, or a 5-year payout of 60% or more (well
 above the CSI 300's and S&P 500's ~35-40%: a company that pays out most of its profit) with 5-year revenue growth
 below the market's median company's over the latest 5-year window of our history tables (CN 6.7% in 2020-2025); else
-ordinary. The 60% is also a judgement of "most of its profit". Since stage 15 each type has one main method, the first
+ordinary. The 60% is also a judgement of "most of its profit". Since stage 21 an A+H issuer's lines take one type
+(rating.one_type): that of the line whose fact sheet has more years (its latest unbroken run of fiscal years with
+revenue, rating.years: a gap or a year reading 0 ends it), typed as that line is (its figures and its market's norm);
+one company with one set of accounts is one business, and Damodaran's playbook types the business, not the listing
+(中国海油's A line, listed in 2022, has 8 years from 2018 and was ordinary; its H line's 10 carry 2016's loss year and
+type it cyclical). At equal length the A line's: the tests read the operating margin, and Eastmoney's CN template gives
+each line the operating profit leaves out its own row (investment income, fair-value changes) where the HK template
+has none for fair-value changes ("Valuation and target price"); its consensus and dividends stand for both lines since
+stage 19. A code's choice where the evidence is a template's detail, written as such (chosen after 中国神华 and 中国石油
+showed the lines typed apart on 10 years each). A US line (an ADR, a share class) keeps its own, its statements being
+its own filings. Since stage 15 each type has one main method, the first
 listed (value.METHODS), which gives the fair value; the others are cross-checks ("Rating"). Until then the methods
 were averaged with fixed weights (DCF 50%, multiples 50% for the ordinary; 60/40, 50/50, a third each, and so on).
 
@@ -2237,7 +2323,10 @@ were averaged with fixed weights (DCF 50%, multiples 50% for the ordinary; 60/40
   stakes at book; a fair-value change has no line of its own in Eastmoney's HK tables (Tencent's sits in 其他收益
   with its investments' disposal gains; BYD Electronic's 其他收益 is mostly operating), so financial assets at fair
   value stay out of the bridge while their gains stay in profit. Banks, insurers and brokers: their investments are
-  their business, unchanged. EV/EBIT's EV leaves the same assets out.
+  their business, unchanged. Since stage 21 an insurance carrier in an operating sector ("Which playbook": UnitedHealth)
+  keeps its cash and investments in the business: they back its claims and, under Regulation S-X Article 7, their
+  income is a revenue line, so its operating income carries it; they are in its invested capital (its return on
+  capital and sales to capital) and the bridge adds none (UnitedHealth's 28bn of cash and 54bn of investments). EV/EBIT's EV leaves the same assets out.
 - Multiples: P/E, EV/EBIT, P/B or P/S as the type uses, against the stock's own 5-10-year range and its peers' median,
   applied to next year's consensus.
 - The fair value: the type's main method a year from now (an absolute method's value rolled forward 12 months at the
@@ -2890,6 +2979,9 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
     cyclical industry), NVIDIA's securities in cash, the return on capital without the stakes, and the largest 30
     members of each market valued by the rating (measured). Done when: a focused test per fix, the evidence for the
     two method changes in PLAN.md; the 25 rebuilt with a before/after table by fix; the stage review.
+21. **Research stage 21** (stage 20's "found, not fixed": an insurance carrier's float and an A+H issuer's two types;
+    adopted and done 2026-11-21, Status). Done when: a focused test per fix; the 25 and each market's largest 30
+    rebuilt before and after on one day; each large move explained by rule; the stage review.
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
 - The backtest snapshots and the stage-1 harness (index funds, costs, month-end frames).
