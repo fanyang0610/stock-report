@@ -1659,3 +1659,10 @@ need a US history that keeps delisted names and their last returns (the SEC fram
 history here has none); none is free for CN or HK.
 
 Rerun: as section 23 (`frame`, then `run`); the "no buffer" column with `buffer = 0.0` in config.toml.
+
+**After stage 17b** (2026-11-22, the main checkout at b9a2da5, frames rebuilt from its data; this run writes the live
+`data/history/expect.json`): HK's Hold and Sell drawn from Buy's band, the buffer counted after the sector cap. 20
+names over the fund CN +1.7% (51%), US +2.3% (60%), HK +3.2% (60%); the picks over the neutral basket −1.5%, −0.7%,
++3.2%. Hold CN +1.6% (ahead 60%), US −6.9% (28%), HK −1.6% (46%). Sell over the fund CN +4.1% (behind 57%), US +4.0%
+(38%), HK +5.8% (66%): HK's Sell, now from the larger names, lags in more windows and by more in the median, with
+fewer of the small survivors' rebounds; the caveats above stand. It decides nothing.
