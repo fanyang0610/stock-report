@@ -22,7 +22,7 @@ import numpy as np
 
 from stockreport import review
 from stockreport.fetch import yahoo
-from stockreport.research import dcf, fade, folder, judge, load, save, stamp, texts, value
+from stockreport.research import dcf, fade, folder, judge, load, save, sheet, stamp, texts, value
 from stockreport.research import market as markets
 from stockreport.research.checks import FINANCIAL, cagr
 
@@ -273,6 +273,45 @@ def implied(f: dict, k: dict, kind: str, cons: dict, today: date, main: str) -> 
     return r
 
 
+def typed(f: dict) -> tuple[str, str, dict, float | None]:
+    """The type (value.kind_of) on the fact sheet's figures and its market's norm, the last 5-year window's median
+    growth, with the base rates of companies of its size and its revenue in the history tables' currency."""
+    market, t = f["market"], f["valuation"]["ttm"]
+    rev = value.convert(yahoo.load_fx(), t["revenue"], f["valuation"]["report_currency"], TABLE_CURRENCY[market]) if t["revenue"] else None
+    rates = fade.base_rates(market, rev, {}) if rev else {}
+    return *value.kind_of(f, {"ebit": sheet.ebit(market, t)}, rates.get("recent_median")), rates, rev
+
+
+def one_type(f: dict, today: date) -> tuple[str, str] | None:
+    """An A+H issuer's type from the line whose fact sheet has the longer history (more fiscal years), typed as that
+    line is: one company with one set of accounts is one type (Damodaran's playbook types the business, not the
+    listing). 中国海油's A line, listed in 2022, has 8 years from 2018 and was ordinary; its H line's 10 years carry
+    2016's loss year, the cycle's low, and type it cyclical: its two fair values were 2.4 times apart. At equal length
+    the A line's, as its Eastmoney consensus and dividends stand for both lines since stage 19 (中国神华, 中国移动 and
+    中国石油 were typed apart on 10 years each: HK's lower median growth and its statements' operating profit, which
+    has no line for investment income, 中国石油's JV income). None when no other line's history is longer (or the
+    line is the A line at equal length), or its fact sheet is of another kind (a financial, a REIT) or can't be built."""
+    from stockreport.research import facts as fact_sheet
+    if f["market"] not in ("cn", "hk"):
+        return None
+    for o in f.get("other_listings") or []:
+        if o["market"] not in ("cn", "hk"):
+            continue
+        try:
+            path = folder(o["market"], fact_sheet.normal(o["market"], o["code"])) / "facts.json"
+            of = load(path) if path.exists() and load(path)["built"][:10] == today.isoformat() else \
+                fact_sheet.build(o["market"], o["code"], today)
+        except Exception as e:
+            log.warning("%s: its %s line %s couldn't be typed: %s", f["code"], o["market"].upper(), o["code"], e)
+            continue
+        n, mine = len(of["history"]), len(f["history"])
+        if of["kind"] == f["kind"] and (n > mine or n == mine and o["market"] == "cn"):
+            kind, why, _, _ = typed(of)
+            return kind, (f"its {o['market'].upper()} line's " + ("longer history" if n > mine else "type at equal history") +
+                          f" ({n} years): {why}")
+    return None
+
+
 def build(market: str, code: str, today: date | None = None) -> dict:
     from stockreport.research import facts as fact_sheet
     today = today or date.today()
@@ -284,14 +323,11 @@ def build(market: str, code: str, today: date | None = None) -> dict:
                    for key in ("financial", "other")}  # the forms, so the sector view is said, not hidden in every rating
     pm = value.peer_medians(f, today)  # the young's target margin (value.paths) and its quartiles (the scenarios)
     k["mature_margin"], k["mature_quartiles"] = pm.get("mature_margin"), pm.get("mature_quartiles")
-    t = v["ttm"]
-    cur_rev = value.convert(yahoo.load_fx(), t["revenue"], k["currency"], TABLE_CURRENCY[market]) if t["revenue"] else None
-    rates = fade.base_rates(market, cur_rev, {}) if cur_rev else {}
-    norm = rates.get("recent_median")  # the last 5-year window's median: the market's norm (kind_of)
+    kind, why, rates, cur_rev = typed(f)
+    kind, why = one_type(f, today) or (kind, why)
     k["base_growth"] = rates.get("fifth_recent")  # companies of this size now: growth beyond the consensus (value.paths)
     k |= {"growth_shares": fade.growth_shares(market, 1), "trend_shares": fade.growth_shares(market, 3),
           "margin_keep": fade.margin_keep(market), "excess_keep": fade.excess_keep(market)}  # stage 14's measured rates
-    kind, why = value.kind_of(f, k, norm)
     cons = value.consensus_years(f, k, today)
     status, reason = flags(f) if kind != "pre_revenue" else ("不评级", why)
     out = {"code": f["code"], "market": market, "name": f["name"], "built": stamp(), "price": v["price"],
@@ -320,7 +356,7 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     target12 = move(target)
     expected = (target12 - price + dividend) / price
     d = found.get("dcf") or found.get("dcf_normal")
-    ours = cagr(d["years"]["revenue"][4], t["revenue"], 5) if d else None
+    ours = cagr(d["years"]["revenue"][4], v["ttm"]["revenue"], 5) if d else None
     rev = reverse(f, k, kind, cons, found) | {"implied_return": implied(f, k, kind, cons, today, main)}
     roll = 1 + k["cost_equity"] - dividend / price  # as the absolute methods' targets roll forward
     for x in j["cross"]:  # what the main method would need to reach a cross-check that rates it differently

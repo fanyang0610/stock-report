@@ -680,3 +680,36 @@ def test_page_one_says_when_the_price_ran_ahead_of_the_forecasts():
     v = {"target": 1.0, "inputs": {"erp": 0.05}, "reverse": {}, "currency": "USD", "uncertainty": {}, "main": "pe_own",
          "state": "resolved", "fair_excess": 0.0, "forecast_lag": lag}
     assert any("近 3 个月股价 -27.5%" in x and "偏高" in x for x in compare.basis({}, v, "S&P 500"))
+
+
+def test_an_a_and_h_issuer_takes_one_type_from_its_longer_history(monkeypatch, tmp_path):
+    # 中国海油's shape: an oil producer (Energy) whose A line's 8 years miss the loss year its H line's 10 carry (2016,
+    # margin -2% against a 38% median): both lines cyclical, typed as the H line is; a line no longer than its own keeps
+    # its type, as does one of another kind
+    margins = [-0.02, 0.21, 0.36, 0.36, 0.26, 0.40, 0.46, 0.41, 0.45, 0.43]
+    def f(market, code, n, kind="general", others=()):
+        return {"market": market, "code": code, "kind": kind, "name": "中国海油", "built": "2026-11-21 15:00",
+                "damodaran": {"sector": "Energy", "industry": "Oil/Gas (Integrated)"}, "summary": {"rev_cagr_3y": 0.0},
+                "valuation": {"ttm": {"revenue": 398.0, "pretax": 170.0, "interest": 0.0}, "report_currency": "CNY"},
+                "history": [{"ebit_margin": m, "revenue": 400.0, "ni": 100.0} for m in margins[-n:]],
+                "other_listings": [{"market": m, "code": c} for m, c in others]}
+    a, h = f("cn", "600938", 8, others=[("hk", "00883")]), f("hk", "00883", 10, others=[("cn", "600938")])
+    sheets = {"cn/600938": a, "hk/00883": h}
+    monkeypatch.setattr(rating, "folder", lambda m, c: tmp_path / m / c)
+    for key in sheets:
+        (tmp_path / key).mkdir(parents=True)
+        (tmp_path / key / "facts.json").write_text("{}")
+    monkeypatch.setattr(rating, "load", lambda p: sheets[f"{p.parent.parent.name}/{p.parent.name}"])
+    monkeypatch.setattr(fade, "base_rates", lambda *a: {"recent_median": 0.05})
+    monkeypatch.setattr(rating.yahoo, "load_fx", lambda: {"CNY": 7.1, "USD": 1.0})
+    today = date(2026, 11, 21)
+    assert rating.typed(a)[0] == "ordinary" and rating.typed(h)[0] == "cyclical"
+    kind, why = rating.one_type(a, today)
+    assert kind == "cyclical" and why.startswith("its HK line's longer history (10 years)")
+    assert rating.one_type(h, today) is None  # its own is the longer
+    sheets["cn/600938"] = f("cn", "600938", 10)  # at equal length the A line's (stage 19's consensus and dividends)
+    assert rating.one_type(h, today)[1].startswith("its CN line's type at equal history (10 years)")
+    assert rating.one_type(sheets["cn/600938"] | {"other_listings": [{"market": "hk", "code": "00883"}]}, today) is None
+    sheets["cn/600938"] = a
+    sheets["hk/00883"] = h | {"kind": "insurer"}
+    assert rating.one_type(a, today) is None
