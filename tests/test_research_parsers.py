@@ -378,3 +378,22 @@ def test_hk_segment_note_whose_revenue_row_is_total_revenues():
     assert df.loc["Core local commerce", "revenue"] == pytest.approx(250.247496e9)
     assert df.loc["Core local commerce", "op_margin"] == pytest.approx(52415162 / 250247496)
     assert df.loc["Unallocated items", "op_income"] == pytest.approx(-8.296892e9) and df["op_share"].isna().all()
+
+
+def test_an_insurance_carrier_is_valued_on_book_unless_its_business_is_operating(monkeypatch, tmp_path):
+    # SEC's SIC 63 marks the carriers (Berkshire 6331, UnitedHealth 6324); Apple's 3571 isn't one; HK by its 金融-保险 industry
+    from stockreport.fetch import frames
+    from stockreport.research import facts
+    sic = tmp_path / "us_sic.csv.gz"
+    pd.DataFrame({"code": ["1067983", "731766", "320193"], "sic": [6331, 6324, 3571]}).to_csv(sic, index=False)
+    monkeypatch.setattr(frames, "SIC", sic)
+    us = pd.DataFrame({"code": ["BRK.B", "UNH", "AAPL", "NEW"], "cik": [1067983, 731766, 320193, None]})
+    assert [facts.carrier("us", c, us) for c in ("BRK.B", "UNH", "AAPL", "NEW", "XYZ")] == [True, True, False, False, False]
+    hk = pd.DataFrame({"code": ["01299", "00005"], "industry_type": ["金融-保险-保险-人寿与健康保险", "金融-银行-商业银行-综合性银行"]})
+    assert facts.carrier("hk", "01299", hk) and not facts.carrier("hk", "00005", hk)
+    kind = lambda *a, **k: facts.kind_of("us", pd.DataFrame(), *a, **k)
+    assert kind("Diversified", None, "Financials", True) == "insurer"  # Berkshire: on book
+    assert kind("Diversified", None, "Financials", False) == "general"  # a holding without float: its DCF
+    assert kind("Healthcare Support Services", None, "Health Care", True) == "general"  # UnitedHealth: float in the business
+    assert kind("Healthcare Support Services", None, "Health Care", True, op_income=False) == "insurer"  # profit carries gains
+    assert kind("Reinsurance", None, "Financials") == "insurer" and kind("", None, None, True) == "insurer"

@@ -11,11 +11,12 @@ from datetime import date
 import pandas as pd
 
 from stockreport.config import CONFIG
-from stockreport.fetch import filings, nasdaq, sec, yahoo
+from stockreport.fetch import filings, frames, nasdaq, sec, yahoo
 from stockreport.research import (STATEMENT, cached, checks, cn, damodaran, days, folder, fresh, hk, listings, load,
                                   save, segments, sheet, sources, stamp, us)
 
 log = logging.getLogger(__name__)
+INSURANCE_SIC = (6300, 6399)  # SEC's SIC major group 63: insurance carriers
 QUOTE = {"cn": "CNY", "hk": "HKD", "us": "USD"}
 KINDS = {"银行": "bank", "保险": "insurer", "证券": "broker"}
 ROLE = r"董事|总经理|總經理|总裁|總裁|行政總裁|主席|董事会秘书|財務總監|财务总监|首席"
@@ -183,13 +184,37 @@ def gather(market: str, code: str, today: date) -> dict:
     return g
 
 
-def kind_of(market: str, st: pd.DataFrame, industry: str, listing_kind: str | None) -> str:
+def carrier(market: str, code: str, snap: pd.DataFrame) -> bool:
+    """An insurance carrier by its regulator's or index's classification, so its balance sheet holds float: US SEC's
+    SIC 6300-6399 (insurance carriers, which file under Regulation S-X Article 7: net investment income and realized
+    gains are revenue captions); HK the snapshot's 金融-保险 industries. CN's 申万 保险 members are typed insurers by
+    their statements' template (KINDS)."""
+    row = snap[snap["code"] == code] if len(snap) else snap
+    if row.empty:
+        return False
+    if market == "us" and frames.SIC.exists() and pd.notna(row["cik"].iloc[0]):
+        sic = pd.read_csv(frames.SIC, dtype={"code": str}).drop_duplicates("code").set_index("code")["sic"]
+        return INSURANCE_SIC[0] <= sic.get(str(int(row["cik"].iloc[0])), 0) <= INSURANCE_SIC[1]
+    return market == "hk" and str(row["industry_type"].iloc[0]).startswith("金融-保险")
+
+
+def kind_of(market: str, st: pd.DataFrame, industry: str, listing_kind: str | None, sector: str | None = None,
+            floats: bool = False, op_income: bool = True) -> str:
+    """The listing's kind. `floats`: an insurance carrier (carrier()). Damodaran values financial service firms on
+    their equity, since their debt and investments are raw material ("Valuing Financial Service Firms", 2009), so a
+    carrier he files under Financials or doesn't classify (Berkshire's Diversified, his Reinsurance, a life insurer
+    under Financial Svcs.) is an insurer, valued on book, as is one without an operating income (its pretax profit
+    carries its investment gains, Article 7's revenue). One he files under an operating sector (UnitedHealth and the
+    other health insurers: Health Care) stays general, its float's assets in the business (build)."""
     if listing_kind == "reit" or "REIT" in industry or "R.E.I.T" in industry:
         return "reit"
     if market == "cn" and st["org_type"].iloc[-1] in KINDS:
         return KINDS[st["org_type"].iloc[-1]]
-    return ("bank" if industry.startswith("Bank") else "insurer" if industry.startswith("Insurance")
+    kind = ("bank" if industry.startswith("Bank") else "insurer" if industry.startswith(("Insurance", "Reinsurance"))
             else "broker" if industry.startswith("Brokerage") else "general")
+    if kind == "general" and floats and (sector in (None, "", "Financials") or not op_income):
+        return "insurer"
+    return kind
 
 
 def consensus(market: str, g: dict, last_fy: int) -> dict:
@@ -262,6 +287,7 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     a = st[st["months"] == 12].tail(11).reset_index(drop=True)
     if a.empty:
         raise RuntimeError(f"{code}: no annual statements")
+    snap = sheet.snapshot(market, today)
     try:
         damodaran.update(today)
         dam = damodaran.industry_of(market, code)
@@ -269,16 +295,22 @@ def build(market: str, code: str, today: date | None = None) -> dict:
             dam = dam or damodaran.industry_of(o["market"], o["code"])
         for other in us_classes(code) if market == "us" else []:  # another share class's line (Berkshire's BRK.A)
             dam = dam or damodaran.industry_of("us", other)
-        dam = dam or damodaran.industry_like(market, code, sheet.snapshot(market, today), g["street"].get("country"))
+        dam = dam or damodaran.industry_like(market, code, snap, g["street"].get("country"))
     except Exception as e:
         log.warning("damodaran: %s", e)
         dam = {}
     lst = listings.issuer(market, code)
     me = lst[(lst["market"] == market) & (lst["code"] == code)]
-    kind = kind_of(market, st, dam.get("industry", ""), me["kind"].iloc[0] if len(me) else None)
+    floats = carrier(market, code, snap)
+    kind = kind_of(market, st, dam.get("industry", ""), me["kind"].iloc[0] if len(me) else None, dam.get("sector"),
+                   floats, market != "us" or g["latest"].get("op_income") is not None)
     if kind in checks.FINANCIAL:  # investments and their income are a bank's or insurer's business, not set apart
         st, a = (x.assign(**{c: float("nan") for c in ("invest_income", "fv_change", "interest_income", "nonop")})
                  for x in (st, a))
+    elif floats:  # an operating business holding float: its cash and investments back its claims and their income is
+        st, a = (x.assign(cash=float("nan"), nonop=float("nan")) for x in (st, a))  # in its operating income (Article
+        # 7), so they are operating assets, in its capital and not added in the bridge (Damodaran: an asset whose income
+        # is in EBIT is not valued apart)
     street, report_cur = g["street"], a["currency"].dropna().iloc[-1] if a["currency"].notna().any() else QUOTE[market]
     quote_cur = street.get("currency") or QUOTE[market]
     fx = yahoo.load_fx()
@@ -339,7 +371,7 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         dps_12m = float(divs.loc[divs["ex_date"] > year_ago, "dps"].sum()) if len(divs) else 0.0
     balance = {k: None if fin and k in ("debt", "cash", "nonop") else checks.val(bal, k) for k in ("debt", "cash", "minority", "nonop")}
     valuation = {"price": price, "quote_currency": quote_cur, "report_currency": report_cur, "fx_quote_to_report": rate,
-                 "balance": balance | {"period": bal["period"]},
+                 "balance": balance | {"period": bal["period"], "float_in_business": floats and not fin},
                  "shares": shares, "market_cap": mcap, "market_cap_report": mcap * rate, "ev": ev, "ttm": t12,
                  "pe_ttm": checks.div(mcap * rate, t12["ni"]) if (t12["ni"] or 0) > 0 else None,
                  "book_common": common, "pb": checks.div(mcap * rate, common), "ps": checks.div(mcap * rate, t12["revenue"]),
@@ -377,7 +409,6 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         acct["income"]["payout"] = None
     if market == "cn":
         acct["cn_flags"] = checks.cn_flags(a, g["flows"])
-    snap = sheet.snapshot(market, today)
     industry = (val_cn.iloc[-1]["industry"] if market == "cn" and val_cn is not None else
                 snap.loc[snap["code"] == code, "industry"].iloc[0] if len(snap) and (snap["code"] == code).any() else street.get("industry"))
     titles = g["filings"] or []
