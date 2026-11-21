@@ -100,9 +100,11 @@ def prepare(s: pd.DataFrame, market: str, m: str, ytd: pd.DataFrame | None) -> p
         s["np_ytd"], s["ocf_ytd"] = s["np"], s["ocf"]  # CNY, as the revenue
     else:
         s["sector"] = s["sector"].replace("", np.nan).fillna("Miscellaneous")
-        s["financial"] = universe.us_financial(s["industry_raw"], sec.load_ciks().reindex(s.index))
+        s["cik"] = sec.load_ciks().reindex(s.index)
+        s["financial"] = universe.us_financial(s["industry_raw"], s["cik"])
         pref = history.us_preferred(s, day)[["pref_share", "pref_div_share"]]
         s = s.join(pref).fillna({"pref_share": 0.0, "pref_div_share": 0.0})
+    s["fin_sector"] = universe.fin_sector(s, market)
     s["div_yield"] = np.nan  # no dividend history: missing, not 0 (snapshots cached before stage 7 hold 0)
     return s
 
@@ -184,8 +186,8 @@ def month_lists(f: pd.DataFrame, market: str) -> dict[str, dict[str, pd.Series]]
         g = g.set_index("code")
         buys, bench = lists.positions(g.sort_values("score", ascending=False), cfg["buys"], market, current["buy"])
         taken = buys.index.union(bench.index)
-        sell = lists.sells(g, cfg["sells"], taken, current["sell"])
-        held = lists.holds(g, cfg["holds"], taken.union(sell.index), current["hold"]).iloc[:cfg["holds"]]
+        sell = lists.sells(g, cfg["sells"], taken, current["sell"], market)
+        held = lists.holds(g, cfg["holds"], taken.union(sell.index), current["hold"], market).iloc[:cfg["holds"]]
         out["buy"][d] = buys["weight"]
         for kind, names in (("hold", held), ("sell", sell)):
             out[kind][d] = pd.Series(1 / max(len(names), 1), index=names.index)

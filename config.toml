@@ -34,7 +34,8 @@ middle = [0.4, 0.6]           # ... the middle fifth of the market's score (from
 bench = 5                     # Hold names next in line, for the review's removals
 sells = 10                    # Sell: expensive, low-quality and distressed names among the largest (lists.sells)
 per_sector = 2                # Hold and Sell names per sector
-largest = 400                 # Hold and Sell come from the largest names by market value
+largest = 400                 # CN and US: Hold and Sell come from the 400 largest by market value (HK: the small_share band)
+risky = 0.1                   # a Sell card names the failure logit's place when in the riskiest tenth (lists.sells)
 buffer = 0.2                  # a rated name stays until it falls past 120% of its list's cut (MSCI Quality, CSI 300: lists.buffered)
 
 [cards]

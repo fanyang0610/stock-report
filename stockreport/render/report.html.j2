@@ -126,7 +126,7 @@
   {% endif %}
   {% if m.vetoes %}<p class="small muted">不列入（你的否决）：{% for v in m.vetoes %}{{ v.ticker }} {{ v.name }} {{ v.reason }}{% if not loop.last %}；{% endif %}{% endfor %}</p>{% endif %}
 
-  <h3>持有<span class="count">{{ m.holds | length }} 只，不偏涨也不偏跌：市值前 400 里评分居中、股价最稳的，复查 {{ m.recheck }}</span></h3>
+  <h3>持有<span class="count">{{ m.holds | length }} 只，不偏涨也不偏跌：{{ m.big }}里评分居中、股价最稳的，复查 {{ m.recheck }}</span></h3>
   <p class="small muted">{{ m.expect.hold }}</p>
   {% for p in m.holds %}
   <div class="card hold">
@@ -142,7 +142,7 @@
   {% else %}<p class="muted">今天没有符合条件的股票。</p>
   {% endfor %}
 
-  <h3>卖出<span class="count">{{ m.sells | length }} 只，预计跑输大盘：市值前 400 里又贵、质量差、困境风险高的，复查 {{ m.recheck }}</span></h3>
+  <h3>卖出<span class="count">{{ m.sells | length }} 只，预计跑输大盘：{{ m.big }}里又贵、质量差或财务风险高的，复查 {{ m.recheck }}</span></h3>
   <p class="small muted">{{ m.expect.sell }}</p>
   {% for p in m.sells %}
   <div class="card sell">

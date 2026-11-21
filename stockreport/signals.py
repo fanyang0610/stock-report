@@ -124,14 +124,14 @@ def long_run(years: pd.DataFrame, day: str, rate: pd.Series | None = None) -> pd
 
 
 def distress(df: pd.DataFrame) -> pd.Series:
-    """Campbell-Hilscher-Szilagyi's failure logit without its constant (higher = more likely to fail), non-financials:
+    """Campbell-Hilscher-Szilagyi's failure logit without its constant (higher = more likely to fail), outside the
+    financial sector (universe.fin_sector: its liabilities are largely clients' money, policies or funds' debt):
     trailing profit as a quarter's over market value + liabilities, liabilities and cash over it, the 12-month log
     return as a monthly average, 3-month volatility, log market value and market over book (book + a tenth of the
     gap, as CHS adjust it; still not positive: the highest). Each input winsorized at its 5th and 95th percentile
-    among the market's non-financials, as CHS winsorize theirs. NaN where liabilities or cash are missing: not
-    screened."""
+    among those names, as CHS winsorize theirs. NaN where liabilities or cash are missing: not screened."""
     col = lambda c: df[c] if c in df else pd.Series(np.nan, index=df.index)
-    fin = df["financial"].astype(bool)
+    fin = df["fin_sector"].astype(bool)
     liab = col("liabilities").fillna(col("liab_y"))
     mta, book = df["mcap"] + liab, df["bps"] * col("shares")
     adj = book + 0.1 * (df["mcap"] - book)
@@ -145,7 +145,8 @@ def distress(df: pd.DataFrame) -> pd.Series:
 def components(df: pd.DataFrame, market: str, cn: pd.DataFrame | None = None) -> pd.DataFrame:
     """Each component's raw value (NaN where it doesn't apply). E/P on 扣非 TTM in CN (reported profit where 扣非 is
     missing), and on profit to common shareholders in the US (B/P and ROE on common book, history.us_preferred); B/P only on
-    a positive book; S/P, cash backing and debt not for banks, insurers and brokers. Forward E/P is the next 12 months'
+    a positive book; S/P and cash backing not for banks, insurers and brokers, debt not for the financial sector
+    (universe.fin_sector: the fee businesses too, whose consolidated liabilities are clients' or funds'). Forward E/P is the next 12 months'
     consensus EPS over the price (forward), the revisions next year's consensus now minus 91 days ago over the price,
     the same fiscal year at both dates (Chan, Jegadeesh and Lakonishok 1996), both with at least 3 estimates. EBIT/EV
     and margin stability not for financials either; revenue and profit growth are the latest report's against a year
@@ -165,7 +166,7 @@ def components(df: pd.DataFrame, market: str, cn: pd.DataFrame | None = None) ->
         "sp": (df["revenue_ttm"] / df["mcap"]).where(~fin & (df["revenue_ttm"] > 0)),
         "roe": (earnings / (book * df["shares"])).where(book > 0) if market == "us" else df["roe"],
         "cash": ((df[ocf] - df[npf]) / df[rev]).where(~fin & (df[rev] > 0)),
-        "debt": df["debt_ratio"].where(~fin),
+        "debt": df["debt_ratio"].where(~df["fin_sector"].astype(bool)),
         "mom": df["mom_12_1"],
         "fep": (col("eps_ntm") / df["price"]).where(col("analysts") >= MIN_ANALYSTS),
         "rev": ((col("est_now") - col("est_90")) / df["price"]).where(col("est_n") >= MIN_ANALYSTS),

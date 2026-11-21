@@ -868,6 +868,53 @@
     code reproduces exactly. Kept from 11-14's published lists (main's four-family code, so these counts mix stage 16
     with the buffer): Buy CN 16, US 15, HK 17; Hold 3, 4, 6; Sell 6, 2, 5. 272 tests.
 
+- Stage 17b (four fixes to the screening lists; the lists check of 2026-11-15, docs/REVIEW-2026-11-15-lists.md,
+  findings F1, F2, F4, F6): done 2026-11-22, on stage 17 (ac6f677). lists.py: HK's Hold and Sell field is Buy's band
+  (lists.biggest, lists.large: the top 95% of HK-listed value; CN and the US keep the 400 largest); Hold's and Sell's
+  buffer counted after the sector cap; the Sell card's risk line in words that say what it weighs, in the riskiest
+  tenth only (config `risky`). universe.fin_sector (the financial sector: US SIC 6000-6499, HK 金融, CN the score's
+  financials), where signals.distress, the debt component and the card's 负债率 risk don't read leverage. report.py,
+  the template and notes.py: page 1's and the headings' Sell words, HK's headings naming its field (lists.big_words),
+  the back page's field and buffer. backtest/qvm.py sets fin_sector and passes the market to Hold and Sell. The
+  reasons, the evidence (Campbell, Hilscher and Szilagyi's treatment of financials read in their working paper) and
+  the sources: "Lists" (the buffer; Hold; Sell), "The score".
+  - 2026-11-15's snapshot, re-scored by the build's own path (with stage 17's code it gives the saved lists exactly),
+    each fix in turn:
+    - F1: HK Sell 8 of 10. Out 黑芝麻智能, 博泰车联, 中国东方航空, 亚盛医药, 云知声, 钧达股份, 极智嘉, 映恩生物 (HK-listed
+      value 276th-394th of 396; 中国东方航空's A shares trade in Shanghai, its H shares are small); in 蔚来, 英诺赛科,
+      怡俊集团控股, 优必选, 中环新能源, 再鼎医药, 威华达控股, 国泰君安国际 (HK$21-55bn, losses or prices of 100+ times
+      sales or book after a run-up: 威华达控股 P/S 356 and up 469% in a year, 怡俊集团控股 P/B 126 and up 890%); kept
+      小鹏集团, 中国星集团. HK Hold 浙江沪杭甬 (HK-listed value 266th) → 中国中车.
+    - F2: US Hold Illinois Tool Works → General Dynamics, HK Hold 海尔智家 → 中国神华: each a current Hold within the
+      first 12 capped places that the old count, on the raw order, missed.
+    - F4: US Sell Ares → Rocket Lab. No other list change; with the whole SIC division (6999) Prologis would also have
+      left US Hold.
+    - F6: no list change; the risk line opens 5 of CN's 10 Sell cards, 5 of the US's, 2 of HK's (all 10 before).
+    - CN: no change in any list. Buy: no change in any market.
+  - The week of snapshots (2026-11-07 … 11-13): Sell exits CN 5 → 3, US 2 → 2, HK 3 → 2; Hold CN 4 → 3, US 5 → 5, HK
+    8 → 7; each fix's share and what still leaves: "Lists", the buffer.
+  - The report rendered from the after-lists (a scratch copy; 16 pages, summary 3,566 bytes), read as text: page 1's
+    又贵、质量又差，或财务风险高, the headings (HK 港股大中盘股里…), the Sell cards' 综合风险 line, the back pages' field,
+    buffer and 负债率 lines. No full `run`: the fixes change how a day's data is listed, which the rebuild covers.
+  - 275 tests pass; new: the buffer counted after the cap (Sell and Hold; both halves fail on stage 17's code), HK's
+    field from Buy's band and CN's and the US's count, the financial sector's leverage; the CN universe sample gained
+    the fin_sector column the build writes. App Python 10,826 → 10,884 lines; config +1 (`risky`).
+  - The fresh-context stage review (one, on Sonnet): 275 tests pass; the code as planned, nothing in stockreport/research
+    changed, no ticker in the code; it recomputed the week table (row for row) and the 2026-11-15 changes, and ran the
+    new capped-buffer test on stage 17's code, where it fails. Its points, answered: (1) F2 is the change that moves the
+    lists; what Hold still loses is the score leaving its band, the review's F7, not this stage: agreed, as "Lists"
+    says. (2) The SIC boundary rests on a convention with gaps (Ares Capital, Annaly, SIC 6726 and 6799), and the
+    Prologis measurement could read as the reason: the reason is the kind of liability (the text now says the figure
+    only shows what the wider line would do), and the gaps are named; none of 6726 or 6799 is in the universe. (3) The
+    `risky` tenth is a new display threshold: it is CHS's short leg, the riskiest decile; the names in its bullet are
+    the evidence the old words misled, not its reason, and it changes no list. (4) HK's Sell now holds speculative,
+    richly priced names that are large by HK-listed value (怡俊集团控股, 中国星集团, 威华达控股), and Constellation's
+    quality E is the US Sell a sceptic will question first: both are the method's result in the field the brief set
+    (Constellation's grade wasn't traced; the check's F5, momentum in Sell, is a later method question). (5) A frame
+    without fin_sector raises a KeyError, not a wrong number: every live path builds it (universe, the backtest's
+    frames); the snapshots saved before 17b don't have it, and no app path scores them again (`track` reads their saved
+    distress column); the comparison re-derived it with universe.fin_sector.
+
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
   fair value per stock, an earnings forecast, an implied return), and judged them on ship bars I proposed that no
@@ -1000,7 +1047,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
       (Graham's form, not Shiller's). Coverage on 2026-11-13: CN 100%, US 96%, HK 95%.
 - **Quality:** profitability (Novy-Marx 2013; Asness-Frazzini-Pedersen's quality-minus-junk, which holds in 23 of 24
   countries), cash backing = −(net profit − operating cash flow) ÷ revenue (Sloan 1996), and balance-sheet strength
-  (lower debt is better; not for financials, whose leverage is their business). Stage 3's redo adds:
+  (lower debt is better; not for the financial sector, whose leverage is its business or its clients' money: stage
+  17b, "Lists", Sell). Stage 3's redo adds:
   - **8-year profitability** (Gray and Carlisle's franchise power: 8-year averages of ROA and return on capital): the
     average yearly ROA, the year's profit ÷ its total assets (CN 扣非 profit, US profit to common, HK profit to
     shareholders), of the last 8 fiscal years public by the date, at least 5, each year clipped to −50%..150%. A year
@@ -1062,7 +1110,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
   momentum's top tenth 13% of the time; across the families on 2026-11-13 a stock short of components is in a top tenth
   6-12% of the time and a stock with all of them 11-18% (shrinking thin evidence leans this way). A component that
   doesn't apply to a kind of stock (financials' S/P, cash backing, debt, EBIT/EV, margin stability) is at the middle
-  for all of them, who are ranked among themselves, so it changes nothing there. The percentiles shown (p_) and the
+  for all of them, who are ranked among themselves, so it changes nothing there; the fee businesses' debt (stage 17b)
+  is at the middle among their sector's peers, as any missing figure is. The percentiles shown (p_) and the
   cards keep a missing figure missing: a card never words a figure it doesn't have.
 - **Forward E/P (stage 3):** the consensus EPS for the next 12 months over the price, at least 3 analysts (CN
   Eastmoney's 研报一致预期, US Nasdaq's consensus, HK Yahoo's). The predicted E/P is the largest part of the earnings
@@ -1110,10 +1159,15 @@ momentum drive the score (fixed in stage 1 after the stage review).
     financials there. SIC 6199 also holds Coinbase (a
     retail broker, like Robinhood, which Nasdaq lists among brokers), Circle and BitMine (balance sheets that are their
     product), so they count as financials. Known gaps, left without name rules: Equitable (a life insurer under SIC
-    6411), Ares Capital (no SIC), Annaly (a mortgage REIT) and HK 中国信达 (filed with asset managers).
+    6411), Ares Capital (no SIC), Annaly (a mortgage REIT) and HK 中国信达 (filed with asset managers). Stage 17b: the
+    two leverage measures (debt ÷ assets and the failure logit) are left out for the whole financial sector, these
+    financials and the fee businesses beside them (universe.fin_sector: US SIC 6000-6499, HK Eastmoney's 金融, CN as
+    here; "Lists", Sell), so Equitable and 中国信达 are no longer read as indebted; Annaly (SIC 6798) stays a gap.
   - "Debt ÷ assets" is total liabilities ÷ assets (资产负债率) in every market: the free tables have no interest-bearing
     debt line. It counts client funds and settlement obligations (ADP, Mastercard) and buyback-shrunk equity as
-    leverage, so such companies grade low on quality; the card's 负债率 is the reported ratio.
+    leverage, so such companies grade low on quality; the card's 负债率 is the reported ratio. Stage 17b leaves it out
+    in the financial sector (its fee businesses' consolidated insurers, funds and client money); ADP and Mastercard
+    (SIC 7374, 7389) are outside it and keep the gap.
   - Cash backing is left out for banks, insurers and brokers (their operating cash flow moves with deposits and loans;
     Sloan's sample excludes financials). CN and HK use the latest report's year to date (CN: operating cash flow per
     share × shares; HK in the reporting currency), the US the trailing 12 months.
@@ -1162,10 +1216,11 @@ momentum drive the score (fixed in stage 1 after the stage review).
     ceil(1.2 k); rounded up so a one-place sector keeps its name while it is first or second, the bench's place; with
     3 places only the sector's 2 best new names come before a current one). For the 1-4 places most sectors have,
     20% is less than one name, so the slack is one place (a 25-100% buffer): the least a buffer can be; from 5 places
-    on it is the providers' 20%. Hold and Sell on their order of 10 (the
-    new top 8 first, the current names within 12), and on their fields: a current Hold stays in a middle band widened
-    by 20% of its width (0.04 a side: 36% to 64% of the score from the top) and among the 480 largest, a current Sell among the 480
-    largest. Not buffered: the screen, HK's small caps and partnerships (protections, not ranks), each sector's number
+    on it is the providers' 20%. Hold and Sell on their order of 10 after the
+    sector cap (stage 17b: the first 8 of the order with at most 2 a sector, then the current names within its first
+    12), and on their fields: a current Hold stays in a middle band widened by 20% of its width (0.04 a side: 36% to
+    64% of the score from the top) and within the field's count × 1.2 (CN and the US the 480 largest; HK 255 by
+    HK-listed value on 2026-11-15), a current Sell within the same. Not buffered: the screen, HK's small caps and partnerships (protections, not ranks), each sector's number
     of places (it follows free float), your vetoes and the review's removals.
   - The previous ratings (lists.rated): data/picks.csv, which keeps every report's three ratings (each day's last
     build, after the review), the market's newest date before the build's day: point in time, and a buy the review
@@ -1185,13 +1240,39 @@ momentum drive the score (fixed in stage 1 after the stage review).
     Yum China, Five Below, 中国铁塔, 德翔海运) or a sector losing a place to free float (广发证券, 腾讯控股, both to
     the bench). Over a whole week the overlap moves less (CN Buy 15 → 16, HK 17 → 18, US Buy 17 → 16 and HK Hold 6 →
     5 by which names the buffer held): the buffer stops a name leaving on noise, not one that keeps falling.
+  - **Counted after the sector cap (stage 17b; the lists check of 2026-11-15, docs/REVIEW-2026-11-15-lists.md, F2).**
+    Until 17b, Hold and Sell applied the buffer to the raw order and the cap of 2 a sector after it. Where the cap
+    binds, the list's last places lie past raw rank 12 (on 2026-11-15 the 10 Sells sat at raw ranks 1-15 in CN and 1-17
+    in HK), so a current name near the cut was outside the buffer and a new one at raw 13-15 entered freely: the
+    week's Sell exits were the same with and without the buffer (CN 5 and 5, US 2 and 2). Now the cap comes first (the
+    whole order with at most 2 a sector), then the buffer on it: the first 8, the current names within the first 12,
+    the rest. This is what the buffer's rule says ("the new top 8 first, the current names within 12") and what MSCI
+    and CSI do: they buffer the ranks of names that can enter the index, not of names a constraint keeps out. The week
+    of snapshots (2026-11-07 … 11-13, as the table above; exits over six days, names kept day by day; kept first to
+    last), Hold and Sell, stage 17 → with 17b's HK field (F1) → and the buffer after the cap (F2) → all of 17b:
+
+    | | Hold | Sell |
+    |---|---|---|
+    | CN | 4 (8/10/10/10/10/8); 6 → 4 → 3 (9/10/10/10/10/8); 7 → 3 | 5 (10/10/10/9/8/8); 8 → 5 → 3 (10/10/10/9/9/9); 9 → 3 |
+    | US | 5 (6/9/10/10/10/10); 6 → 5 → 5 → 5 | 2 (10/10/9/10/10/9); 9 → 2 → 2 (10/10/9/9/10/10); 9 → 2 |
+    | HK | 8 (9/8/10/8/7/10); 5 → 8 → 8 → 7 (9/8/10/8/8/10); 6 | 3 (10/10/10/8/9/10); 7 → 2 (10/10/10/9/10/9); 8 → 2 → 2 |
+
+    Buy is unchanged (CN 4, US 5, HK 3). Before F2 four Sell exits were within the first 12 capped places (CN 云南锗业,
+    US Carvana and Vistra, HK 威华达控股, each 11th). After it every Sell exit is a real move: a
+    sector's third name (CN 南方航空 twice and 中国国航, both behind two airlines; HK 康方生物), more current names
+    within 12 than places left (US Rocket Companies, HK 金山云, each 11th behind two current names), or past 12 (US
+    Cardinal Health, 13th). What Hold still loses is mostly a score leaving the widened band (US Canadian National,
+    Realty Income, TC Energy, Southern at 29-34%; 交通银行 and 中国石化 at 65%) or a name moving to the bench: the score
+    itself moving, which a daily buffer can't hold (the review's F7, a monthly review calendar, a later stage). HK
+    Hold's one exit fewer under F4 is 香港交易所, whose score no longer swings out of the band on its clearing
+    members' margin read as debt.
 - **Buys (stage 3's redo):** 20 names from the whole scored market, equal amounts:
   - what can't be bought (it stays scored and can be rated Sell; the screen keeps it off Hold too):
     - Quantitative Value's screen (Gray and Carlisle, step 1: avoid a permanent loss): the 5% of each market's
-      non-financials most likely to fail within 12 months by Campbell, Hilscher and Szilagyi's model (2008, Table 4,
+      names outside the financial sector (stage 17b; before it, outside the score's financials) most likely to fail within 12 months by Campbell, Hilscher and Szilagyi's model (2008, Table 4,
       12-month horizon: profit and liabilities and cash over market value + liabilities, the past year's return,
-      3-month volatility, size, market-to-book; each input winsorized at its 5th and 95th percentile among the market's
-      non-financials, as CHS winsorize theirs, and a book still negative after CHS's adjustment counted as the highest
+      3-month volatility, size, market-to-book; each input winsorized at its 5th and 95th percentile among those names,
+      as CHS winsorize theirs, and a book still negative after CHS's adjustment counted as the highest
       market-to-book; the constant and the market terms drop out of a ranking, the US-only $15 price term is left out;
       liabilities and cash from Yahoo where the market's own tables lack them), and the 5% with the largest accruals:
       Sloan's (1996) working-capital accruals, the latest fiscal year's working-capital increase less depreciation over
@@ -1255,7 +1336,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
     the market it is measured against (the US 20 names trailed SPY by 2.9 points a year in 2018-2026). How you split
     your money between the list, funds or bonds is your business, not the report's.
   - Spot checks on 2026-11-01 (examples, not targets): see Status.
-- **Hold (stage 5):** the 10 steadiest prices among the 400 largest names in the middle fifth of the market's score
+- **Hold (stage 5):** the 10 steadiest prices in Hold's and Sell's field (CN and the US the 400 largest names; HK, stage
+  17b, Buy's band: the large and mid caps, the top 95% of HK-listed value; lists.biggest) in the middle fifth of the market's score
   (from the top, the 40th to the 60th percentile), at most 2 per sector, not in Quantitative Value's screen, not a buy
   or a buy's bench, not a Sell (stage 17: a name has one rating), not vetoed (lists.holds); a current Hold kept within
   the buffer (above). The next 5 in that order are Hold's bench, which replaces a Hold name the review removes.
@@ -1276,7 +1358,13 @@ momentum drive the score (fixed in stage 1 after the stage review).
     the market", and says the 10 together moved less than the fund but lagged strong markets (stage 7: "fell less"
   went, as each held year's fall doesn't bear it out in the US and HK: US median −8.9% against SPY's −8.3%).
   - Why the 400 largest and 2 a sector, as Sell: names an investor is likely to know or hold, and the steadiest prices
-    cluster in a few sectors (banks, utilities); why not the screen: a name likely to fail, or with the largest
+    cluster in a few sectors (banks, utilities). HK (stage 17b; the lists check of 2026-11-15, F1): a count of 400
+    cuts CN's and the US's ~800 scored names in half and HK's ~396 not at all, so HK's Sell drew micro caps (7 of 10 on
+    2026-11-15 ranked 286th-398th by size; four worth HK$4-8bn, five listed in 2024-25), the bottom of value, quality
+    and safety at once after stage 17. HK's field is now the band Buy already uses (Hang Seng's LargeCap and MidCap,
+    the top 95% of HK-listed value; 212 names on 2026-11-15, from about HK$19bn): no new number, and the same reason,
+    names an investor is likely to know. CN and the US keep the 400 largest (their 800-name fields are large and mid
+    caps already); why not the screen: a name likely to fail, or with the largest
     accruals, isn't expected to be stable.
   - Why not the 10 closest to the median score: a score's distance from the median says nothing about how a price will
     move, and it changes with every small move of the score.
@@ -1287,13 +1375,65 @@ momentum drive the score (fixed in stage 1 after the stage review).
     place: the middle fifth starts at 318); HK 交通银行, 招商银行,
     中国电信, 光大环境, 信和置业, 中国中车, 中国神华, 中国飞鹤, 中国旺旺, 福耀玻璃 (19-29%). Score ranks 323-470 of 796 (CN),
     336-469 of 794 (US), 163-223 of 390 (HK).
-- **Sell (stage 17):** the 10 most expensive, lowest-quality and most distressed among the 400 largest, at most 2 per
+- **Sell (stage 17):** the 10 most expensive, lowest-quality and most distressed in Hold's and Sell's field (CN and the
+  US the 400 largest; HK the top 95% of HK-listed value, stage 17b), at most 2 per
   sector, not a buy or a buy's bench (lists.sells, lists.junk): the lowest mean of three percentiles, the value family,
   the quality family and safety (1 − the percentile of Campbell-Hilscher-Szilagyi's failure logit, signals.distress,
-  among the market's non-financials; missing, as for every financial, at the middle, as a missing component is); ties
-  to the smaller free float. A current Sell kept within the buffer (above). The card's 为什么卖出 gives (beside the grades)
-  the failure risk's place when in the riskier half (财务困境概率在全市场非金融股中排前 N%), the two weakest value and
-  quality components and the risks; a hard red flag only adds to it.
+  among the market's names outside the financial sector; missing, as for that sector, at the middle, as a missing
+  component is); ties to the smaller free float. A current Sell kept within the buffer, counted after the cap (above).
+  The card's 为什么卖出 gives (beside the grades) the failure logit's place when in the riskiest tenth (stage 17b:
+  综合风险（亏损、负债、股价波动和下跌）在全市场非金融股中排前 N%), the two weakest value and quality components and the
+  risks; a hard red flag only adds to it.
+  - **The financial sector's leverage (stage 17b; the lists check of 2026-11-15, F4).** Six US names outside the
+    score's financials carry liabilities that are their product or their clients' money: Ares (71% of assets,
+    consolidated funds), KKR (81%, Global Atlantic), Apollo (93%, Athene), Ameriprise (97%), Carlyle (77%), Equitable
+    (100%, a life insurer). The failure logit put Ares, KKR and Apollo in the riskiest 12-14%, and Ares was Sell #4
+    with a card saying 负债率 71% and a failure-risk place, neither about its own debt; BlackRock already counted as a
+    financial through Nasdaq's broker industry, so the line was uneven. For the two measures that read leverage, the
+    failure logit and debt ÷ assets (the quality component and the card's 负债率 risk), the whole financial sector is now
+    "not applicable", at the middle (universe.fin_sector); the rest of its scoring stays.
+    - The evidence. Fama and French (JF 1992, p. 429, section I.A) use "all nonfinancial firms" and exclude financial
+      firms because the high leverage normal for them "probably does not have the same meaning" as for others, where
+      it more likely indicates distress; they give no SIC codes (SIC 6000-6999 is the later convention, as in French's
+      industry definitions). Ohlson (JAR 1980) fitted his failure score on US industrial firms only (105 failed, 2,058
+      others, 1970-76, as Skogsvik and Skogsvik 2013 summarize it; his own exclusion wording not read). Campbell,
+      Hilscher and Szilagyi (read in the NBER working paper w12362, July 2006, of the JF 2008 article: section 3, p. 17,
+      and the appendix) state no exclusion: their sample is every CRSP firm with COMPUSTAT data, financials included.
+      They report that Shumway's and Chava-Jarrow's model behaves differently in the finance, insurance and real estate
+      sector, with a lower intercept (fewer failures at the same values) and a more negative coefficient on profit, and
+      find "no strong evidence of sector effects" in their own model. So CHS don't require leaving financials out;
+      the screen leaves them out because Quantitative Value, its source, has no financials, as Ohlson's sample and
+      Fama and French's tests have none. A ranking has no sector intercept, so pooled in, every bank, insurer and fund
+      consolidator would rank among the likeliest to fail on liabilities over market value alone, the overstatement
+      CHS's lower FIRE intercept shows in the simpler model. 17b keeps CHS's model and Quantitative Value's exclusion
+      and moves the line from an industry list to the sector.
+    - Where the line is. CN 申万 银行 and 非银金融 (unchanged: the score's financials are that sector already); HK
+      Eastmoney's 金融 sector (adds 香港交易所, whose liabilities are mostly clearing members' margin, and 中国信达); US
+      SEC SIC 6000-6499, finance and insurance (adds 16 names: the asset managers Ares, KKR, Apollo, Blackstone,
+      Carlyle, Ameriprise, T. Rowe Price, Franklin, Invesco; the insurance brokers Marsh, Aon, Gallagher, WTW, Brown &
+      Brown, Erie; Equitable). Not the whole division to 6999: that also holds real estate (65xx), REITs (6798) and
+      royalty holders (6792, 6795: Texas Pacific Land, Royal Gold), 36 more US names whose liabilities are borrowings
+      against their own assets, the leverage the failure model is meant to read (a REIT's mortgages and bonds). CN's
+      and HK's financial sectors leave real estate out too (申万 房地产, HK 房地产), as GICS has since 2016 and the
+      US census's NAICS does (sector 52, Finance and Insurance, apart from 53, Real Estate). The reason is the kind of
+      liability; the measurement only shows what the wider line would do: with 6999, Prologis (debt 42%, low among
+      REITs) loses its debt component and leaves US Hold on 2026-11-15 (score rank 531); with 6499 no REIT moves. Left
+      outside the line too: SIC 67's investment offices (6726 closed-end funds and business development companies,
+      6799), none of them in the US universe on 2026-11-15 (Ares Capital has no SIC), and Annaly (6798).
+    - What it changed on 2026-11-15: Ares leaves US Sell (its measure 0.097 → 0.218), Rocket Lab takes its place.
+      Only the 18 names' own scores move (US Ameriprise's score rank 82 → 30, Apollo 738 → 663, Marsh 230 → 176; T.
+      Rowe Price 34 → 71 and Erie 354 → 444, whose low debt no longer counts for them; HK 香港交易所 250 → 203);
+      Equitable leaves the 5% failure screen and Flex takes its last place. No Buy changes.
+  - **The card's risk line (stage 17b; F6).** Each Sell card opened with 财务困境概率在全市场非金融股中排前 N%, for the
+    riskier half: Snowflake (前 9%) generates cash, Constellation earns $3.5bn, several HK names hold more cash than
+    their liabilities, and a reader takes it as "may go bankrupt". Among the 800 largest the logit's spread comes
+    mostly from leverage, volatility and price-to-book (the check's 5th-95th percentile ranges). It now says what it
+    weighs, 综合风险（亏损、负债、股价波动和下跌）,
+    and only in the riskiest tenth, Campbell, Hilscher and Szilagyi's short leg (their long-short holds the safest
+    tenth against the riskiest, and their portfolios split that tenth into the 90-95th, 95-99th and 99-100th
+    percentiles); page 1 says 又贵、质量又差，或财务风险高, and the Sell heading 又贵、质量差或财务风险高的. The
+    back page keeps the measure's source line. On 2026-11-15 the line shows on 5 of CN's 10 Sell cards, 5 of the US's,
+    2 of HK's (all 10 before).
   - Why (the method review of 2026-11-13, finding S3): until stage 17 Sell was the score's 10 lowest, and the score
     holds momentum, so its bottom is the year's losers. Losers rebound sharply when markets turn (Daniel and Moskowitz,
     "Momentum crashes", JFE 2016: the published reason; the history only showed the same, Sell beating the fund on
@@ -1314,7 +1454,7 @@ momentum drive the score (fixed in stage 1 after the stage review).
     Novy-Marx combines his two ranks equally.
   - On 2026-11-13's snapshots (before, the score's bottom; after, the new rule without the week's buffer; #: the place
     among the 400 largest on the new measure, value / quality / momentum family percentiles, the failure logit's place
-    among the market's non-financials):
+    among the market's non-financials; stage 17's own figures, before 17b):
     - CN in: 中国东航 (#1; 0.03 / 0.03 / 0.21; failure top 1%: a loss, debt 88%), 芯原股份 (#2; PB 22, down 56% in 6
       months; top 1%), 江淮汽车 (#7; momentum 0.82, so the old score put it 626th of 794; top 1%), 晶科能源 (#9),
       东阳光 (#13), 昆仑万维 (#16; momentum 0.80). Out: 南方航空 (#4, but 交通运输's two places went to 中国东航 and
@@ -1340,7 +1480,7 @@ momentum drive the score (fixed in stage 1 after the stage review).
 ### Cards
 - The price; the rank; the three grades A-E (fifths of each family; four until stage 16); one line on why it's there (its two strongest
   components in words, with the figure); the key risk (a loss, heavy debt (70%+ of assets, the SASAC warning line; not
-  financials) or a 30%+ fall in 6 months, else its weakest component); the cost of one board lot (CN 100 shares, US 1
+  the financial sector, stage 17b) or a 30%+ fall in 6 months, else its weakest component); the cost of one board lot (CN 100 shares, US 1
   share, HK the board lot from HKEX's List of Securities, verified 2026-10-24: Tencent 100, HSBC 400, China Mobile 500,
   AIA 200); the re-check date (12 months on, the rating's horizon: "Lists"); what the company does in one line (stage
   4, "Report"). A buy's share of the money (5%, the same for every buy) is in the list's heading. Stage 5: every
@@ -2222,6 +2362,15 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
     after; Sell before and after on the newest snapshot with the names that change and why; Sell's history rerun
     (BACKTEST.md section 27) with its survivor caveat; tests for the buffer and the new Sell; pytest passes; a full
     `run`; the fresh-context stage review; status; committed.
+17b. **Screening lists, four fixes** (the lists check of 2026-11-15, docs/REVIEW-2026-11-15-lists.md, F1, F2, F4, F6).
+    HK's Hold and Sell from Buy's band (the top 95% of HK-listed value) instead of a count that cut nothing there; the
+    Hold and Sell buffer counted after the sector cap; the failure logit and debt ÷ assets not read for the financial
+    sector (Fama and French 1992, Ohlson 1980; Campbell, Hilscher and Szilagyi's treatment verified first); the Sell
+    card's risk line in words that say what it weighs, in the riskiest tenth only. Not changed: the score's families,
+    the sector places, the screen's share, Buy. Done when: this plan has each change with its reason and source; the
+    2026-11-15 snapshot before and after with the names that change and why; the week's Hold and Sell exits before
+    and after the buffer fix; a test for the capped buffer; pytest passes; the fresh-context stage review; status;
+    committed.
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
 - The backtest snapshots and the stage-1 harness (index funds, costs, month-end frames).
@@ -2282,6 +2431,12 @@ securities) and MSCI EM 50 Index Methodology (August 2019, section 3.1.1); CSI's
 Pedersen, "Quality minus junk" (RAST 2019); Campbell, Hilscher and Szilagyi (JF 2008, above); Daniel and Moskowitz,
 "Momentum crashes" (JFE 2016); Green, Hand and Soliman, "Going, going, gone? The apparent demise of the accruals
 anomaly" (Management Science 2011); Shumway, "The delisting bias in CRSP data" (JF 1997).
+Stage 17b: Fama and French, "The cross-section of expected stock returns" (JF 1992, p. 429, section I.A); Ohlson,
+"Financial ratios and the probabilistic prediction of bankruptcy" (JAR 1980), as summarized by Skogsvik and Skogsvik
+(Investment Management and Financial Innovations 2013); Campbell, Hilscher and Szilagyi, "In search of distress risk"
+(NBER working paper w12362, July 2006: section 3, p. 17, and the appendix; the JF 2008 article above); Hang Seng
+Composite Index methodology (LargeCap, MidCap and SmallCap bands); NAICS (sector 52, Finance and Insurance, apart from
+53, Real Estate) and GICS (Real Estate out of Financials, 2016).
 
 ## Decisions kept from the old plan
 - Python 3.12 + uv. The old Swift project is archived read-only at ~/Developer/EquitySignalsClawbot-legacy.

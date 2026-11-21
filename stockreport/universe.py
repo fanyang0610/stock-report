@@ -22,16 +22,38 @@ CN_FINANCIAL = ["银行", "非银金融"]  # 申万 level 1: banks, brokers, ins
 # The score's financials (PLAN.md, "How each ingredient is built"): banks, insurers, brokers and other lenders, whose
 # balance sheet is the product. US: SEC SIC 6000-6199 (credit institutions) and 6300-6399 (insurance carriers) too.
 US_SIC = [(6000, 6199), (6300, 6399)]
+# The financial sector, whose leverage isn't read (fin_sector): US SIC 6000-6499, finance and insurance.
+FIN_SIC = (6000, 6499)
 CONSENSUS = ["analysts", "e1_year", "eps_e1", "eps_e2", "eps_e3"]  # CN and US: three estimate years
+
+
+def us_sic(cik: pd.Series) -> pd.Series:
+    """Each stock's SEC SIC code by its CIK (frames.SIC; NaN where unknown)."""
+    codes = pd.read_csv(frames.SIC, dtype={"code": str}).drop_duplicates("code").set_index("code")["sic"] \
+        if frames.SIC.exists() else pd.Series(dtype=float)
+    return codes.reindex(cik.dropna().astype("int64").astype(str)).set_axis(cik.dropna().index).reindex(cik.index)
 
 
 def us_financial(industry: pd.Series, cik: pd.Series) -> pd.Series:
     """Nasdaq's bank, broker and insurer industries, or a lender or insurer by its SEC SIC code (Nasdaq puts AmEx,
     Synchrony and SoFi under "Finance: Consumer Services" with Moody's and Equifax)."""
-    codes = pd.read_csv(frames.SIC, dtype={"code": str}).drop_duplicates("code").set_index("code")["sic"] \
-        if frames.SIC.exists() else pd.Series(dtype=float)
-    sic = codes.reindex(cik.dropna().astype("int64").astype(str)).set_axis(cik.dropna().index).reindex(industry.index)
+    sic = us_sic(cik).reindex(industry.index)
     return industry.isin(CONFIG["peers"]["financial_industries_us"]) | sum(sic.between(lo, hi) for lo, hi in US_SIC).astype(bool)
+
+
+def fin_sector(df: pd.DataFrame, market: str) -> pd.Series:
+    """The financial sector (PLAN.md, "Lists", Sell): the score's financials and the fee businesses beside them (asset
+    managers, insurance brokers, exchanges), whose consolidated liabilities are largely clients' money, policies or
+    their funds' debt, so leverage doesn't mean distress there (Fama and French 1992; Ohlson 1980 fitted his failure
+    score without them). The failure logit (signals.distress) and debt ÷ assets aren't read for them. CN 申万 银行 and
+    非银金融 (the score's financials already); HK Eastmoney's 金融 sector; US SEC SIC 6000-6499 (finance and insurance:
+    real estate and REITs, 6500 and up, borrow against their own assets)."""
+    fin = df["financial"].astype(bool)
+    if market == "hk":
+        return fin | (df["sector"] == "金融")
+    if market == "us":
+        return fin | us_sic(df["cik"]).between(*FIN_SIC)
+    return fin
 
 
 def load_results(table: str = "results") -> pd.DataFrame:
@@ -249,6 +271,7 @@ def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
     df["cash_conv"] = (df["ocfps"] / df["eps"]).where(df["eps"] > 0)
     df["sector"] = swclass.level1().reindex(df.index).fillna("未分类")
     df["financial"] = df["sector"].isin(CN_FINANCIAL)
+    df["fin_sector"] = fin_sector(df, "cn")
     df["float_value"] = cn_float(df["mcap"], index.load(), moved(prices, index.as_of()))
     df = yahoo_balance(df, "cn", "CNY")
 
@@ -338,6 +361,7 @@ def build_us(today: date) -> tuple[pd.DataFrame, dict]:
     }
     df["financial"] = us_financial(df["industry"], df["cik"])
     df["sector"] = df["sector"].replace("", np.nan).fillna("Miscellaneous")
+    df["fin_sector"] = fin_sector(df, "us")
     return finish(df, info, checks | crosscheck.checks(df, "us", info))
 
 
@@ -391,6 +415,7 @@ def build_hk(today: date) -> tuple[pd.DataFrame, dict]:
     df["fwd_growth"] = (df["eps_e2"] / df["eps_e0"]).where((df["eps_e0"] > 0) & (df["eps_e2"] > 0)) ** 0.5 - 1
     df["financial"] = df["industry_type"].fillna("").str.split("-").str[-1].isin(CONFIG["peers"]["financial_industries_hk"])
     df["sector"] = df["industry_type"].fillna("").str.split("-").str[0].replace("", "未分类")
+    df["fin_sector"] = fin_sector(df, "hk")
     df["lot"] = hkex.load_lots().reindex(df.index)
 
     checks = {

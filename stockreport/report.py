@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from stockreport import deliver, review, track, verdicts
+from stockreport import deliver, lists, review, track, verdicts
 from stockreport.cleanup import size_of
 from stockreport.config import CONFIG, DATA, REPORTS
 from stockreport.fetch import profiles
@@ -44,7 +44,7 @@ GUIDE = [  # page 1: how to read it, in five lines
     "已有评级的股票要明显掉出范围才换，不会因为一点小涨跌就换。",
     "<b>买入 20 只</b>从整个市场按评分选，各行业的只数按它在市场里的分量分配，每只买相同金额、持有 12 个月；<b>持有 10 只</b>是大公司里"
     "评分居中、过去一年每日涨跌最小的（10 只合起来历史上比基金波动小，大盘涨得多时落后；单只仍可能大涨大跌）；<b>卖出 10 只</b>"
-    "是大公司里又贵、质量又差、财务困境风险又高的（每个行业最多 2 只），不看股价最近涨跌。",
+    "是大公司里又贵、质量又差，或财务风险高的（每个行业最多 2 只），不看股价最近涨跌。",
     "<b>评级 A–E</b>：价值（价格相对当前和多年平均的利润、资产贵不贵）、质量（赚钱能力、稳定性和 5 年利润增长）、动量（利润和营收同比、"
     "股价和分析师预期在不在变好），都和同行业比：A 是同行最好的五分之一，E 是最差的五分之一。<b>风险</b>是亏损、负债率 70% 以上或半年跌超 30%；没有这些"
     "时写<b>短板</b>，即和同行比最弱的一项。",
@@ -56,7 +56,8 @@ GUIDE = [  # page 1: how to read it, in five lines
 METHOD = [  # the back pages
     ("怎么打分", "每只股票按三类打分，各占三分之一，每项都和同行业比（银行、保险、券商等金融股另算；同行不足 10 只的和全市场比）："
      "价值（市盈率、未来 12 个月预期市盈率、市净率、市销率、EBIT/EV、股息率、按近 5-8 年平均利润算的市盈率，免得利润只高一年就显得便宜）；"
-     "质量（盈利能力、利润的现金支撑、负债率、8 年平均资产回报率、毛利率稳定性、股价波动、5 年利润增长）；动量（利润和营收同比；美股、港股："
+     "质量（盈利能力、利润的现金支撑、负债率（金融业不算：银行、保险、券商、资产管理、保险经纪和交易所的负债多是客户的钱）、"
+     "8 年平均资产回报率、毛利率稳定性、股价波动、5 年利润增长）；动量（利润和营收同比；美股、港股："
      "过去 12 个月除最近 1 个月的涨幅；A 股：最新季度扣非利润相对往年同期的意外；三个市场都加上分析师 3 个月内对下一个完整财年盈利预测的"
      "调整）。缺数据的一项按同行的中间算，数据少的股票不会因此更容易排到最前或最后。成分借自 Stockopedia（价值、质量、动量三类）、"
      "Seeking Alpha 量化评级、Alpha Architect 的量化价值（Gray-Carlisle）、Greenblatt 神奇公式、格雷厄姆的平均利润和红利低波指数，"
@@ -66,14 +67,16 @@ METHOD = [  # the back pages
      "概率）和应计利润最大的各 5% 不买（量化价值的第一步），港股小盘股和美股合伙企业也不买。组合只有 20 只，收益会明显偏离指数，"
      "好坏都可能。"),
     ("三种评级", "评级是相对大盘的，和摩根大通、摩根士丹利等券商的评级一样（跑赢 / 持平 / 跑输所覆盖股票的平均回报）：研究里评分最高的五分之一"
-     "跑赢、最低的五分之一跑输，中间的没有明显优势。买入 = 上面的 20 只。持有 = 市值前 400 里、评分在全市场正中间五分之一的股票中，近一年"
+     "跑赢、最低的五分之一跑输，中间的没有明显优势。买入 = 上面的 20 只。持有 = 大公司（A 股、美股市值前 400，港股是占市值 95% 的"
+     "大中盘股）里、评分在全市场正中间五分之一的股票中，近一年"
      "每日涨跌（波动率）最小的 10 只（每个行业最多 2 只，不含买入和候补，也不含可能陷入财务困境或应计利润最大的）：评分不偏向涨也不偏向跌，"
      "过去波动小的股票以后波动通常也小。波动小说的是每天的涨跌，不是一年的涨跌：缓慢而持续的下跌也可能波动小，卡片上的「风险」会写出半年"
-     "跌超 30%。卖出 = 市值前 400 里（不含买入和候补）价值、质量两类评分和财务困境概率（Campbell-Hilscher-Szilagyi）三项平均最差的 "
+     "跌超 30%。卖出 = 同样的大公司里（不含买入和候补）价值、质量两类评分和财务困境概率（Campbell-Hilscher-Szilagyi，"
+     "综合亏损、负债、现金、股价波动和下跌；金融业不算）三项平均最差的 "
      "10 只，每个行业最多 2 只：又贵又差、可能陷入困境的公司长期跑输（Novy-Marx 2013；Asness、Frazzini、Pedersen 的 quality-minus-"
      "junk；Campbell、Hilscher、Szilagyi 2008）。不看动量：评分最低的往往是刚大跌的股票，大盘反弹时它们涨得最多（Daniel、Moskowitz "
      "2016）。复查日都是 12 个月后，即评级的期限；名单每天更新，评级可能提前改变，但已有评级的股票有缓冲：买入在本行业排到名额的 "
-     "1.2 倍以内、持有和卖出在 12 名以内（持有的评分区间也放宽到 36%-64%）都保留，和 MSCI、中证指数的 20% 缓冲规则一样。"),
+     "1.2 倍以内、持有和卖出在每个行业最多 2 只排好后的 12 名以内（持有的评分区间也放宽到 36%-64%）都保留，和 MSCI、中证指数的 20% 缓冲规则一样。"),
     ("审核（你请求报告时进行，唯一用 AI 的一步）", "DeepSeek 读每只股票近 90 天的非例行公告标题、程序从最新定期报告里截取的相关段落"
      "（审计意见、持续经营、立案调查、公司被收购）和近 30 天的新闻标题，每条结论都引用原文，由程序核对引文确实出自该来源。硬风险（监管"
      "立案调查或欺诈认定、非标审计意见或审计师辞任、持续经营疑虑或债务违约、退市/ST/停牌、已签署尚未完成的被收购或私有化（现金或换股）、"
@@ -293,7 +296,7 @@ def section(market: str, rows: pd.DataFrame, day: str, today: date, failed: list
             if r and r["rating"] in ("买入", "持有", "卖出") and r["rating"] != word:
                 p["research"] = f"个股报告（{r['date'][5:]}）：{r['rating']}，与本榜不同，原因见该报告"
     return {"code": market.upper(), "name": name, "short": name.split()[0], "currency": currency, "unit": unit, "day": day,
-            "expect": expect(market), "live": live(market), "field": FIELD[market],
+            "expect": expect(market), "live": live(market), "field": FIELD[market], "big": lists.big_words(market),
             "data_date": max((c["price_date"] for c in cards["buy"] if c["price_date"]), default=day),
             "recheck": cards["buy"][0]["recheck"] if cards["buy"] else "",
             "share": f"{cards['buy'][0]['weight']:.0%}" if cards["buy"] and cards["buy"][0].get("weight") else "",

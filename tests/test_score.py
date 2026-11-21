@@ -29,7 +29,8 @@ def universe(n: int = 10, **cols) -> pd.DataFrame:
         "shares": 10.0, "mcap_rank": np.arange(n, 0, -1), "country": "United States", "period": "2026-06-30",
         "div_yield": i / 100, "vol_1y": 0.5 - i / 50, "rev_growth": i / 10, "np_growth": i / 10},
         index=[f"C{k}" for k in range(n)])
-    return df.assign(**cols)
+    df = df.assign(**cols)
+    return df if "fin_sector" in cols else df.assign(fin_sector=df["financial"])  # universe.fin_sector holds them
 
 
 def test_percentiles_rank_within_the_market_and_low_debt_is_better():
@@ -76,6 +77,23 @@ def test_us_financials_are_banks_insurers_brokers_and_lenders(tmp_path, monkeypa
                           "Investment Managers", "Major Banks"], index=["AXP", "MCO", "UNH", "BX", "JPM"])
     cik = pd.Series([1, 2, 3, 4, None], index=industry.index)
     assert uni.us_financial(industry, cik).tolist() == [True, False, True, False, True]  # lender, ratings, insurer
+
+
+def test_the_financial_sectors_leverage_isnt_read(tmp_path, monkeypatch):
+    """Fee businesses beside the score's financials (asset managers, insurance brokers, exchanges): their consolidated
+    liabilities are clients' money, policies or funds' debt, so neither the failure logit nor debt ÷ assets is read."""
+    monkeypatch.setattr(frames, "SIC", tmp_path / "sic.csv.gz")
+    pd.DataFrame({"code": ["1", "2", "3", "4"], "sic": [6282.0, 6411.0, 6798.0, 7372.0]}).to_csv(frames.SIC, index=False)
+    us = pd.DataFrame({"financial": [False, False, False, False, True], "cik": [1, 2, 3, 4, None]},
+                      index=["ARES", "MRSH", "PLD", "MSFT", "JPM"])
+    assert uni.fin_sector(us, "us").tolist() == [True, True, False, False, True]  # a REIT borrows against its own assets
+    hk = pd.DataFrame({"financial": [True, False, False], "sector": ["金融", "金融", "房地产"]}, index=["00939", "00388", "00016"])
+    assert uni.fin_sector(hk, "hk").tolist() == [True, True, False]
+    df = universe(fin_sector=[True] + [False] * 9, liabilities=50.0, cash=5.0, vol_3m=0.3, ret_12m=0.0)
+    s = score(df, "hk")
+    assert np.isnan(s.loc["C0", "c_debt"]) and np.isnan(s.loc["C0", "distress"]) and s["distress"].notna().sum() == 9
+    assert not np.isnan(s.loc["C0", "c_sp"])  # the rest of its scoring stays: not one of the score's financials
+    assert s.loc["C0", "risk"] != "负债率 90%" and score(df.assign(fin_sector=False), "hk").loc["C0", "risk"] == "负债率 90%"
 
 
 def test_grades_are_fifths():
@@ -220,7 +238,8 @@ def test_hk_small_caps_and_partnerships_cant_be_bought(monkeypatch):
 def test_distress_logit_weighs_campbell_hilscher_szilagyi_with_winsorized_inputs():
     k = np.arange(21.0)
     df = pd.DataFrame({"mcap": 100.0, "liabilities": 100.0 + 10 * k, "np_ttm": 8.0 - k, "bps": 5.0, "shares": 10.0,
-                       "ret_12m": 0.2 - k / 50, "vol_3m": 0.2 + k / 50, "cash": 20.0 - k / 2, "financial": False},
+                       "ret_12m": 0.2 - k / 50, "vol_3m": 0.2 + k / 50, "cash": 20.0 - k / 2, "financial": False,
+                       "fin_sector": False},
                       index=[f"S{i}" for i in range(21)])
     x = distress(df)
     mta = 300.0  # S10, the median on every input, isn't clipped: market value 100 + liabilities 200
@@ -314,10 +333,36 @@ def test_sell_is_expensive_low_quality_and_distressed_not_the_lowest_score(monke
     df.loc["C25", "distress"] = 9.0  # the likeliest to fail (safety 0), value and quality a quarter up: first
     s = lists.sells(df, 5)
     assert s.index[0] == "C25" and "C10" in s.index and "C11" not in s.index
-    fin = df.assign(financial=df.index == "C25")  # no failure logit for a financial: its safety at the middle
+    fin = df.assign(distress=df["distress"].mask(df.index == "C25"))  # the financial sector has no failure logit
     assert lists.junk(fin)["C25"] == pytest.approx((df.loc["C25", "f_value"] * 2 + 0.5) / 3)
     s = lists.sells(df, 5, out=pd.Index(["C25"]))  # a buy or its bench isn't rated Sell too
     assert "C25" not in s.index and len(s) == 5
+
+
+def test_the_sell_and_hold_buffer_counts_places_after_the_sector_cap(monkeypatch):
+    """Where the cap of 2 a sector binds, the list's last places lie past raw rank 12: the buffer counts the capped
+    order (the first 8 capped names, then current names within the first 12 capped)."""
+    monkeypatch.setitem(CONFIG["lists"], "middle", [0.0, 1.0])
+    x = np.linspace(0, 1, 30)  # C0 the most expensive and lowest quality; C2-C5 are sector x's third to sixth
+    df = universe(30).assign(score=x, f_value=x, f_quality=x, distress=0.0, sta=0.0, mcap_rank=np.arange(1, 31),
+                             sector=["x"] * 6 + [f"y{k}" for k in range(24)], vol_1y=0.1 + x)
+    capped = ["C0", "C1"] + [f"C{k}" for k in range(6, 30)]  # C14 is the capped 11th (raw 15th), C16 the 13th
+    assert lists.sells(df, 10).index.tolist() == capped[:10]
+    kept = lists.sells(df, 10, current=pd.Index(["C14", "C16"])).index.tolist()
+    assert kept == capped[:8] + ["C14", "C12"] and "C16" not in kept  # within 12 capped: kept; the 13th: not
+    held = lists.holds(df, 10, pd.Index([]), pd.Index(["C14"]))  # the steadiest first: the same order here
+    assert held.index[:10].tolist() == capped[:8] + ["C14", "C12"] and len(held) == 15  # and the bench of 5
+
+
+def test_hk_hold_and_sell_come_from_buys_band_cn_and_us_from_the_400_largest(monkeypatch):
+    monkeypatch.setitem(CONFIG["lists"], "small_share", {"hk": 0.05})
+    monkeypatch.setitem(CONFIG["lists"], "largest", 3)
+    value = [50.0, 20, 10, 5, 4, 3, 2, 2, 1, 1, 1, 1]  # the top 95%: V0-V7 (V7 starts at 94); 8 × 1.2: within 10th
+    df = pd.DataFrame({"float_value": value, "mcap_rank": range(1, 13)}, index=[f"V{k}" for k in range(12)])
+    assert lists.biggest(df, "hk", pd.Index([])).tolist() == [True] * 8 + [False] * 4
+    assert lists.biggest(df, "hk", pd.Index(["V9", "V10"]))[["V9", "V10"]].tolist() == [True, False]
+    us = lists.biggest(df, "us", pd.Index(["V3", "V4"]))  # the count: 3, a current name within ceil(3.6) = 4
+    assert us.tolist() == [True] * 4 + [False] * 8
 
 
 def test_the_buffer_keeps_a_current_name_until_it_falls_past_120_percent_of_the_cut():

@@ -110,7 +110,7 @@ def card_lines(row: pd.Series, used: list[str], market: str) -> tuple[str, str, 
     cfg, facts = CONFIG["cards"], []
     if row["np_ttm"] <= 0:
         facts.append("近 12 个月亏损")
-    if not row["financial"] and row["debt_ratio"] >= cfg["heavy_debt"]:
+    if not row["fin_sector"] and row["debt_ratio"] >= cfg["heavy_debt"]:
         facts.append(f"负债率 {row['debt_ratio']:.0%}")
     if row.get("ret_6m", 0) <= cfg["big_fall"]:
         facts.append(f"近 6 个月下跌 {-row['ret_6m']:.0%}")
