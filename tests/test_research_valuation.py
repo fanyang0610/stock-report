@@ -268,6 +268,10 @@ def test_market_carries_its_members_excess_growth(monkeypatch):
     p = market.paths(a, 0.03, {"above": 0.9, "below": 0.6}, [0.3, 0.1, 0.1, 0.1, 0.1])
     assert p["early"] == pytest.approx([0.06, 0.04, 0.04, 0.04, 0.04]) and got["excess_growth"] == pytest.approx(0.10)
     assert market.worth(a, p, got["r"], 0.9)["value"] == pytest.approx(1.0, abs=1e-6)
+    # a bank's model carries no excess (its book grows at the base rate): b, a quarter of the book, counts none
+    banked = market.aggregate(snap.assign(financial=[False, True]), "cn")
+    assert banked["growth_share"] == pytest.approx(0.75)
+    assert market.paths(banked, 0.03, {"above": 0.9, "below": 0.6}, [0.3, 0.1, 0.1, 0.1, 0.1])["excess"] == pytest.approx(0.075)
     market.implied.cache_clear()
     snap["rev_growth"] = None  # no growth over the base: a lower return prices the same members (their ROE beats it)
     market.implied.cache_clear()
