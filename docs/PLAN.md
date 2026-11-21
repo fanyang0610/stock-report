@@ -1266,90 +1266,122 @@
     the newer one (us.with_classes). Visa 2.45bn class A shares in FY2015 to 1.90bn in FY2026 (market value 811bn
     against the quote's 794bn), Berkshire 2.47bn to 2.14bn B shares (1,269bn against 1,260bn).
   - Fix 2, patch: a listing Damodaran doesn't classify (data section): HSBC and Standard Chartered Bank (Money Center)
-    from HK's snapshot industry, 不评级 -> 持有 (price over fair value 1.13 and 1.12 at fix 2, 0.95 and 1.19 after fix 3); Berkshire Diversified from
-    BRK.A (a holding; its DCF unchanged).
-  - Fix 3, major: the lean, measured first (data/stage20/lean.py, each candidate switched off on the largest 30,
-    cap-weighted value today over price; base after fixes 1-2: CN 1.20, HK 1.12, US 1.13). The aggregate's own model
-    applied member by member gives CN 1.09, HK 1.03, US 1.05: about half of the CN and HK lean is that the largest
-    members are cheap on the market's own terms (a selection, no fault). Of the rest: the consensus excess growth the
-    members carry and the aggregate didn't, CN 0.03, HK 0.01, US 0.17 (NVIDIA 0.11); the moat on the return on
-    capital rather than ROE, 0.01, 0.00, 0.03 (one model in operating and equity terms: no inconsistency); the moat
-    as a whole 0.03, 0.01, 0.24 (the aggregate has one too); the forms: banks and insurers came out 15-30% above the
-    aggregate's rule member by member (CN financials 1.08 against 1.02, HK 1.15 against 1.00). Two inconsistencies
-    fixed ("Rating", one rule for the forms and the aggregate): the excess-return model's long run and book growth,
-    and the aggregate now carrying its members' excess growth (US non-financials' implied return 6.54% -> 6.97%, US
-    financials 8.21% -> 8.31%, CN non-financials 6.31% -> 6.39%, HK within 0.1 point). No rescaling (rule 12).
+    from HK's snapshot industry, 不评级 -> 持有; Berkshire Diversified from BRK.A (a holding; its DCF unchanged).
+  - Fix 3, major: the lean, measured first on 2026-11-16's data (data/stage20/lean.py, each candidate switched off on
+    the largest 30, cap-weighted value today over price; data/stage20/lean/*.json). The base after fixes 1-2: CN 1.20,
+    HK 1.12, US 1.13. The aggregate's own model applied member by member gives CN 1.09, HK 1.03, US 1.05: about half of
+    the CN and HK lean is that the largest members are cheap on the market's own terms (a selection; argued, not
+    measured on every member). Against the base after fixes 1-2: the moat on the return on capital rather than ROE,
+    0.01, 0.00, 0.03 (one model in operating and equity terms: no inconsistency); the members' moats switched off,
+    the aggregate's kept, 0.03, 0.01, 0.24 (the aggregate has one too: not a like-for-like switch, so no conclusion);
+    the forms: banks and insurers 15-30% above the aggregate's rule member by member (CN financials 1.08 against 1.02,
+    HK 1.15 against 1.00). Against the base after the bank model's change (fix3a_*.json): the consensus excess growth
+    the members carry and the aggregate didn't, CN 0.03, HK 0.01, US 0.17 (NVIDIA 0.11). Two inconsistencies fixed
+    ("Rating", one rule for the forms and the aggregate): the excess-return model's long run and book growth, and the
+    aggregate carrying its members' excess growth, for the book in members valued by a DCF (the stage review: the
+    financial groups' members carry none, so their groups carry none; US non-financials' implied return 6.54% -> 6.97%,
+    CN's 6.31% -> 6.39%, HK's within 0.1 point, the financial groups' unchanged). The aggregate's excess is on its
+    members' trailing revenue growth, the basis the shares were measured on, where a member's DCF starts from the
+    consensus's (the snapshot carries no consensus revenue): a stated difference. No rescaling (rule 12).
   - Fix 4, patch: the extreme views. 中芯国际 (1% of its price): Yahoo's statements and revenue estimates for its A
     line are its HK line's USD under a CNY label, so the cross-check left its 2025 out (every figure 86% off: its
     growth history went empty) and its first consensus year read revenue -82% at a 107% margin; when every compared
     figure is ours over the label's rate to the dollar within 15% (each year translated at its own rate), Yahoo's are
-    dollars: not compared, its revenue estimates converted (facts.second_in_usd). 1.49 -> 1.42, still 卖出: the rest is
+    dollars: not compared, its revenue estimates converted (facts.second_in_usd). Still 卖出 (below): the rest is
     the method's view, a return on capital below its cost in 7 of its 10 years and 0.37 of sales per unit of new
     capital, so growth destroys value, against a price at about 100 times earnings that rests on its strategic role.
     Broadcom (0.23): typed cyclical on a -3% margin in FY2016, its Avago-Broadcom merger year (revenue +94%), then
     normalized on a capital swollen by acquisition goodwill; the cyclical test now needs the halved margin in a
-    downturn ("Which playbook"): a fast grower, 65.9 -> 273, 卖出 -> 持有 (1.30). AMD (0.11 -> 0.08 after fix 3) and
-    Tesla (0.10): no fault found, model views. AMD's consensus (87% revenue growth in the first window, 31% in the
+    downturn ("Which playbook"): a fast grower (below). AMD (price over fair value 7.4 -> 10.5 after fix 3) and Tesla
+    (9.1): no fault found, model views. AMD's consensus (87% revenue growth in the first window, 31% in the
     second, an adjusted EPS of 13.8 and 22.8 against 5.6) costs 55bn of reinvestment in year one at its own sales to
     capital of 0.48, which carries Xilinx's goodwill, and its margin returns to its GAAP 8-year median of 8.4%, after
     Xilinx's amortization; Damodaran counts acquisitions as reinvestment, so goodwill in capital fits his growth
     identity, and no published rule to leave it out was found (searched). Tesla: the consensus (EPS 0.96 and 1.29),
-    then the base rate and its own 8-year median margin of 6.8% give 41 against 390: its price rests on businesses
+    then the base rate and its own 8-year median margin of 6.8% give 41 against 346: its price rests on businesses
     without revenue yet (robotaxi, robots), which free data and the consensus don't value.
-  - Before / after, all on 2026-11-16's data (before: stage 19's code, 3b8705d, from a frozen copy; each later column
-    the code after that fix's commit; fixes 1, 2 and 4 rebuilt the fact sheets; data/stage20/run.py, table.py). The 25,
-    rating at before / 1 / 2 / 3 / 4, one entry when it never moved:
-  | company | type | rating: before / 1 / 2 / 3 / 4 | fair value | price / fair (level) |
+  - Before / after, every step rebuilt on 2026-11-21's data (prices of that day, the 2026-11-14 snapshot setting the
+    groups' returns; before: stage 19's code, 3b8705d, from a frozen copy, reading the SEC statements it had for the 7
+    US names fix 1 refetched; each later column the code after that commit, "review" the stage review's fix; every
+    step rebuilt the fact sheets; data/stage20/run.py, redo.sh, table.py, table.txt). A first run on 2026-11-16's data
+    (data/stage20/d1116) gave the same moves at that day's prices. The 25, rating at before / 1 / 2 / 3 / 4 / review,
+    one entry when it never moved; price over fair value is the valuation's own price_to_fair throughout:
+  | company | type | rating: before / 1 / 2 / 3 / 4 / review | fair value | price / fair (level) |
   |---|---|---|---|---|
-  | 五粮液 000858 | income | 买入 | 116.5 -> 115.2 | 0.65 (med) -> 0.66 (med) |
-  | 比亚迪 002594 | fast_grower | 持有 | 115.8 -> 114.2 | 0.73 (med) -> 0.74 (med) |
-  | 招商银行 600036 | bank | 持有 / 持有 / 持有 / 买入 / 买入 | 55.3 -> 61.27 | 0.84 (low) -> 0.76 (low) |
-  | 恒瑞医药 600276 | ordinary | 卖出 | 32.04 -> 31.7 | 1.58 (med) -> 1.60 (med) |
-  | 贵州茅台 600519 | ordinary | 持有 | 1,826 -> 1,802 | 0.82 (high) -> 0.83 (high) |
-  | 中国神华 601088 | income | 持有 | 53.13 -> 53.01 | 0.96 (low) -> 0.96 (low) |
-  | 中国平安 601318 | insurer | 持有 | 65.91 -> 66.71 | 0.88 (med) -> 0.87 (med) |
-  | 君实生物 688180 | loss_making | 卖出 | 18.6 -> 18.6 | 1.70 (low) -> 1.70 (low) |
-  | 百济神州 688235 | ordinary | 卖出 | 142.6 -> 140.9 | 2.09 (high) -> 2.12 (high) |
-  | 腾讯控股 00700 | ordinary | 持有 | 489.7 -> 488.6 | 0.85 (med) -> 0.86 (med) |
-  | 领展房产基金 00823 | reit | 持有 | 35.18 -> 35.02 | 1.16 (low) -> 1.17 (low) |
-  | 比亚迪股份 01211 | fast_grower | 持有 | 97.22 -> 96.99 | 0.72 (med) -> 0.72 (med) |
-  | 中国平安 02318 | insurer | 持有 | 67.53 -> 65.28 | 0.84 (low) -> 0.86 (med) |
-  | Apple Inc. AAPL | ordinary | 持有 | 317.3 -> 292.3 | 1.19 (med) -> 1.30 (med) |
-  | AMAZON COM INC AMZN | ordinary | 卖出 | 178.5 -> 164.9 | 1.59 (med) -> 1.73 (med) |
-  | Alibaba Group Holding Ltd BABA | ordinary | 买入 | 137.3 -> 137 | 0.74 (low) -> 0.74 (low) |
-  | JPMORGAN CHASE & CO JPM | bank | 持有 | 308.5 -> 408.3 | 1.19 (high) -> 0.90 (med) |
-  | ELI LILLY & Co LLY | fast_grower | 卖出 | 844 -> 772.8 | 1.78 (high) -> 1.94 (high) |
-  | MICRON TECHNOLOGY INC MU | cyclical | 持有 | 800.8 -> 767.3 | 1.03 (med) -> 1.08 (med) |
-  | NVIDIA CORP NVDA | fast_grower | 买入 | 454.9 -> 417.1 | 0.38 (v.high) -> 0.42 (v.high) |
-  | NOVO NORDISK A S NVO | fast_grower | 买入 | 100.5 -> 92.12 | 0.43 (med) -> 0.48 (med) |
-  | REALTY INCOME CORP O | reit | 持有 | 68.06 -> 67.32 | 0.88 (low) -> 0.89 (low) |
-  | Palantir Technologies Inc. PLTR | fast_grower | 卖出 | 39.71 -> 37.24 | 4.51 (high) -> 4.83 (high) |
-  | Snowflake Inc. SNOW | loss_making | 卖出 | 107 -> 98.99 | 2.90 (v.high) -> 3.15 (v.high) |
-  | TAIWAN SEMICONDUCTOR MANUFACTURING CO LTD TSM | ordinary | 买入 / 买入 / 买入 / 持有 / 持有 | 562.6 -> 519.3 | 0.74 (low) -> 0.81 (low) |
-  - All 25: 5 / 13 / 7 at every step (招商银行 up, TSMC down at fix 3). The largest 30, cap-weighted value over price
-    (financials, others; Buy / Hold / Sell): CN 1.20 (1.08, 1.30; 5/21/4) -> 1.17 (1.04, 1.28; 5/21/4); HK 1.14 of 28
-    valued (1.19, 1.09; 2/23/3) -> 1.08 of 30 (1.06, 1.09; 1/27/2); US 1.06 of 26 (1.25, 1.06; 4/13/9) -> 1.06 of 30
-    (1.69, 1.02; 4/17/9). The US financials' 1.69 is Berkshire (2.00) and UnitedHealth (2.09), both DCFs (below).
-  - The large moves, each by rule. Fix 3, financials whose ROE is below their group's return fall (they no longer reach
-    the cost by year 10): 工商银行 H 11.39 -> 9.49, 中国银行 H 8.62 -> 6.87, 交通银行 H 12.96 -> 9.94, 中信银行 H 13.71 ->
-    11.04, 邮储银行 7.93 -> 7.50 (A) and 8.57 -> 7.25 (H), 买入 -> 持有 on both; those above it rise (their book in
-    place keeps its ROE): 招商银行 A 55.3 -> 61.3 (持有 -> 买入 at 0.76: ROE 13-14% against CN financials' 12.8%), 中银
-    香港 48.9 -> 69.6, HSBC 124 -> 150, JPMorgan 309 -> 408 (its book now grows at the base rate where its dividends-only
-    retention grew it 12.6% a year), 中国人寿 A 32.8 -> 39.9, AIA 57.3 -> 79.6 (卖出 -> 持有). The US implied return's
-    rise: TSMC 563 -> 519 (买入 -> 持有 at 0.81 against low's 0.80), Johnson & Johnson 197 -> 180 (持有 -> 卖出), AMD
-    60.7 -> 43.3, Apple 317 -> 292, Lilly 844 -> 773. Fix 1: Meta 买入 (1,282, 0.53), Berkshire 持有 (1,370, 0.46: inside
-    its high uncertainty's band), Visa 持有 (1.04), Mastercard 持有 (1.10). Fix 4: Broadcom (above).
+  | 五粮液 000858 | income | 买入 | 116.4 -> 115.2 | 0.65 (med) -> 0.66 (med) |
+  | 比亚迪 002594 | fast_grower | 持有 | 115.8 -> 114.3 | 0.72 (med) -> 0.73 (med) |
+  | 招商银行 600036 | bank | 持有 / 持有 / 持有 / 买入 / 买入 / 买入 | 55.36 -> 61.24 | 0.86 (low) -> 0.78 (low) |
+  | 恒瑞医药 600276 | ordinary | 卖出 | 32.02 -> 31.68 | 1.54 (med) -> 1.56 (med) |
+  | 贵州茅台 600519 | ordinary | 持有 | 1,828 -> 1,803 | 0.84 (high) -> 0.86 (high) |
+  | 中国神华 601088 | income | 持有 | 53.22 -> 53.11 | 0.99 (low) -> 1.00 (low) |
+  | 中国平安 601318 | insurer | 持有 | 66.01 -> 66.71 | 0.91 (med) -> 0.90 (med) |
+  | 君实生物 688180 | loss_making | 卖出 | 18.6 -> 18.6 | 1.44 (low) -> 1.44 (low) |
+  | 百济神州 688235 | ordinary | 卖出 | 143 -> 141.3 | 1.95 (high) -> 1.98 (high) |
+  | 腾讯控股 00700 | ordinary | 持有 | 516.4 -> 515.2 | 0.72 (med) -> 0.72 (med) |
+  | 领展房产基金 00823 | reit | 持有 | 34.88 -> 34.72 | 1.16 (low) -> 1.17 (low) |
+  | 比亚迪股份 01211 | fast_grower | 持有 | 97.69 -> 97.45 | 0.69 (med) -> 0.69 (med) |
+  | 中国平安 02318 | insurer | 持有 | 67.37 -> 64.86 | 0.81 (low) -> 0.84 (med) |
+  | Apple Inc. AAPL | ordinary | 持有 | 317.4 -> 292.5 | 1.15 (med) -> 1.25 (med) |
+  | AMAZON COM INC AMZN | ordinary | 卖出 | 178.8 -> 165.3 | 1.47 (med) -> 1.60 (med) |
+  | Alibaba Group Holding Ltd BABA | ordinary | 买入 | 136.1 -> 135.8 | 0.64 (low) -> 0.65 (low) |
+  | JPMORGAN CHASE & CO JPM | bank | 持有 | 307.9 -> 414 | 1.07 (high) -> 0.80 (med) |
+  | ELI LILLY & Co LLY | fast_grower | 卖出 | 844.9 -> 773.9 | 1.66 (high) -> 1.81 (high) |
+  | MICRON TECHNOLOGY INC MU | cyclical | 持有 | 801 -> 767.7 | 0.79 (med) -> 0.83 (med) |
+  | NVIDIA CORP NVDA | fast_grower | 买入 | 492.1 -> 450.9 | 0.27 (v.high) -> 0.30 (v.high) |
+  | NOVO NORDISK A S NVO | fast_grower | 买入 | 101.1 -> 92.71 | 0.39 (med) -> 0.43 (med) |
+  | REALTY INCOME CORP O | reit | 持有 | 68.01 -> 67.27 | 0.87 (low) -> 0.88 (low) |
+  | Palantir Technologies Inc. PLTR | fast_grower | 卖出 | 39.79 -> 37.33 | 3.84 (high) -> 4.11 (high) |
+  | Snowflake Inc. SNOW | loss_making | 卖出 | 107.1 -> 99.13 | 2.54 (v.high) -> 2.75 (v.high) |
+  | TAIWAN SEMICONDUCTOR MANUFACTURING CO LTD TSM | ordinary | 买入 | 561.7 -> 518.7 | 0.60 (low) -> 0.65 (low) |
+  - All 25: 5 / 13 / 7 -> 6 / 12 / 7 (招商银行 up at fix 3). The largest 30, cap-weighted value over price (financials,
+    others; Buy / Hold / Sell): CN 1.17 (1.04, 1.30; 5/21/4) -> 1.15 (1.00, 1.28; 5/21/4); HK 1.19 of 28 valued (1.22,
+    1.17; 2/25/1) -> 1.13 of 30 (1.09, 1.17; 1/28/1); US 1.26 of 26 (1.45, 1.26; 4/14/8) -> 1.25 of 30 (1.85, 1.20;
+    5/16/9). The levels sit above 2026-11-16's (CN 1.20 -> 1.17, HK 1.14 -> 1.08, US 1.06 -> 1.06) because the prices
+    are five days newer than the snapshot that sets the returns; the changes by fix are the same. The US financials'
+    1.85 is Berkshire (2.08) and UnitedHealth (2.56), both DCFs (below), and the US others' 1.20 the newer prices.
+  - The large moves, each by rule (price over fair value in brackets). Fix 1: Meta 买入 (1,286, 0.46), Berkshire 持有
+    (1,370, 0.44; inside its high uncertainty's band), Visa 持有 (432, 0.98), Mastercard 持有 (635, 1.04); after fix 3
+    Meta 1,181 (0.51), Berkshire 1,267 (0.48: typed a holding at fix 2, its DCF unchanged), Visa 396 (1.08),
+    Mastercard 583 (1.14). Fix 2: HSBC 不评级 -> 持有 (124, 1.05), Standard Chartered 不评级 -> 持有 (213, 1.00). Fix 3,
+    financials whose ROE is below their group's return fall (they no longer reach the cost by year 10): 工商银行 H 11.38
+    -> 9.49, 中国银行 H 8.61 -> 6.86, 交通银行 H 12.96 -> 9.93, 中信银行 H 13.70 -> 11.02, 邮储银行 7.93 -> 7.51 (A) and 8.56
+    -> 7.24 (H), 买入 -> 持有 on both; those above it rise (their book in place keeps its ROE): 招商银行 A 55.4 -> 61.3
+    (持有 -> 买入 at 0.78: ROE 13-14% against CN financials' 12.8%), 中银香港 48.8 -> 69.4, HSBC 124 -> 149 (0.88),
+    JPMorgan 308 -> 407 (its book now grows at the base rate where its dividends-only retention grew it 12.6% a year),
+    中国人寿 A 32.8 -> 39.9, AIA 57.2 -> 79.5. The US non-financials' higher return: Johnson & Johnson 197 -> 180
+    (持有 -> 卖出), AMD 60.8 -> 43.4, Apple 317 -> 292, Lilly 845 -> 774, TSMC 562 -> 519 (still 买入 at 0.65; at
+    2026-11-16's prices it fell to 持有 at 0.81), Broadcom 73.1 -> 65.8 (持有 -> 卖出, as a cyclical). Fix 4: Broadcom a
+    fast grower, 65.8 -> 273 (卖出 -> 持有, 1.15); 中芯国际 1.35 -> 0.73 (卖出; 99 -> 184): with its revenue consensus read
+    in dollars it grows 19% a year, and growth at 0.37 of sales per unit of capital that earns below its cost takes value
+    away. The review's fix moves no rating: the financial groups' returns as before fix 3.
   - Found, not fixed here (each a follow-up with its fix): Berkshire's DCF takes an EBIT of 101bn that carries its
     investment gains (no operating-income tag) and adds 373bn of cash that is mostly insurance float, with its debt
     read as 0 (the cross-check left it out): value it as the financial its snapshot marks it (on book), or take the
     operating businesses' income and keep the float's assets in the business; UnitedHealth adds 54bn of investments
-    that back medical claims (fair 903 against 407, 买入); 中国海油's A line is typed ordinary (its A history is too short
+    that back medical claims (fair 915 against 340, 买入); 中国海油's A line is typed ordinary (its A history is too short
     for the cycle test) and its H line cyclical, 79.9 CNY against HK$36.9 (about CNY 33): an A+H issuer's lines should
-    take one type, from the longer history; Meta 买入 at 0.55 after fix 3 (1,177; 0.53 at fix 1) rests on the consensus (EPS 32.7 and 38.1) and its moat.
+    take one type, from the longer history; Meta 买入 at 0.51 (1,181) rests on the consensus (EPS 32.7 and 38.1) and its moat.
   - Tests: a multi-class filer's count in its listed line's units (the class chain across 10-Ks), an unclassified
     listing's snapshot industry, the excess-return model equal to dcf.fcfe, the market carrying its members' excess
-    growth, Yahoo's dollars under a yuan label, the downturn in the cycle test (Broadcom's and NVIDIA's shapes). 306
-    pass. App Python 11,986 lines (11,780 before): value.py 486 and rating.py 404, the 400 a guide.
+    growth (none for a bank's share of the book), Yahoo's dollars under a yuan label, the downturn in the cycle test
+    (Broadcom's and NVIDIA's shapes). 306 pass. App Python 11,991 lines (11,780 before): value.py 486 and rating.py
+    404, the 400 a guide.
+  - The fresh-context stage review (one, on Sonnet): the headline figures, rating counts, lean values and tests matched
+    the files; the excess-return model equals dcf.fcfe (122.5159 both on its inputs); us.with_classes fetches only
+    when the latest year's or the latest filing's count is missing and chains the class soundly; second_in_usd can't
+    fire on a CNY, HKD, TWD or DKK label (a EUR label's band, 0.75-0.99, could in theory; none here). Answered from it:
+    (1) the downturn test was measured on "revenue fell" while the code compares the year's growth with the market's
+    median: remeasured as coded (US 1, HK 8, CN 28), Broadcom said to be its trigger and the comparison of one year with
+    a 5-year rate written as a judgement ("Which playbook"); of the 99 rebuilt only Broadcom changed type. (2) The
+    aggregate carried excess growth for the financial groups whose bank, insurer and broker members carry none: fixed
+    (c14f73f, patch: excess only for the book in members valued by a DCF; the financial groups' returns as before);
+    the aggregate's trailing basis against the members' consensus one is stated as a difference (fix 3). (3) Figures
+    on mixed baselines and two readings of price over fair value: the lean's baselines are stated per candidate, every
+    figure is now the valuation's price_to_fair, and the before / after was rebuilt on one day for every step
+    (2026-11-21, above) after the first run's caches went stale. Not changed: the moat's 0.24 of the US lean (the
+    members' moats off with the aggregate's kept is no like-for-like test; the moat on ROE, the like-for-like one, moves
+    0.03); the constants (5 classified peers, the 15% band, 3 compared figures) are code's readings, written at their
+    rules.
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
   fair value per stock, an earnings forecast, an implied return), and judged them on ship bars I proposed that no
@@ -2090,8 +2122,10 @@ below half its median in a downturn (since stage 20 for the economy-driven indus
 than the market's median company's over 5 years, the fast-grower test's norm; Damodaran's cyclical firms are those
 whose revenues and earnings move with the economy, ch. 22, and Broadcom's -3% in FY2016 was its Avago-Broadcom merger
 year, revenue +94%: retyped a fast grower; Materials and Energy as before, a producer's margin also halving when its
-input's price rises; measured on the snapshots' history tables, data/stage20/downturn.py: US 6, HK 8 and CN 36 members
-of those industries halved only in years of rising revenue) (a downturn that halved margins; no published cut-off was found, so "half" is code's reading of
+input's price rises; measured on the snapshots' history tables, data/stage20/downturn.py, with the test as coded: of the
+members of those industries whose margin halved, US 1 (Broadcom), HK 8 and CN 28 halved only in years growing at the
+market's median or faster; one year's growth against a 5-year median rate is code's reading of "a downturn", a
+judgement written here; Broadcom's value was the trigger, the rule is the type table's own wording, for every company) (a downturn that halved margins; no published cut-off was found, so "half" is code's reading of
 "volatile", a judgement written here: China Shenhua's low is 21% against a 27% median, not cyclical; Micron's -34%
 against 28%, cyclical), unless (since stage 19) the company is in one of his economy-driven industries (not the
 Materials or Energy sectors) and its last 5 years' average revenue is 20% a year or more above the 5 years' before
