@@ -134,4 +134,4 @@ def test_return_on_capital_without_the_stakes_valued_apart():
                        "cash": 30.0, "nonop": 120.0, "shares": 10.0, "ocf": 40.0, "capex": 10.0} for i in range(5)])
     h = sheet.history(a, {}, "general", "us")
     assert h[-1]["roic"] == pytest.approx(30 * 0.75 / 100)
-    assert value.sales_to_capital({"history": h}, {})[0] == pytest.approx(3.0)
+    assert value.sales_to_capital({"history": h, "valuation": {"balance": {}}}, {})[0] == pytest.approx(3.0)

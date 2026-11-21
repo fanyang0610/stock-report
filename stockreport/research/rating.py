@@ -282,15 +282,30 @@ def typed(f: dict) -> tuple[str, str, dict, float | None]:
     return *value.kind_of(f, {"ebit": sheet.ebit(market, t)}, rates.get("recent_median")), rates, rev
 
 
+def years(f: dict) -> int:
+    """The fact sheet's history in years: its latest unbroken run of fiscal years with revenue (a row a year after the
+    last, from the latest back), so a gap (中国移动's A line: 2010-11, then 2018-25) or a year whose revenue reads 0 (百济神州
+    A's 2025, 中国石油 H's 2017) doesn't count as history the type's tests can read."""
+    n, last = 0, None
+    for x in reversed(f["history"]):
+        y = int(x["period"][:4])
+        if not (x.get("revenue") or 0) > 0 or (last is not None and y != last - 1):
+            break
+        n, last = n + 1, y
+    return n
+
+
 def one_type(f: dict, today: date) -> tuple[str, str] | None:
-    """An A+H issuer's type from the line whose fact sheet has the longer history (more fiscal years), typed as that
-    line is: one company with one set of accounts is one type (Damodaran's playbook types the business, not the
-    listing). 中国海油's A line, listed in 2022, has 8 years from 2018 and was ordinary; its H line's 10 years carry
-    2016's loss year, the cycle's low, and type it cyclical: its two fair values were 2.4 times apart. At equal length
-    the A line's, as its Eastmoney consensus and dividends stand for both lines since stage 19 (中国神华, 中国移动 and
-    中国石油 were typed apart on 10 years each: HK's lower median growth and its statements' operating profit, which
-    has no line for investment income, 中国石油's JV income). None when no other line's history is longer (or the
-    line is the A line at equal length), or its fact sheet is of another kind (a financial, a REIT) or can't be built."""
+    """An A+H issuer's type from the line whose fact sheet has the longer history (years()), typed as that line is:
+    one company with one set of accounts is one type (Damodaran's playbook types the business, not the listing).
+    中国海油's A line, listed in 2022, has 8 years from 2018 and was ordinary; its H line's 10 years carry 2016's loss
+    year, the cycle's low, and type it cyclical: its two fair values were 2.4 times apart. At equal length the A line's:
+    the type's tests read the operating margin, and the A line's statements (Eastmoney's CN template) give each line the
+    operating profit leaves out its own row (investment income, fair-value changes: "Valuation and target price"),
+    where the HK template has no row for fair-value changes, so its profit keeps them; its consensus and dividends
+    stand for both lines since stage 19. None
+    when no other line's history is longer (or the line is the A line at equal length), or its fact sheet is of another
+    kind (a financial, a REIT) or can't be built."""
     from stockreport.research import facts as fact_sheet
     if f["market"] not in ("cn", "hk"):
         return None
@@ -304,7 +319,7 @@ def one_type(f: dict, today: date) -> tuple[str, str] | None:
         except Exception as e:
             log.warning("%s: its %s line %s couldn't be typed: %s", f["code"], o["market"].upper(), o["code"], e)
             continue
-        n, mine = len(of["history"]), len(f["history"])
+        n, mine = years(of), years(f)
         if of["kind"] == f["kind"] and (n > mine or n == mine and o["market"] == "cn"):
             kind, why, _, _ = typed(of)
             return kind, (f"its {o['market'].upper()} line's " + ("longer history" if n > mine else "type at equal history") +

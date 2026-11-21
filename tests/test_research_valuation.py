@@ -691,7 +691,8 @@ def test_an_a_and_h_issuer_takes_one_type_from_its_longer_history(monkeypatch, t
         return {"market": market, "code": code, "kind": kind, "name": "中国海油", "built": "2026-11-21 15:00",
                 "damodaran": {"sector": "Energy", "industry": "Oil/Gas (Integrated)"}, "summary": {"rev_cagr_3y": 0.0},
                 "valuation": {"ttm": {"revenue": 398.0, "pretax": 170.0, "interest": 0.0}, "report_currency": "CNY"},
-                "history": [{"ebit_margin": m, "revenue": 400.0, "ni": 100.0} for m in margins[-n:]],
+                "history": [{"period": f"{2026 - n + i}-12-31", "ebit_margin": m, "revenue": 400.0, "ni": 100.0}
+                            for i, m in enumerate(margins[-n:])],
                 "other_listings": [{"market": m, "code": c} for m, c in others]}
     a, h = f("cn", "600938", 8, others=[("hk", "00883")]), f("hk", "00883", 10, others=[("cn", "600938")])
     sheets = {"cn/600938": a, "hk/00883": h}
@@ -710,6 +711,22 @@ def test_an_a_and_h_issuer_takes_one_type_from_its_longer_history(monkeypatch, t
     sheets["cn/600938"] = f("cn", "600938", 10)  # at equal length the A line's (stage 19's consensus and dividends)
     assert rating.one_type(h, today)[1].startswith("its CN line's type at equal history (10 years)")
     assert rating.one_type(sheets["cn/600938"] | {"other_listings": [{"market": "hk", "code": "00883"}]}, today) is None
+    # a history's years: its latest unbroken run with revenue (a gap, or a year reading 0, ends it)
+    gap = f("cn", "600938", 10, others=[("hk", "00883")])
+    gap["history"][1]["period"] = "2011-12-31"
+    sheets["cn/600938"] = gap
+    assert rating.years(gap) == 8 and rating.one_type(h, today) is None
+    gap["history"] = [x | {"period": f"{2016 + i}-12-31"} for i, x in enumerate(gap["history"])]
+    gap["history"][-1]["revenue"] = 0.0
+    assert rating.years(gap) == 0 and rating.one_type(gap, today)[0] == "cyclical"
     sheets["cn/600938"] = a
     sheets["hk/00883"] = h | {"kind": "insurer"}
     assert rating.one_type(a, today) is None
+
+
+def test_a_floats_cash_and_investments_stay_in_its_capital():
+    # an insurance carrier in an operating sector (facts: float_in_business): its claims' cash and investments earn
+    # income its operating income carries, so they stay in its invested capital (UnitedHealth's 28bn and 54bn)
+    x = {"equity": 100.0, "debt": 78.0, "cash": 28.0, "nonop": 54.0}
+    f = lambda held: {"valuation": {"balance": {"float_in_business": held}}}
+    assert value.capital(f(True), x) == 178.0 and value.capital(f(False), x) == 96.0

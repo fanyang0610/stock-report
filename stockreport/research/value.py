@@ -148,9 +148,16 @@ def inputs(f: dict, mkt: dict | None) -> dict:
             "published": {"erp": c["erp"], "cost_equity": coe_pub, "wacc": cost(coe_pub), "stable_cost": rf + c["erp"] - c["crp"], "stable_wacc": rf + c["erp"] - c["crp"],
                           "market_return": rf + home["erp"]},  # Damodaran's published premium: the absolute view
             "ind_margin": ind.get("op_margin"), "ind_sales_to_capital": ind.get("sales_to_capital"),
-            "debt": debt, "cash": 0.0 if fin else (b["cash"] or 0.0), "minority": b["minority"] or 0.0,
-            "nonop": 0.0 if fin else (b.get("nonop") or 0.0),
+            "debt": debt, "cash": 0.0 if fin or b.get("float_in_business") else (b["cash"] or 0.0), "minority": b["minority"] or 0.0,
+            "nonop": 0.0 if fin or b.get("float_in_business") else (b.get("nonop") or 0.0),  # a float's in the business
             "shares": v["shares"], "fx": v["fx_quote_to_report"], "ebit": ebit}
+
+
+def capital(f: dict, x: dict) -> float:
+    """Invested capital: equity + debt - cash - the stakes the bridge values apart (sheet.history's); a float's cash and
+    investments stay in it (facts: an insurance carrier in an operating sector)."""
+    apart = 0.0 if f["valuation"]["balance"].get("float_in_business") else (x.get("cash") or 0) + (x.get("nonop") or 0)
+    return x["equity"] + (x.get("debt") or 0) - apart
 
 
 def history(f: dict, key: str, n: int) -> pd.Series:
@@ -319,14 +326,13 @@ def normal(f: dict, k: dict) -> dict | None:
     margin, rev0 = history(f, "ebit_margin", 10).mean(), f["valuation"]["ttm"]["revenue"]
     if not margin > 0:
         return None
-    capital = lambda x: x["equity"] + (x.get("debt") or 0) - (x.get("cash") or 0) - (x.get("nonop") or 0)
     roc = [x["ebit_margin"] * x["revenue"] / c for x in f["history"][-10:] if x.get("ebit_margin") is not None
-           and x.get("revenue") and x.get("equity") is not None and (c := capital(x)) > 0]
+           and x.get("revenue") and x.get("equity") is not None and (c := capital(f, x)) > 0]
     v = f["valuation"]  # today's capital on one balance sheet: a US filer's equity is its latest 10-Q's, its cash, debt
     equity = v["book_common"] or 0.0  # and stakes its 10-K's, whose year end then gives the equity too (NVIDIA's cash
     if (f.get("latest") or {}).get("period") != v["balance"].get("period"):  # earned since counted as capital)
         equity = next((x["equity"] for x in f["history"] if x["period"] == v["balance"]["period"] and x.get("equity")), equity)
-    now = capital({"equity": equity, "debt": k["debt"], "cash": k["cash"], "nonop": k["nonop"]})
+    now = capital(f, {"equity": equity, "debt": k["debt"], "cash": k["cash"], "nonop": k["nonop"]})
     if len(roc) < MOAT_YEARS or now <= 0 or float(np.mean(roc)) <= 0:
         return {"source": "10-year average margin x trailing revenue", "margin": float(margin), "revenue": rev0,
                 "ebit": rev0 * margin, "roc": None, "capital": None, "years": len(roc)}
@@ -414,7 +420,7 @@ def sales_to_capital(f: dict, k: dict) -> tuple[float, str]:
     them; else the industry's."""
     h = f["history"][-5:]
     s2c = [x["revenue"] / ic for x in h if x.get("revenue") and x.get("equity") is not None
-           and (ic := x["equity"] + (x.get("debt") or 0) - (x.get("cash") or 0) - (x.get("nonop") or 0)) > 0]
+           and (ic := capital(f, x)) > 0]
     return (float(np.median(s2c)), "own 5-year median") if len(s2c) >= 3 else (k["ind_sales_to_capital"], "industry")
 
 

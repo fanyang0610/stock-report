@@ -95,17 +95,18 @@ def ebit(market: str, x):
     return core if present(core) else total
 
 
-def history(a: pd.DataFrame, dps: dict[str, float], kind: str, market: str = "cn") -> list[dict]:
+def history(a: pd.DataFrame, dps: dict[str, float], kind: str, market: str = "cn", held: bool = False) -> list[dict]:
     """Up to 10 fiscal years with margins, returns, cash conversion, free cash flow and leverage (not for banks, insurers
     and brokers, whose debt, cash and operating cash flow are their business; nor a REIT's cash conversion, its profit
-    carrying property revaluations). EPS is profit over the year's shares on today's basis."""
+    carrying property revaluations). EPS is profit over the year's shares on today's basis. `held`: the float's cash and
+    investments are operating assets, in the capital (value.capital)."""
     h = a.tail(10).copy()
     h["fcf"] = fcf(h) if fcf(h) is not None else np.nan
     h["gross_margin"], h["op_margin"], h["net_margin"] = h["gp"] / h["revenue"], h["op_income"] / h["revenue"], h["ni"] / h["revenue"]
     h["roe"], h["roa"], h["eps"] = roe_series(a).tail(10), h["ni"] / h["assets"], h["ni"] / h["shares"]
     tax_rate = (h["tax"] / h["pretax"]).clip(0, 0.5).fillna(0.25)
     nonop = h["nonop"].fillna(0) if "nonop" in h else 0.0  # the stakes whose income EBIT leaves out (valued apart in
-    invested = h["equity"] + h["debt"].fillna(0) - h["cash"].fillna(0) - nonop  # the bridge): out of capital too
+    invested = h["equity"] + h["debt"].fillna(0) - (0.0 if held else h["cash"].fillna(0) + nonop)  # the bridge): out of capital too
     operating = ebit(market, h)
     h["roic"] = (operating * (1 - tax_rate) / invested).where(invested > 0)
     h["ebit_margin"] = operating / h["revenue"]
