@@ -263,7 +263,8 @@ def trailing_eps(f: dict, k: dict) -> tuple[float | None, str]:
     """The last twelve months' EPS on the consensus's own basis, in the reporting currency, so the consensus years
     grow from the figure they are forecast against. Nasdaq's (Zacks's) and Yahoo's consensus are mostly the companies'
     adjusted figures (Lilly's leave out acquired research and amortization, NVIDIA's and Amazon's their stakes' gains):
-    the source's own four latest quarters, when they end with the trailing figures (within 20 days: 52-53-week years).
+    the source's own four quarters that end with the trailing figures (within 20 days: 52-53-week years; a source run
+    a quarter past the fact sheet, NVIDIA's Nasdaq actuals after its release, keeps the four that match).
     Eastmoney's 研报一致预期 forecasts reported profit to shareholders (归母净利润) per share: the trailing profit.
     Without either, the trailing reported profit, said."""
     c, v = f["consensus"], f["valuation"]
@@ -272,28 +273,65 @@ def trailing_eps(f: dict, k: dict) -> tuple[float | None, str]:
         return reported, "reported (归母净利润 per share, the consensus's own basis)"
     rows = ([(r["quarter"], r["eps"]) for r in c.get("actuals") or []] if c["source"] == "Nasdaq" else
             [(r["quarter"], r.get("actual")) for r in c.get("surprises") or [] if r.get("quarter")])
-    rows = sorted(rows)[-4:]
     end = date.fromisoformat(f["latest"]["period"])
+    rows = sorted(r for r in rows if (month_end(r[0]) - end).days <= 20)[-4:]
     if len(rows) == 4 and all(e is not None for _, e in rows) and abs((month_end(rows[-1][0]) - end).days) <= 20 \
             and 250 <= (month_end(rows[-1][0]) - month_end(rows[0][0])).days <= 290:
         return convert(yahoo.load_fx(), sum(e for _, e in rows), c["currency"], k["currency"]), f"{c['source']}'s last four quarters"
     return reported, "reported (no trailing figures on the consensus's own basis)"
 
 
+def reported_so_far(f: dict, fy_month: int) -> dict[str, float]:
+    """Revenue the company has already reported for its current fiscal year (the fact sheet's year-to-date figures:
+    CN and HK; a US fact sheet carries the trailing twelve months, not the year to date)."""
+    x = f.get("latest") or {}
+    if x.get("basis") != "year to date" or not 0 < (x.get("months") or 0) < 12 or not x.get("revenue"):
+        return {}
+    end = date.fromisoformat(x["period"])
+    return {str(end.year if end.month <= fy_month else end.year + 1): x["revenue"]}
+
+
+def revenue_years(f: dict, k: dict, fy_month: int) -> tuple[dict, dict, list[dict]]:
+    """Revenue by fiscal year in the reporting currency: the EPS consensus's own brokers' where they publish it (CN:
+    Eastmoney's, the panel whose EPS the margin divides; cn.revenue_consensus), else Yahoo's; an estimate below what
+    the company has already reported for that fiscal year is rejected (a stale forecast: 摩尔线程's Yahoo 2026 at
+    3.60bn after 3.29bn in nine months, Q3 alone +319%), the other source's taken if it isn't, and said."""
+    c, fx = f["consensus"], yahoo.load_fx()
+    sources = [("Eastmoney", c.get("revenue") or {}, c["currency"]),
+               ("Yahoo", {y: d.get("revenue") for y, d in (c.get("yahoo_years") or {}).items()},
+                c.get("revenue_currency") or k["currency"])]
+    done, rev, src, rejected = reported_so_far(f, fy_month), {}, {}, []
+    for y in sorted({y for _, t, _ in sources for y, v in t.items() if v}):
+        for name, table, cur in sources:
+            if not table.get(y):
+                continue
+            x = convert(fx, table[y], cur, k["currency"])
+            if y in done and x < done[y]:
+                rejected.append({"year": y, "source": name, "revenue": x, "reported": done[y]})
+                continue
+            rev[y], src[y] = x, name
+            break
+    return rev, src, rejected
+
+
 def consensus_years(f: dict, k: dict, today: date) -> dict:
-    """The consensus in the reporting currency: EPS and (Yahoo's) revenue over the two 12-month windows after the
-    trailing figures end (PLAN.md: years 1-2; their growth is then a true 12 months'), the next 12 months from today
-    (the multiples' base), and the analysts' low and high EPS for the first year (Yahoo; CN: the brokers' reports)."""
+    """The consensus in the reporting currency: EPS and revenue (revenue_years) over the two 12-month windows after
+    the trailing figures end (PLAN.md: years 1-2; their growth is then a true 12 months'), the next 12 months from
+    today (the multiples' base), and the analysts' low and high EPS for the first year (Yahoo; CN: the brokers'
+    reports). `basis_gap`: the trailing year's profit on the consensus's basis less the reported (adjusted EPS: stock
+    pay, amortization), held at its amount so the consensus profit is taken back to reported terms (paths)."""
     c, fx, fy_month = f["consensus"], yahoo.load_fx(), int(f["summary"]["fy_latest"][5:7])
     eps = {y: convert(fx, e, c["currency"], k["currency"]) for y, e in c["eps"].items() if e is not None}
     yy = c.get("yahoo_years") or {}
-    rev = {y: convert(fx, d["revenue"], c.get("revenue_currency") or k["currency"], k["currency"])
-           for y, d in yy.items() if d.get("revenue")}
+    rev, rev_source, rejected = revenue_years(f, k, fy_month)
     end = date.fromisoformat(f["latest"]["period"])
     base = date(end.year + end.month // 12, end.month % 12 + 1, 1)
     eps0, basis = trailing_eps(f, k)
+    ni0 = f["valuation"]["ttm"].get("ni")
+    gap = eps0 * k["shares"] - ni0 if eps0 is not None and ni0 is not None and not basis.startswith("reported") else 0.0
     out = {"eps": [], "revenue": [], "from": base.isoformat(), "ntm_eps": forward(eps, fy_month, today, 0),
-           "ntm_revenue": forward(rev, fy_month, today, 0), "eps0": eps0, "eps0_basis": basis}
+           "ntm_revenue": forward(rev, fy_month, today, 0), "eps0": eps0, "eps0_basis": basis, "basis_gap": gap,
+           "revenue_source": rev_source, "revenue_rejected": rejected}
     for i in range(2):
         e = forward(eps, fy_month, base, 12 * i)
         if e is None:
@@ -328,11 +366,7 @@ def normal(f: dict, k: dict) -> dict | None:
         return None
     roc = [x["ebit_margin"] * x["revenue"] / c for x in f["history"][-10:] if x.get("ebit_margin") is not None
            and x.get("revenue") and x.get("equity") is not None and (c := capital(f, x)) > 0]
-    v = f["valuation"]  # today's capital on one balance sheet: a US filer's equity is its latest 10-Q's, its cash, debt
-    equity = v["book_common"] or 0.0  # and stakes its 10-K's, whose year end then gives the equity too (NVIDIA's cash
-    if (f.get("latest") or {}).get("period") != v["balance"].get("period"):  # earned since counted as capital)
-        equity = next((x["equity"] for x in f["history"] if x["period"] == v["balance"]["period"] and x.get("equity")), equity)
-    now = capital(f, {"equity": equity, "debt": k["debt"], "cash": k["cash"], "nonop": k["nonop"]})
+    now = capital_now(f, k)
     if len(roc) < MOAT_YEARS or now <= 0 or float(np.mean(roc)) <= 0:
         return {"source": "10-year average margin x trailing revenue", "margin": float(margin), "revenue": rev0,
                 "ebit": rev0 * margin, "roc": None, "capital": None, "years": len(roc)}
@@ -343,10 +377,9 @@ def normal(f: dict, k: dict) -> dict | None:
 
 def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     """Ten years of revenue growth and margins: the consensus years first, each a 12-month window both the revenue
-    consensus (Yahoo's) and the profit consensus cover (a margin needs both: a window past the revenue forecasts ends
-    them, where NVIDIA's second year put 50% more profit on base-rate revenue, a 79% margin), its operating income the
-    trailing one (stock-based pay a cost) grown as the consensus EPS grows from the trailing EPS on its own basis
-    (trailing_eps). Then (stage 14, PLAN.md "Forecast"):
+    consensus (revenue_years) and the profit consensus cover (a margin needs both: a window past the revenue forecasts
+    ends them, where NVIDIA's second year put 50% more profit on base-rate revenue, a 79% margin), its operating income
+    from the consensus profit (consensus_ebit). Then (stage 14, PLAN.md "Forecast"):
     - Growth: the base rate (k["base_growth"]: the median 5-year revenue growth of companies of the same size,
       Mauboussin's base rates) plus the share of the last consensus year's excess over it that the market's history
       keeps in each following year (k["growth_shares"], measured on one year's excess; k["trend_shares"] on three
@@ -362,12 +395,13 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     t, s = f["valuation"]["ttm"], f["summary"]
     rev0, ebit0, eps0 = t["revenue"], k["ebit"], cons.get("eps0")
     m0, base = ebit0 / rev0, k.get("base_growth")
-    growth, margin, prev_r = [], [], rev0
+    growth, margin, check, prev_r = [], [], [], rev0
     for e, r in zip(cons["eps"], cons["revenue"]):
         if not r or prev_r <= 0:  # a margin needs the revenue and the profit of the same 12 months
             break
         growth.append(r / prev_r - 1)
-        margin.append(ebit0 * e / eps0 / r if eps0 and eps0 > 0 and e > 0 else m0)
+        margin.append(consensus_ebit(f, k, cons, e) / r)
+        check.append(ebit0 * e / eps0 / r if eps0 and eps0 > 0 and e > 0 else None)  # the EPS-growth figure: a check
         prev_r = r
     n = len(growth)
     nm = normal(f, k) if kind == "cyclical" else None
@@ -381,7 +415,7 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
         g0 = base if base is not None else g_term
         return {"growth": [g0] * CONVERGENCE + [g0 + (g_term - g0) * t_ / (dcf.YEARS - CONVERGENCE) for t_ in range(1, 6)],
                 "margin": [nm["margin"]] * dcf.YEARS, "target_margin": nm["margin"], "consensus_years": n,
-                "revenue0": nm["revenue"], "earned": earned, "normal": nm, "margin_source": "10-year average",
+                "revenue0": nm["revenue"], "earned": earned, "normal": nm, "margin_source": "10-year average", "eps_check": check,
                 "sales_to_capital": nm["revenue"] / nm["capital"] if nm["capital"] else None}
     shares = k.get("growth_shares") or [0.0] * CONVERGENCE
     if not growth:
@@ -409,15 +443,48 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     else:
         keep = k["margin_keep"]["above" if last > target else "below"]
         margin += [target + (last - target) * keep ** (t_ - n) for t_ in range(n + 1, dcf.YEARS + 1)]
-    return {"growth": growth, "margin": margin, "target_margin": target, "consensus_years": n,
+    return {"growth": growth, "margin": margin, "target_margin": target, "consensus_years": n, "eps_check": check,
             "margin_source": "10-year average" if kind == "cyclical" else "profitable peers' median" if young and target == k.get("mature_margin")
             else "industry" if young else "own 8-year median"}
 
 
-def sales_to_capital(f: dict, k: dict) -> tuple[float, str]:
+def consensus_ebit(f: dict, k: dict, cons: dict, eps: float) -> float:
+    """A consensus window's operating income from its profit (stage 23; Damodaran: operating growth from revenue and
+    margin, not from EPS, which buybacks, interest and investment gains move): net income = the consensus EPS x
+    today's shares, less the basis gap (an adjusted consensus back to reported terms, consensus_years), taken back to
+    operating income through the trailing year's own bridge: grossed up at its effective tax rate (as the DCF's first
+    years tax it; a loss isn't grossed up) and its net interest and non-operating income (EBIT less pretax profit)
+    held at their amounts. A turn to profit is kept whatever the trailing EPS (摩尔线程: trailing -0.51, the first
+    window's 1.05)."""
+    t = f["valuation"]["ttm"]
+    ni = eps * k["shares"] - (cons.get("basis_gap") or 0.0)
+    bridge = k["ebit"] - t["pretax"] if t.get("pretax") is not None else 0.0
+    return (ni / (1 - (k.get("tax_effective") or 0.0)) if ni > 0 else ni) + bridge
+
+
+def capital_now(f: dict, k: dict) -> float:
+    """Today's invested capital on one balance sheet: a US filer's equity is its latest 10-Q's, its cash, debt and
+    stakes its 10-K's, whose year end then gives the equity too (NVIDIA's cash earned since counted as capital)."""
+    v = f["valuation"]
+    equity = v["book_common"] or 0.0
+    if (f.get("latest") or {}).get("period") != v["balance"].get("period"):
+        equity = next((x["equity"] for x in f["history"] if x["period"] == v["balance"]["period"] and x.get("equity")), equity)
+    return capital(f, {"equity": equity, "debt": k["debt"], "cash": k["cash"], "nonop": k["nonop"]})
+
+
+YOUNG_SOURCES = ("profitable peers' median", "industry")  # paths' margin sources for a young company
+
+
+def sales_to_capital(f: dict, k: dict, margin_source: str | None = None) -> tuple[float, str]:
     """Revenue over invested capital (equity + debt - cash - the stakes valued apart, as sheet.history's return on
     capital: their revenue isn't in revenue), its 5-year median when invested capital is positive in at least 3 of
-    them; else the industry's."""
+    them; else the industry's. A company whose long-run margin is mature peers' (a young one, paths) takes its
+    industry's, as its margin (stage 23: Damodaran's young-firm default, the Ginzu's and "Valuing Young, Start-up and
+    Growth Companies", 2009): capital built while revenue was small doesn't set a mature firm's needs, and own capital
+    beside peers' margin made growth destroy value (摩尔线程: own 0.32 x 18.1% x 75% = 4.3% on new capital against a
+    6.8% cost)."""
+    if margin_source in YOUNG_SOURCES and k.get("ind_sales_to_capital"):
+        return k["ind_sales_to_capital"], "industry (its long-run margin is mature peers')"
     h = f["history"][-5:]
     s2c = [x["revenue"] / ic for x in h if x.get("revenue") and x.get("equity") is not None
            and (ic := capital(f, x)) > 0]

@@ -70,11 +70,12 @@ def methods(f: dict, k: dict, kind: str, cons: dict, today: date, eps_factor: fl
             d = min((peers_q[1] - peers_q[0]) / 2 if peers_q else quartiles(m), abs(path["target_margin"])) * shift
             path["margin"] = [x + d * min(i + 1, value.CONVERGENCE) / value.CONVERGENCE for i, x in enumerate(path["margin"])]
         s2c, s2c_source = (path["sales_to_capital"], "normal: new capital earns the cycle's average return") \
-            if path.get("sales_to_capital") else value.sales_to_capital(f, k)
+            if path.get("sales_to_capital") else value.sales_to_capital(f, k, path["margin_source"])
         x, res = value.dcf_value(f, k, path, s2c, roic["ronic"], g_term=g_dcf)
         x = max(x, 0.0)
         out["dcf_normal" if kind == "cyclical" else "dcf"] = {
             "value": x, "target": x * roll, "path": path, "sales_to_capital": s2c, "s2c_source": s2c_source,
+            **year10_return(f, k, res),
             "moat": roic, "g": g_dcf, "terminal_multiple": dcf.terminal(1.0, g_dcf, k["stable_wacc"], roic["ronic"]),
             "years": {key: res[key] for key in ("revenue", "ebit", "nopat", "reinvestment", "fcff")},
             "pv_terminal_share": res["pv_terminal"] / res["operating"] if res["operating"] > 0 else None}
@@ -389,7 +390,9 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         except Exception as e:
             log.warning("%s sections for the tail scenario: %s", code, e)
     skipped = [m for m in order[:order.index(main)] if m in found]
-    out |= {"rating": j["rating"], "state": j["state"], "main": main, "main_skipped": skipped, "fcfe_payout": fcfe_payout, "main_view": j["main_view"], "checks_view": j["checks_view"],
+    filings = folder(market, f["code"]) / "filings.json"
+    out |= {"provisional": judge.release(f, load(filings) if filings.exists() else [], today),  # 暂定: results since
+            "rating": j["rating"], "state": j["state"], "main": main, "main_skipped": skipped, "fcfe_payout": fcfe_payout, "main_view": j["main_view"], "checks_view": j["checks_view"],
             "cross": j["cross"], "acts": acts, "uncertainty": u, "scenarios": cases, "target": target12, "fair_value": target,
             "price_to_fair": (1 + k["market_return"]) / (1 + k["market_return"] + j["fair_excess"]) if 1 + k["market_return"] + j["fair_excess"] > 0 else None,
             "fair_excess": j["fair_excess"], "expected_return": expected, "excess_return": expected - k["market_return"],
@@ -411,6 +414,16 @@ def build(market: str, code: str, today: date | None = None) -> dict:
                        "analysts": c.get("analysts"), "implied": needs},
             "screening": {kk: f["screening"].get(kk) for kk in ("rating", "fifth", "score_rank", "universe", "in_universe", "reason")}}
     return finish(out)
+
+
+def year10_return(f: dict, k: dict, res: dict) -> dict:
+    """The DCF's return on capital in year 10 (its NOPAT over today's invested capital plus the reinvestment of years
+    1-9), beside the industry's (Damodaran's pre-tax operating margin x sales to capital, after the marginal tax): the
+    Ginzu's check that the forecast's growth and margin are consistent with the capital it takes (stage 23)."""
+    ic = value.capital_now(f, k) + sum(res["reinvestment"][:dcf.YEARS - 1])
+    m, s2c = k.get("ind_margin"), k.get("ind_sales_to_capital")
+    return {"roic10": res["nopat"][-1] / ic if ic > 0 else None,
+            "roic_industry": m * s2c * (1 - k["tax_marginal"]) if m is not None and s2c else None}
 
 
 def finish(out: dict) -> dict:
@@ -443,6 +456,18 @@ def show(r: dict) -> str:
     lines.append(f"  implied return {'-' if rv.get('implied_return') is None else f"{rv['implied_return']:.2%}"} against a required "
                  f"{k['cost_equity']:.2%}; absolute view (published premium): fair value "
                  f"{'-' if a['fair_value'] is None else f"{a['fair_value']:.2f}"}, excess {pct(a['gap'])} ({a['view']})")
+    d, c = r["methods"].get("dcf") or r["methods"].get("dcf_normal"), r["consensus"]
+    if d:
+        p, f2 = d["path"], lambda xs: "/".join("-" if x is None else f"{x:.1%}" for x in xs)
+        lines.append(f"  forecast: {p['consensus_years']} consensus years (revenue {c.get('revenue_source')}), margins "
+                     f"{f2(p['margin'][:p['consensus_years']])} (EPS-growth check {f2(p.get('eps_check') or [])}); long-run "
+                     f"{p['target_margin']:.1%} ({p['margin_source']}); sales to capital {d['sales_to_capital']:.2f} ({d['s2c_source']});"
+                     f" year-10 ROIC {'-' if d.get('roic10') is None else f'{d['roic10']:.1%}'} (industry "
+                     f"{'-' if d.get('roic_industry') is None else f'{d['roic_industry']:.1%}'})")
+    for x in c.get("revenue_rejected") or []:
+        lines.append(f"  rejected: {x['source']}'s FY{x['year']} revenue {x['revenue']:,.0f} below the {x['reported']:,.0f} already reported")
+    if r.get("provisional"):
+        lines.append(f"  provisional (暂定): results {r['provisional']['date']} ({r['provisional']['title'] or 'next earnings date'}) after the figures of {r['provisional']['period']}")
     for x in r["acts"]["block"] + r["acts"]["widen"]:
         lines.append(f"  check: {x['check']}: {x['why']}")
     for x in r["tail"]:

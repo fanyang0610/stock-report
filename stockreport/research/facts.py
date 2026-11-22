@@ -138,7 +138,9 @@ def gather(market: str, code: str, today: date) -> dict:
     if market == "cn":
         g["statements"] = cached(f / "statements.csv.gz", S, lambda: cn.statements(code))
         g["segments"] = cached(f / "segments.csv.gz", S, lambda: cn.segments(code))
-        g["consensus"] = optional(f / "consensus.json", S, lambda: cn.consensus(code, today), f"{code} Eastmoney consensus")
+        c = f / "consensus.json"  # refetched when written before stage 23's revenue consensus
+        g["consensus"] = optional(c, -1 if predates(c, "revenue") else S, lambda: cn.consensus(code, today),
+                                  f"{code} Eastmoney consensus")
         g["valuation"] = cached(f / "valuation.csv.gz", D, lambda: cn.valuation(code))
         g["flows"] = cached(f / "flows.json", D, lambda: cn.flows(code, today))
     elif market == "us":
@@ -178,8 +180,9 @@ def gather(market: str, code: str, today: date) -> dict:
         if len(a_line):  # an A+H issuer's dividends as declared, per fiscal year, from its A line's 分红, and one
             a = a_line["code"].iloc[0]  # consensus for both lines: the A line's (Eastmoney's, the deeper: 平安's A line
             g["a_dividends"] = cached(f / "a_dividends.json", S, lambda: cn.dividends(a))  # had 6.52 / 7.53 for
-            g["consensus"] = optional(folder("cn", a) / "consensus.json", S, lambda: cn.consensus(a, today),  # 2026-27,
-                                      f"{a} Eastmoney consensus")  # its H line Yahoo's 7.02 / 8.88: 14.8% vs 22.2%
+            c = folder("cn", a) / "consensus.json"  # 2026-27, its H line Yahoo's 7.02 / 8.88: 14.8% vs 22.2%
+            g["consensus"] = optional(c, -1 if predates(c, "revenue") else S, lambda: cn.consensus(a, today),
+                                      f"{a} Eastmoney consensus")
     g["filings"] = cached(f / "filings.json", S, lambda: filings.recent(market, code, today, 365, routine=True) or [])
     return g
 
@@ -244,8 +247,8 @@ def consensus(market: str, g: dict, last_fy: int) -> dict:
     y0 = min(set(eps) & set(out["eps_yahoo"]), default=None)
     out["basis"] = BASIS.get(out["source"])
     out["basis_gap_yahoo"] = abs(eps[y0] - out["eps_yahoo"][y0]) / abs(out["eps_yahoo"][y0]) if y0 and out["eps_yahoo"][y0] else None
-    if eastmoney:
-        out["reports"] = c.get("reports", [])
+    if eastmoney:  # the same brokers' revenue (CNY, as their EPS), beside Yahoo's (value.consensus_years)
+        out["reports"], out["revenue"] = c.get("reports", []), {y: v for y, v in (c.get("revenue") or {}).items() if int(y) > last_fy}
     return out
 
 

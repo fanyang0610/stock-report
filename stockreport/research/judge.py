@@ -29,7 +29,9 @@ discrete risks as a scenario, never in the discount rate.
   into it) and the chance of it over the year at which the rating would fall a step."""
 
 import math
+import re
 from collections import Counter
+from datetime import date, timedelta
 
 from stockreport.research import value
 from stockreport.research.checks import FINANCIAL
@@ -152,6 +154,29 @@ def lag(f: dict) -> dict | None:
     gap = (1 + ret) / (now / before) - 1
     far = abs(ret) >= LAG and abs(gap) >= LAG and (gap < 0) == (ret < 0)
     return {"year": y, "price_3m": ret, "revision_3m": now / before - 1, "gap": gap} if far else None
+
+
+NOT_RESULTS = re.compile(r"说明会|說明會|董事會|董事会|会议|會議|利润分配|利潤分配|股息|派息|年報|中期報告")  # an 'earnings'
+# filing that isn't new results: a results meeting's notice, a board meeting's date, a dividend (events.py's earnings
+# patterns are broad), and HK's annual and interim report documents, which follow the period's results announcement
+# (腾讯's 2025 年報 of 04-09 after its 業績公佈 of 03-18; an HK quarterly report, 比亚迪's 季度報告, is the release itself)
+
+
+def release(f: dict, filings: list[dict], today: date) -> dict | None:
+    """Results released after the fact sheet's figures (stage 23): a results filing (events.py's 'earnings' kind: an
+    8-K item 2.02, a 10-Q or 10-K, a periodic report, 业绩预告 or 快报, 業績公佈) dated after the latest figures' own
+    filing, or the next earnings date (Yahoo's) passed since. Without that filing's date (HK), a release dated after
+    the next quarter's end, the earliest a later period can be reported. Until the next build reads its filing, the
+    figures predate it and the rating is provisional (暂定); releases aren't parsed (rule 2: numbers from tables)."""
+    x = f.get("latest") or {}
+    if not x.get("period"):
+        return None
+    after = date.fromisoformat(x["notice"]) if x.get("notice") else value.month_end(x["period"]) + timedelta(days=91)
+    found = [(date.fromisoformat(r["date"]), r["title"]) for r in filings or [] if r.get("kind") == "earnings"
+             and not NOT_RESULTS.search(r.get("title") or "")]
+    found += [(date.fromisoformat(d), None) for d in (f["consensus"].get("next_earnings") or []) if d]
+    found = sorted(((d, t) for d, t in found if after < d <= today), key=lambda z: (z[0], z[1] is None))
+    return {"date": found[0][0].isoformat(), "title": found[0][1], "period": x["period"]} if found else None
 
 
 def judge(main: str, found: dict, order: list[str], price: float, dividend: float, market_return: float, b: dict,

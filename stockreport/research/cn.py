@@ -137,7 +137,26 @@ def consensus(code: str, today: date) -> dict:
                         "neutral": num(r.get("RATING_NEUTRAL_NUM")), "reduce": num(r.get("RATING_REDUCE_NUM")),
                         "sell": num(r.get("RATING_SALE_NUM"))},
             "target_high": num(r.get("DEC_AIMPRICEMAX")), "target_low": num(r.get("DEC_AIMPRICEMIN")),
-            "industry": r.get("INDUSTRY_BOARD"), "reports": reports}
+            "industry": r.get("INDUSTRY_BOARD"), "reports": reports, "revenue": revenue_consensus(code, eps)}
+
+
+def revenue_consensus(code: str, eps: dict) -> dict:
+    """The same brokers' revenue (营业总收入, the statements' revenue) by estimated year, from Eastmoney's F10 profit
+    forecast (its 预测统计 table: the 研报一致预期 panel, whose EPS it repeats), for the years the EPS consensus has; empty
+    when the page fails (Yahoo's revenue then stands alone, value.consensus_years)."""
+    market = secucode(code).split(".")[1]
+    try:
+        payload = Http(min_interval=1.0, headers={"Referer": "https://emweb.securities.eastmoney.com/"}).get(
+            "https://emweb.securities.eastmoney.com/PC_HSF10/ProfitForecast/PageAjax", params={"code": f"{market}{code}"}).json()
+    except Exception as e:
+        log.warning("%s Eastmoney revenue consensus: %s", code, e)
+        return {}
+    return revenue_rows(payload.get("yctj_list") or [], eps)
+
+
+def revenue_rows(rows: list[dict], eps: dict) -> dict:
+    return {str(x["YEAR"]): num(x.get("TOTAL_OPERATE_INCOME")) for x in rows
+            if x.get("YEAR_MARK") == "E" and str(x.get("YEAR")) in eps and num(x.get("TOTAL_OPERATE_INCOME"))}
 
 
 def valuation(code: str) -> pd.DataFrame:

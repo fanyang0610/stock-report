@@ -172,6 +172,7 @@ def basis(f: dict, v: dict, index: str) -> list[str]:
     if v.get("target") is None:
         return []
     k, rv, q = v.get("inputs") or {}, v.get("reverse") or {}, v["currency"]
+    out = [provisional(v["provisional"])] if v.get("provisional") else []
     mk, u, main = k.get("market") or {}, v["uncertainty"], v["main"]
     shares = (v.get("base_rates") or {}).get("share_at_least") or {}
     r = rv.get("implied_return")
@@ -179,7 +180,7 @@ def basis(f: dict, v: dict, index: str) -> list[str]:
     home = {True: "内地", False: "非内地"}.get(mk.get("china"), "")
     place = MARKET.get(k.get("priced_in"), index) + "中"
     group = home + {True: "金融股", False: "非金融公司"}.get(mk.get("financial"), "成分")
-    out = [implied + f"要求回报 {pct(k['cost_equity'])}（{place}{group}现价隐含的股权风险溢价 "
+    out += [implied + f"要求回报 {pct(k['cost_equity'])}（{place}{group}现价隐含的股权风险溢价 "
            f"{pct(k['erp_market'])}" + (f"，国别风险差 {pct(k['crp'], True)}" if abs(k.get("crp") or 0) >= 0.0005 else "") +
            f"，加无风险利率 {pct(k['rf'], digits=2)}）；按{METHOD[main]}，合理价值的超额回报 {pct(v['fair_excess'], True)}，{threshold(v)}"
            if mk.get("r") is not None else f"大盘的隐含回报未能求出，用 Damodaran 公布的股权风险溢价 {pct(k['erp'])}"]
@@ -227,6 +228,12 @@ def basis(f: dict, v: dict, index: str) -> list[str]:
         out.append(f"绝对视角（Damodaran 公布的股权风险溢价 {pct(a['erp'])}、行业贝塔 {k['beta']:.2f}，股权成本 {pct(a['cost_equity'])}）："
                    f"合理价值 {price(a['fair_value'], q)}，超额回报 {pct(a['gap'], True)}，看{a['view']}")
     return out
+
+
+def provisional(p: dict) -> str:
+    """Results released after the fact sheet's figures (judge.release): the rating is provisional (暂定)."""
+    what = f"{p['date']} 发布了新的业绩（{p['title']}）" if p.get("title") else f"下次财报日 {p['date']} 已过"
+    return f"评级暂定：{what}，本报告的财务数据截至 {p['period']}，早于这次发布；新的定期报告读入后评级会更新"
 
 
 def explain(a: dict, f: dict) -> str:

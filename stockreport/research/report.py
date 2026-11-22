@@ -205,7 +205,7 @@ def summary(f: dict, v: dict, doc: dict, limit: int = 4000) -> str:
     if v.get("target") is None:
         lines.append(f"评级：{v['rating']}（{v.get('reason') or '无法估值'}），现价 {price(v['price'], q)}")
     else:
-        lines.append(f"评级：{v['rating']}　12 个月目标价 {price(v['target'], q)}（现价 {price(v['price'], q)}，"
+        lines.append(f"评级：{v['rating']}{'（暂定）' if v.get('provisional') else ''}　12 个月目标价 {price(v['target'], q)}（现价 {price(v['price'], q)}，"
                      f"{pct(v['target'] / v['price'] - 1, True, 0)}），预期回报 {pct(v['expected_return'], True)}（含股息），"
                      f"同组公司现价隐含 {pct(v['market_return'])}")
         if number(v.get("fair_value")):

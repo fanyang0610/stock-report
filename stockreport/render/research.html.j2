@@ -59,7 +59,7 @@
   <div class="sub" style="text-align:right">个股研究报告<br>数据 {{ f.price.date }} · 生成 {{ r.doc.date }}</div>
 </div>
 <div class="decision">
-  <div class="badge b-{{ v.rating if v.rating in ('买入','持有','卖出') else 'other' }}"><div class="big">{{ v.rating }}</div><div class="small">相对大盘的评级</div></div>
+  <div class="badge b-{{ v.rating if v.rating in ('买入','持有','卖出') else 'other' }}"><div class="big">{{ v.rating }}</div><div class="small">相对大盘的评级{% if v.provisional %}（暂定）{% endif %}</div></div>
   {% if v.target is number %}
   <div class="nums">
     <div><b>{{ F.price(v.target, r.q) }}</b><span>12 个月目标价</span></div>
@@ -262,7 +262,8 @@
 {% set d = v.methods.dcf or v.methods.dcf_normal %}
 <tr><td>永续期资本成本 · 永续增长</td><td class="num">{{ F.pct(k.stable_wacc if d and k.stable_wacc is number else k.stable_cost) }} · {{ F.pct(d.g if d else k.g) }}</td></tr>
 {% if d %}<tr><td>长期营业利润率（{{ fc.margin_source }}）</td><td class="num">{{ F.pct(d.path.target_margin) }}</td></tr>
-<tr><td>销售额 / 投入资本</td><td class="num">{{ '%.2f' | format(d.sales_to_capital) }}</td></tr>
+<tr><td>销售额 / 投入资本{% if d.s2c_source and d.s2c_source.startswith('industry') %}（行业）{% endif %}</td><td class="num">{{ '%.2f' | format(d.sales_to_capital) }}</td></tr>
+{% if d.roic10 is number %}<tr><td>第 10 年投入资本回报率 · 资本成本 · 行业</td><td class="num">{{ F.pct(d.roic10) }} · {{ F.pct(k.stable_wacc or k.wacc) }} · {{ F.pct(d.roic_industry) if d.roic_industry is number else '-' }}</td></tr>{% endif %}
 <tr><td>护城河（回报高于资本成本的年份占比）</td><td class="num" style="white-space: normal">{% if d.moat.moat %}{{ F.pct(d.moat.track, False, 0) }}，第 10 年新投资回报 {{ F.pct(d.moat.start) }}，此后 {{ d.moat.years }} 年降至资本成本{% else %}无，第 10 年后新投资回报等于资本成本{% endif %}</td></tr>
 <tr><td>终值隐含市盈率 · 终值占价值</td><td class="num">{{ F.times(d.terminal_multiple) }} · {{ F.pct(d.pv_terminal_share, False, 0) }}</td></tr>{% endif %}
 </table></div>

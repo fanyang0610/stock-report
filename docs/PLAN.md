@@ -1737,10 +1737,82 @@
   - Not verified: CSI's reserve-list wording (its temporary change of 2026-10-09 checked, the rule's text not re-read);
     the report not rendered from a real between-review day (the first comes the day after the first report on this
     code).
-- Method review (2026-11-23, Opus 5.5, read-only; docs/reviews/REVIEW-2026-11-23.md): stages 23-28 adopted ("Stages"),
-  none started. The research forecast treats every company as the median company (688795 at 21 CNY against 270.5:
+- Method review (2026-11-23, Opus 5.5, read-only; docs/reviews/REVIEW-2026-11-23.md): stages 23-28 adopted ("Stages");
+  stage 23 done, 24-28 to come. The research forecast treats every company as the median company (688795 at 21 CNY against 270.5:
   two bugs and the median path; Amazon's margin anchor); the screening's history is survivors only, which fits its
   three adverse results.
+- Stage 23 (research forecast inputs; the review's F1 and F2): done 2026-11-23 on branch
+  claude/quizzical-dubinsky-12662a (from bd65198). The method is in "Forecast" (since stage 23): (a) a consensus
+  window's operating income from its profit, through the trailing year's own bridge (value.consensus_ebit), so a turn
+  to profit is kept and investment gains and interest don't move it; the EPS-growth figure kept as a check; the
+  trailing quarters on the consensus's basis are the four that end with the fact sheet; (b) CN's revenue consensus
+  from the EPS panel's own brokers (Eastmoney's F10 profit forecast carries it: verified; the datacenter table doesn't),
+  Yahoo's where it lacks a year, an estimate below the year's revenue already reported rejected; (c) the young take
+  their industry's sales to capital, as their margin, and the report shows the year-10 return on capital beside the
+  cost of capital and the industry's; (d) results released after the figures make the rating 暂定 (page 1, the badge,
+  the WeChat text). Type tests, rates, fades and the rating table unchanged.
+  - The cached companies rebuilt on 2026-11-23, fact sheets and valuations before (bd65198's code) and after on the
+    same day's data (fair value a year on, quote currency; the three HK lines new in the cache were built by the A+H
+    type check):
+
+    | Company | Type | Price | Fair before → after | Rating | Consensus years | Year-1 margin | Sales to capital |
+    |---|---|---|---|---|---|---|---|
+    | 688795 摩尔线程 | loss-maker | 270.50 | 21.39 → 60.73 | 卖出 → 卖出 | 1 → 2 | -6.8% → 7.6% | 0.32 → 1.11 (industry) |
+    | 688180 君实生物 | loss-maker | 25.14 | 17.52 → 1.71 | 卖出 → 卖出 | 1 → 2 | -12.5% → 3.3% | 0.43 → 0.71 (industry) |
+    | 01877 君实生物 | loss-maker | 13.20 | 3.24 → 7.91 | 卖出 → 持有 | 1 → 2 | -9.0% → 5.2% | 0.34 → 0.71 (industry) |
+    | SNOW | loss-maker | 254.82 | 91.13 → 98.67 | 持有 → 卖出 | 1 → 1 | -22.8% → -9.0% | 1.35 (industry, as before) |
+    | 688235 百济神州 | fast grower | 262.72 | 140.80 → 151.42 | 卖出 → 卖出 | 1 → 2 | 21.6% → 20.7% | 1.58 → 1.07 (industry) |
+    | 06160 百济神州 | fast grower | 230.80 | 65.59 → 67.69 | 持有 → 持有 | 1 → 2 | 20.9% → 20.0% | 1.90 → 1.22 (industry) |
+    | 01276 恒瑞医药 | ordinary | 42.92 | 25.69 → 26.62 | 卖出 → 卖出 | 1 → 2 | 32.0% → 31.7% | 1.29 → 1.07 (industry) |
+    | 600276 恒瑞医药 | ordinary | 47.00 | 31.30 → 34.54 | 卖出 → 卖出 | 1 → 2 | 25.7% → 26.2% | 1.49 own |
+    | 002594 比亚迪 | fast grower | 79.68 | 112.49 → 123.36 | 持有 → 持有 | 1 → 2 | 5.6% → 5.7% | 10.96 own |
+    | 01211 比亚迪股份 | fast grower | 62.35 | 89.95 → 94.00 | 持有 → 持有 | 1 → 2 | 7.2% → 6.8% | 5.66 own |
+    | 000858 五粮液 | income | 72.55 | 113.38 → 116.47 | 买入 → 买入 | 1 → 2 | 35.5% → 36.6% | own |
+    | 600519 贵州茅台 | ordinary | 1485.75 | 1776.47 → 1767.33 | 持有 → 持有 | 1 → 2 | 63.5% → 64.5% | own |
+    | NVDA | fast grower | 125.53 | 388.48 → 398.54, 暂定 | 买入 → 买入 | 1 → 1 | 55.2% → 58.6% | 2.56 own |
+    | AMZN | ordinary | 246.82 | 152.08 → 151.43 | 卖出 → 卖出 | 1 → 1 | 15.5% → 15.4% | 3.17 own |
+    | LLY, BABA, TSM, NVO, AAPL, PLTR, MU, 00700, 601088, 01088 | | | within ±2% | unchanged | | | |
+    | banks, insurers, REITs, 01167 (不评级) | | | unchanged (no DCF) | unchanged; 00823 领展 暂定 | | | |
+
+  - Each large move by rule. 摩尔线程 by change: (a) 21.4 → 25.9 (the first window's profit, an 8.6% margin, where the
+    trailing loss margin stood); (b) → 18.3 (Eastmoney's 2027-28 revenue adds a second window, revenue +54%, which
+    at its own 0.32 sales to capital takes more capital than it earns: F2 itself); (c) → 60.7 (the industry's 1.11).
+    The reverse DCF now solves (growth 62% a year to year 5, or an 81% margin), the year-10 return on capital is
+    12.5% against a 6.8% cost and the industry's 22.5%; still 卖出 (price 4.7 times fair value, above extreme
+    uncertainty's 4.0). Stage 25's paths take it from here. 君实生物's A line: its DCF was negative before, so EV/Sales
+    gave the fair value (the loss-maker's rule, "Which playbook"); with the consensus margin and the industry's ratio
+    the DCF is just positive (1.61 today, 1.71 a year on: a 7.5% long-run margin, Damodaran's global biotech, its CN peers having fewer than
+    10 profitable members) and becomes the main method. The H line takes its HK peers' 24.3%, so its DCF rose (b and
+    c as for 摩尔线程). SNOW: the consensus's smaller loss is now kept (-9.0% for the window, -22.8% trailing); its fair
+    value rose 8%, the bear-to-bull half-range fell from 52% of it to 48% (extreme to very high uncertainty, whose 卖出
+    line is 1.75 times fair value rather than 4.0), and price over fair value is 2.77. 百济神州 and 恒瑞's H line are
+    young by the margin test (a loss year; the H line's short history), so they take the industry's ratio. The CN
+    names and their H lines gain a second consensus year from Eastmoney's revenue: 比亚迪 +9.7%, 恒瑞 A +10.3% and
+    百济神州 A +7.5% are that year (its consensus growth carried a year longer before the base-rate fade), 百济's
+    after a lower ratio. NVIDIA: +3.4 points of year-1
+    margin from holding its non-operating income (interest on its cash) where EPS growth had scaled it; 暂定 for its
+    results of 2026-11-17 after figures ending 2026-07-26. Amazon: unchanged (its consensus years and margin are the
+    same; F4's margin anchor is stage 26's). No revenue estimate was rejected in the cache today (摩尔线程's Yahoo
+    2026, 3.60bn, is above its nine months' 3.29bn; Eastmoney's 3.83bn is taken). 腾讯 isn't 暂定: today's build read
+    its third quarter.
+  - Tests: one per change (the turn to profit and the bridge; the trailing quarters that match; the revenue
+    consensus parser, preference and rejection; the young's sales to capital and the year-10 return; the provisional
+    rating and page 1's line); the consensus tests rewritten for the bridge. 329 pass.
+  - Found, not fixed: the loss-maker's fair value jumps between a DCF just above 0 and EV/Sales (君实生物 A: 1.71
+    against 17.79), and its A and H lines take different long-run margins (Damodaran's global 7.5% against HK peers'
+    24.3%); both are the young types' valuation, stage 25's scope. An A+H issuer's lines share a type (stage 21) but
+    the young test reads each line's own history, so 恒瑞's H line (listed 2025) takes peers' margin and the industry's
+    sales to capital (1.07) where its A line keeps its own (1.49): for stage 24 (typing).
+  - The fresh-context stage review (one, on Sonnet): the bridge consistent with the DCF's tax (years 1-5 at the
+    effective rate), no sign or unit error (ADRs per ADS), the fiscal-year mapping right, no rule for a named stock,
+    every table row recomputed and matching. Its points, answered: (1) the loss-makers' results are incoherent
+    (君实生物's jump and its A/H gap; 摩尔线程 still needs 62% a year): written above as found, stage 25's scope; (2) an
+    HK December company without a filing date would be 暂定 after its 年報 (April) until the next period: fixed, the
+    report documents excluded, with a test; (3) the trailing-quarters selection doesn't change NVIDIA today (Nasdaq
+    keeps four quarters): the text corrected above, no workaround; (4) minorities understated by the gross-up: no, the
+    effective rate already carries their share; (5) the moves the text left unexplained (比亚迪, 恒瑞 A, 百济 A) and the
+    1.61 / 1.71 mix-up: written. Year-10 returns of 95-320% (NVIDIA, Apple, 茅台, 五粮液) are the forecast's own: the
+    row shows what the forecast implies against the industry, as the Ginzu does.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -2951,12 +3023,61 @@ were averaged with fixed weights (DCF 50%, multiples 50% for the ordinary; 60/40
   company's own trend faded toward the market's base rate. Since stage 13: a consensus year is a 12-month window from
   the trailing figures' end that both the revenue consensus (Yahoo's, this and next fiscal year) and the EPS
   consensus cover, since a margin needs both; for a company whose trailing figures end mid-year that is one year.
-  Its operating income is the trailing one (stock-based pay a cost, as every later year) grown as the consensus EPS
-  grows from the trailing EPS on the consensus's own basis: the source's last four reported quarters (Nasdaq's, i.e.
+  Until stage 23 its operating income was the trailing one grown as the consensus EPS grew from the trailing EPS on
+  the consensus's own basis: the source's four reported quarters that end with the fact sheet (Nasdaq's, i.e.
   Zacks's, mostly the companies' adjusted figures; Yahoo's for HK), Eastmoney's reported 归母 profit per share for CN
   (value.trailing_eps). Since stage 19 an A+H issuer's H line takes its A line's Eastmoney consensus (one consensus for
   one company: 平安's lines had 6.52 / 7.53 against Yahoo's 7.02 / 8.88 for 2026-27, implied 14.8% against 22.2%),
   with Yahoo's targets and ratings, which are on the H price.
+- Since stage 23 (docs/reviews/REVIEW-2026-11-23.md, F1 and F2), four changes to the inputs; the type tests, discount
+  rates, growth and margin fades and the rating table are as before:
+  - Operating income from the consensus profit (value.consensus_ebit). A window's net income is its consensus EPS x
+    today's shares, less the basis gap (the trailing year's profit on the consensus's basis less the reported, held at
+    its amount: an adjusted consensus's stock pay and amortization stay costs, as in every later year), taken back to
+    operating income through the trailing year's own bridge: grossed up at its effective tax rate (the rate the DCF's
+    first five years apply; a loss isn't grossed up), plus its EBIT less pretax profit (net interest less
+    non-operating income: investment gains, fair-value changes, interest on cash) at its amount. Damodaran derives
+    operating income from revenue and margin, not EPS ("valquestions/growth.htm"): EPS growth carries interest,
+    investment gains and tax, and the old ratio applied all of it to operating income, and dropped the consensus
+    altogether when the trailing EPS was 0 or below (the year kept today's loss margin): 摩尔线程's first window
+    (trailing EPS -0.51, the window's 1.05) kept a -6.8% margin. The EPS-growth figure stays in the valuation as a
+    check (`eps_check`, printed by `research CODE --value`). Limits: the free consensus gives EPS, not net income,
+    outside CN, so a buyback's lift to EPS still lifts the window's profit (today's shares); the bridge holds the
+    trailing year's non-operating income, so a company whose investment gains the consensus expects to vanish is
+    overstated by them. The trailing quarters on the consensus's basis are now the four that end with the fact
+    sheet's period, so a source run a quarter past the fact sheet doesn't set the basis from the wrong window; where the
+    source keeps only its last four quarters (Nasdaq's: NVIDIA's on 2026-11-23, after its release of 2026-11-17) three
+    match and the reported EPS stands with no basis gap, as before, so its adjusted consensus is read as reported
+    profit (its stock pay counted as profit for the consensus window: a limit, and the rating is 暂定 then, below).
+    Minorities: the effective tax rate is 1 - 归母 profit / pretax profit, so the gross-up restores the pretax profit
+    the minorities share.
+  - A second revenue consensus for CN (value.revenue_years, cn.revenue_consensus): Eastmoney's F10 profit forecast
+    (emweb.securities.eastmoney.com/PC_HSF10/ProfitForecast/PageAjax, its 预测统计 table) carries the 研报一致预期
+    panel's revenue (营业总收入, the statements' revenue) beside its EPS, the same brokers and years (verified
+    2026-11-23 on 摩尔线程: 11 brokers' EPS -0.26 / 1.48 / 4.19 for 2026-28, as the datacenter's RPT_WEB_RESPREDICT,
+    and revenue 3.83 / 6.79 / 10.13bn; the datacenter table itself has no revenue). A CN company's revenue consensus
+    is now that panel's, the one whose profit the margin divides, else Yahoo's (thin in CN: 1-3 analysts, and for
+    摩尔线程 3.60bn for 2026 and no 2028), so the consensus years cover the years the EPS consensus covers (two
+    windows where it reaches far enough). An estimate below the revenue the company has already reported for that
+    fiscal year (the fact sheet's year-to-date figures, CN and HK; a US fact sheet carries the trailing twelve months,
+    so the test can't run there) is rejected and the other source's taken; `research CODE --value` prints a rejection.
+  - Sales to capital from the margin's source (value.sales_to_capital): a company whose long-run margin is mature
+    peers' (the young: a loss-maker, a fast grower with a loss year, under 5 years of history or a negative 8-year
+    median) takes its industry's ratio (Damodaran's, the region's table), as its margin, Damodaran's default for a
+    young firm (the Ginzu; "Valuing Young, Start-up and Growth Companies", 2009); the rest keep their own 5-year
+    median. Own capital built while revenue was small beside peers' margin made growth destroy value: 摩尔线程's own
+    0.32 x the peers' 18.1% x 75% = 4.3% on new capital against a 6.8% cost, so the reverse DCF found no growth,
+    margin or rate that reached the price. The report gives the DCF's year-10 return on capital (year 10's NOPAT over
+    today's invested capital plus the reinvestment of years 1-9) beside the cost of capital and the industry's
+    (Damodaran's pre-tax operating margin x sales to capital, after the marginal tax): the Ginzu's consistency check
+    (rating.year10_return).
+  - Results released after the fact sheet's figures (judge.release): a results filing (an 8-K item 2.02, 10-Q, 10-K,
+    a periodic report, 业绩预告 or 快报, 業績公佈; a results meeting's notice, a board meeting's date or a dividend
+    excluded, and HK's 年報 and 中期報告, documents that follow the period's results announcement) dated after the
+    latest figures' own filing date, or Yahoo's next earnings date passed since; where the
+    fact sheet has no filing date (HK), a release after the next quarter's end, the earliest a later period can be
+    reported. Page 1's rating basis then says the figures predate it, the badge and the WeChat text mark the rating
+    暂定, until a build reads the new periodic report. Releases aren't parsed (rule 2: numbers from tables).
 - Years 3-10: growth fades to the long-run rate, no higher than the risk-free rate (Damodaran); margins move from
   today's toward the company's own 8-year median (mature) or the industry's (young or loss-making); reinvestment by its
   sales-to-capital ratio. Since 2026-11-12 (your gap check, below): beyond the analysts' revenue forecasts, growth is

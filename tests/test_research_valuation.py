@@ -442,27 +442,32 @@ KEEP = {"margin_keep": {"above": 0.9, "below": 0.6}}
 def test_forecast_paths_follow_the_consensus_then_fade():
     # consensus revenue and EPS +10% a year for two years: the margin holds; growth then falls in equal steps to g by
     # year 10; the margin's 5-point gap below the own 8-year median (20%) keeps 60% a year (the measured share below)
-    f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0}}, "summary": {},
+    f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0, "pretax": 15.0}}, "summary": {},
          "history": [{"ebit_margin": 0.2}] * 8}
-    k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1} | KEEP
+    k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1, "tax_effective": 1 / 3} | KEEP
     p = value.paths(f, k, "ordinary", {"eps": [1.1, 1.21], "revenue": [110.0, 121.0], "eps0": 1.0}, 0.02)
     assert p["growth"][:2] == pytest.approx([0.1, 0.1]) and p["growth"][9] == pytest.approx(0.02)
     assert p["growth"][2] == pytest.approx(0.1 - 0.08 / 8) and p["margin"][:2] == pytest.approx([0.15, 0.15])
     assert p["margin"][2:] == pytest.approx([0.2 - 0.05 * 0.6 ** t for t in range(1, 9)])
-    high = value.paths(f, k | {"ebit": 30.0}, "ordinary", {"eps": [1.1], "revenue": [110.0], "eps0": 1.0}, 0.02)
+    rich = f | {"valuation": {"ttm": {"revenue": 100.0, "ni": 20.0, "pretax": 30.0}}}
+    high = value.paths(rich, k | {"ebit": 30.0}, "ordinary", {"eps": [2.2], "revenue": [110.0], "eps0": 2.0}, 0.02)
     assert high["margin"][9] == pytest.approx(0.2 + 0.1 * 0.9 ** 9)  # 10 points above it keep 90% a year
     young = value.paths(f, k, "loss_making", {"eps": [], "revenue": []}, 0.02)
     assert young["target_margin"] == 0.1 and young["margin"][4:] == pytest.approx([0.1] * 6)  # industry's, by year 5
 
 
 def test_consensus_margins_on_the_consensus_basis():
-    # adjusted consensus EPS 1.375 against 1.25 adjusted trailing (reported 1.0): operating income grows 10% with
-    # revenue, the margin holds at 15% (from reported profit it would jump to 15% x 1.375 = 20.6%); a second window
-    # past the revenue consensus ends the consensus years (NVIDIA's 79%), its profit forecast unused
-    f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0}}, "summary": {}, "history": [{"ebit_margin": 0.15}] * 8}
-    k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1, "base_growth": 0.05} | KEEP
-    p = value.paths(f, k, "ordinary", {"eps": [1.375, 2.5], "revenue": [110.0, None], "eps0": 1.25}, 0.02)
-    assert p["consensus_years"] == 1 and p["margin"][:2] == pytest.approx([0.15, 0.15]) and p["growth"][1] == 0.05
+    # adjusted consensus EPS 1.375 against 1.25 adjusted trailing (reported 1.0): the trailing basis gap, 2.5 of profit,
+    # is held at its amount, so the consensus's 13.75 is 11.25 reported, 16.875 pretax at the trailing third's tax:
+    # a 15.3% margin (on the adjusted figure as reported it would be 20.6%); a second window past the revenue consensus
+    # ends the consensus years (NVIDIA's 79%), its profit forecast unused
+    f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0, "pretax": 15.0}}, "summary": {},
+         "history": [{"ebit_margin": 0.15}] * 8}
+    k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1, "base_growth": 0.05, "tax_effective": 1 / 3} | KEEP
+    cons = {"eps": [1.375, 2.5], "revenue": [110.0, None], "eps0": 1.25, "basis_gap": 2.5}
+    p = value.paths(f, k, "ordinary", cons, 0.02)
+    assert p["consensus_years"] == 1 and p["margin"][0] == pytest.approx(16.875 / 110) and p["growth"][1] == 0.05
+    assert p["eps_check"] == [pytest.approx(0.15)]  # the EPS-growth figure, kept as a check
 
 
 def test_trailing_eps_on_the_consensus_basis(monkeypatch):
@@ -485,8 +490,8 @@ def test_trailing_eps_on_the_consensus_basis(monkeypatch):
 def test_growth_beyond_the_consensus_is_the_base_rate():
     # one revenue consensus year (+20%), profit +30% then +25%: year 2 grows revenue at the size class's median (5%),
     # not with profit (Chan, Karceski and Lakonishok 2003), when no excess is kept; years 3-5 at 5%; then down to g
-    f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0}}, "summary": {}, "history": [{"ebit_margin": 0.2}] * 8}
-    k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1, "base_growth": 0.05} | KEEP
+    f = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0, "pretax": 15.0}}, "summary": {}, "history": [{"ebit_margin": 0.2}] * 8}
+    k = {"ebit": 15.0, "shares": 10.0, "ind_margin": 0.1, "base_growth": 0.05, "tax_effective": 1 / 3} | KEEP
     p = value.paths(f, k, "ordinary", {"eps": [1.3, 1.625], "revenue": [120.0, None], "eps0": 1.0}, 0.02)
     assert p["growth"][:5] == pytest.approx([0.2, 0.05, 0.05, 0.05, 0.05])
     assert p["growth"][5:] == pytest.approx([0.05 - 0.03 * i / 5 for i in range(1, 6)])
@@ -558,9 +563,9 @@ def test_a_cyclical_normalized_on_its_capital():
     # price peak); new capital earns the normal 20% (sales to capital 1)
     h = [{"ebit_margin": m, "revenue": 100.0, "equity": 80.0, "debt": 30.0, "cash": 10.0, "nonop": 0.0,  # capital 100
           "period": f"{2016 + i}-12-31"} for i, m in enumerate((0.1, 0.3) * 5)]
-    f = {"history": h, "valuation": {"book_common": 400.0, "ttm": {"revenue": 1000.0}, "balance": {"period": "2025-12-31"}},
-         "summary": {}, "latest": {"period": "2025-12-31"}}
-    k = {"debt": 200.0, "cash": 50.0, "nonop": 50.0, "ebit": 300.0, "shares": 10.0, "ind_margin": 0.1,
+    f = {"history": h, "valuation": {"book_common": 400.0, "ttm": {"revenue": 1000.0, "ni": 300.0, "pretax": 300.0},
+         "balance": {"period": "2025-12-31"}}, "summary": {}, "latest": {"period": "2025-12-31"}}
+    k = {"debt": 200.0, "cash": 50.0, "nonop": 50.0, "ebit": 300.0, "shares": 100.0, "ind_margin": 0.1,
          "base_growth": 0.05, "growth_shares": [0.3] * 5} | KEEP
     nm = value.normal(f, k)
     assert nm["roc"] == pytest.approx(0.2) and nm["capital"] == 500 and nm["ebit"] == pytest.approx(100)
@@ -730,3 +735,97 @@ def test_a_floats_cash_and_investments_stay_in_its_capital():
     x = {"equity": 100.0, "debt": 78.0, "cash": 28.0, "nonop": 54.0}
     f = lambda held: {"valuation": {"balance": {"float_in_business": held}}}
     assert value.capital(f(True), x) == 178.0 and value.capital(f(False), x) == 96.0
+
+
+def test_a_turn_to_profit_is_kept_and_non_operating_income_held():
+    # stage 23 (a): a trailing loss (EPS -2.0) with a consensus profit of 1.0 a share: the window's operating income
+    # is that profit, untaxed as the trailing year was (no tax: its effective rate 0), less the trailing interest
+    # income on cash held at its amount (EBIT -25 against pretax -18): 10 - 7 = 3 on revenue 150, not the trailing
+    # -25% margin the old rule kept
+    f = {"valuation": {"ttm": {"revenue": 100.0, "ni": -20.0, "pretax": -18.0}}, "summary": {},
+         "history": [{"ebit_margin": -0.3}] * 3}
+    k = {"ebit": -25.0, "shares": 10.0, "ind_margin": 0.12, "mature_margin": 0.18, "tax_effective": 0.0} | KEEP
+    p = value.paths(f, k, "loss_making", {"eps": [1.0], "revenue": [150.0], "eps0": -2.0}, 0.02)
+    assert p["margin"][0] == pytest.approx(3 / 150) and p["eps_check"] == [None]
+    # a profitable company with 3 of non-operating income (investment gains): its profit doubling to 20 is 30 pretax
+    # at its one-third tax, 27 of operating income with the gains held; EPS growth would have doubled EBIT to 24
+    g = {"valuation": {"ttm": {"revenue": 100.0, "ni": 10.0, "pretax": 15.0}}, "summary": {}, "history": [{"ebit_margin": 0.12}] * 8}
+    q = value.paths(g, {"ebit": 12.0, "shares": 10.0, "ind_margin": 0.1, "tax_effective": 1 / 3} | KEEP, "ordinary",
+                    {"eps": [2.0], "revenue": [100.0], "eps0": 1.0}, 0.02)
+    assert q["margin"][0] == pytest.approx(0.27) and q["eps_check"] == [pytest.approx(0.24)]
+
+
+def test_trailing_quarters_that_match_the_fact_sheet(monkeypatch):
+    # NVIDIA 2026-11-22: Nasdaq's actuals had run a quarter past the fact sheet (its release); the four that end with
+    # the fact sheet's period are its basis, not the reported EPS
+    monkeypatch.setattr(value.yahoo, "load_fx", lambda: {"USD": 0.14})
+    q = [{"quarter": m, "eps": e} for m, e in (("2025-10", 1.30), ("2026-01", 1.62), ("2026-04", 1.87), ("2026-07", 1.05),
+                                                ("2026-10", 2.10))]
+    f = {"consensus": {"source": "Nasdaq", "currency": "USD", "actuals": q}, "latest": {"period": "2026-07-26"},
+         "valuation": {"ttm": {"ni": 120.0}}}
+    eps, basis = value.trailing_eps(f, {"shares": 24.0, "currency": "USD"})
+    assert eps == pytest.approx(1.30 + 1.62 + 1.87 + 1.05) and basis == "Nasdaq's last four quarters"
+
+
+def test_revenue_consensus_from_the_eps_brokers_and_stale_estimates_rejected(monkeypatch):
+    # stage 23 (b): the EPS brokers' revenue (Eastmoney's F10 table, 摩尔线程's rows) is preferred to Yahoo's; an
+    # estimate below the nine months already reported (3.29bn) is rejected and the other source's taken; a year only
+    # Yahoo has comes from Yahoo
+    monkeypatch.setattr(value.yahoo, "load_fx", lambda: {"CNY": 1.0})
+    from stockreport.research import cn
+    rows = [{"YEAR": 2025, "YEAR_MARK": "A", "TOTAL_OPERATE_INCOME": 1505525060.52},
+            {"YEAR": 2026, "YEAR_MARK": "E", "TOTAL_OPERATE_INCOME": 3825692727.27},
+            {"YEAR": 2027, "YEAR_MARK": "E", "TOTAL_OPERATE_INCOME": 6793751818.18},
+            {"YEAR": 2028, "YEAR_MARK": "E", "TOTAL_OPERATE_INCOME": None}]
+    em = cn.revenue_rows(rows, {"2026": -0.26, "2027": 1.48, "2028": 4.19})
+    assert em == {"2026": pytest.approx(3825692727.27), "2027": pytest.approx(6793751818.18)}  # A years and blanks out
+    f = {"consensus": {"currency": "CNY", "revenue": {"2026": 3.0e9, "2027": 6.8e9},
+                       "yahoo_years": {"2026": {"revenue": 3.6e9}, "2028": {"revenue": 9.0e9}}, "revenue_currency": "CNY"},
+         "latest": {"period": "2026-09-30", "months": 9, "basis": "year to date", "revenue": 3.29e9}}
+    rev, src, rejected = value.revenue_years(f, {"currency": "CNY"}, 12)
+    assert rev == {"2026": 3.6e9, "2027": 6.8e9, "2028": 9.0e9} and src == {"2026": "Yahoo", "2027": "Eastmoney", "2028": "Yahoo"}
+    assert rejected == [{"year": "2026", "source": "Eastmoney", "revenue": 3.0e9, "reported": 3.29e9}]
+    assert value.reported_so_far({"latest": {"period": "2026-03-31", "months": 9, "basis": "year to date",
+                                             "revenue": 5.0}}, 6) == {"2026": 5.0}  # a June year: FY2026's nine months
+    assert value.reported_so_far({"latest": {"period": "2026-09-30", "months": 12, "basis": "TTM", "revenue": 5.0}}, 12) == {}
+
+
+def test_a_young_company_takes_its_industrys_sales_to_capital():
+    # stage 23 (c): own capital built while revenue was small (5-year median 0.32) beside mature peers' margin: the
+    # industry's 1.11, as its margin; an established company keeps its own
+    h = [{"revenue": 32.0, "equity": 100.0, "debt": 0.0, "cash": 0.0, "nonop": 0.0}] * 5
+    f = {"history": h, "valuation": {"balance": {}}}
+    k = {"ind_sales_to_capital": 1.11}
+    assert value.sales_to_capital(f, k, "profitable peers' median") == (1.11, "industry (its long-run margin is mature peers')")
+    assert value.sales_to_capital(f, k, "industry")[0] == 1.11
+    assert value.sales_to_capital(f, k, "own 8-year median") == (pytest.approx(0.32), "own 5-year median")
+    # the year-10 return on capital: NOPAT 30 over today's 100 + the first nine years' reinvestment (9 x 10)
+    f2 = {"valuation": {"book_common": 100.0, "balance": {"period": "2026-09-30"}}, "latest": {"period": "2026-09-30"},
+          "history": []}
+    k2 = {"debt": 20.0, "cash": 20.0, "nonop": 0.0, "ind_margin": 0.2, "ind_sales_to_capital": 1.0, "tax_marginal": 0.25}
+    r = rating.year10_return(f2, k2, {"nopat": [0.0] * 9 + [38.0], "reinvestment": [10.0] * 10})
+    assert r == {"roic10": pytest.approx(0.2), "roic_industry": pytest.approx(0.15)}
+
+
+def test_results_released_after_the_figures_make_the_rating_provisional():
+    # stage 23 (d): NVIDIA's figures end 2026-07-26 (filed 08-26); its 8-K results of 11-17 came after: 暂定.
+    # Amazon's release (10-29) came the day before its 10-Q (10-30), the figures': not provisional
+    nvda = {"latest": {"period": "2026-07-26", "notice": "2026-08-26"}, "consensus": {"next_earnings": ["2026-11-17"]}}
+    filings = [{"date": "2026-11-17", "kind": "earnings", "title": "8-K: Results of operations; Item 9.01"},
+               {"date": "2026-11-12", "kind": "other", "title": "8-K: Director or officer change"}]
+    p = judge.release(nvda, filings, date(2026, 11, 23))
+    assert p == {"date": "2026-11-17", "title": "8-K: Results of operations; Item 9.01", "period": "2026-07-26"}
+    amzn = {"latest": {"period": "2026-09-30", "notice": "2026-10-30"}, "consensus": {"next_earnings": ["2026-10-29"]}}
+    assert judge.release(amzn, [{"date": "2026-10-29", "kind": "earnings", "title": "8-K"}], date(2026, 11, 23)) is None
+    # HK without the figures' filing date: a release after the next quarter's end counts (腾讯's Q3 in November after
+    # June's figures), the interim's own (August) doesn't; a results meeting's notice isn't results; a date to come
+    hk = {"latest": {"period": "2026-06-30", "notice": None}, "consensus": {"next_earnings": ["2026-11-18"]}}
+    assert judge.release(hk, [{"date": "2026-08-12", "kind": "earnings", "title": "中期業績公佈"}], date(2026, 11, 23))["date"] == "2026-11-18"
+    assert judge.release(hk, [], date(2026, 11, 17)) is None
+    dec = {"latest": {"period": "2025-12-31", "notice": None}, "consensus": {}}  # the annual report document isn't a release
+    assert judge.release(dec, [{"date": "2026-04-09", "kind": "earnings", "title": "2025 年報"}], date(2026, 5, 1)) is None
+    cn = {"latest": {"period": "2026-09-30", "notice": "2026-10-29"}, "consensus": {}}
+    assert judge.release(cn, [{"date": "2026-11-05", "kind": "earnings", "title": "关于召开2026年第三季度业绩说明会的公告"}],
+                         date(2026, 11, 23)) is None
+    from stockreport.research import compare
+    assert compare.provisional(p).startswith("评级暂定：2026-11-17 发布了新的业绩")
