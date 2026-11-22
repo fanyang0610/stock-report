@@ -1667,6 +1667,10 @@ names over the fund CN +1.7% (51%), US +2.3% (60%), HK +3.2% (60%); the picks ov
 (38%), HK +5.8% (66%): HK's Sell, now from the larger names, lags in more windows and by more in the median, with
 fewer of the small survivors' rebounds; the caveats above stand. It decides nothing.
 
+**After stage 17d** (2026-11-22, main at f300ed4, frames rebuilt; it writes the live `data/history/expect.json`):
+momentum's top fifth isn't rated Sell. Buy and Hold unchanged. Sell over the fund CN +6.6% (behind 60%), US −0.1%
+(48%), HK +5.4% (68%), against +4.1%, +4.0% and +5.8% after 17b. The caveats above stand; it decides nothing.
+
 ## 28. Stage 14: how long margins, growth and excess returns last (2026-11-14; backtest/persistence.py)
 
 The check behind the research DCF's long-run rules (PLAN.md "Forecast" and "As built", stable period). Published
