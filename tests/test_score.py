@@ -327,12 +327,14 @@ def test_sell_is_expensive_low_quality_and_distressed_not_the_lowest_score(monke
     s = lists.sells(rated(), 5)
     assert s.index.tolist() == ["C10", "C11", "C12", "C13", "C14"] and s["sector"].value_counts().max() <= 2
     df = rated()
-    df.loc["C10", "f_momentum"] = 1.0  # value and quality as low, momentum high: still a Sell (momentum isn't asked)
+    df.loc["C10", "f_momentum"] = 0.8  # value and quality as low, momentum B at its top: still a Sell
     df.loc["C11", ["f_value", "f_quality"]] = 0.9  # a washed-out price on a cheap, sound company: not a Sell
     df.loc["C11", "f_momentum"] = 0.0
+    df.loc["C12", "f_momentum"] = 0.81  # momentum's top fifth (grade A): not a Sell, however expensive and poor
     df.loc["C25", "distress"] = 9.0  # the likeliest to fail (safety 0), value and quality a quarter up: first
     s = lists.sells(df, 5)
-    assert s.index[0] == "C25" and "C10" in s.index and "C11" not in s.index
+    assert s.index[0] == "C25" and "C10" in s.index and "C11" not in s.index and "C12" not in s.index
+    assert "C12" not in lists.sells(df, 5, current=pd.Index(["C12"])).index  # a protection, not a rank: not buffered
     fin = df.assign(distress=df["distress"].mask(df.index == "C25"))  # the financial sector has no failure logit
     assert lists.junk(fin)["C25"] == pytest.approx((df.loc["C25", "f_value"] * 2 + 0.5) / 3)
     s = lists.sells(df, 5, out=pd.Index(["C25"]))  # a buy or its bench isn't rated Sell too
@@ -344,7 +346,8 @@ def test_the_sell_and_hold_buffer_counts_places_after_the_sector_cap(monkeypatch
     order (the first 8 capped names, then current names within the first 12 capped)."""
     monkeypatch.setitem(CONFIG["lists"], "middle", [0.0, 1.0])
     x = np.linspace(0, 1, 30)  # C0 the most expensive and lowest quality; C2-C5 are sector x's third to sixth
-    df = universe(30).assign(score=x, f_value=x, f_quality=x, distress=0.0, sta=0.0, mcap_rank=np.arange(1, 31),
+    df = universe(30).assign(score=x, f_value=x, f_quality=x, f_momentum=0.5, distress=0.0, sta=0.0,
+                             mcap_rank=np.arange(1, 31),
                              sector=["x"] * 6 + [f"y{k}" for k in range(24)], vol_1y=0.1 + x)
     capped = ["C0", "C1"] + [f"C{k}" for k in range(6, 30)]  # C14 is the capped 11th (raw 15th), C16 the 13th
     assert lists.sells(df, 10).index.tolist() == capped[:10]

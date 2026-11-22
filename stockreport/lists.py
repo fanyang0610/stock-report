@@ -3,7 +3,7 @@ without anyone's portfolio: 买入 (Buy, expected to beat the market) the 20-nam
 (each sector its places by its share of the market's free-float value, filled by its best scores, equal amounts;
 Quantitative Value's screen first); 持有 (Hold, expected in line with it) the 10 steadiest prices among the largest
 names at the middle of the score; 卖出 (Sell, expected to lag it) the 10 most expensive, lowest-quality and most
-distressed among the largest. A name rated in the newest earlier report keeps its rating until it falls well past
+distressed among the largest, outside momentum's top fifth. A name rated in the newest earlier report keeps its rating until it falls well past
 the cut (buffered: MSCI's and CSI's 20% buffer)."""
 
 import math
@@ -14,7 +14,7 @@ import pandas as pd
 
 from stockreport import verdicts
 from stockreport.config import CONFIG, DATA
-from stockreport.score import DIGITS, card_lines, ranked
+from stockreport.score import DIGITS, card_lines, grade, ranked
 from stockreport.signals import FAMILIES, MIDDLE
 
 LOT = {"cn": 100, "us": 1}  # HK: each stock's board lot (HKEX)
@@ -177,21 +177,24 @@ def junk(df: pd.DataFrame) -> pd.Series:
     quality family and safety (1 - the percentile of Campbell-Hilscher-Szilagyi's failure logit, signals.distress,
     outside the financial sector; missing, as for the financial sector, at the middle). The short side of Novy-Marx's
     (2013) profitable value and of Asness, Frazzini and Pedersen's quality minus junk (2019), whose safety includes
-    the failure scores; Campbell, Hilscher and Szilagyi (2008) found the likeliest to fail earn the least. Momentum
-    is left out: a low score's losers rebound when markets turn (Daniel and Moskowitz 2016)."""
+    the failure scores; Campbell, Hilscher and Szilagyi (2008) found the likeliest to fail earn the least. Weak
+    momentum doesn't count towards Sell: losers rebound when markets turn (Daniel and Moskowitz 2016); strong momentum
+    keeps a name off the list (sells())."""
     risk = df["distress"].rank(pct=True)
     return ((df["f_value"] + df["f_quality"] + (1 - risk).fillna(MIDDLE)) / 3).round(DIGITS)
 
 
 def sells(df: pd.DataFrame, n: int, out: pd.Index = NONE["sell"], current: pd.Index = NONE["sell"],
           market: str = "") -> pd.DataFrame:
-    """The Sell list: in Hold's and Sell's field (biggest()), not `out` (the buys and their bench), the lowest of junk()
-    (ties: the smaller free float, then the code), at most `per_sector` a sector, the `current` ones kept within the
-    buffer on that capped order (buffered: the first 8, then current names within the first 12). With the score's card
-    lines, `weak` names the two weakest value and quality components and `reason` the failure logit's place when in
-    the riskiest `risky` share, in words that say what it weighs."""
+    """The Sell list: in Hold's and Sell's field (biggest()), not `out` (the buys and their bench), not in momentum's
+    top fifth (grade A: among the year's strongest winners value and the failure risk don't predict lagging, Asness
+    1997; a protection like the buys' screen, so not buffered), the lowest of junk() (ties: the smaller free float,
+    then the code), at most `per_sector` a sector, the `current` ones kept within the buffer on that capped order
+    (buffered: the first 8, then current names within the first 12). With the score's card lines, `weak` names the
+    two weakest value and quality components and `reason` the failure logit's place when in the riskiest `risky`
+    share, in words that say what it weighs."""
     cfg, key = CONFIG["lists"], junk(df)
-    field = df[biggest(df, market, current) & ~df.index.isin(out)]
+    field = df[biggest(df, market, current) & ~df.index.isin(out) & (grade(df["f_momentum"]) != "A")]
     value = field["float_value" if "float_value" in field else "mcap"]
     order = pd.DataFrame({"k": key[field.index], "v": value, "c": field.index.astype(str)}).sort_values(["k", "v", "c"])
     order = capped(field.loc[order.index], len(order), cfg["per_sector"]).index

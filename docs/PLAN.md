@@ -1683,6 +1683,37 @@
     with 中国神华 and 中国石油 in view: argued from the templates and written as a code's choice ("Which playbook");
     each other answer would leave one company with two types. Not changed: a line whose other line's fact sheet isn't
     today's builds it (a failure leaves its own type, logged); the SIC table is read per fact sheet (one small file).
+- Stage 17d (momentum in Sell; the lists check of 2026-11-15, F5): done 2026-11-22, on stage 17c (3014920). A name in
+  its sector's momentum top fifth (grade A) isn't rated Sell (lists.sells; not buffered, as the buys' screen isn't);
+  weak momentum still doesn't count towards Sell. report.py: page 1's Sell line (跌得多不算卖出理由，动量 A 的不评卖出)
+  and the back page's reasons with their sources; backtest/qvm.py runs it through lists.sells as before (the history's
+  momentum family has no revisions). The evidence from the six papers, read in full, the decision and its limits:
+  "Lists", Sell.
+  - 2026-11-15's snapshot re-scored by the build's own path with 17b's and 17c's code (the US with the SEC operating
+    income as filed by that day), before → after: CN 昆仑万维 → 光库科技; US Bloom Energy, Moderna, Lumentum →
+    Cardinal Health, MercadoLibre, Ares (Ares by the buffer from 11-14's list; Rocket Companies next); HK 威华达控股 →
+    地平线机器人. Buy and Hold unchanged. Each name and its figures: "Lists", Sell.
+  - The report rendered from the after-lists (a scratch copy; 15 pages, summary 3,572 bytes), read as text: page 1
+    still one page with the new Sell line, the back page's two momentum sentences with their sources.
+  - The history's Sell figures (BACKTEST.md section 27, the 预期 line's Sell part) change on the next history run;
+    not rerun here: it decides nothing, and the line says the history can't test Sell.
+  - 276 tests pass; the Sell test now holds a grade-A name off the list, current or not (it fails on 17c's code),
+    and grade B at its top (0.8) stays. App Python 10,890 → 10,894 lines.
+  - The fresh-context stage review (one, on Sonnet): 276 tests pass; every figure and quote checked against the
+    papers' text (Asness Tables 4 and 5, Daniel and Moskowitz Table 1 and section 2.3, Stambaugh, Yu and Yuan 2012
+    Table 3 and 2015 section 2.1, quality minus junk Table 4, Novy-Marx's "orthogonal" sentences); the code as planned
+    (the screen before the buffer, the history through lists.sells); the before/after lists re-run, identical to the
+    paragraph above; nothing in stockreport/research changed, no ticker in the code. Its points, answered: (1) no
+    cited paper tests expensive, low-quality winners, and the score's momentum family isn't pure price momentum (CN's
+    is earnings only): agreed and stated in "Limits"; the rule stands on what the papers do test (value's spread gone
+    among the top momentum quintile, the winners' positive alpha, momentum inside the published combined short leg)
+    and on the score's own one-third weight for its family. (2) The three US names in score 0.208-0.218 on junk(),
+    against 0.063-0.120 for the three out: the list is weaker by its own measure, now said in "Lists"; that measure
+    has no momentum in it, which is the reason for the rule. (3) The back page said 涨势最强的一组历来跑赢大盘 and
+    贵的和便宜的回报差不多 without their scope: now 美股…按市净率… and 长期平均跑赢大盘，只在大跌后的反弹里落后. Its
+    observation that Cardinal Health (quality 0.02, failure top 9%) will surprise a reader is the method's result;
+    威华达控股's data wasn't inspected (it leaves Sell either way).
+
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
   fair value per stock, an earnings forecast, an implied return), and judged them on ship bars I proposed that no
@@ -2000,7 +2031,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
     sector cap (stage 17b: the first 8 of the order with at most 2 a sector, then the current names within its first
     12), and on their fields: a current Hold stays in a middle band widened by 20% of its width (0.04 a side: 36% to
     64% of the score from the top) and within the field's count × 1.2 (CN and the US the 480 largest; HK 255 by
-    HK-listed value on 2026-11-15), a current Sell within the same. Not buffered: the screen, HK's small caps and partnerships (protections, not ranks), each sector's number
+    HK-listed value on 2026-11-15), a current Sell within the same. Not buffered: the screen, HK's small caps and
+    partnerships, Sell's momentum top fifth (stage 17d) (protections, not ranks), each sector's number
     of places (it follows free float), your vetoes and the review's removals.
   - The previous ratings (lists.rated): data/picks.csv, which keeps every report's three ratings (each day's last
     build, after the review), the market's newest date before the build's day: point in time, and a buy the review
@@ -2157,7 +2189,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
     336-469 of 794 (US), 163-223 of 390 (HK).
 - **Sell (stage 17):** the 10 most expensive, lowest-quality and most distressed in Hold's and Sell's field (CN and the
   US the 400 largest; HK the top 95% of HK-listed value, stage 17b), at most 2 per
-  sector, not a buy or a buy's bench (lists.sells, lists.junk): the lowest mean of three percentiles, the value family,
+  sector, not a buy or a buy's bench, not in momentum's top fifth (stage 17d, below) (lists.sells, lists.junk): the
+  lowest mean of three percentiles, the value family,
   the quality family and safety (1 − the percentile of Campbell-Hilscher-Szilagyi's failure logit, signals.distress,
   among the market's names outside the financial sector; missing, as for that sector, at the middle, as a missing
   component is); ties to the smaller free float. A current Sell kept within the buffer, counted after the cap (above).
@@ -2214,6 +2247,86 @@ momentum drive the score (fixed in stage 1 after the stage review).
     percentiles); page 1 says 又贵、质量又差，或财务风险高, and the Sell heading 又贵、质量差或财务风险高的. The
     back page keeps the measure's source line. On 2026-11-15 the line shows on 5 of CN's 10 Sell cards, 5 of the US's,
     2 of HK's (all 10 before).
+  - **Momentum's top fifth isn't rated Sell (stage 17d; the lists check of 2026-11-15, F5).** Stage 17 left momentum
+    out of Sell's measure, so a name in its sector's strongest momentum could be rated Sell on value, quality and the
+    failure logit alone: on 2026-11-15 (stages 17b and 17c's code) 6 of the 10 US Sells had a momentum family of 0.63
+    or more, three in its top fifth (Bloom Energy 0.93, Moderna 0.88, Lumentum 0.88), and CN's 昆仑万维 (0.82) and HK's
+    威华达控股 (1.00) were there too. What each source says about expensive, low-quality stocks with strong momentum
+    (each read in full: the FAJ article in AQR's copy, the others in their NBER working papers or the publisher's open
+    copy):
+    - Asness, "The interaction of value and momentum strategies" (FAJ 1997; US NYSE, Amex and Nasdaq stocks, 1963-94;
+      value-weighted quintiles on NYSE breaks, sorted independently on the 12-month return without the last month and
+      on industry-relative book-to-market or dividend yield; Table 4). Value's spread among the winners' quintile is
+      0.13% a month (t 0.65), against 0.69-0.97% (t 3.4-4.9) in each of the other four. In the dearest fifth the
+      winners earned 1.50% a month, the losers 0.03% and the cheapest fifth's winners 1.62%: the expensive winner sat
+      with the best of the 25 cells, the expensive loser at the very bottom. By dividend yield the same (Table 5: 0.15%
+      among the winners, t 0.74; it "does not work at all" there). His reading: winners, whatever their book-to-market,
+      are "not generally distressed", so the distress value may stand for is absent among them, and no stigma attaches
+      to recent winners. The study is price momentum and value; it has no quality or failure measure.
+    - Daniel and Moskowitz, "Momentum crashes" (JFE 2016; read in NBER w20439; US 1927-2013, value-weighted deciles of
+      the 12-month return skipping a month; Table 1, section 2.3). The winner decile earned 15.3% a year over bills
+      against the market's 7.7%, a CAPM alpha of +7.5% (t 5.1); the loser decile −14.7% (t −6.7). The crashes come
+      "mostly" from the short side: in July and August 1932 the losers rose 232% and the winners 32%, from March to May
+      2009 163% and 8%; the losers' option-like beta appears only in bear markets. The winners carry the more negative
+      skew (−0.82 a month) and trailed the market in the 2009-13 rebound. So weak momentum is a poor reason for a Sell
+      (stage 17's reason), and strong momentum is the side that has beaten the market, the rebound after a crash apart.
+    - Stambaugh, Yu and Yuan, "The short of it: investor sentiment and anomalies" (JFE 2012; NBER w16898; 11 anomalies,
+      US 1965-2008, extreme value-weighted deciles; Table 3). The anomalies' profits come mostly from their short legs
+      after high sentiment, the overpriced side. Momentum's long leg, the winners, earns a three-factor alpha of 0.66% a
+      month after high sentiment and 0.60% after low (t 3.6 and 3.5), the largest and steadiest long-leg alpha of the
+      eleven (the others' −0.03% to 0.49%): the winners are not among the overpriced the paper finds; the losers are.
+    - Stambaugh, Yu and Yuan, "Arbitrage asymmetry and the idiosyncratic volatility puzzle" (JF 2015; NBER w18560;
+      section 2.1). Their mispricing measure is a stock's average rank on the same 11 anomalies, momentum one of them
+      (the 6-month return skipping a month, a high return ranked underpriced); the most overpriced, the short leg, have
+      the highest average ranks, and averaging the ranks widens the extreme deciles' spread by 62 basis points a month
+      over combining the eleven strategies' returns, 58 of them in the short leg. The published combined short leg weighs a strong past return against a stock; ours, without momentum,
+      didn't.
+    - Asness, Frazzini and Pedersen, "Quality minus junk" (RAST 2019; Table 4). Quality is profitability, growth,
+      safety and payout, with no past returns. QMJ loads −0.09 on momentum in the US (t −4.3) and 0.00 globally, and its
+      four-factor alpha, with momentum as a factor, is 0.60% a month (US) and 0.61% (global): junk lags apart from
+      momentum, which earns its own premium beside it. Junk with strong momentum isn't tested.
+    - Novy-Marx, "The other side of value" (JFE 2013; sections 3 and 4). Profitability and value combined are
+      "essentially orthogonal to momentum", and his four-factor model keeps momentum a factor of its own beside
+      industry-adjusted value and gross profitability (it prices Campbell-Hilscher-Szilagyi's failure strategy through
+      profitability). In that model an expensive, unprofitable winner carries the momentum premium too.
+    - The decision: a name in its sector's momentum top fifth (grade A: the family above 0.8) isn't rated Sell. The
+      evidence cuts one way. Weak momentum is no reason for a Sell (Daniel and Moskowitz); strong momentum is a reason
+      against one: among the top momentum quintile value doesn't separate returns (Asness), the winners have beaten
+      the market over 87 years (Daniel and Moskowitz) and after high and low sentiment alike (Stambaugh, Yu and Yuan
+      2012), and the published combined short leg counts momentum (2015) while quality minus junk and profitable value
+      leave it a premium of its own. Why the top fifth: it is where Asness found value's edge gone, while in the fourth
+      fifth it is intact (0.69%, t 3.4); a wider cut would keep off Sell names the evidence leaves on it. It is the
+      score's grade A, the reader's own scale. Why a screen and not momentum inside junk(): a momentum term in the
+      measure would also rank losers higher on Sell, which stage 17 left out for Daniel and Moskowitz's reason; the
+      screen acts on the winners' side only. It mirrors the buys' screen (the 5% likeliest to fail can't be a Buy):
+      one family's extreme keeps a name off one rating; and like that screen it is a protection, not a rank, so it
+      isn't buffered (a current Sell that reaches momentum's top fifth leaves). Keeping stage 17's rule was the other
+      option: it rated Sell the names the published research finds least likely to lag. Decided from the papers, not
+      from the lists or the history; the cut is Asness's quintile, not any name's figure (Snowflake, 0.63, is grade B
+      and stays).
+    - Limits. Asness's interaction is US price momentum, 1963-94, and he tested value, not quality or the failure
+      logit (his reason, that winners are rarely distressed, speaks to the failure logit's side). The score's momentum
+      family is each market's momentum evidence (US and HK the 12-1-month return, profit and revenue growth and the
+      revisions; CN the SUE, growth and revisions, as the price trend hasn't paid in A-shares: "The score"), and the
+      rule follows the family as the score defines it, a third of every score on the same evidence; in CN it rests on
+      earnings momentum (Chan, Jegadeesh and Lakonishok 1996) without a published interaction test there. A name near
+      0.8 can cross it from day to day, as a name near the buys' screen can: the review's F7, a monthly review
+      calendar, is where that is settled.
+    - What it changed on 2026-11-15 (the snapshot re-scored by the build's own path with 17b's and 17c's code, the
+      previous ratings from data/picks.csv, before → after; value / quality / momentum families, the failure logit's
+      place among the market's non-financials):
+      - CN: 昆仑万维 out (momentum 0.82: profit +100% and revenue +54% year on year, its SUE −2.1); 光库科技 in (0.04 /
+        0.20 / 0.76, failure top 25%; its price up 91% in a year, which CN's momentum family doesn't use).
+      - US: Bloom Energy (0.93; up 131% over the 12-1 months), Moderna (0.88; up 807%) and Lumentum (0.88; up 295%)
+        out. In: Cardinal Health (0.51 / 0.02 / 0.75; failure top 9%), MercadoLibre (0.11 / 0.46 / 0.39; top 6%) and
+        Ares (0.08 / 0.08 / 0.08; a financial, so its failure logit sits at the middle since 17b, now a Sell on value
+        and quality alone): Ares is 11th of the capped order and on 11-14's list, so the buffer keeps it ahead of
+        Rocket Companies (10th). Snowflake (0.63), Constellation (0.65) and Carvana (0.71) stay: grade B. By junk()
+        the three in are weaker Sells than the three out (0.208-0.218 against 0.063-0.120): the cost of the rule,
+        whose reason is that junk() doesn't see momentum.
+      - HK: 威华达控股 out (1.00; up 469% in a year); 地平线机器人 in (0.06 / 0.32 / 0.45; failure top 33%).
+      - Buy and Hold are unchanged in every market; the five names out of Sell are rated nothing (score ranks 658-727
+        of ~790, 威华达控股 317 of 396: far below Hold's band, 40-60% from the top).
   - Why (the method review of 2026-11-13, finding S3): until stage 17 Sell was the score's 10 lowest, and the score
     holds momentum, so its bottom is the year's losers. Losers rebound sharply when markets turn (Daniel and Moskowitz,
     "Momentum crashes", JFE 2016: the published reason; the history only showed the same, Sell beating the fund on
@@ -2307,7 +2420,7 @@ momentum drive the score (fixed in stage 1 after the stage review).
   its 预期 line, as cards with the same fields (为什么持有, 为什么卖出; stage 5).
   US cards are named by Eastmoney's Chinese short name (美光科技), with the English name beside it.
 - Back pages: how the score and the lists are built, the three ratings (stage 17: Sell's rule with its sources, why
-  momentum is left out, and the buffer), the review rules, where the words come from, the 预期 details (the 10 and 5
+  weak momentum doesn't count and (17d) why momentum's top fifth isn't rated Sell, and the buffer), the review rules, where the words come from, the 预期 details (the 10 and 5
   name ranges, the overlapping portfolio's largest fall, the history's limits, families running against the research;
   the neutral basket's split, here from stage 7, moved into the 预期 line itself in stage 17) and the published
   evidence.
@@ -2372,6 +2485,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
   the newest earlier report's; Sell is the live rule (lists.junk), on value and quality only, as the history has no
   failure logit (its safety part sits at the middle); a name has one rating there too (Hold leaves out the Sell names).
   It fills the 预期 lines and decides nothing (BACKTEST.md section 27).
+- Stage 17d: the same Sell rule keeps momentum's top fifth off the list (lists.sells), on the history's momentum family
+  (no revisions there).
 - The CN frames are point-in-time by report date but hold only companies still listed (Eastmoney drops delisted ones),
   with restated 扣非 figures; US and HK hold today's listings. So every market's numbers are flattered, and the report
   says so (corrected in stage 1: this line said CN had delisted names).
@@ -3496,6 +3611,12 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
     coverage among the US scored names; Lumentum, Carvana and Boeing checked against their filings; the 2026-11-15
     snapshot before and after with the names that change and why; a parser test on a saved SEC sample; pytest
     passes; the fresh-context stage review; status; committed. A core-profit E/P for the US and HK is a follow-up.
+17d. **Momentum in Sell** (the lists check of 2026-11-15, F5). Read the sources on expensive, low-quality stocks with
+    strong momentum (Asness 1997; Daniel and Moskowitz 2016; Stambaugh, Yu and Yuan 2012 and 2015; quality minus junk;
+    Novy-Marx 2013) and decide from them whether a name in momentum's top fifth can be rated Sell. Not changed: the
+    score, junk()'s three parts, weak momentum's place (none), Buy and Hold's rules. Done when: this plan has what each
+    source says, the decision and its reason; the 2026-11-15 Sell lists before and after with each change explained by
+    the rule; tests; pytest passes; the fresh-context stage review; status; committed.
 18. **Research stage 18** (the check of stage 15's 25 valuations, 2026-11-15, faults 0-3; adopted 2026-11-15; done
     2026-11-15, Status). First a patch: US caches written before stage 13 are refetched. Then a cyclical normalized on
     its capital (its revenue too, not only its margin, and no consensus excess carried on); each stock set against
@@ -3581,6 +3702,11 @@ Composite Index methodology (LargeCap, MidCap and SmallCap bands); NAICS (sector
 53, Real Estate) and GICS (Real Estate out of Financials, 2016).
 Stage 17c: Rouen, So and Wang, "Core earnings: new data and evidence" (JFE 2021); Novy-Marx (JFE 2013, above);
 Greenblatt (2006) and Gray and Carlisle (2012, above) for EBIT as operating earnings.
+Stage 17d: Asness, "The interaction of value and momentum strategies" (FAJ 1997, Tables 4 and 5); Daniel and
+Moskowitz, "Momentum crashes" (JFE 2016; NBER w20439, 2014); Stambaugh, Yu and Yuan, "The short of it: investor
+sentiment and anomalies" (JFE 2012; NBER w16898) and "Arbitrage asymmetry and the idiosyncratic volatility puzzle" (JF
+2015; NBER w18560); Asness, Frazzini and Pedersen, "Quality minus junk" (RAST 2019, Table 4); Novy-Marx (JFE 2013,
+above).
 
 ## Decisions kept from the old plan
 - Python 3.12 + uv. The old Swift project is archived read-only at ~/Developer/EquitySignalsClawbot-legacy.
