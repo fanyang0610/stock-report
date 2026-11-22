@@ -1737,6 +1737,10 @@
   - Not verified: CSI's reserve-list wording (its temporary change of 2026-10-09 checked, the rule's text not re-read);
     the report not rendered from a real between-review day (the first comes the day after the first report on this
     code).
+- Method review (2026-11-23, Opus 5.5, read-only; docs/reviews/REVIEW-2026-11-23.md): stages 23-28 adopted ("Stages"),
+  none started. The research forecast treats every company as the median company (688795 at 21 CNY against 270.5:
+  two bugs and the median path; Amazon's margin anchor); the screening's history is survivors only, which fits its
+  three adverse results.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -3732,6 +3736,104 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
     changes count and the Sell card's price line. Not changed: the score, the lists' rules at a review, the buffer,
     the history. Done when: this plan has each decision with its source; a week of snapshots before and after; tests;
     pytest passes; the fresh-context stage review; status; committed.
+
+**Stages 23-28** (the method review of 2026-11-23, docs/reviews/REVIEW-2026-11-23.md, findings F1-F7; adopted
+2026-11-23). In order, one session each. Each is started from the card the previous stage leaves (the first from the
+review's session), its worktree cut from the previous stage's branch (`source_branch` on the card), so each builds on
+the last; merging into main and pushing stay the user's call (rule 9). The card names the model and effort below (my
+judgement: Opus for a method's design and for valuation numbers, Sonnet for specified fixes, data plumbing and reruns;
+every stage review on Sonnet, rule 8); the user may change them on the card. Each stage ends with its status here, a
+commit, and the next stage's card carrying this table's model and effort. Each method change follows a bug or the
+published source named, never one stock's result ("How decisions are made"); the stocks named are checks, not reasons.
+
+| Stage | Findings | Model, effort | Why |
+|---|---|---|---|
+| 23 Research forecast inputs | F1, F2 | Opus 5.5, high | valuation numbers; consensus bases and units are subtle |
+| 24 Typing and accounting | F5 | Sonnet 5.5, high | four specified fixes; the stage review checks the figures |
+| 25 Growth companies valued over their base-rate paths | F3 | Opus 5.5, xhigh | designs a method and measures its evidence |
+| 26 The margin anchor | F4 | Opus 5.5, high | one specified measurement; the rule follows it |
+| 27 A survivor-free history | F6 | Sonnet 5.5, high | data sourcing and a rerun that decides no method |
+| 28 Screening value measures and the tracker | F7 | Sonnet 5.5, high | specified changes and a rerun |
+
+23. **Research forecast inputs** (F1, F2). (a) The consensus years' operating income from the consensus profit: its net
+    income (EPS × shares) taken back to operating income through the trailing year's own bridge (its tax rate, net
+    interest and non-operating income), so a turn to profit is kept (a trailing EPS at or below 0 no longer drops the
+    consensus, value.paths) and buybacks or investment gains don't move operating income (Damodaran: operating growth
+    from revenue and margin); the EPS-growth figure stays only as a cross-check. (b) A second revenue consensus for CN
+    (Eastmoney's broker forecasts, if its tables carry revenue: verify; else said), so the consensus years cover the
+    years the EPS consensus covers; a revenue estimate for a fiscal year below what the company has already reported
+    for that year is rejected, said. (c) Sales to capital from the margin's source: a company whose long-run margin is
+    mature peers' takes its industry's sales to capital (Damodaran's young-firm default); the report gives the year-10
+    return on capital beside the cost of capital and the industry's. (d) An earnings release dated after the fact
+    sheet's period (a results filing after it, or a next-earnings date passed): page 1 says the figures predate it and
+    the rating is marked provisional (暂定) until the filing is read; parsing releases is not in scope. Not changed:
+    the type tests, the discount rates, the growth and margin fades, the rating table. Done when: this plan has each
+    change with its reason; a focused test per change; the cached companies (data/research) rebuilt before and after on
+    one day, each large move explained by rule (688795, NVIDIA and Amazon in the table); pytest passes; the
+    fresh-context stage review; status; committed; stage 24's card.
+24. **Typing and accounting** (F5). (a) The cyclical test before the loss test: a company in a cyclical industry with
+    the margin history and downturn the test reads (value.kind_of) is cyclical though its trailing year is a loss; its
+    normal year needs a positive 10-year average margin (else a loss-maker, as now). (b) The HK "-B" / STAR "-U" label
+    alone no longer makes a company pre-revenue: it is pre-revenue when the cost test also holds (operating costs over
+    twice revenue) or it has no revenue, else typed by its figures, page 1 saying its pipeline isn't valued. (c) Each
+    reporting currency's own risk-free rate (Damodaran's published rates by currency, or the currency's government
+    10-year yield from a free source); the US yield only where neither exists, said as now. (d) Claims senior to common
+    holders in both reports: preferred stock added to the screening's EV and subtracted in the research's equity bridge,
+    at the balance sheet's carrying value; in CN also perpetual bonds booked as equity (其他权益工具's 永续债), which rank
+    ahead of common shareholders (verify each market's line and whether book_common already takes them out). Not
+    changed: the type table's methods, the rates' premium, the score's families. Done when: this plan has each change
+    with its reason; a focused test per change; the cached companies rebuilt before and after; the screening snapshot's
+    EV before and after, the names whose EBIT/EV percentile moves most explained; pytest passes; the fresh-context
+    stage review; status; committed; stage 25's card.
+25. **Growth companies valued over their base-rate paths** (F3). For the fast-grower and loss-maker types: (a) the fair
+    value is the mean of the DCF over comparable companies' actual 10-year revenue paths (fade.revenue_table: the same
+    market, size fifth and recent-growth band; the history's own windows, no fitted distribution), each path's margins
+    and capital as stage 23 sets them, and the group's share that failed (delisted, ST or revenue gone) at a distress
+    value where the data has it (survivors only until stage 27, said); the group's minimum size chosen and written.
+    Sources: Damodaran, "Valuing Young, Start-up and Growth Companies" (2009: simulation, failure probability);
+    Mauboussin and Callahan, "The Base Rate Book" (2016); Rappaport and Mauboussin, "Expectations Investing". (b) For
+    every DCF type, the reverse DCF in business terms: the 10-year revenue and long-run margin today's price needs, and
+    the share of comparable companies that reached that revenue; it solves whenever new capital earns above its cost
+    (stage 23's sales to capital). (c) For these types the bear and bull from the paths' 25th and 75th percentiles
+    (Morningstar's reading of its scenarios) instead of the inputs combined as independent. (d) Page 1 leads with what
+    the price needs and its base rate, then the expected value and its range; the "absolute view" line is reviewed
+    (the review's note: a CN bank at a 5.2% cost of equity). Measured, not changed: the same averaging applied to the
+    cached ordinary companies, to confirm the effect on mature types is small (if not, written why). Not changed: the
+    discount rates, the rating table, the other types. Done when: this plan has the method, its sources and its
+    choices; tests on the path averaging and the reverse curve; the cached fast growers and loss-makers rebuilt before
+    and after, each move explained; 688795's report rendered and read; pytest passes; the fresh-context stage review;
+    status; committed; stage 26's card.
+26. **The margin anchor** (F4). Measure in backtest/persistence.py, per market and side, whether a margin gap to the
+    8-year median that has lasted 3 or more years keeps a larger share 3 years on than a gap that opened in the last
+    year, by stage 14's method (fade.margin_keep, net of the market's drift; survivors only, said), as stage 14 asked
+    of growth. Decide the anchor from the measurement and Fama and French (2000, reversion toward expected
+    profitability): where lasting gaps persist more, a lasting gap's keep or anchor follows the measurement; where
+    not, unchanged, written. Not changed: the young's and cyclicals' margins, growth, rates. Done when: this plan has
+    the measurement table and the decision; a BACKTEST.md section; tests; the cached companies rebuilt before and after
+    (Amazon, Apple, 贵州茅台 and NVIDIA in the table); pytest passes; the fresh-context stage review; status; committed;
+    stage 27's card.
+27. **A survivor-free history** (F6). CN: a free source of delisted A-shares' prices and the figures the history uses
+    (Baostock or another: verify point-in-time dates and coverage of the past top 800's delisted names; ask the user
+    before adding the dependency, backtest/ only, the storage rules). US: the SEC frames' dead filers, with a free
+    price source for delisted names if one exists, else Shumway's (1997) and Shumway and Warther's (1999) delisting
+    returns from the last known price. HK: whether any free source keeps delisted names (else said). Rerun the
+    history; the 预期 lines and BACKTEST.md before and after; each market's 预期 gives the picks against the
+    sector-matched basket beside the picks against the fund. Where the CN revenue of delisted names is available, stage
+    25's failure share uses it. If Sell still beats the fund in CN or HK, or US quality still runs against its
+    published direction, Status records it and the card proposes an evidence review of those markets' published work;
+    no list rule changes here. Not changed: the score, the lists. Done when: this plan has the sources and their
+    limits; the BACKTEST.md section; the 预期 lines updated and the report rendered; pytest passes; the fresh-context
+    stage review; status; committed; stage 28's card.
+28. **Screening value measures and the tracker** (F7). (a) CN and HK EBIT for EBIT/EV from Eastmoney's statements on
+    research/sheet.ebit's definitions (operating profit without investment income, fair-value changes and interest
+    income, plus interest expense), Yahoo's only where the statement lacks it (stage 17c's reason; the storage rules).
+    (b) E/P on the average profit replaced by the 8-year average ROA × today's total assets over market value
+    (Damodaran's scaled average; the same years, minimum and stale rule). (c) track.py: an unresolved name stays at its
+    last price (MSCI's practice), a delisting is settled at what holders received where known, and the unresolved
+    weight is shown. The history rerun on stage 27's frames for the 预期 lines. Not changed: the families' membership,
+    the lists' rules. Done when: this plan has each change with its reason and coverage; a snapshot before and after
+    with the names that change and why; tests; the history rerun; pytest passes; the fresh-context stage review;
+    status; committed. The last stage: its card asks to merge the chain into main instead of a next stage.
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
 - The backtest snapshots and the stage-1 harness (index funds, costs, month-end frames).
