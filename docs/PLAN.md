@@ -890,7 +890,7 @@
   follow-up: research/us.py would pass its companyfacts through sec.complete). Done 2026-11-14: research/us.py passes
   its companyfacts through sec.complete; `research TSM --facts` reads 11 years to 2025-12-31.
 
-- Stage 17b (four fixes to the screening lists; the lists check of 2026-11-15, docs/REVIEW-2026-11-15-lists.md,
+- Stage 17b (four fixes to the screening lists; the lists check of 2026-11-15, docs/reviews/REVIEW-2026-11-15-lists.md,
   findings F1, F2, F4, F6): done 2026-11-22, on stage 17 (ac6f677). lists.py: HK's Hold and Sell field is Buy's band
   (lists.biggest, lists.large: the top 95% of HK-listed value; CN and the US keep the 400 largest); Hold's and Sell's
   buffer counted after the sector cap; the Sell card's risk line in words that say what it weighs, in the riskiest
@@ -1809,7 +1809,7 @@ momentum drive the score (fixed in stage 1 after the stage review).
 
 - **Why three families (stage 16, 2026-11-13).** Stage 3's redo added a fourth, growth (revenue growth, profit growth,
   5-year profit growth over assets), as Seeking Alpha's fifth grade, beside Stockopedia's three. The method review of
-  2026-11-13 (docs/REVIEW-2026-11-13.md, finding S1) found the Buy list was in practice an earnings-rebound list: the
+  2026-11-13 (docs/reviews/REVIEW-2026-11-13.md, finding S1) found the Buy list was in practice an earnings-rebound list: the
   buys' median year-on-year profit growth was CN +63% (the scored market's +9%), US +94% (+18%); growth was the buys'
   highest family and value their lowest. One earnings spike lifted three families: E/P, forward E/P and EBIT/EV in
   value; profit growth; and SUE, the revisions and the price in momentum. Growth and momentum moved together (family
@@ -2076,7 +2076,7 @@ momentum drive the score (fixed in stage 1 after the stage review).
     Yum China, Five Below, 中国铁塔, 德翔海运) or a sector losing a place to free float (广发证券, 腾讯控股, both to
     the bench). Over a whole week the overlap moves less (CN Buy 15 → 16, HK 17 → 18, US Buy 17 → 16 and HK Hold 6 →
     5 by which names the buffer held): the buffer stops a name leaving on noise, not one that keeps falling.
-  - **Counted after the sector cap (stage 17b; the lists check of 2026-11-15, docs/REVIEW-2026-11-15-lists.md, F2).**
+  - **Counted after the sector cap (stage 17b; the lists check of 2026-11-15, docs/reviews/REVIEW-2026-11-15-lists.md, F2).**
     Until 17b, Hold and Sell applied the buffer to the raw order and the cap of 2 a sector after it. Where the cap
     binds, the list's last places lie past raw rank 12 (on 2026-11-15 the 10 Sells sat at raw ranks 1-15 in CN and 1-17
     in HK), so a current name near the cut was outside the buffer and a new one at raw 13-15 entered freely: the
@@ -3049,7 +3049,7 @@ were averaged with fixed weights (DCF 50%, multiples 50% for the ordinary; 60/40
   differs.
 
 #### Rating (code)
-Since stage 15 (docs/REVIEW-2026-11-13.md, R1 and R3, and the skills' section): the return today's price implies
+Since stage 15 (docs/reviews/REVIEW-2026-11-13.md, R1 and R3, and the skills' section): the return today's price implies
 against the return the market's price implies (since stage 18 its group's: the members valued in its form, in Hong
 Kong of its home), both under this model's own cash-flow rules, with one main method per
 type, the skills' checks acting, and discrete risks as a scenario (research/market.py, judge.py, rating.py).
@@ -3646,20 +3646,20 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
     `track`'s section; README. Done when: ~40 test messages route correctly with DeepSeek mocked and once live
     (Chinese, English, Japanese, codes, partial names, typos, A+H, vague, unsupported, two names); the stage review;
     then, with your OK (rule 9), the listener is restarted and one test round-trip goes out; status; committed.
-13. **Research inputs on one basis** (docs/REVIEW-2026-11-13.md, finding R5; adopted 2026-11-13; done 2026-11-14,
+13. **Research inputs on one basis** (docs/reviews/REVIEW-2026-11-13.md, finding R5; adopted 2026-11-13; done 2026-11-14,
     Status). The consensus years' margins on the earnings basis the consensus is forecast on; a 20-F filer's trailing
     twelve months from the second source's interim figures; operating profit without the income of non-operating
     assets, the assets at book in the equity bridge, in every market where the tables carry the lines. Done when: no
     consensus-year margin above the company's 10-year best without a stated reason; TSMC's research and screening P/E
     within 5%; the 25 cached companies rebuilt with a before/after table; a test per parser or formula change.
-14. **Research long-run assumptions** (docs/REVIEW-2026-11-13.md, findings R2 and R4; adopted 2026-11-14; done
+14. **Research long-run assumptions** (docs/reviews/REVIEW-2026-11-13.md, findings R2 and R4; adopted 2026-11-14; done
     2026-11-14, Status). A committed script measuring margin persistence (above and below the median apart, windows
     stated, survivors said), growth persistence year by year and the fade of excess returns in all three markets; the
     margin path, the growth past the consensus and a graded moat that sets how long excess returns last, from that
     and the published evidence; the 5-point r - g rule replaced by the skill's sensitivity test. Done when: each rule
     has its evidence in PLAN.md; the 25 cached companies rebuilt with a before/after table, each large move explained
     by rule; a test per formula change.
-15. **Research rating** (docs/REVIEW-2026-11-13.md, findings R1 and R3 and the skills' section; adopted 2026-11-14; done
+15. **Research rating** (docs/reviews/REVIEW-2026-11-13.md, findings R1 and R3 and the skills' section; adopted 2026-11-14; done
     2026-11-15, Status). The rating on the return the price implies against its market's, each market's implied return
     solved with the model's own cash-flow rules on its cap-weighted members, replacing the CN and HK bank floor with
     one rule; one main method per type with the others as cross-checks and a stated unresolved state when they rate
@@ -3669,7 +3669,7 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
     cap-weighted market comes out at its price by construction; the 25 cached companies rebuilt with a before/after
     table and the share of Buy / Hold / Sell by currency; the report's page 1 and the street comparison follow; a test
     per formula change.
-16. **Screening score** (the method review of 2026-11-13, docs/REVIEW-2026-11-13.md, findings S1 and S5; adopted
+16. **Screening score** (the method review of 2026-11-13, docs/reviews/REVIEW-2026-11-13.md, findings S1 and S5; adopted
     2026-11-13; its stages 13-15 are the research report's, 17 the screening's lists and words). Three families instead
     of four: profit and revenue growth into momentum, the 5-year profit growth over assets into quality; the E/P on the
     5-8-year average profit in value; a missing component counted at the middle of its family; no long-run figures from
@@ -3688,7 +3688,7 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
     after; Sell before and after on the newest snapshot with the names that change and why; Sell's history rerun
     (BACKTEST.md section 27) with its survivor caveat; tests for the buffer and the new Sell; pytest passes; a full
     `run`; the fresh-context stage review; status; committed.
-17b. **Screening lists, four fixes** (the lists check of 2026-11-15, docs/REVIEW-2026-11-15-lists.md, F1, F2, F4, F6).
+17b. **Screening lists, four fixes** (the lists check of 2026-11-15, docs/reviews/REVIEW-2026-11-15-lists.md, F1, F2, F4, F6).
     HK's Hold and Sell from Buy's band (the top 95% of HK-listed value) instead of a count that cut nothing there; the
     Hold and Sell buffer counted after the sector cap; the failure logit and debt ÷ assets not read for the financial
     sector (Fama and French 1992, Ohlson 1980; Campbell, Hilscher and Szilagyi's treatment verified first); the Sell

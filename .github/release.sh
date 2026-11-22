@@ -19,6 +19,7 @@ is_app() { grep -Eq '^(stockreport/|bridge/|launchd/|config\.toml$|pyproject\.to
 rank() { case $1 in major) echo 3;; minor) echo 2;; patch) echo 1;; *) echo 0;; esac; }
 
 level=none
+headline=""   # the first commit at the release's level names the release
 notes=""
 for c in $commits; do
   subject=$(git log -1 --format=%s "$c")
@@ -30,7 +31,7 @@ for c in $commits; do
   else
     l=none
   fi
-  [ "$(rank "$l")" -gt "$(rank "$level")" ] && level=$l
+  if [ "$(rank "$l")" -gt "$(rank "$level")" ]; then level=$l; headline=$subject; fi
   [ "$l" != none ] && notes+="- $subject (${c:0:7})"$'\n'
 done
 
@@ -46,7 +47,7 @@ esac
 
 body="Changes since $last ($level release):"$'\n\n'"$notes"
 if [ "${1:-}" = --dry-run ]; then
-  echo "Would release $next"; echo "$body"; exit 0
+  echo "Would release $next: $headline"; echo "$body"; exit 0
 fi
-gh release create "$next" --target "$(git rev-parse HEAD)" --title "$next" --notes "$body"
+gh release create "$next" --target "$(git rev-parse HEAD)" --title "$next: $headline" --notes "$body"
 echo "Released $next"
