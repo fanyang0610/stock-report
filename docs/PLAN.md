@@ -3739,8 +3739,9 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
 
 **Stages 23-28** (the method review of 2026-11-23, docs/reviews/REVIEW-2026-11-23.md, findings F1-F7; adopted
 2026-11-23). In order, one session each. Each is started from the card the previous stage leaves (the first from the
-review's session), its worktree cut from the previous stage's branch (`source_branch` on the card), so each builds on
-the last; merging into main and pushing stay the user's call (rule 9). The card names the model and effort below (my
+review's session). A card's worktree is cut from main, so each brief names the previous stage's branch and the stage
+first fast-forwards its own branch to it (`git merge --ff-only <branch>`, unless main already has it), so each builds
+on the last; merging into main and pushing stay the user's call (rule 9). The card names the model and effort below (my
 judgement: Opus for a method's design and for valuation numbers, Sonnet for specified fixes, data plumbing and reruns;
 every stage review on Sonnet, rule 8); the user may change them on the card. Each stage ends with its status here, a
 commit, and the next stage's card carrying this table's model and effort. Each method change follows a bug or the
