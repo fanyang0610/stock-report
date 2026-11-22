@@ -97,13 +97,14 @@
 {% for m in r.markets %}
 <section class="market">
   <h2>{{ m.name }}{% if r.test %} <span class="tag test">测试数据</span>{% endif %}</h2>
-  <div class="sub">数据日期 {{ m.data_date }} · 价格单位 {{ m.unit }}</div>
+  <div class="sub">数据日期 {{ m.data_date }}{% if m.rated %} · 评级日 {{ m.rated }}（卡片上的评级、评分和理由按评级日，价格是最新的），下月第一份报告重新评级{% endif %} · 价格单位 {{ m.unit }}</div>
   {% if m.stale %}<p class="warn">{{ m.stale }}</p>{% endif %}
   <div class="expect"><b>买入组合的预期：</b>{{ m.expect.line }}</div>
   {% if m.live %}<p class="small">{{ m.live }}</p>{% endif %}
 
   <h3>买入<span class="count">{{ m.buys | length }} 只，预计跑赢大盘：从{{ m.field }}里选，每只 {{ m.share or "等额" }}，持有 12 个月</span></h3>
   {% if m.changes %}<p class="small muted changes">与 {{ m.changes.since }} 的名单相比：{% if m.changes.new %}新进 {{ m.changes.new | length }} 只（标「新」）{% else %}没有新进{% endif %}{% if m.changes.gone %}；移出 {{ m.changes.gone | join("、") }}{% endif %}。</p>{% endif %}
+  {% if m.cluster %}<p class="small">{{ m.cluster }}</p>{% endif %}
   {% if m.lots %}<p class="small muted">{{ m.lots }}</p>{% endif %}
   {% for p in m.buys %}
   <div class="card buy">

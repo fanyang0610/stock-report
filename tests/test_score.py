@@ -435,3 +435,49 @@ def test_words_follow_the_figure_not_the_rank():
     s = score(universe(mom_12_1=[-0.1] + [-0.2] * 9), "hk")  # C0's best component is momentum, still a fall
     assert s.loc["C0", "why"].startswith("近一年股价走弱（-10%）")
     assert s.loc["C0", "weak"].startswith("市净率高（PB 10.00）")  # its worst ratios, worded as such
+
+
+def ratings_of(out: pd.DataFrame) -> dict[str, pd.Index]:
+    return {k: pd.Index(out.loc[out["list"] == k, "code"]) for k in ("buy", "hold", "sell")}
+
+
+def test_between_reviews_the_names_stand_and_only_prices_and_removals_change():
+    """The review calendar (stage 18): the month's first report rates; later builds keep its names at today's prices,
+    a Buy that leaves the data is replaced from the review's bench (its sector first), a Sell isn't replaced."""
+    review = lists.build(rated().assign(lot=100, period="2026-06-30"), "cn", DAY)
+    assert (review["rated"] == DAY.isoformat()).all()
+    cur = ratings_of(review)
+    buy, sell = cur["buy"][0], cur["sell"][0]
+    later = rated().assign(lot=100, period="2026-06-30", price=12.0)
+    later["score"] = later["score"].to_numpy()[::-1]  # the score turned upside down: at a review every list would change
+    later = later.drop([buy, sell])
+    out = lists.build(later, "cn", date(2026, 10, 28), cur, review)
+    now = ratings_of(out)
+    bench = review[review["list"] == "next"].set_index("code")["sector"]
+    sub = bench[bench == review.set_index("code").at[buy, "sector"]].index[0]
+    assert set(now["buy"]) == set(cur["buy"]) - {buy} | {sub} and set(now["hold"]) == set(cur["hold"])
+    assert set(now["sell"]) == set(cur["sell"]) - {sell} and len(now["sell"]) == 9
+    assert (out.loc[out["list"] != "veto", "price"] == 12.0).all() and (out["rated"] == DAY.isoformat()).all()
+    assert (out["recheck"] == "2027-10-24").all() and (out.loc[out["list"] == "buy", "weight"] == 1 / 20).all()
+
+
+def test_the_review_is_the_months_first_report(tmp_path, monkeypatch):
+    pd.DataFrame({"date": ["2026-10-30", "2026-11-02"], "market": "cn", "bucket": "buy",
+                  "ticker": "600519"}).to_csv(tmp_path / "picks.csv", index=False)
+    (tmp_path / "2026-11-02").mkdir()
+    rows = pd.DataFrame({"list": ["buy"], "code": ["600519"], "rated": ["2026-11-02"]})
+    rows.to_csv(tmp_path / "2026-11-02" / "cn_lists.csv", index=False)
+    monkeypatch.setattr(lists, "PICKS", tmp_path / "picks.csv")
+    monkeypatch.setattr(lists, "REPORTS", tmp_path)
+    assert lists.standing("cn", date(2026, 11, 9))["code"].tolist() == ["600519"]  # November's report rated: it stands
+    assert lists.standing("cn", date(2026, 11, 2)) is None  # the month's first report is the review
+    assert lists.standing("cn", date(2026, 12, 1)) is None and lists.standing("us", date(2026, 11, 9)) is None
+    rows.drop(columns="rated").to_csv(tmp_path / "2026-11-02" / "cn_lists.csv", index=False)
+    assert lists.standing("cn", date(2026, 11, 9)) is None  # lists from before the calendar: reviewed, not guessed
+
+
+def test_a_sell_cards_reasons_leave_out_the_fall_in_price(monkeypatch):
+    monkeypatch.setitem(CONFIG["lists"], "largest", 400)
+    s = score(universe(20, ret_6m=-0.5, np_ttm=[-1.0] * 2 + [1.0] * 18), "hk").assign(distress=0.0, mcap_rank=range(1, 21))
+    sell = lists.sells(s, 4, market="cn")
+    assert len(sell) and not sell["risk"].str.contains("下跌|走弱").any() and sell["risk"].str.contains("亏损").any()

@@ -8,6 +8,7 @@ import json
 import logging
 import re
 import time
+from collections import Counter
 from datetime import date
 from pathlib import Path
 
@@ -40,8 +41,8 @@ EVIDENCE = {
 FIELD = {"cn": "A 股市值前 800 只", "us": "美股市值前 800 只", "hk": "流动性达标的港股"}  # the buys' field: the scored market
 GUIDE = [  # page 1: how to read it, in five lines
     "<b>三种评级</b>，像券商分析师给股票评级一样只看股票本身，不看任何人的持仓：<b>买入</b> = 预计跑赢大盘；<b>持有</b> = 评分居中，"
-    "不偏涨也不偏跌，股价较稳；<b>卖出</b> = 预计跑输大盘（大盘涨时它也可能涨，只是涨得少）。评级看 12 个月，名单每天按最新数据更新；"
-    "已有评级的股票要明显掉出范围才换，不会因为一点小涨跌就换。",
+    "不偏涨也不偏跌，股价较稳；<b>卖出</b> = 预计跑输大盘（大盘涨时它也可能涨，只是涨得少）。评级看 12 个月，每月第一份报告重新评级一次："
+    "其余日子名单不变，只更新价格，审核发现硬风险的买入和持有由候补替换；重新评级时，已有评级的股票排名小幅下滑也保留。",
     "<b>买入 20 只</b>从整个市场按评分选，各行业的只数按它在市场里的分量分配，每只买相同金额、持有 12 个月；<b>持有 10 只</b>是大公司里"
     "评分居中、过去一年每日涨跌最小的（10 只合起来历史上比基金波动小，大盘涨得多时落后；单只仍可能大涨大跌）；<b>卖出 10 只</b>"
     "是大公司里又贵、质量又差，或财务风险高的（每个行业最多 2 只）；跌得多不算卖出理由，动量 A 的不评卖出。",
@@ -76,8 +77,10 @@ METHOD = [  # the back pages
      "10 只，每个行业最多 2 只：又贵又差、可能陷入困境的公司长期跑输（Novy-Marx 2013；Asness、Frazzini、Pedersen 的 quality-minus-"
      "junk；Campbell、Hilscher、Szilagyi 2008）。动量弱不算卖出理由：刚大跌的股票在大盘反弹时涨得最多（Daniel、Moskowitz 2016）；"
      "动量 A 的不评卖出：美股过去一年涨得最多的五分之一里，按市净率贵的和便宜的回报差不多（Asness 1997），股价涨势最强的一组"
-     "长期平均跑赢大盘，只在大跌后的反弹里落后（Daniel、Moskowitz 2016；Stambaugh、Yu、Yuan 2012）。复查日都是 12 个月后，即评级的期限；名单每天更新，评级可能提前改变，但已有评级的股票有缓冲：买入在本行业排到名额的 "
-     "1.2 倍以内、持有和卖出在每个行业最多 2 只排好后的 12 名以内（持有的评分区间也放宽到 36%-64%）都保留，和 MSCI、中证指数的 20% 缓冲规则一样。"),
+     "长期平均跑赢大盘，只在大跌后的反弹里落后（Daniel、Moskowitz 2016；Stambaugh、Yu、Yuan 2012）。复查日都是评级后 12 个月，即评级的期限。评级每月第一份报告重新评定一次，像 MSCI、中证指数定期调整成分股："
+     "两次评级之间名单不变，只更新价格；退市、停牌缺数据或被你否决的买入和持有由评级时排好的候补替换（同行业优先，和中证指数的备选名单"
+     "一样），审核剔除的也一样；卖出名单不补。重新评级时已有评级的股票有缓冲：买入在本行业排到名额的 1.2 倍以内、持有和卖出在每个行业"
+     "最多 2 只排好后的 12 名以内（持有的评分区间也放宽到 36%-64%）都保留，和 MSCI、中证指数的 20% 缓冲规则一样。"),
     ("审核（你请求报告时进行，唯一用 AI 的一步）", "DeepSeek 读每只股票近 90 天的非例行公告标题、程序从最新定期报告里截取的相关段落"
      "（审计意见、持续经营、立案调查、公司被收购）和近 30 天的新闻标题，每条结论都引用原文，由程序核对引文确实出自该来源。硬风险（监管"
      "立案调查或欺诈认定、非标审计意见或审计师辞任、持续经营疑虑或债务违约、退市/ST/停牌、已签署尚未完成的被收购或私有化（现金或换股）、"
@@ -143,6 +146,28 @@ def expect(market: str) -> dict:
     if backwards:
         detail.append(f"这段历史里{'、'.join(backwards)}与已发表研究的方向相反；已发表研究的样本长得多，方法不变。")
     return {"line": line, "short": short, "rated": rated, "hold": hold, "sell": sell, "detail": detail + [EVIDENCE[market]]}
+
+
+SECTOR_ZH = {"Technology": "科技", "Consumer Discretionary": "可选消费", "Consumer Staples": "必需消费", "Industrials": "工业",
+             "Finance": "金融", "Health Care": "医疗", "Utilities": "公用事业", "Energy": "能源", "Basic Materials": "原材料",
+             "Real Estate": "房地产", "Telecommunications": "电信", "Miscellaneous": "其他"}  # Nasdaq's US sectors
+
+
+def cluster(buys: list[dict], market: str) -> str:
+    """How concentrated the buys are (the lists check of 2026-11-15, F8), computed: the sector with the most names and
+    its share of the market's free-float value (which sets its places), and the largest group of one industry when it
+    has 3 or more (US industries are named by their companies: Nasdaq's English labels)."""
+    sectors = Counter(b.get("sector") for b in buys if b.get("sector"))
+    if len(buys) < 4 or not sectors:
+        return ""
+    top, k = sectors.most_common(1)[0]
+    share = next((b["sector_share"] for b in buys if b.get("sector") == top and b.get("sector_share") is not None), None)
+    text = f"最集中的行业：{SECTOR_ZH.get(top, top)} {k} 只" + (f"（占市场自由流通市值的 {share:.0%}，名额按这个分配）" if share else "")
+    industries = Counter(b.get("industry") for b in buys if b.get("industry"))
+    if industries and (group := industries.most_common(1)[0])[1] >= 3:
+        names_ = "、".join(b["short"] for b in buys if b.get("industry") == group[0])
+        text += f"；同一细分行业 {group[1]} 只（{'' if market == 'us' else group[0] + '：'}{names_}），它们常一起涨跌"
+    return text + "。"
 
 
 def lot_money(buys: list[dict], unit: str) -> str:
@@ -300,6 +325,8 @@ def section(market: str, rows: pd.DataFrame, day: str, today: date, failed: list
             "expect": expect(market), "live": live(market), "field": FIELD[market], "big": lists.big_words(market),
             "data_date": max((c["price_date"] for c in cards["buy"] if c["price_date"]), default=day),
             "recheck": cards["buy"][0]["recheck"] if cards["buy"] else "",
+            "rated": next((c["rated"] for k in ("buy", "hold", "sell") for c in cards[k] if c.get("rated")), ""),
+            "cluster": cluster(cards["buy"], market),
             "share": f"{cards['buy'][0]['weight']:.0%}" if cards["buy"] and cards["buy"][0].get("weight") else "",
             "stale": (f"今日未能更新，沿用 {day} 的名单" if day != today.isoformat() else
                       f"今日部分数据获取失败（{'、'.join(failed)}），沿用上次的缓存数据" if failed else ""),

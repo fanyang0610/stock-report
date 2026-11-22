@@ -3,9 +3,11 @@ without anyone's portfolio: 买入 (Buy, expected to beat the market) the 20-nam
 (each sector its places by its share of the market's free-float value, filled by its best scores, equal amounts;
 Quantitative Value's screen first); 持有 (Hold, expected in line with it) the 10 steadiest prices among the largest
 names at the middle of the score; 卖出 (Sell, expected to lag it) the 10 most expensive, lowest-quality and most
-distressed among the largest, outside momentum's top fifth. A name rated in the newest earlier report keeps its rating until it falls well past
-the cut (buffered: MSCI's and CSI's 20% buffer)."""
+distressed among the largest, outside momentum's top fifth. The ratings change at a review, the month's first report (stage 18): a name rated in the
+newest earlier report keeps its rating there until it falls well past the cut (buffered: MSCI's and CSI's 20%
+buffer); between reviews the names stand (standing(), kept()) and only prices and removals change."""
 
+import logging
 import math
 from datetime import date
 
@@ -13,30 +15,55 @@ import numpy as np
 import pandas as pd
 
 from stockreport import verdicts
-from stockreport.config import CONFIG, DATA
+from stockreport.config import CONFIG, DATA, REPORTS
 from stockreport.score import DIGITS, card_lines, grade, ranked
 from stockreport.signals import FAMILIES, MIDDLE
 
+log = logging.getLogger(__name__)
 LOT = {"cn": 100, "us": 1}  # HK: each stock's board lot (HKEX)
 PARTNERSHIP = r"(?:\bL\.?P\.?|Limited Partnership)$"  # US master limited partnerships (K-1 units)
 PICKS = DATA / "picks.csv"  # every report's ratings, each day's last build (written by track.log_picks)
 NONE = {"buy": pd.Index([]), "hold": pd.Index([]), "sell": pd.Index([])}
 COLUMNS = ["list", "rank", "code", "name", "sector", "weight", "price", "price_date", "lot", "lot_cost", "score",
            "score_rank", "f_value", "f_quality", "f_momentum", "g_value", "g_quality", "g_momentum", "vol_1y", "why", "weak", "risk", "status", "reason", "recheck", "period", "np_ytd", "np_ttm",
-           "report_currency"]
+           "report_currency", "industry", "sector_share", "rated"]
+RATED = ["buy", "next", "hold", "hold_next", "sell"]  # the rows a review's build rates or benches
+
+
+def reports(market: str, today: date) -> pd.DataFrame:
+    """The market's ratings in data/picks.csv before `today` (date, bucket, ticker): buy, hold, sell."""
+    if not PICKS.exists():
+        return pd.DataFrame(columns=["date", "bucket", "ticker"])
+    log_ = pd.read_csv(PICKS, dtype={"ticker": str, "date": str}, usecols=["date", "market", "bucket", "ticker"])
+    return log_[(log_["market"] == market) & (log_["date"] < today.isoformat()) & log_["bucket"].isin(list(NONE))]
 
 
 def rated(market: str, today: date) -> dict[str, pd.Index]:
     """The ratings of the market's newest report before `today` (data/picks.csv: buy, hold, sell; a buy or Hold the
-    review removed isn't rated, its replacement is): the names the buffer keeps. None yet: no name is kept."""
-    if not PICKS.exists():
+    review removed isn't rated, its replacement is): the names the buffer keeps at a review, and the names that stand
+    between reviews. None yet: no name is kept."""
+    log_ = reports(market, today)
+    if log_.empty:
         return NONE
-    log = pd.read_csv(PICKS, dtype={"ticker": str, "date": str}, usecols=["date", "market", "bucket", "ticker"])
-    log = log[(log["market"] == market) & (log["date"] < today.isoformat()) & log["bucket"].isin(list(NONE))]
-    if log.empty:
-        return NONE
-    last = log[log["date"] == log["date"].max()]
+    last = log_[log_["date"] == log_["date"].max()]
     return {k: pd.Index(last.loc[last["bucket"] == k, "ticker"].unique()) for k in NONE}
+
+
+def standing(market: str, today: date) -> pd.DataFrame | None:
+    """Between reviews, the rows the ratings stand on: the lists CSV of the market's newest earlier report when that
+    report is of today's month (the review's build, carried day to day, with its benches and its `rated` day). None:
+    today's build is a review, the month's first report (no report yet this month; or that report's lists predate
+    the calendar or are gone, so the ratings are reviewed rather than guessed)."""
+    log_ = reports(market, today)
+    if log_.empty or (last := log_["date"].max())[:7] != today.isoformat()[:7]:
+        return None
+    path = REPORTS / last / f"{market}_lists.csv"
+    rows = pd.read_csv(path, dtype={"code": str, "price_date": str, "recheck": str, "period": str, "rated": str},
+                       encoding="utf-8-sig") if path.exists() else None
+    if rows is None or "rated" not in rows or rows["rated"].isna().all():
+        log.warning("%s: no review rows in %s; today's build is a review", market.upper(), path)
+        return None
+    return rows
 
 
 def buffered(order: pd.Index, current: pd.Index, n: int) -> pd.Index:
@@ -191,8 +218,9 @@ def sells(df: pd.DataFrame, n: int, out: pd.Index = NONE["sell"], current: pd.In
     1997; a protection like the buys' screen, so not buffered), the lowest of junk() (ties: the smaller free float,
     then the code), at most `per_sector` a sector, the `current` ones kept within the buffer on that capped order
     (buffered: the first 8, then current names within the first 12). With the score's card lines, `weak` names the
-    two weakest value and quality components and `reason` the failure logit's place when in the riskiest `risky`
-    share, in words that say what it weighs."""
+    two weakest value and quality components, `risk` the facts and the weakest of those two families (a fall in price
+    isn't a reason to sell, as page 1 says: stage 18) and `reason` the failure logit's place when in the riskiest
+    `risky` share, in words that say what it weighs."""
     cfg, key = CONFIG["lists"], junk(df)
     field = df[biggest(df, market, current) & ~df.index.isin(out) & (grade(df["f_momentum"]) != "A")]
     value = field["float_value" if "float_value" in field else "mcap"]
@@ -203,35 +231,77 @@ def sells(df: pd.DataFrame, n: int, out: pd.Index = NONE["sell"], current: pd.In
         return sell
     used = sorted({c for f in ("value", "quality") for c in FAMILIES[f][market]})
     risk = df["distress"].rank(pct=True, ascending=False)
-    lines = {code: card_lines(row, used, market)[1] for code, row in sell.iterrows()}
+    lines = {code: card_lines(row.drop("ret_6m", errors="ignore"), used, market) for code, row in sell.iterrows()}
     reason = {code: f"综合风险（亏损、负债、股价波动和下跌）在全市场非金融股中排前 {math.ceil(risk[code] * 100)}%"
               if risk.get(code, 1) <= cfg["risky"] else "" for code in sell.index}  # the grades are on the card
-    return sell.assign(weak=pd.Series(lines), reason=pd.Series(reason))
+    return sell.assign(weak=pd.Series({c: x[1] for c, x in lines.items()}),
+                       risk=pd.Series({c: x[2] for c, x in lines.items()}), reason=pd.Series(reason))
 
 
-def build(df: pd.DataFrame, market: str, today: date, current: dict[str, pd.Index] = NONE) -> pd.DataFrame:
+def kept(df: pd.DataFrame, current: dict[str, pd.Index], prev: pd.DataFrame, vetoes: dict) -> pd.DataFrame:
+    """Between reviews (PLAN.md, "Lists": the review calendar): the names the newest earlier report rates (`current`,
+    after the results review's removals) on their rows of the review (`prev`: the card, its grades and lines, the
+    re-check date), each with today's price. A Buy or Hold name that is no longer scored (a delisting, a suspension,
+    missing data: AGENTS.md rule 5) or that you vetoed since is replaced by the next of its bench fixed at the review,
+    of its sector first (CSI's reserve list); its bench's rest stays the bench for the results review. A Sell name
+    isn't replaced (it has no bench; MSCI's indexes add no name between reviews). Nothing is re-screened."""
+    prev = prev[prev["list"].isin(RATED)].drop_duplicates("code").set_index("code")
+    live = prev.index.isin(df.index) & ~prev.index.isin(list(vetoes))
+    rated_now = set().union(*current.values())
+    parts = []
+    for kind, reserve in (("buy", "next"), ("hold", "hold_next")):
+        names = prev[prev.index.isin(current[kind])]
+        bench = prev[(prev["list"] == reserve) & live & ~prev.index.isin(rated_now)].sort_values("rank")
+        keep = [names.loc[[c]] for c in names.index if live[prev.index.get_loc(c)]]
+        for c in names.index[~names.index.isin(df.index) | names.index.isin(list(vetoes))]:
+            same = bench[bench["sector"] == names.at[c, "sector"]]
+            if len(pick := same if len(same) else bench):
+                keep.append(pick.iloc[:1])
+                bench = bench.drop(pick.index[0])
+        keep = pd.concat(keep) if keep else prev.iloc[:0]
+        keep = keep.sort_values("score", ascending=False, kind="stable") if kind == "buy" else \
+            keep.iloc[np.lexsort([keep.index.astype(str), keep["vol_1y"].to_numpy()])]
+        parts += [keep.assign(list=kind, rank=range(1, len(keep) + 1)),
+                  bench.assign(list=reserve, rank=range(len(keep) + 1, len(keep) + len(bench) + 1))]
+    sell = prev[prev.index.isin(current["sell"]) & prev.index.isin(df.index)].sort_values("rank")
+    out = pd.concat(parts + [sell.assign(list="sell", rank=range(1, len(sell) + 1))]).rename_axis("code")
+    now = df.reindex(out.index)
+    out["price"], out["price_date"] = now["price"], now["price_date"] if "price_date" in now else out["price_date"]
+    out["lot_cost"] = out["price"] * out["lot"]
+    out.loc[out["list"] == "buy", "weight"] = 1 / max((out["list"] == "buy").sum(), 1)
+    return out.reset_index()
+
+
+def build(df: pd.DataFrame, market: str, today: date, current: dict[str, pd.Index] = NONE,
+          prev: pd.DataFrame | None = None) -> pd.DataFrame:
     """The day's three ratings, one row each (COLUMNS): the buys, their bench (it replaces buys the results review
     removes), the Sell names, the Hold names and theirs, and your vetoes (kept out of Buy and Hold); `current`: the
-    ratings of the newest earlier report (rated()), which the buffer keeps. A name has one rating: Sell leaves out the
-    buys and their bench, Hold also the Sell names. Each rating's re-check date is 12 months on, its horizon."""
+    ratings of the newest earlier report (rated()). At a review (`prev` None, standing()) they are rebuilt and the
+    buffer keeps `current`'s names; between reviews `prev`, the review's rows, stands (kept()). A name has one
+    rating: Sell leaves out the buys and their bench, Hold also the Sell names. Each rating's re-check date is 12
+    months after its review (`rated`), its horizon."""
     cfg = CONFIG["lists"]
     vetoes = {c: v for c, v in verdicts.active(market, today, df["period"].astype(str)).items() if v["verdict"] == "veto"}
     df = df.assign(lot=df["lot"] if "lot" in df else LOT[market])
+    veto = pd.DataFrame([{"list": "veto", "code": c, "name": df["name"].get(c, ""),
+                          "reason": f"你的否决（至 {v['until']}）：{v['reason']}"} for c, v in vetoes.items()])
+    if prev is not None:
+        return pd.concat([x for x in (kept(df, current, prev, vetoes), veto) if len(x)]).reindex(columns=COLUMNS)
     df["lot_cost"] = df["price"] * df["lot"]
+    value = df["float_value" if "float_value" in df else "mcap"]
+    df["sector_share"] = df["sector"].map(value.groupby(df["sector"]).sum() / value.sum())
     order = ranked(df)  # ties: score.ranked
     buys, bench = positions(order[~order.index.isin(list(vetoes))], cfg["buys"], market, current["buy"])
     bench = ranked(bench)  # each replaces a removed buy of its sector (review.apply)
     taken = buys.index.union(bench.index)
     sell = sells(order, cfg["sells"], taken, current["sell"], market)
     held = holds(order, cfg["holds"], taken.union(sell.index).union(list(vetoes)), current["hold"], market)
-    k, due = cfg["holds"], anniversary(today).isoformat()
+    k = cfg["holds"]
     parts = [buys.assign(list="buy", rank=range(1, len(buys) + 1)),
              bench.assign(list="next", rank=range(len(buys) + 1, len(buys) + len(bench) + 1)),
              held.iloc[:k].assign(list="hold", rank=range(1, min(k, len(held)) + 1)),
              held.iloc[k:].assign(list="hold_next", rank=range(k + 1, len(held) + 1)),
-             sell.assign(list="sell", rank=range(1, len(sell) + 1)),
-             pd.DataFrame([{"list": "veto", "code": c, "name": df["name"].get(c, ""),
-                            "reason": f"你的否决（至 {v['until']}）：{v['reason']}"} for c, v in vetoes.items()])]
+             sell.assign(list="sell", rank=range(1, len(sell) + 1)), veto]
     out = pd.concat([p.rename_axis("code").reset_index() if "code" not in p else p for p in parts if len(p)])
-    out.loc[out["list"] != "veto", "recheck"] = due
+    out.loc[out["list"] != "veto", ["recheck", "rated"]] = [anniversary(today).isoformat(), today.isoformat()]
     return out.reindex(columns=COLUMNS)

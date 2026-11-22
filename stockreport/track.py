@@ -53,10 +53,14 @@ def load_sent() -> pd.DataFrame:
 def log_sent(day: date, buys: pd.DataFrame) -> None:
     """Append the buys of a report sent to you on `day` (market, ticker, name, listed: as report.build returned them
     for that very text, not a file a later build may have rewritten): the record of what was sent, never rewritten
-    (data/picks.csv keeps only each day's last build, sent or not)."""
+    (data/picks.csv keeps only each day's last build, sent or not). A later reply the same day replaces that day's
+    rows of its markets: the record is the last text sent that day, so the next report's changes line counts against
+    one list (two different texts on 2026-11-08 left 21 US names and read 新进 7 只，移出 8 只)."""
     new = buys.assign(date=day.isoformat()).reindex(columns=SENT)
     new["listed"] = new["listed"].fillna(new["date"])
-    pd.concat([load_sent(), new]).drop_duplicates(["date", "market", "ticker"]).to_csv(SENT_LOG, index=False)
+    old = load_sent()
+    old = old[(old["date"] != day.isoformat()) | ~old["market"].isin(new["market"])]
+    pd.concat([old, new]).drop_duplicates(["date", "market", "ticker"]).to_csv(SENT_LOG, index=False)
 
 
 def log_picks(today: date, final: dict[str, pd.DataFrame]) -> None:

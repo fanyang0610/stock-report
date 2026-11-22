@@ -90,7 +90,9 @@ def test_report_dry_run(tmp_path, monkeypatch):
     assert pdf.stat().st_size > 10_000 and report.newest() == ("2026-10-24", pdf, summary)
     assert sent["ticker"].tolist() == buys["code"].tolist() * 3  # what this text names, in its order
     track.log_sent(DAY, sent)
-    track.log_sent(DAY, sent)  # a second reply the same day adds nothing new
+    track.log_sent(DAY, sent[sent["market"] == "us"].iloc[1:])  # a second reply the same day with another US list: the last one counts
+    assert len(track.load_sent()) == 59 and track.load_sent().groupby("market").size().to_dict() == {"cn": 20, "hk": 20, "us": 19}
+    track.log_sent(DAY, sent)
     assert len(track.load_sent()) == 60 and set(track.load_sent()["market"]) == {"cn", "us", "hk"}
     assert set(track.load_sent().loc[track.load_sent()["market"] == "hk", "listed"]) == {"2026-10-23"}
     logged = track.load()
@@ -148,3 +150,12 @@ def test_live_line_leaves_out_missing_figures():
     assert "持有比" not in line and "、。" not in line and "比对照组合多赚 2.0%" in line and "停牌或退市的 1 只" in line
     assert report.live_line("hk", cohorts, t.assign(buy=float("nan"), sell=float("nan")), 0) == ""
     assert "第一个月末之后" in report.live_line("hk", cohorts, pd.DataFrame(), 0)
+
+
+def test_the_buys_largest_cluster_is_one_computed_sentence():
+    buys = [{"sector": "Technology", "sector_share": 0.41, "industry": "Semiconductors", "short": f"T{k}"} for k in range(3)]
+    buys += [{"sector": "Technology", "sector_share": 0.41, "industry": "Software", "short": "G"}]
+    buys += [{"sector": "Finance", "sector_share": 0.1, "industry": "Banks", "short": f"F{k}"} for k in range(2)]
+    assert report.cluster(buys, "us") == ("最集中的行业：科技 4 只（占市场自由流通市值的 41%，名额按这个分配）；"
+                                          "同一细分行业 3 只（T0、T1、T2），它们常一起涨跌。")
+    assert report.cluster(buys[3:] + [{"sector": "Energy", "short": "E"}], "cn") == "最集中的行业：金融 2 只（占市场自由流通市值的 10%，名额按这个分配）。"

@@ -1714,6 +1714,30 @@
     observation that Cardinal Health (quality 0.02, failure top 9%) will surprise a reader is the method's result;
     威华达控股's data wasn't inspected (it leaves Sell either way).
 
+- Stage 22 (screening; the lists check of 2026-11-15, F7-F9): done 2026-11-22, on stage 17d (8876fa0 on main). The
+  ratings change at a review, the month's first report: between reviews the review's rows stand with today's prices
+  (lists.standing, lists.kept), a Buy or Hold that leaves the data or is vetoed is replaced from the review's bench,
+  nothing is re-screened; page 1 and the back page say so, each market's heading gives the 评级日. One computed
+  sentence under each Buy heading on the largest sector and industry group (report.cluster). The changes line counts
+  against the last text sent that day (track.log_sent); a Sell card's risk line no longer cites a fall in price.
+  Decisions, sources and the two weeks' figures: "Lists", the review calendar, the buys' concentration, smaller.
+  backtest/qvm.py unchanged: the history already forms lists month to month with the buffer.
+  - The two weeks of snapshots, exits a week, daily buffer → calendar: Buy CN 7 → 1 and 7 → 0, US 5 → 0 and 8 → 1,
+    HK 4 → 0 and 3 → 0; Hold and Sell all → 0. The two left are names that left the data, replaced from the bench.
+  - Tests: the between-review build (names stand under a reversed score, a gone buy replaced in its sector, a gone
+    Sell not, prices refreshed), the review day from data/picks.csv, the Sell risk line, the cluster sentence, the
+    sent log's same-day reply. 324 pass.
+  - The fresh-context stage review (one, on Sonnet): 324 pass; kept() read correct (replacement, a name on the bench
+    and rated, a removed name can't return, empty cases), standing()'s month rule the same as track.first_reports',
+    the wording as the code does, no ticker, research untouched. Its points, answered: (1) a one-day data gap
+    replaces a name for the month: kept, as rule 5 says, now written in "Lists"; (2) cards between reviews show the
+    review's grades and lines beside today's price: the heading now says 卡片上的评级、评分和理由按评级日，价格是最新的;
+    (3) the first calendar build is a mid-month review and November's cohort stays 11-07: disclosed above; (4)
+    report.py is 408 lines, over the estimate: left, the code reads plainly.
+  - Not verified: CSI's reserve-list wording (its temporary change of 2026-10-09 checked, the rule's text not re-read);
+    the report not rendered from a real between-review day (the first comes the day after the first report on this
+    code).
+
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
   fair value per stock, an earnings forecast, an implied return), and judged them on ship bars I proposed that no
@@ -2006,8 +2030,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
     fifths; the middle has no expected edge either way. So the score's top fifth leans to Buy, its bottom fifth to
     Sell, the middle to Hold, and each list takes its section's best candidates by its own rule below.
   - Re-check date: 12 months from the report, for every rating: the rating's horizon (the brokers' 6-18 months; the
-    history measures 12 months; NAPS holds a year). The lists are rebuilt each day, so a rating can change sooner; the
-    newest report has the current one. (Before stage 5 a buy's re-check came sooner if its rank fell; with no holdings
+    history measures 12 months; NAPS holds a year), counted from the rating's review (stage 22: the month's first
+    report; between reviews the names stand, below). The newest report has the current rating. (Before stage 5 a buy's re-check came sooner if its rank fell; with no holdings
     check there is nothing to re-check before the year ends.)
 - **The buffer (stage 17).** A name rated in the market's newest earlier report keeps its rating until it falls well past
   the cut, as the index providers keep their constituents. The method review of 2026-11-13 (finding S2) counted, from
@@ -2075,9 +2099,77 @@ momentum drive the score (fixed in stage 1 after the stage review).
     within 12 than places left (US Rocket Companies, HK 金山云, each 11th behind two current names), or past 12 (US
     Cardinal Health, 13th). What Hold still loses is mostly a score leaving the widened band (US Canadian National,
     Realty Income, TC Energy, Southern at 29-34%; 交通银行 and 中国石化 at 65%) or a name moving to the bench: the score
-    itself moving, which a daily buffer can't hold (the review's F7, a monthly review calendar, a later stage). HK
+    itself moving, which a daily buffer can't hold (stage 22's review calendar, below, answers it). HK
     Hold's one exit fewer under F4 is 香港交易所, whose score no longer swings out of the band on its clearing
     members' margin read as debt.
+- **The review calendar (stage 22; the lists check of 2026-11-15, F7).** The ratings change only at a review, the
+  market's first report of the month; the reports between keep the review's names. Until stage 22 the buffer ran
+  every day, so a 12-month rating still changed 3-8 times a week a market (the tables above), while MSCI and CSI,
+  whose 20% buffer this is, apply it only at their reviews.
+  - When the review falls: MSCI reviews its indexes each quarter, the large ones in May and November; CSI the CSI
+    300, 500 and 1000 each June and December. Here monthly, at the month's first report, because that is the list the
+    report's 预期 figures and the 实盘记录 measure: the history forms the lists each month with the month before's
+    names buffered (backtest/qvm.month_lists, unchanged) and holds each 12 months, and track.py starts a cohort from
+    each month's first report. A half-yearly review would leave the reader a list the figures don't describe, and
+    the momentum family's revisions and earnings surprises six months old. A report counts once it is logged
+    (data/picks.csv, when a report is sent or requested); a month with no report yet reviews again at the next build.
+  - Between reviews (lists.standing, lists.kept): the newest earlier report's lists CSV stands, its cards, grades,
+    lines and re-check date as the review rated them, with today's price and one-lot cost. MSCI's derived indexes
+    add no name between reviews and remove none on account of their screen ("No new securities will be added …
+    between Index Reviews"; "no deletions from the Index between Index Reviews on account of" the screen: MSCI Global
+    Fossil Fuels Exclusion Indexes methodology, 2024, section on ongoing events); they reflect corporate events, so
+    the EM 50's count "may differ from 50" between reviews (MSCI EM 50 methodology, 2017). So nothing is re-screened
+    between reviews: a Sell or Hold that crosses momentum's top fifth or the buys' screen keeps its rating until the
+    next review, which applies both as protections (not buffered).
+  - What still changes between reviews: a Buy or Hold name no longer scored (a delisting, a suspension, missing data:
+    AGENTS.md rule 5) or vetoed since, and the results review's removals (review.apply, as before), each replaced by
+    the next of the bench fixed at the review, its sector first. This is CSI's practice for a fixed count: a
+    constituent deleted between reviews is replaced at once (the 中证500's temporary change of 2026-10-09, 富乐德 for
+    ST联光), from the reserve list (备选名单) its review publishes (the reserve rule's wording not re-read here). A Sell
+    name that leaves the data isn't replaced (it has no bench; as MSCI's count, the list may show 9).
+  - A name gone from the data for one day (a bad fetch as well as a delisting) is replaced and stays replaced until
+    the next review: rule 5 drops a stock without data, and the carried rows no longer hold it. MSCI keeps a suspended
+    constituent at its last price; here a card needs today's price, so the replacement is the rule, and the month's
+    review re-ranks the name if it is back.
+  - The first report under the calendar is a review (the lists before it carry no `rated` day), so is any build whose
+    newest earlier report's lists CSV is gone. track.py's November cohort is still 2026-11-07's report.
+  - The two weeks of snapshots (each re-scored with this code; day 1 a review from data/picks.csv's ratings, each day
+    after built from the day before; exits over the week by day, and names kept from the first day to the last;
+    "review": the exits if the last day were a review against the first day's ratings; no results review, so no
+    removals by it). US and HK 2026-11-17 have no snapshot.
+
+    | 11-07 … 11-13 | Buy, daily buffer → calendar | Hold | Sell | at a review on 11-13: Buy, Hold, Sell |
+    |---|---|---|---|---|
+    | CN | 7 (2/0/0/3/1/1); 15 of 20 → 1 (0/0/0/1/0/0); 19 | 4 (2/0/0/0/0/2); 6 of 10 → 0; 10 | 5 (1/0/0/1/1/2); 8 → 0; 10 | 4, 3, 1 |
+    | US | 5 (1/3/0/1/0/0); 16 → 0; 20 | 4 (3/1/0/0/0/0); 7 → 0; 10 | 3 (0/1/2/0/0/0); 8 → 0; 10 | 3, 3, 2 |
+    | HK | 4 (0/1/0/2/0/1); 17 → 0; 20 | 8 (1/2/1/2/2/0); 6 → 0; 10 | 2 (1/0/0/1/0/0); 8 → 0; 10 | 2, 3, 1 |
+
+    | 11-16 … 11-22 | Buy | Hold | Sell | at a review on 11-22 |
+    |---|---|---|---|---|
+    | CN | 7 (3/1/0/1/2/0); 15 → 0; 20 | 0; 10 → 0; 10 | 3 (0/0/2/0/1/0); 7 → 0; 10 | 4, 0, 3 |
+    | US | 8 (1/1/4/2); 17 → 1 (0/0/1/0); 19 | 2 (0/1/0/1); 8 → 0; 10 | 1 (0/0/1/0); 9 → 0; 10 | 2, 1, 1 |
+    | HK | 3 (0/1/1/1); 19 → 0; 20 | 2 (0/0/2/0); 8 → 0; 10 | 3 (2/1/0/0); 8 → 0; 10 | 0, 2, 2 |
+
+    The calendar's two exits are names that left the data (CN 伯特利 on 11-11, replaced by 宇通客车 from the bench;
+    US Sandisk on 11-21, by TE Connectivity). A review a week on changes about as many names as the daily rule's net
+    change over the week (CN Buy 4 against 5 net), in one batch the reader sees on a known day.
+  - What a reader sees: page 1 says the ratings are reviewed at the month's first report and only prices and
+    replacements change between; each market's heading gives the review day (评级日).
+- **The buys' concentration (stage 22; the lists check, F8).** Under the Buy heading one computed sentence
+  (report.cluster): the sector with the most buys and its share of the market's free float, which sets its places,
+  and the largest group of one industry when it has 3 or more names (a tie: the one with the higher-ranked name),
+  which tend to move together. On 2026-11-22's buys: US 科技 8 of 20 (38% of free float), Micron, TSMC and Texas
+  Instruments in Semiconductors (Western Digital and ASML sit in other Nasdaq industries, so it counts 3, not the
+  check's 5 on one chip cycle); CN 电子 3 (17%; the check's 5 in AI hardware span four 申万 industries); HK 金融 6
+  (31%), 纺织及服饰 3 (波司登, 安踏体育, 晶苑国际; tied with three brokers).
+  No method change: stage 16 kept the sector-relative design that makes it.
+- **Smaller (stage 22; the lists check, F9).** The changes line counted against two texts sent the same day (US
+  2026-11-08: 21 names, 新进 7 只，移出 8 只): a later reply now replaces that day's record (track.log_sent). A Sell
+  card's reasons left out momentum (Constellation's 近一年股价走弱) but not its risk line, which drew on all three
+  families and the 6-month fall: Sell's risk line now comes from value and quality and the loss and debt facts
+  (lists.sells), so no Sell card cites a fall in price. Left as notes: the first list's mix of two methods washed
+  out weeks ago (no line needed now); Nasdaq's sector labels (Ciena among utilities) and safety's spread across
+  sectors are older than these stages and the cap of 2 a sector limits them.
 - **Buys (stage 3's redo):** 20 names from the whole scored market, equal amounts:
   - what can't be bought (it stays scored and can be rated Sell; the screen keeps it off Hold too):
     - Quantitative Value's screen (Gray and Carlisle, step 1: avoid a permanent loss): the 5% of each market's
@@ -2310,8 +2402,8 @@ momentum drive the score (fixed in stage 1 after the stage review).
       revisions; CN the SUE, growth and revisions, as the price trend hasn't paid in A-shares: "The score"), and the
       rule follows the family as the score defines it, a third of every score on the same evidence; in CN it rests on
       earnings momentum (Chan, Jegadeesh and Lakonishok 1996) without a published interaction test there. A name near
-      0.8 can cross it from day to day, as a name near the buys' screen can: the review's F7, a monthly review
-      calendar, is where that is settled.
+      0.8 can cross it from day to day, as a name near the buys' screen can; since stage 22 it is applied only at the
+      month's review (the review calendar, above).
     - What it changed on 2026-11-15 (the snapshot re-scored by the build's own path with 17b's and 17c's code, the
       previous ratings from data/picks.csv, before → after; value / quality / momentum families, the failure logit's
       place among the market's non-financials):
@@ -3634,6 +3726,12 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
 21. **Research stage 21** (stage 20's "found, not fixed": an insurance carrier's float and an A+H issuer's two types;
     adopted and done 2026-11-21, Status). Done when: a focused test per fix; the 25 and each market's largest 30
     rebuilt before and after on one day; each large move explained by rule; the stage review.
+22. **Screening review calendar** (the lists check of 2026-11-15, F7-F9; adopted and done 2026-11-22, Status). The
+    ratings change only at the month's first report; between reviews the names stand and only prices and removals
+    change, decided from MSCI's and CSI's published practice; one computed sentence on the buys' largest cluster; the
+    changes count and the Sell card's price line. Not changed: the score, the lists' rules at a review, the buffer,
+    the history. Done when: this plan has each decision with its source; a week of snapshots before and after; tests;
+    pytest passes; the fresh-context stage review; status; committed.
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
 - The backtest snapshots and the stage-1 harness (index funds, costs, month-end frames).
