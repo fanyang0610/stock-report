@@ -273,7 +273,7 @@ def screening(market: str, code: str, snap: pd.DataFrame, today: date, listed: s
         r = row.iloc[0]
         view |= {"in_universe": True, "score": r["score"], "score_rank": int(r["score_rank"]), "universe": len(snap),
                  "fifth": fifth(r["score_rank"], len(snap)), "why": r.get("why"), "weak": r.get("weak"), "risk": r.get("risk")}
-        view |= {k: r.get(k) for k in ("g_value", "g_quality", "g_growth", "g_momentum", "f_value", "f_quality", "f_growth", "f_momentum")}
+        view |= {k: r.get(k) for k in ("g_value", "g_quality", "g_momentum", "f_value", "f_quality", "f_momentum")}  # stage 16's three
     else:
         reason = f"not among the market's {CONFIG['universe']['top_n']} largest liquid ordinary shares listed over a year"
         if listed and (today - date.fromisoformat(listed)).days < CONFIG["universe"]["min_listing_days"]:

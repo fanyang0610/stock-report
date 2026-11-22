@@ -62,7 +62,7 @@ def red_flags(f: dict, today: date) -> dict | None:
         return None
     sc = f["screening"]
     row = {"code": code, "name": f["name"], "rank": None, "sector": f.get("industry"), "why": sc.get("why"), "risk": sc.get("risk")}
-    row |= {k: sc.get(k) if sc.get(k) else float("nan") for k in ("g_value", "g_quality", "g_growth", "g_momentum")}
+    row |= {k: sc.get(k) if sc.get(k) else float("nan") for k in ("g_value", "g_quality", "g_momentum")}
     client = httpx.Client(base_url=CONFIG["notes"]["base_url"], timeout=review.CFG["timeout"],
                           headers={"Authorization": f"Bearer {key}"})
     try:

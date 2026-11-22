@@ -820,9 +820,10 @@
     comparison's by a few names from that day's prices alone (燕京啤酒's E/P percentile among 17 food-and-drink peers
     0.94 → 1.0 on a 0.2% price move: the list turnover of the review's finding S2, stage 17). 268 tests.
   - Left for later: stockreport/research/compare.py (stage 13's folder, not edited here) still names a growth grade
-    (its 筛选成长评级 key shows "-") and says momentum is a quarter of the score; a follow-up once stage 13 lands. The
-    US annual history misses some foreign filers' newer annual reports (Toyota's ends in fiscal 2020, TSMC's in 2024):
-    a data follow-up for fetch/. Stage 17 (the lists and their words) follows the review.
+    (its 筛选成长评级 key shows "-") and says momentum is a quarter of the score; a follow-up once stage 13 lands (done
+    2026-11-22 with the research merge: the three families, momentum a third, quality's 5-year growth). The US annual
+    history misses some foreign filers' newer annual reports (Toyota's ends in fiscal 2020, TSMC's in 2024): a data
+    follow-up for fetch/ (merged 2026-11-22: "US annual history brought up to date", below). Stage 17 (the lists and their words) follows the review.
 - Stage 17 (screening lists and words; the method review of 2026-11-13, findings S2, S3, S4): done 2026-11-15. On
   stage 16's score (its branch merged first). lists.py: the buffer (lists.buffered, lists.rated: a name rated in the
   newest earlier report in data/picks.csv stays until it falls past 120% of its list's cut: MSCI's quality indexes,

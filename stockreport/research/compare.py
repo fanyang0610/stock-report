@@ -38,24 +38,25 @@ def screening(facts: dict, val: dict, market_pe: float | None, findings: list[di
     agreement = None if r is None or s is None else ("一致", "部分一致", "相反")[abs(r - s)]
     peers = (facts.get("peers") or {}).get("median") or {}
     keys = {"scr_view": ("筛选的看法", view or "不在筛选范围"), "scr_value": ("筛选价值评级", sc.get("g_value") or "-"),
-            "scr_quality": ("筛选质量评级", sc.get("g_quality") or "-"), "scr_growth": ("筛选成长评级", sc.get("g_growth") or "-"),
+            "scr_quality": ("筛选质量评级", sc.get("g_quality") or "-"),
             "scr_momentum": ("筛选动量评级", sc.get("g_momentum") or "-"),
             "scr_rank": ("筛选排名", f"第 {sc['score_rank']} 名（共 {sc['universe']} 只）" if sc.get("score_rank") else "-"),
             "ind_pe": ("同行市盈率中位数", times(peers.get("pe"))), "mkt_pe": ("全市场市盈率中位数", times(market_pe))}
     drivers = []
     if agreement and agreement != "一致":
-        d, g = r - s, {k: sc.get(f"g_{k}") or "" for k in ("value", "quality", "growth", "momentum")}
+        d, g = r - s, {k: sc.get(f"g_{k}") or "" for k in ("value", "quality", "momentum")}  # the screening's three
         if d < 0 and g["momentum"] in "AB" and g["momentum"] or d > 0 and g["momentum"] in ("D", "E"):
-            drivers.append("动量：筛选的四项里动量（近期涨跌和分析师上调）占四分之一，该股动量评级 {scr_momentum}；研究的估值不看动量")
+            drivers.append("动量：筛选的三项里动量（股价或业绩超预期、利润和营收增长、分析师上调）占三分之一，该股动量评级 {scr_momentum}；"
+                           "研究的估值不看动量")
         expensive_sector = peers.get("pe") and market_pe and peers["pe"] > 1.2 * market_pe
         cheap_sector = peers.get("pe") and market_pe and peers["pe"] < 0.8 * market_pe
         if d < 0 and g["value"] in ("A", "B") or d > 0 and g["value"] in ("D", "E") or expensive_sector or cheap_sector:
             drivers.append("比较对象：筛选在同行业内排名（该股价值评级 {scr_value}），研究对比全市场和自身的现金流；"
                            "同行市盈率中位数 {ind_pe}，全市场 {mkt_pe}")
-        if d < 0 and "A" in (g["quality"], g["growth"]):
-            drivers.append("质量和成长：筛选看重这两项（质量 {scr_quality}、成长 {scr_growth}），研究看现价是否已经反映（合理价值的超额回报 {fair_excess}）")
-        if d > 0 and {"D", "E"} & {g["quality"], g["growth"]}:
-            drivers.append("质量和成长：筛选里这两项偏弱（质量 {scr_quality}、成长 {scr_growth}），研究看现价相对价值（合理价值的超额回报 {fair_excess}）")
+        if d < 0 and g["quality"] == "A":
+            drivers.append("质量：筛选看重这一项（质量评级 {scr_quality}，含 5 年利润增长），研究看现价是否已经反映（合理价值的超额回报 {fair_excess}）")
+        if d > 0 and g["quality"] in ("D", "E"):
+            drivers.append("质量：筛选里这一项偏弱（质量评级 {scr_quality}），研究看现价相对价值（合理价值的超额回报 {fair_excess}）")
         if findings:
             drivers.append("公告和新闻：本报告的审核读到" + "、".join(dict.fromkeys(x["words"] for x in findings[:3])) +
                            "，这是筛选的数字看不到的")
@@ -64,7 +65,7 @@ def screening(facts: dict, val: dict, market_pe: float | None, findings: list[di
         if kind == "cyclical":
             drivers.append("周期：研究用正常化利润（自身 10 年平均资本回报率乘现有资本，一致预期年份高出的部分另计），筛选用当前利润，周期高点时两者差得最远")
         if not drivers:
-            drivers.append("估值：研究的合理价值超额回报 {fair_excess}，筛选的价值项只占四分之一（价值评级 {scr_value}）")
+            drivers.append("估值：研究的合理价值超额回报 {fair_excess}，筛选的价值项只占三分之一（价值评级 {scr_value}）")
     return {"view": view, "agreement": agreement, "drivers": drivers, "keys": keys,
             "reason": None if sc.get("in_universe") else sc.get("reason")}
 

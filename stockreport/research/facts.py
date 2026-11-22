@@ -472,7 +472,7 @@ def show(f: dict) -> str:
     lines.append(f"consensus EPS {cs['eps']} ({cs['source']}, {cs['analysts']} analysts); target {cs['target_mean']}"
                  f" [{cs['target_low']}-{cs['target_high']}]")
     lines.append("screening: " + (f"{sc.get('rating', sc.get('fifth'))} (score rank {sc.get('score_rank')} of {sc.get('universe')};"
-                                  f" value {sc.get('g_value')} quality {sc.get('g_quality')} growth {sc.get('g_growth')}"
+                                  f" value {sc.get('g_value')} quality {sc.get('g_quality')}"
                                   f" momentum {sc.get('g_momentum')})" if sc.get("in_universe") else sc["reason"]))
     cc = f["crosscheck"]
     lines.append("second source: " + ("single source; " if cc["single_source"] else "") + ", ".join(
