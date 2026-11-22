@@ -8,7 +8,8 @@ held year's own largest fall, and a neutral basket (the 20 names' sector places,
 sector, equal amounts within it) to split the 20 names' lead over the fund into the picks and the places with equal
 amounts. Stage 17: each month's lists keep the month before's names within the buffer (lists.buffered), and Sell is
 the live rule's expensive, low-quality names (lists.junk; the history has no distress inputs, so its safety part sits
-at the middle).
+at the middle). Stage 17d: the same rule keeps momentum's top fifth off Sell (lists.sells; the history's momentum
+family has no revisions).
 - Portfolios: the app's buy rule each month (lists.positions: each sector's places by its share of the free-float
   value, its best scores, equal amounts, the screen) on the whole snapshot (the 800 largest; HK all that pass the
   floors). Free float then: CN market value × today's CSI 300 float factor (the median outside it; float_factors), HK
