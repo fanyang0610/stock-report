@@ -10,11 +10,13 @@ from datetime import date
 
 import pandas as pd
 
-from stockreport.fetch import filings, nasdaq, yahoo
+from stockreport.config import CONFIG
+from stockreport.fetch import filings, frames, nasdaq, sec, yahoo
 from stockreport.research import (STATEMENT, cached, checks, cn, damodaran, days, folder, fresh, hk, listings, load,
                                   save, segments, sheet, sources, stamp, us)
 
 log = logging.getLogger(__name__)
+INSURANCE_SIC = (6300, 6399)  # SEC's SIC major group 63: insurance carriers
 QUOTE = {"cn": "CNY", "hk": "HKD", "us": "USD"}
 KINDS = {"银行": "bank", "保险": "insurer", "证券": "broker"}
 ROLE = r"董事|总经理|總經理|总裁|總裁|行政總裁|主席|董事会秘书|財務總監|财务总监|首席"
@@ -64,6 +66,18 @@ def newer_years(st: pd.DataFrame, second: pd.DataFrame) -> tuple[pd.DataFrame, l
     return pd.concat([st, new.assign(months=12).reindex(columns=st.columns)], ignore_index=True), list(new["period"])
 
 
+def trailing_or_annual(st: pd.DataFrame, t: dict | None) -> dict:
+    """A 20-F filer's trailing twelve months: the second source's (Yahoo's, from the quarterly results it files as
+    6-Ks), as the screening counts them, when they end after its last fiscal year in the statements' currency; else
+    that fiscal year (us.from_annual). TSMC on 2026-11-13: the twelve months to September 2026, P/E 27 where its 2025
+    year gave 42, and the consensus years start in October 2026, not January."""
+    a = st[st["months"] == 12]
+    if t and len(a) and t.get("ni") is not None and t.get("revenue") and t["period"] > a["period"].max() \
+            and t.get("currency") == a["currency"].dropna().iloc[-1]:
+        return t
+    return us.from_annual(st)
+
+
 def units(price: float, shares: float, quote: dict, listed: float | None) -> float:
     """Ordinary shares per unit a US line trades in: 1, unless the filing's count times the price is more than 20% off
     the line's market value (Tencent's quote, else Nasdaq's screener): an ADR (TSMC's is 5 shares, Alibaba's 8) or a
@@ -74,6 +88,45 @@ def units(price: float, shares: float, quote: dict, listed: float | None) -> flo
         return 1.0
     r = shares * price / mv
     return r if abs(r - 1) > 0.2 else 1.0
+
+
+def second_in_usd(a: pd.DataFrame, second: pd.DataFrame, label: str, fx: pd.Series) -> bool:
+    """Yahoo's statements and estimates in US dollars under another currency's label: every figure the cross-check
+    compares in the latest year both report is ours over the label's rate to the dollar, within 15% (each year's
+    statements are translated at that year's rates, not today's). 中芯国际's A line: Yahoo's figures are its HK line's
+    USD, labelled CNY (ours 6.3-7.4 times them at 6.67 to the dollar), so the cross-check left its 2025 out and its
+    revenue estimates read 84% below its trailing revenue."""
+    if label == "USD" or second is None or not len(second) or label not in fx:
+        return False
+    s = second.assign(day=pd.to_datetime(second["period"]))
+    for i in range(len(a) - 1, -1, -1):
+        near = s[(s["day"] - pd.Timestamp(a.iloc[i]["period"])).abs() <= pd.Timedelta(days=10)]
+        if len(near):
+            ours, other = a.iloc[i], near.iloc[-1]
+            ratios = [ours[k] / other[k] for k in sheet.CHECK if k in other and pd.notna(ours.get(k)) and pd.notna(other[k])
+                      and ours[k] > 0 and other[k] > 0]
+            r = float(fx[label] / fx["USD"])
+            return len(ratios) >= 3 and all(r / 1.15 <= x <= r * 1.15 for x in ratios)
+    return False
+
+
+def us_classes(code: str) -> list[str]:
+    """The issuer's other US lines: the tickers SEC files under the same CIK (BRK.A beside BRK.B)."""
+    ciks = sec.load_ciks() if sec.CIKS.exists() else pd.Series(dtype=float)
+    return [c for c, k in ciks.items() if k == ciks.get(code) and c != code] if code in ciks else []
+
+
+def listed_value(code: str) -> float | None:
+    """A US line's market value in Nasdaq's screener (units' second source)."""
+    return nasdaq.load_list().drop_duplicates("code").set_index("code")["mcap"].get(code) if nasdaq.LIST.exists() else None
+
+
+def predates(path, key: str) -> bool:
+    """A cache written before a field it must carry existed (stage 13: the US statements' non-operating assets, Nasdaq's
+    quarters the consensus's basis is measured on): refetched however fresh, else stage 13's rules run on GAAP."""
+    if not path.exists():
+        return False
+    return key not in (load(path) if path.suffix == ".json" else pd.read_csv(path, nrows=0).columns)
 
 
 def gather(market: str, code: str, today: date) -> dict:
@@ -89,15 +142,29 @@ def gather(market: str, code: str, today: date) -> dict:
         g["valuation"] = cached(f / "valuation.csv.gz", D, lambda: cn.valuation(code))
         g["flows"] = cached(f / "flows.json", D, lambda: cn.flows(code, today))
     elif market == "us":
-        if not (fresh(f / "statements.csv.gz", S) and fresh(f / "latest.json", S)):
-            payload = us.companyfacts(code)  # several MB, parsed in memory and not kept
-            save(f / "statements.csv.gz", us.parse_statements(code, payload))
-            save(f / "latest.json", us.latest(code, payload, today))
+        st = f / "statements.csv.gz"
+        if not (fresh(st, S) and fresh(f / "latest.json", S)) or predates(st, "nonop") or predates(st, "securities"):
+            try:
+                payload = us.companyfacts(code)  # several MB, parsed in memory and not kept
+                quote = g["tencent"] or {}
+                mv = quote.get("mcap") or listed_value(code)
+                line = mv / quote["price"] if mv and quote.get("price") else None  # the line's count, in its units
+                table, last = us.with_classes(us.parse_statements(code, payload), us.latest(code, payload, today), payload, line)
+                save(st, table)
+                save(f / "latest.json", last)
+            except Exception as e:  # as cached(): a failed refresh keeps the cache there is (rule 4)
+                if not (st.exists() and (f / "latest.json").exists()):
+                    raise
+                log.warning("%s SEC statements: refresh failed (%s); the cache is used", code, e)
         g["statements"], g["latest"] = load(f / "statements.csv.gz"), load(f / "latest.json")
+        g["statements"], g["cash_from_second"] = us.with_securities(g["statements"], g["second"], CONFIG["crosscheck"]["large"])
         if not g["latest"]:  # a 20-F filer: no quarterly reports, and its newest annual report can be missing from
             g["statements"], g["from_second"] = newer_years(g["statements"], g["second"])  # SEC's data for months
-            g["latest"] = us.from_annual(g["statements"])
-        g["consensus"] = optional(f / "consensus.json", S, lambda: us.consensus(code), f"{code} Nasdaq consensus")
+            g["foreign"] = True
+            g["latest"] = trailing_or_annual(g["statements"], optional(f / "trailing.json", S, lambda: sources.trailing(
+                market, code), f"{code} Yahoo trailing figures"))
+        c = f / "consensus.json"
+        g["consensus"] = optional(c, -1 if predates(c, "actuals") else S, lambda: us.consensus(code), f"{code} Nasdaq consensus")
         g["flows"] = cached(f / "flows.json", D, lambda: us.flows(code))
         g["segments"] = optional(f / "segments.csv.gz", S, lambda: segments.us(code, today), f"{code} segments")
     else:
@@ -108,19 +175,46 @@ def gather(market: str, code: str, today: date) -> dict:
         g["statements"], g["consensus"], g["flows"] = st, None, {}
         g["segments"] = optional(f / "segments.csv.gz", S, lambda: segments.hk(code, today, st), f"{code} segments")
         a_line = listings.issuer(market, code).query("market == 'cn'")
-        if len(a_line):  # an A+H issuer's dividends as declared, per fiscal year, from its A line's 分红
-            g["a_dividends"] = cached(f / "a_dividends.json", S, lambda: cn.dividends(a_line["code"].iloc[0]))
+        if len(a_line):  # an A+H issuer's dividends as declared, per fiscal year, from its A line's 分红, and one
+            a = a_line["code"].iloc[0]  # consensus for both lines: the A line's (Eastmoney's, the deeper: 平安's A line
+            g["a_dividends"] = cached(f / "a_dividends.json", S, lambda: cn.dividends(a))  # had 6.52 / 7.53 for
+            g["consensus"] = optional(folder("cn", a) / "consensus.json", S, lambda: cn.consensus(a, today),  # 2026-27,
+                                      f"{a} Eastmoney consensus")  # its H line Yahoo's 7.02 / 8.88: 14.8% vs 22.2%
     g["filings"] = cached(f / "filings.json", S, lambda: filings.recent(market, code, today, 365, routine=True) or [])
     return g
 
 
-def kind_of(market: str, st: pd.DataFrame, industry: str, listing_kind: str | None) -> str:
+def carrier(market: str, code: str, snap: pd.DataFrame) -> bool:
+    """An insurance carrier by its regulator's or index's classification, so its balance sheet holds float: US SEC's
+    SIC 6300-6399 (insurance carriers, which file under Regulation S-X Article 7: net investment income and realized
+    gains are revenue captions); HK the snapshot's 金融-保险 industries. CN's 申万 保险 members are typed insurers by
+    their statements' template (KINDS)."""
+    row = snap[snap["code"] == code] if len(snap) else snap
+    if row.empty:
+        return False
+    if market == "us" and frames.SIC.exists() and pd.notna(row["cik"].iloc[0]):
+        sic = pd.read_csv(frames.SIC, dtype={"code": str}).drop_duplicates("code").set_index("code")["sic"]
+        return INSURANCE_SIC[0] <= sic.get(str(int(row["cik"].iloc[0])), 0) <= INSURANCE_SIC[1]
+    return market == "hk" and str(row["industry_type"].iloc[0]).startswith("金融-保险")
+
+
+def kind_of(market: str, st: pd.DataFrame, industry: str, listing_kind: str | None, sector: str | None = None,
+            floats: bool = False, op_income: bool = True) -> str:
+    """The listing's kind. `floats`: an insurance carrier (carrier()). Damodaran values financial service firms on
+    their equity, since their debt and investments are raw material ("Valuing Financial Service Firms", 2009), so a
+    carrier he files under Financials or doesn't classify (Berkshire's Diversified, his Reinsurance, a life insurer
+    under Financial Svcs.) is an insurer, valued on book, as is one without an operating income (its pretax profit
+    carries its investment gains, Article 7's revenue). One he files under an operating sector (UnitedHealth and the
+    other health insurers: Health Care) stays general, its float's assets in the business (build)."""
     if listing_kind == "reit" or "REIT" in industry or "R.E.I.T" in industry:
         return "reit"
     if market == "cn" and st["org_type"].iloc[-1] in KINDS:
         return KINDS[st["org_type"].iloc[-1]]
-    return ("bank" if industry.startswith("Bank") else "insurer" if industry.startswith("Insurance")
+    kind = ("bank" if industry.startswith("Bank") else "insurer" if industry.startswith(("Insurance", "Reinsurance"))
             else "broker" if industry.startswith("Brokerage") else "general")
+    if kind == "general" and floats and (sector in (None, "", "Financials") or not op_income):
+        return "insurer"
+    return kind
 
 
 def consensus(market: str, g: dict, last_fy: int) -> dict:
@@ -128,26 +222,29 @@ def consensus(market: str, g: dict, last_fy: int) -> dict:
     street, c = g["street"], g["consensus"] or {}
     yahoo_eps = sources.eps_years(street.get("estimates") or {})
     eps = {y: v for y, v in (c.get("eps") or yahoo_eps).items() if int(y) > last_fy and v is not None}
-    main = c if c else street  # HK: Yahoo is the consensus source; CN and US: Eastmoney and Nasdaq, Yahoo beside them
-    out = {"source": c.get("source", "Yahoo"), "eps": eps, "currency": "CNY" if market == "cn" else
+    eastmoney = c.get("source", "").startswith("Eastmoney")  # CN, and an A+H issuer's H line (its A line's)
+    main = c if c and market != "hk" else street  # HK: Yahoo's targets and ratings are its own line's (an A line's
+    # target is on the A price); CN and US: Eastmoney's and Nasdaq's, Yahoo beside them
+    out = {"source": c.get("source", "Yahoo"), "eps": eps, "currency": "CNY" if eastmoney else
            street.get("est_currency") if market == "hk" else "USD", "analysts": main.get("analysts"),
            "eps_yahoo": {y: v for y, v in yahoo_eps.items() if int(y) > last_fy}, "ratings": main.get("ratings"),
            "target_mean": main.get("target_mean"), "target_high": main.get("target_high"), "target_low": main.get("target_low"),
            "target_yahoo": street.get("target_mean"), "target_yahoo_range": [street.get("target_low"), street.get("target_high")],
            "ratings_yahoo": street.get("ratings"), "upgrades_6m": street.get("upgrades_6m"),
            "downgrades_6m": street.get("downgrades_6m"), "surprises": street.get("surprises"),
-           "next_earnings": street.get("next_earnings")}
+           "next_earnings": street.get("next_earnings"), "actuals": c.get("actuals")}
     est = street.get("estimates") or {}
     e0, e1 = est.get("0y") or {}, est.get("+1y") or {}
     if e0.get("end"):  # Yahoo's revenue and EPS range by fiscal year; revenue only when +1y's end differs from 0y's
         year, same = int(e0["end"][:4]), e1.get("end") == e0.get("end")  # (Yahoo repeats 0y's end for AAPL)
         out["yahoo_years"] = {str(y): {"revenue": None if same else e.get("revenue"), "eps_low": e.get("eps_low"),
-                                       "eps_high": e.get("eps_high")} for y, e in ((year, e0), (year + 1, e1)) if e}
+                                       "eps_high": e.get("eps_high"), "eps_90d": e.get("eps_90d")}
+                              for y, e in ((year, e0), (year + 1, e1)) if e}
         out["revenue_currency"] = street.get("report_currency")  # Yahoo's: BeiGene's A line reports in USD there
     y0 = min(set(eps) & set(out["eps_yahoo"]), default=None)
     out["basis"] = BASIS.get(out["source"])
     out["basis_gap_yahoo"] = abs(eps[y0] - out["eps_yahoo"][y0]) / abs(out["eps_yahoo"][y0]) if y0 and out["eps_yahoo"][y0] else None
-    if market == "cn":
+    if eastmoney:
         out["reports"] = c.get("reports", [])
     return out
 
@@ -190,17 +287,30 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     a = st[st["months"] == 12].tail(11).reset_index(drop=True)
     if a.empty:
         raise RuntimeError(f"{code}: no annual statements")
+    snap = sheet.snapshot(market, today)
     try:
         damodaran.update(today)
         dam = damodaran.industry_of(market, code)
         for _, o in listings.issuer(market, code).iterrows():  # an A+H issuer may be classified under its other line
             dam = dam or damodaran.industry_of(o["market"], o["code"])
+        for other in us_classes(code) if market == "us" else []:  # another share class's line (Berkshire's BRK.A)
+            dam = dam or damodaran.industry_of("us", other)
+        dam = dam or damodaran.industry_like(market, code, snap, g["street"].get("country"))
     except Exception as e:
         log.warning("damodaran: %s", e)
         dam = {}
     lst = listings.issuer(market, code)
     me = lst[(lst["market"] == market) & (lst["code"] == code)]
-    kind = kind_of(market, st, dam.get("industry", ""), me["kind"].iloc[0] if len(me) else None)
+    floats = carrier(market, code, snap)
+    kind = kind_of(market, st, dam.get("industry", ""), me["kind"].iloc[0] if len(me) else None, dam.get("sector"),
+                   floats, market != "us" or g["latest"].get("op_income") is not None or a["op_income"].notna().iloc[-1])
+    if kind in checks.FINANCIAL:  # investments and their income are a bank's or insurer's business, not set apart
+        st, a = (x.assign(**{c: float("nan") for c in ("invest_income", "fv_change", "interest_income", "nonop")})
+                 for x in (st, a))
+    # an operating business holding float: its cash and investments back its claims and their income is in its
+    # operating income (Article 7), so they are operating assets, in its capital and not added in the bridge (Damodaran:
+    # an asset whose income is in EBIT is not valued apart); shown as they are (its net debt is still net of its cash)
+    held = floats and kind not in checks.FINANCIAL
     street, report_cur = g["street"], a["currency"].dropna().iloc[-1] if a["currency"].notna().any() else QUOTE[market]
     quote_cur = street.get("currency") or QUOTE[market]
     fx = yahoo.load_fx()
@@ -208,6 +318,8 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     daily = g["prices"]["daily"]
     px = sources.price_facts(daily, code, sources.INDEX[market][1])
     dps = dividends(market, g, a.iloc[-1]["period"][:4], today, quote_cur, report_cur)
+    if st["shares"].isna().all():  # rule 5: no count, no per-share figure
+        raise RuntimeError(f"{code}: no share count in its statements")
     shares = st.dropna(subset=["shares"])["shares"].iloc[-1]
     if market == "us" and g["latest"].get("shares"):  # the latest filing's cover count
         shares = g["latest"]["shares"]
@@ -224,21 +336,27 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     else:
         a["shares"] = sheet.split_basis(a, g["prices"]["splits"]).values
     if market == "us":  # an ADR or another share class: shares in the line's own units
-        listed = nasdaq.load_list().drop_duplicates("code").set_index("code")["mcap"].get(code) if nasdaq.LIST.exists() else None
-        per = units(price, shares, g["tencent"], listed)
+        per = units(price, shares, g["tencent"], listed_value(code))
         shares, a["shares"] = shares / per, a["shares"] / per
     fin = kind in checks.FINANCIAL  # banks', insurers' and brokers' debt, cash and operating cash flow are their business
-    check, a = sheet.crosscheck(a, None if g["single"] else g["second"], fin)  # a figure > 5% off is left out
+    usd = not g["single"] and second_in_usd(a, g["second"], report_cur, fx)  # Yahoo's figures in its US dollars:
+    if usd:  # no figure to compare at one rate (each year's translation differs), and its estimates are in dollars
+        g["street"] = g["street"] | {"report_currency": "USD"}  # (consensus' revenue_currency)
+    check, a = sheet.crosscheck(a, None if g["single"] or usd else g["second"], fin)  # a figure > 5% off is left out
+    if usd:
+        check = {"second_in_usd": "Yahoo's figures are in US dollars under a CNY label: not compared"}
     mcap = price * shares
     t12 = ({"revenue": g["latest"].get("revenue"), "ni": g["latest"].get("ni"), "ocf": g["latest"].get("ocf")} if market == "us"
            else {k: sheet.ttm(st, k) for k in ("revenue", "ni", "ocf")})
-    for k in ("capex", "pretax", "interest", "da", "op_income"):
-        t12[k] = sheet.ttm(st, k) if market != "us" else g["latest"].get(k)
+    for k in ["capex", "da"] + sheet.EBIT_KEYS:
+        t12[k] = sheet.ttm(st, k, sparse=k in sheet.SPARSE) if market != "us" else g["latest"].get(k)
     bal = st.iloc[-1].copy()  # the latest balance sheet (US: the latest 10-Q's equity on the last 10-K's layout)
     if market == "us" and g["latest"].get("equity"):
         bal["equity"] = g["latest"]["equity"]
-    ev = None if fin else mcap * rate + (checks.val(bal, "debt") or 0) - (checks.val(bal, "cash") or 0) + (checks.val(bal, "minority") or 0)
-    ebit = sheet.ebit(market, t12["pretax"], t12["interest"], t12["op_income"])
+    apart = 0.0 if held else (checks.val(bal, "cash") or 0) + (checks.val(bal, "nonop") or 0)
+    ev = None if fin else mcap * rate + (checks.val(bal, "debt") or 0) + (checks.val(bal, "minority") or 0) - apart  # the
+    # operating assets', as EBIT is
+    ebit = sheet.ebit(market, t12)
     common = None if checks.val(bal, "equity") is None else checks.val(bal, "equity") - (checks.val(bal, "pref") or 0)
     cons = consensus(market, g, int(a.iloc[-1]["period"][:4]))
     eps_years = sorted(cons["eps"])
@@ -252,9 +370,9 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     else:
         divs = g["prices"]["dividends"]
         dps_12m = float(divs.loc[divs["ex_date"] > year_ago, "dps"].sum()) if len(divs) else 0.0
-    balance = {k: None if fin and k in ("debt", "cash") else checks.val(bal, k) for k in ("debt", "cash", "minority")}
+    balance = {k: None if fin and k in ("debt", "cash", "nonop") else checks.val(bal, k) for k in ("debt", "cash", "minority", "nonop")}
     valuation = {"price": price, "quote_currency": quote_cur, "report_currency": report_cur, "fx_quote_to_report": rate,
-                 "balance": balance | {"period": bal["period"]},
+                 "balance": balance | {"period": bal["period"], "float_in_business": held},
                  "shares": shares, "market_cap": mcap, "market_cap_report": mcap * rate, "ev": ev, "ttm": t12,
                  "pe_ttm": checks.div(mcap * rate, t12["ni"]) if (t12["ni"] or 0) > 0 else None,
                  "book_common": common, "pb": checks.div(mcap * rate, common), "ps": checks.div(mcap * rate, t12["revenue"]),
@@ -292,7 +410,6 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         acct["income"]["payout"] = None
     if market == "cn":
         acct["cn_flags"] = checks.cn_flags(a, g["flows"])
-    snap = sheet.snapshot(market, today)
     industry = (val_cn.iloc[-1]["industry"] if market == "cn" and val_cn is not None else
                 snap.loc[snap["code"] == code, "industry"].iloc[0] if len(snap) and (snap["code"] == code).any() else street.get("industry"))
     titles = g["filings"] or []
@@ -306,8 +423,8 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         "code": code, "market": market, "built": stamp(), "kind": kind, "listed": listed,
         "name": (me["name"].iloc[0] if len(me) and pd.notna(me["name"].iloc[0]) else None) or (me["name_en"].iloc[0] if len(me) else code),
         "listings": lst.replace({float("nan"): None}).to_dict("records"), "other_listings": others, "industry": industry,
-        "damodaran": dam, "business": street.get("business"), "employees": street.get("employees"),
-        "price": px, "valuation": valuation, "summary": sheet.summary(a, kind, market), "history": sheet.history(a, dps, kind, market),
+        "damodaran": dam, "home": street.get("country") if g.get("foreign") else None, "business": street.get("business"), "employees": street.get("employees"),
+        "price": px, "valuation": valuation, "summary": sheet.summary(a, kind, market), "history": sheet.history(a, dps, kind, market, held),
         "latest": g["latest"] if market == "us" else sheet.latest_vs_prior(st),
         "audit_opinion": a.iloc[-1].get("opinion") if "opinion" in a else None,
         "checks": acct, "consensus": cons | ({"note": REIT_NOTE} if kind == "reit" else {}), "flows": g["flows"], "street": {k: street.get(k) for k in (
@@ -319,6 +436,8 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         "filings_12m": {"count": len(titles), "management": [t for t in titles if re.search(MANAGEMENT, t["title"])][:10],
                         "auditor": [t for t in titles if re.search(AUDITOR, t["title"])][:5]},
         "crosscheck": {"single_source": g["single"], "years_from_second": g.get("from_second") or [],
+                       "cash_from_second": g.get("cash_from_second") or [],
+                       "ttm_from_second": (g.get("latest") or {}).get("basis") == "TTM (Yahoo)",
                        "shares_per_unit": None if market != "us" or per == 1.0 else per} | check |
                       sheet.quote_check({"price": price, "mcap": mcap}, g["tencent"]),
         "as_of": {p.name: date.fromtimestamp(p.stat().st_mtime).isoformat() for p in folder(market, code).iterdir()

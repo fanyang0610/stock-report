@@ -216,7 +216,7 @@ def earnings_signals(a: pd.DataFrame) -> dict:
     g = lambda r, k: div(val(r, k), val(p, k)) - 1 if div(val(r, k), val(p, k)) is not None else None
     rev = g(t, "revenue")
     faster = lambda k: None if None in (g(t, k), rev) or (div(val(t, k), val(t, "revenue")) or 0) < 0.05 else g(t, k) > rev
-    conv = lambda r: div(val(r, "ocf"), val(r, "ni"))
+    conv = lambda r: div(val(r, "ocf"), val(r, "ni")) if (val(r, "ni") or 0) > 0 else None  # a loss: cash can't trail it
     intensity = (a["capex"] / a["revenue"]).dropna()
     return {"receivables_faster": faster("receivables"), "inventory_faster": faster("inventory"),
             "cash_below_profit_widening": None if None in (conv(t), conv(p)) else conv(t) < 1 and conv(t) < conv(p),

@@ -41,10 +41,21 @@ def months(report_type: str) -> int:
     return {"一季报": 3, "中报": 6, "三季报": 9, "年报": 12}.get(report_type, 0)
 
 
-def statement_rows(income: list[dict], balance: list[dict], cash: list[dict], main: list[dict]) -> pd.DataFrame:
+NONOP = ("LONG_EQUITY_INVEST", "OTHER_EQUITY_INVEST", "OTHER_NONCURRENT_FINASSET", "CREDITOR_INVEST",
+         "OTHER_CREDITOR_INVEST", "AVAILABLE_SALE_FINASSET", "HOLD_MATURITY_INVEST")  # stakes and financial investments
+# (长期股权投资, 其他权益工具投资, 其他非流动金融资产, 债权投资, 其他债权投资; before 2019 可供出售 and 持有至到期);
+# 交易性金融资产 already counts as cash
+
+
+def statement_rows(income: list[dict], balance: list[dict], cash: list[dict], main: list[dict],
+                   layout: str = "G") -> pd.DataFrame:
     """Every report period's statements in the shared layout (research.KEYS); banks', insurers' and brokers' layouts
     fill what they have (revenue is their total operating income). Dividends paid aren't read from the cash flow (CN
-    lumps interest paid in): the fact sheet takes them from the dividend table."""
+    lumps interest paid in): the fact sheet takes them from the dividend table. The general layout's 营业利润 counts
+    the income of non-operating assets: 投资收益 (associates' share, disposals, dividends, wealth products),
+    公允价值变动收益, the interest income inside 财务费用 and a finance subsidiary's 利息收入 inside revenue (茅台's,
+    earned on the 拆出资金 counted as cash); they are kept apart (sheet.ebit) with the assets at book (NONOP).
+    Financial firms' investment income is their business: not kept apart."""
     by = lambda rows: {r["REPORT_DATE"][:10]: r for r in rows}
     inc, bal, cf, mf = by(income), by(balance), by(cash), by(main)
     out = []
@@ -74,6 +85,9 @@ def statement_rows(income: list[dict], balance: list[dict], cash: list[dict], ma
                "minority": first(b, "MINORITY_EQUITY"), "retained": total(b, "UNASSIGN_RPOFIT", "SURPLUS_RESERVE"),
                "shares": first(m, "TOTAL_SHARE") or first(b, "SHARE_CAPITAL"), "share_capital": first(b, "SHARE_CAPITAL"),
                "contract_liab": total(b, "CONTRACT_LIAB", "ADVANCE_RECEIVABLES"), "cip": first(b, "CIP")}
+        if layout == "G":
+            row |= {"invest_income": first(i, "INVEST_INCOME"), "fv_change": first(i, "FAIRVALUE_CHANGE_INCOME"),
+                    "interest_income": total(i, "FE_INTEREST_INCOME", "INTEREST_INCOME"), "nonop": total(b, *NONOP)}
         out.append(row | {k: first(m, f) for k, f in EXTRA.items()})
     df = pd.DataFrame(out)
     return df.reindex(columns=STATEMENT + ["opinion", "updated", "share_capital"] + list(EXTRA)).sort_values("period").reset_index(drop=True)
@@ -87,7 +101,7 @@ def statements(code: str) -> pd.DataFrame:
     kind = main[0].get("ORG_TYPE") or "通用"
     p = LAYOUT.get(kind, "G")
     parts = [get(f"RPT_F10_FINANCE_{p}{s}", sec, "REPORT_DATE") for s in ("INCOME", "BALANCE", "CASHFLOW")]
-    return statement_rows(*parts, main).assign(org_type=kind)
+    return statement_rows(*parts, main, layout=p).assign(org_type=kind)
 
 
 def segments(code: str) -> pd.DataFrame:

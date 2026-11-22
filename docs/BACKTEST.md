@@ -1666,3 +1666,125 @@ names over the fund CN +1.7% (51%), US +2.3% (60%), HK +3.2% (60%); the picks ov
 +3.2%. Hold CN +1.6% (ahead 60%), US −6.9% (28%), HK −1.6% (46%). Sell over the fund CN +4.1% (behind 57%), US +4.0%
 (38%), HK +5.8% (66%): HK's Sell, now from the larger names, lags in more windows and by more in the median, with
 fewer of the small survivors' rebounds; the caveats above stand. It decides nothing.
+
+## 28. Stage 14: how long margins, growth and excess returns last (2026-11-14; backtest/persistence.py)
+
+The check behind the research DCF's long-run rules (PLAN.md "Forecast" and "As built", stable period). Published
+evidence sets each rule; this measures it in the screening's history tables (today's listings only: survivors, so
+persistence above the median and recovery below it are overstated). Section 26 is stage 16's (its own branch).
+Margins: US operating margin, CN 扣非 net margin, HK net margin (the CN and HK tables carry no operating profit);
+a gap of 3+ points to the company's median of the 5 or 8 years (with or without the year measured); median share kept
+h years on (in brackets the slope over the gap's deciles, observations and start years), as measured and net of the
+market's drift (the median company's distance from its own median h years on). Growth: the slope, over the deciles'
+medians, of the growth above the size fifth's median in year t+h on the past 1 or 3 years' excess. Excess returns:
+return on equity against today's stable cost of equity (the yield + Damodaran's mature premium). The last line per
+market is what the DCF uses.
+
+```
+uv run python -m backtest.persistence
+
+CN margins (扣非 net margin), 5590 companies, years 2009-2025; gap of at least 3%; median kept share (slope over the gap's deciles) [obs, start years]
+  as measured
+    w=5 with now above  0.88 (0.86) [6984,12]   0.58 (0.68) [6329,11]   0.38 (0.56) [5673,10]   0.24 (0.47) [4933,9]   0.10 (0.42) [4100,8]
+    w=5 with now below  0.97 (0.56) [13647,12]   0.92 (0.41) [11772,11]   0.90 (0.31) [9967,10]   0.92 (0.27) [8329,9]   0.93 (0.25) [7061,8]
+    w=5 w/o  now above  0.89 (0.88) [8288,11]   0.63 (0.73) [7371,10]   0.44 (0.63) [6474,9]   0.31 (0.54) [5552,8]   0.18 (0.49) [4566,7]
+    w=5 w/o  now below  0.98 (0.63) [15867,11]   0.94 (0.49) [13471,10]   0.94 (0.39) [11302,9]   0.95 (0.35) [9342,8]   0.96 (0.33) [7791,7]
+    w=8 with now above  0.85 (0.84) [5294,9]   0.52 (0.60) [4620,8]   0.33 (0.48) [4004,7]   0.19 (0.41) [3341,6]   0.09 (0.38) [2549,5]
+    w=8 with now below  0.95 (0.59) [11770,9]   0.90 (0.45) [9677,8]   0.86 (0.34) [7864,7]   0.87 (0.30) [6235,6]   0.84 (0.25) [4872,5]
+    w=8 w/o  now above  0.86 (0.85) [5197,8]   0.59 (0.66) [4452,7]   0.40 (0.55) [3759,6]   0.32 (0.54) [2998,5]   0.19 (0.52) [2131,4]
+    w=8 w/o  now below  0.96 (0.63) [11424,8]   0.92 (0.48) [9288,7]   0.90 (0.38) [7413,6]   0.90 (0.34) [5602,5]   0.86 (0.27) [4133,4]
+  net of the market's drift
+    w=5 with now above  1.03 (0.93) [6984,12]   0.81 (0.77) [6329,11]   0.67 (0.69) [5673,10]   0.60 (0.63) [4933,9]   0.52 (0.60) [4100,8]
+    w=5 with now below  0.79 (0.52) [13647,12]   0.69 (0.36) [11772,11]   0.61 (0.25) [9967,10]   0.58 (0.19) [8329,9]   0.54 (0.16) [7061,8]
+    w=5 w/o  now above  1.08 (0.97) [8288,11]   0.92 (0.84) [7371,10]   0.77 (0.78) [6474,9]   0.70 (0.71) [5552,8]   0.64 (0.68) [4566,7]
+    w=5 w/o  now below  0.75 (0.58) [15867,11]   0.66 (0.42) [13471,10]   0.61 (0.31) [11302,9]   0.59 (0.27) [9342,8]   0.56 (0.23) [7791,7]
+    w=8 with now above  1.06 (0.95) [5294,9]   0.84 (0.73) [4620,8]   0.66 (0.64) [4004,7]   0.62 (0.60) [3341,6]   0.52 (0.57) [2549,5]
+    w=8 with now below  0.72 (0.54) [11770,9]   0.63 (0.40) [9677,8]   0.56 (0.27) [7864,7]   0.52 (0.23) [6235,6]   0.50 (0.18) [4872,5]
+    w=8 w/o  now above  1.13 (0.98) [5197,8]   0.93 (0.81) [4452,7]   0.79 (0.70) [3759,6]   0.74 (0.71) [2998,5]   0.65 (0.71) [2131,4]
+    w=8 w/o  now below  0.69 (0.58) [11424,8]   0.62 (0.41) [9288,7]   0.56 (0.32) [7413,6]   0.54 (0.27) [5602,5]   0.50 (0.20) [4133,4]
+
+CN revenue growth: excess over the size fifth's median kept in year t+h (slope over deciles) [obs]
+  past 1y excess: h1 0.25 [60944]  h2 0.08 [55490]  h3 0.08 [50222]  h4 0.09 [45146]  h5 0.05 [40212]
+  past 3y excess: h1 0.23 [51833]  h2 0.13 [46501]  h3 0.11 [41285]  h4 0.09 [36257]  h5 0.05 [31382]
+
+CN return on equity above today's stable cost of equity 5.8%: share above h years on (all firm-years: 65% above)
+  5 of 5 years above: h1 0.84 [20116]  h2 0.75 [18546]  h3 0.69 [16718]  h4 0.64 [14676]  h5 0.59 [12497]
+  4 of 5 years above: h1 0.53 [7293]  h2 0.51 [6470]  h3 0.49 [5533]  h4 0.48 [4601]  h5 0.46 [3889]
+  3 of 5 years above: h1 0.40 [5804]  h2 0.42 [4990]  h3 0.42 [4214]  h4 0.41 [3645]  h5 0.41 [3093]
+  0-2 of 5 years above: h1 0.23 [14554]  h2 0.28 [12363]  h3 0.30 [10615]  h4 0.32 [9050]  h5 0.33 [7686]
+  5 of 5, median excess under 10%: h1 0.81 [10060]  h2 0.71 [9088]  h3 0.65 [8118]  h4 0.60 [7140]  h5 0.56 [6106]
+  5 of 5, median excess over 10%: h1 0.88 [10056]  h2 0.78 [9458]  h3 0.72 [8600]  h4 0.67 [7536]  h5 0.63 [6391]
+  5 of 5, share of the excess kept, net of drift: h1 0.83 [19523]  h2 0.74 [18015]  h3 0.68 [16238]  h4 0.65 [14232]  h5 0.63 [12109]
+
+CN used: margin gap kept a year above 0.916 below 0.850 (5 years: 0.64 / 0.44); growth shares after one year's excess [0.249, 0.082, 0.081, 0.081, 0.053], after three years' [0.226, 0.131, 0.114, 0.092, 0.054]; excess return kept a year 0.911 (year 11: 0.36, year 25: 0.10)
+
+US margins (operating margin), 1150 companies, years 2015-2025; gap of at least 3%; median kept share (slope over the gap's deciles) [obs, start years]
+  as measured
+    w=5 with now above  1.00 (1.01) [1010,6]   0.89 (0.91) [790,5]   0.72 (0.78) [594,4]   0.80 (1.06) [397,3]   1.19 (1.21) [200,2]
+    w=5 with now below  0.44 (0.21) [710,6]   0.19 (0.04) [595,5]   0.03 (-0.02) [481,4]   0.04 (-0.03) [361,3]   0.08 (-0.02) [258,2]
+    w=5 w/o  now above  1.01 (1.04) [1089,5]   0.94 (1.00) [813,4]   0.83 (0.90) [561,3]   0.91 (0.91) [328,2]   1.16 (1.12) [120,1]
+    w=5 w/o  now below  0.51 (0.29) [726,5]   0.24 (0.11) [586,4]   0.05 (0.02) [444,3]   0.02 (0.02) [287,2]   0.03 (-0.02) [160,1]
+    w=8 with now above  0.96 (1.00) [560,3]   0.90 (0.82) [337,2]   0.72 (0.61) [145,1]        -              -      
+    w=8 with now below  0.59 (0.25) [346,3]   0.31 (0.13) [227,2]   0.13 (0.04) [104,1]        -              -      
+    w=8 w/o  now above  1.04 (1.02) [401,2]   1.04 (0.91) [170,1]        -              -              -      
+    w=8 w/o  now below  0.64 (0.53) [241,2]   0.42 (0.57) [115,1]        -              -              -      
+  net of the market's drift
+    w=5 with now above  0.88 (0.95) [1010,6]   0.68 (0.83) [790,5]   0.51 (0.67) [594,4]   0.57 (0.95) [397,3]   0.91 (1.08) [200,2]
+    w=5 with now below  0.58 (0.24) [710,6]   0.31 (0.07) [595,5]   0.19 (0.01) [481,4]   0.19 (0.00) [361,3]   0.27 (0.02) [258,2]
+    w=5 w/o  now above  0.86 (0.97) [1089,5]   0.72 (0.92) [813,4]   0.61 (0.80) [561,3]   0.70 (0.80) [328,2]   0.86 (0.99) [120,1]
+    w=5 w/o  now below  0.70 (0.33) [726,5]   0.40 (0.16) [586,4]   0.21 (0.07) [444,3]   0.16 (0.05) [287,2]   0.25 (0.02) [160,1]
+    w=8 with now above  0.79 (0.92) [560,3]   0.68 (0.74) [337,2]   0.54 (0.50) [145,1]        -              -      
+    w=8 with now below  0.82 (0.31) [346,3]   0.54 (0.20) [227,2]   0.35 (0.11) [104,1]        -              -      
+    w=8 w/o  now above  0.82 (0.95) [401,2]   0.81 (0.82) [170,1]        -              -              -      
+    w=8 w/o  now below  0.90 (0.60) [241,2]   0.63 (0.66) [115,1]        -              -              -      
+
+US revenue growth: excess over the size fifth's median kept in year t+h (slope over deciles) [obs]
+  past 1y excess: h1 0.30 [7257]  h2 0.06 [6288]  h3 0.10 [5378]  h4 0.20 [4533]  h5 0.15 [3749]
+  past 3y excess: h1 0.21 [5534]  h2 0.16 [4632]  h3 0.25 [3810]  h4 0.20 [2977]  h5 0.14 [2177]
+
+US return on equity above today's stable cost of equity 9.3%: share above h years on (all firm-years: 61% above)
+  5 of 5 years above: h1 0.91 [1681]  h2 0.91 [1383]  h3 0.89 [1091]  h4 0.88 [796]  h5 0.87 [525]
+  4 of 5 years above: h1 0.77 [847]  h2 0.76 [686]  h3 0.75 [539]  h4 0.73 [405]  h5 0.75 [255]
+  3 of 5 years above: h1 0.64 [667]  h2 0.66 [546]  h3 0.67 [416]  h4 0.69 [299]  h5 0.69 [189]
+  0-2 of 5 years above: h1 0.34 [1799]  h2 0.42 [1451]  h3 0.44 [1129]  h4 0.45 [833]  h5 0.48 [545]
+  5 of 5, median excess under 13%: h1 0.87 [845]  h2 0.87 [706]  h3 0.83 [572]  h4 0.82 [424]  h5 0.82 [280]
+  5 of 5, median excess over 13%: h1 0.95 [836]  h2 0.95 [677]  h3 0.95 [519]  h4 0.94 [372]  h5 0.93 [245]
+  5 of 5, share of the excess kept, net of drift: h1 0.92 [1627]  h2 0.87 [1339]  h3 0.87 [1054]  h4 0.82 [769]  h5 0.79 [507]
+
+US used: margin gap kept a year above 0.848 below 0.594 (5 years: 0.44 / 0.07); growth shares after one year's excess [0.304, 0.128, 0.128, 0.128, 0.128], after three years' [0.212, 0.202, 0.202, 0.202, 0.144]; excess return kept a year 0.954 (year 11: 0.60, year 25: 0.31)
+
+HK margins (net margin), 2945 companies, years 2015-2025; gap of at least 3%; median kept share (slope over the gap's deciles) [obs, start years]
+  as measured
+    w=5 with now above  0.69 (0.64) [2562,6]   0.41 (0.52) [2027,5]   0.20 (0.50) [1517,4]   0.07 (0.38) [1118,3]   0.10 (0.61) [646,2]
+    w=5 with now below  0.94 (0.77) [4810,6]   0.87 (0.62) [4018,5]   0.89 (0.54) [3183,4]   0.93 (0.56) [2280,3]   0.98 (0.63) [1524,2]
+    w=5 w/o  now above  0.75 (0.72) [2690,5]   0.47 (0.52) [2044,4]   0.35 (0.50) [1444,3]   0.17 (0.41) [961,2]   0.28 (0.61) [394,1]
+    w=5 w/o  now below  0.94 (0.83) [4958,5]   0.91 (0.77) [3917,4]   0.91 (0.62) [2886,3]   0.97 (0.63) [1798,2]   0.83 (0.62) [904,1]
+    w=8 with now above  0.72 (0.54) [1240,3]   0.46 (0.34) [780,2]   0.40 (0.20) [354,1]        -              -      
+    w=8 with now below  0.97 (0.85) [2789,3]   0.93 (0.74) [1805,2]   0.86 (0.62) [864,1]        -              -      
+    w=8 w/o  now above  0.84 (0.68) [896,2]   0.66 (0.62) [419,1]        -              -              -      
+    w=8 w/o  now below  0.99 (0.92) [1907,2]   0.95 (0.83) [895,1]        -              -              -      
+  net of the market's drift
+    w=5 with now above  0.81 (0.66) [2562,6]   0.62 (0.56) [2027,5]   0.53 (0.57) [1517,4]   0.44 (0.45) [1118,3]   0.56 (0.68) [646,2]
+    w=5 with now below  0.79 (0.75) [4810,6]   0.66 (0.58) [4018,5]   0.59 (0.49) [3183,4]   0.57 (0.50) [2280,3]   0.57 (0.57) [1524,2]
+    w=5 w/o  now above  0.97 (0.77) [2690,5]   0.76 (0.59) [2044,4]   0.69 (0.57) [1444,3]   0.57 (0.48) [961,2]   0.68 (0.68) [394,1]
+    w=5 w/o  now below  0.72 (0.78) [4958,5]   0.64 (0.71) [3917,4]   0.61 (0.56) [2886,3]   0.60 (0.57) [1798,2]   0.54 (0.57) [904,1]
+    w=8 with now above  0.96 (0.59) [1240,3]   0.79 (0.39) [780,2]   0.71 (0.26) [354,1]        -              -      
+    w=8 with now below  0.73 (0.81) [2789,3]   0.65 (0.70) [1805,2]   0.59 (0.57) [864,1]        -              -      
+    w=8 w/o  now above  1.06 (0.74) [896,2]   0.89 (0.68) [419,1]        -              -              -      
+    w=8 w/o  now below  0.73 (0.87) [1907,2]   0.68 (0.79) [895,1]        -              -              -      
+
+HK revenue growth: excess over the size fifth's median kept in year t+h (slope over deciles) [obs]
+  past 1y excess: h1 0.20 [18639]  h2 0.06 [16099]  h3 0.09 [13677]  h4 0.06 [11421]  h5 0.02 [9321]
+  past 3y excess: h1 0.14 [14611]  h2 0.08 [12131]  h3 0.06 [9853]  h4 0.04 [7685]  h5 0.02 [5579]
+
+HK return on equity above today's stable cost of equity 8.2%: share above h years on (all firm-years: 42% above)
+  5 of 5 years above: h1 0.75 [2243]  h2 0.64 [1946]  h3 0.56 [1604]  h4 0.52 [1223]  h5 0.49 [807]
+  4 of 5 years above: h1 0.44 [1567]  h2 0.39 [1307]  h3 0.36 [1062]  h4 0.33 [787]  h5 0.30 [522]
+  3 of 5 years above: h1 0.33 [1688]  h2 0.31 [1417]  h3 0.27 [1119]  h4 0.26 [832]  h5 0.29 [540]
+  0-2 of 5 years above: h1 0.16 [8607]  h2 0.19 [6802]  h3 0.19 [5132]  h4 0.21 [3609]  h5 0.21 [2254]
+  5 of 5, median excess under 10%: h1 0.76 [1122]  h2 0.66 [956]  h3 0.59 [770]  h4 0.55 [579]  h5 0.51 [383]
+  5 of 5, median excess over 10%: h1 0.75 [1121]  h2 0.62 [990]  h3 0.53 [834]  h4 0.50 [644]  h5 0.48 [424]
+  5 of 5, share of the excess kept, net of drift: h1 0.82 [2136]  h2 0.64 [1862]  h3 0.59 [1541]  h4 0.54 [1178]  h5 0.52 [776]
+
+HK used: margin gap kept a year above 0.884 below 0.850 (5 years: 0.54 / 0.44); growth shares after one year's excess [0.2, 0.075, 0.075, 0.063, 0.015], after three years' [0.145, 0.082, 0.06, 0.037, 0.017]; excess return kept a year 0.878 (year 11: 0.24, year 25: 0.04)
+```

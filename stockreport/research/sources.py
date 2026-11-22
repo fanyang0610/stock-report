@@ -60,6 +60,46 @@ def annual(market: str, code: str) -> pd.DataFrame:
     return parse_annual(payload)
 
 
+TRAILING = ["revenue", "ni", "gp", "ocf", "pretax", "interest", "da", "capex", "op_income"]  # SECOND's names
+
+
+def parse_trailing(payload: dict) -> dict:
+    """The trailing twelve months to the latest quarter in us.latest()'s layout, from Yahoo's interim figures: each
+    figure Yahoo's trailing value at that date, else its four quarters to it (20 days' slack for 52-53-week years),
+    else none; the same a year earlier for the year-on-year lines; the equity and ordinary shares at that date. {}
+    without a trailing profit."""
+    series = {}
+    for item in payload["timeseries"]["result"]:
+        name = item["meta"]["type"][0]
+        series[name] = sorted((v["asOfDate"], v["reportedValue"]["raw"], v.get("currencyCode")) for v in item.get(name) or [] if v)
+    near = lambda name, day: [x for x in series.get(name, []) if abs((date.fromisoformat(x[0]) - day).days) <= 20]
+    profit = series.get("trailing" + SECOND["ni"])
+    if not profit:
+        return {}
+    end = date.fromisoformat(profit[-1][0])
+
+    def at(key, day):
+        if hit := near("trailing" + SECOND[key], day):
+            v = hit[-1][1]
+        else:
+            q = [near("quarterly" + SECOND[key], day - timedelta(days=91 * i)) for i in range(4)]
+            if not all(q):
+                return None
+            v = sum(x[-1][1] for x in q)
+        return abs(v) if key == "capex" else v
+    point = lambda key: (near("quarterly" + SECOND[key], end) or [(None, None)])[-1][1]
+    return {"period": end.isoformat(), "months": 12, "basis": "TTM (Yahoo)", "notice": None, "currency": profit[-1][2],
+            "equity": point("equity"), "shares": point("shares")} | {k: at(k, end) for k in TRAILING} | {
+        f"{k}_prior": at(k, end - timedelta(days=365)) for k in ("revenue", "ni", "gp", "ocf")}
+
+
+def trailing(market: str, code: str) -> dict:
+    types = ",".join(f + SECOND[k] for f in ("trailing", "quarterly") for k in TRAILING + ["equity", "shares"])
+    payload = yahoo.make_http().get(yahoo.TIMESERIES.format(symbol=symbol(market, code)), params={
+        "type": types, "period1": int(time.time()) - 3 * 365 * 86400, "period2": int(time.time())}).json()
+    return parse_trailing(payload)
+
+
 def raw(d, key):
     v = (d or {}).get(key)
     return v.get("raw") if isinstance(v, dict) else v
@@ -105,7 +145,7 @@ def parse_summary(payload: dict, today: date) -> dict:
                              "grade": m.get("toGrade"), "action": m.get("action"), "target": m.get("currentPriceTarget")}
                             for m in moves[:10]],
         "sector": profile.get("sector"), "industry": profile.get("industry"), "employees": profile.get("fullTimeEmployees"),
-        "business": (profile.get("longBusinessSummary") or "")[:600]}
+        "country": profile.get("country"), "business": (profile.get("longBusinessSummary") or "")[:600]}
 
 
 def summary(market: str, code: str, today: date) -> dict:

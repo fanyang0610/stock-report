@@ -114,3 +114,24 @@ def test_cn_shares_on_todays_basis():
                       "shares": [1.386e9] * 3})
     latest = pd.Series({"period": "2025-09-30", "share_capital": 1.386e9})
     assert list(sheet.cn_shares(a, latest, 1.386e9, [("2021-06-10", 0.2)])) == pytest.approx([1.2e9, 1.2e9, 1.26e9])
+
+
+def test_cash_below_profit_needs_a_profit():
+    # operating cash flow at 80% then 60% of profit: below it and widening; a loss year with positive cash flow (a
+    # loss-maker funding itself) has cash above profit, whatever the ratio's sign says
+    a = pd.DataFrame({"revenue": [100.0, 110.0], "ni": [10.0, 10.0], "ocf": [8.0, 6.0], "capex": [1.0, 1.0]})
+    assert checks.earnings_signals(a)["cash_below_profit_widening"] is True
+    loss = a.assign(ni=[-10.0, -12.0], ocf=[8.0, 12.0])
+    assert checks.earnings_signals(loss)["cash_below_profit_widening"] is None
+
+
+def test_return_on_capital_without_the_stakes_valued_apart():
+    # US filer: operating income 30 (the stakes' income left out), tax 25%; capital = equity 200 + debt 50 - cash 30 -
+    # stakes 120 = 100, so the return is 22.5% (with the stakes in, 10.2%); sales to capital 300 / 100 = 3
+    from stockreport.research import value
+    a = pd.DataFrame([{"period": f"{2021 + i}-12-31", "revenue": 300.0, "gp": 120.0, "op_income": 30.0, "ni": 20.0,
+                       "pretax": 32.0, "tax": 8.0, "interest": 2.0, "assets": 500.0, "equity": 200.0, "debt": 50.0,
+                       "cash": 30.0, "nonop": 120.0, "shares": 10.0, "ocf": 40.0, "capex": 10.0} for i in range(5)])
+    h = sheet.history(a, {}, "general", "us")
+    assert h[-1]["roic"] == pytest.approx(30 * 0.75 / 100)
+    assert value.sales_to_capital({"history": h, "valuation": {"balance": {}}}, {})[0] == pytest.approx(3.0)

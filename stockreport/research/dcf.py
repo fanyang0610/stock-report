@@ -41,11 +41,16 @@ def steps(start: float, end: float) -> list[float]:
 
 
 def fcff(revenue0: float, growth: list[float], margin: list[float], tax: list[float], sales_to_capital: list[float],
-         cost: list[float], g_term: float, wacc_term: float, roic_term: float, tax_term: float, nol: float = 0.0) -> dict:
-    """Value of the operating assets: ten years of free cash flow to the firm, then a stable year growing at g_term.
-    Reinvestment is next year's revenue change over the sales-to-capital ratio (one year's lag, Ginzu's default); in
-    the stable period it is g / return on capital of NOPAT (a return equal to the cost of capital adds no value). A tax
-    loss carried forward shields operating income until used."""
+         cost: list[float], g_term: float, wacc_term: float, ronic: list[float], tax_term: float, nol: float = 0.0,
+         earned: list[tuple[float, float]] | None = None) -> dict:
+    """Value of the operating assets: ten years of free cash flow to the firm, then the stable period growing at
+    g_term (terminal). Reinvestment is next year's revenue change over the sales-to-capital ratio (one year's lag,
+    Ginzu's default); in the stable period it is g / the return on new capital of NOPAT: `ronic` for the years excess
+    returns last, then the cost of capital (growth adds no value). A tax loss carried forward shields operating income
+    until used. `earned`: the first years' (revenue, operating income) as forecast, while the paths describe a normal
+    year (a cyclical's consensus years: their income above or below normal is residual income, Damodaran's
+    normalization; the reinvestment and the later years follow the normal path, so a price-driven peak takes no
+    capital it won't keep)."""
     rev = [revenue0]
     for g in growth:
         rev.append(rev[-1] * (1 + g))
@@ -57,17 +62,68 @@ def fcff(revenue0: float, growth: list[float], margin: list[float], tax: list[fl
         left = left - e if e < 0 else max(left - e, 0)
     nxt = rev[2:] + [rev_term]
     reinvest = [(nxt[t] - rev[t + 1]) / sales_to_capital[t] for t in range(YEARS)]
+    shown = rev[1:]
+    for t, (r, e) in enumerate(earned or []):
+        shown[t], ebit[t], nopat[t] = r, e, e if e <= 0 else e * (1 - tax[t])
     flows = [n - r for n, r in zip(nopat, reinvest)]
     factor, disc = 1.0, []
     for c in cost:
         factor /= 1 + c
         disc.append(factor)
-    term_nopat = rev_term * margin[-1] * (1 - tax_term)
-    term_flow = term_nopat - (g_term / roic_term * term_nopat if g_term > 0 else 0)
-    tv = term_flow / (wacc_term - g_term)
+    tv = terminal(rev_term * margin[-1] * (1 - tax_term), g_term, wacc_term, ronic)
     pv = sum(f * d for f, d in zip(flows, disc))
-    return {"revenue": rev[1:], "ebit": ebit, "nopat": nopat, "reinvestment": reinvest, "fcff": flows, "discount": disc,
+    return {"revenue": shown, "ebit": ebit, "nopat": nopat, "reinvestment": reinvest, "fcff": flows, "discount": disc,
             "terminal_value": tv, "pv_terminal": tv * disc[-1], "pv_flows": pv, "operating": pv + tv * disc[-1]}
+
+
+def fcfe(book0: float, roe: list[float], growth: list[float], cost: float, g_term: float, ronic: list[float]) -> dict:
+    """fcff's rules in equity terms (a market's aggregate, research/market.py): each year's profit is its ROE on the
+    opening book, the book grows at `growth` (the reinvestment growth needs, as revenue over sales to capital in fcff) and
+    the rest is paid out; then the stable period as in fcff: the year-10 ROE on the book in place, new capital earning
+    `ronic`, then its cost (terminal). With ROE equal to the cost every year the value is the book."""
+    book, factor, pv = book0, 1.0, 0.0
+    for r, g in zip(roe, growth):
+        factor /= 1 + cost
+        pv += (r - g) * book * factor
+        book *= 1 + g
+    tv = terminal(roe[-1] * book, g_term, cost, ronic)
+    return {"value": pv + tv * factor, "pv_flows": pv, "pv_terminal": tv * factor}
+
+
+def terminal(nopat: float, g: float, cost: float, ronic: list[float]) -> float:
+    """The stable period's value a year before `nopat` (year 11's) is earned, in Morningstar's last two stages: the
+    years excess returns last, each new unit of capital earning that year's `ronic` (growth g takes g / RONIC of
+    NOPAT), then a return on new capital equal to the cost of capital, whose value is NOPAT / cost at any growth
+    (Koller's value-driver formula, RONIC = WACC). With no excess years it is the Ginzu's NOPAT (1 - g / WACC) / (WACC -
+    g) for g > 0."""
+    pv, n, factor = 0.0, nopat, 1.0
+    for r in ronic:
+        factor /= 1 + cost
+        pv += n * (1 - g / r if g > 0 else 1.0) * factor
+        n *= 1 + g
+    return pv + (n / cost if g > 0 else n / (cost - g)) * factor
+
+
+STEP, LIMIT = 0.005, 1 / 9  # stable growth +0.5 point may raise the terminal value by at most 1/9: the investment-
+# research skill's tools/terminal_value.py check ("g 只要再加 0.5pct", its 5-point r - g floor) for a perpetuity of
+# a fixed payout, where 0.005 / (r - g - 0.005) <= 1/9 is r - g >= 5 points
+
+
+def tested_growth(tv, g_max: float, g_min: float = 0.0) -> float:
+    """The highest stable growth up to `g_max` (the riskless rate: Damodaran's cap) at which `tv(g)`, a terminal value
+    as a function of growth, passes the sensitivity test; `g_min` when none does."""
+    def ok(g):
+        a, b = tv(g), tv(g + STEP)
+        return a > 0 and b > 0 and b / a - 1 <= LIMIT
+    if ok(g_max):
+        return g_max
+    if not ok(g_min):
+        return g_min
+    lo, hi = g_min, g_max
+    for _ in range(50):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if ok(mid) else (lo, mid)
+    return lo
 
 
 def equity_value(operating: float, debt: float, minority: float, cash: float, nonop: float = 0.0, options: float = 0.0) -> float:
@@ -100,19 +156,21 @@ def implied_cost_equity(roe, pb, g):
     return g + (roe - g) / pb
 
 
-def excess_return(book0: float, roe: list[float], payout: list[float], cost: list[float], roe_term: float,
+def excess_return(book0: float, roe: list[float], growth: list[float], cost: list[float], fade: list[float],
                   cost_term: float, g_term: float) -> dict:
-    """Equity value = book + the present value of each year's excess return (ROE - COE) x opening book, book growing
-    by retained profit; after the last year a stable period at roe_term, cost_term and g_term, whose value over book is
-    the justified P/B's (Damodaran, "Investment Valuation", ch. 21)."""
+    """Equity value = book + the present value of each year's excess return (ROE - COE) x opening book (Damodaran,
+    "Investment Valuation", ch. 21), the book growing at `growth` with the rest of the profit paid out; then the stable
+    period. Stage 20, one rule for the forms and the market's aggregate that sets the return (fcfe, whose value this is
+    at one cost): the book grows on the growth path, as capital follows revenue in fcff, and the year-10 ROE stays on
+    the book in place, new capital earning `fade` (the moat's returns on new capital), then the cost (terminal)."""
     book, factor, pv, rows = book0, 1.0, 0.0, []
-    for r, p, c in zip(roe, payout, cost):
+    for r, g, c in zip(roe, growth, cost):
         excess = (r - c) * book
         factor /= 1 + c
         pv += excess * factor
-        rows.append({"book": book, "roe": r, "excess": excess})
-        book *= 1 + r * (1 - p)
-    term = (justified_pb(roe_term, cost_term, g_term) - 1) * book
+        rows.append({"book": book, "roe": r, "excess": excess, "payout": 1 - g / r if r > 0 else None})
+        book *= 1 + g
+    term = terminal(roe[-1] * book, g_term, cost_term, fade) - book
     return {"value": book0 + pv + term * factor, "pv_excess": pv, "pv_terminal": term * factor, "book_end": book, "years": rows}
 
 

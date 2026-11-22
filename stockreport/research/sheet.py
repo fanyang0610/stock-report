@@ -15,15 +15,18 @@ from stockreport.research.checks import cagr, div, fcf, roe_series, val
 
 CHECK = ["revenue", "ni", "equity", "ocf", "assets"]
 BALANCE = ["assets", "cur_assets", "cur_liab", "cash", "receivables", "inventory", "ppe", "goodwill", "intangibles",
-           "liabilities", "debt", "lt_debt", "equity", "pref", "minority", "retained", "contract_liab", "cip"]
+           "liabilities", "debt", "lt_debt", "equity", "pref", "minority", "retained", "contract_liab", "cip", "nonop"]
 FIN_OFF = ["ocf", "capex", "fcf", "debt", "cash", "net_debt", "roic", "ocf_to_profit", "gp", "gross_margin", "ebit_margin"]
 RATING = {"buy": "买入", "hold": "持有", "sell": "卖出"}
+SPARSE = ["invest_income", "fv_change", "interest_income"]  # the non-operating assets' income: empty when there is none
+EBIT_KEYS = ["pretax", "interest", "op_income"] + SPARSE
 
 
-def ttm(st: pd.DataFrame, key: str) -> float | None:
+def ttm(st: pd.DataFrame, key: str, sparse: bool = False) -> float | None:
     """Twelve months to the latest period: the fiscal year itself, or the year to date + the last fiscal year - the
-    same months a year earlier (CN quarters, HK halves)."""
-    st = st.dropna(subset=[key])
+    same months a year earlier (CN quarters, HK halves). A sparse line (SPARSE) left empty in a report is none that
+    period, not the last period that had one (五粮液's 公允价值变动收益, last in 2023)."""
+    st = st.assign(**{key: st[key].fillna(0)}) if sparse and key in st else st.dropna(subset=[key])
     if st.empty:
         return None
     last = st.iloc[-1]
@@ -64,38 +67,54 @@ def quarters(st: pd.DataFrame, n: int = 8) -> pd.DataFrame:
     return q[["period", "revenue_q", "ni_q", "revenue_yoy", "ni_yoy"]].tail(n)
 
 
-def ebit(market: str, pretax, interest, op_income):
-    """Operating profit, a figure or a column. US filers: the operating income they report, when filed: their pretax
-    profit carries equity stakes' fair-value changes (US GAAP since 2018, ASU 2016-01: Amazon's Anthropic stake) and
-    interest earned on cash the valuation adds as cash (Damodaran's EBIT is operating income). Elsewhere pretax profit
-    plus interest expense: CN's 营业利润 itself counts investment income, and an HK associate's share stands for a
-    stake the free data can't value apart (Tencent's)."""
-    if isinstance(pretax, pd.Series):
-        total = pretax + interest.fillna(0)
-        return op_income.where(op_income.notna(), total) if market == "us" else total
-    if market == "us" and op_income is not None and op_income == op_income:
-        return op_income
-    return None if pretax is None else pretax + (interest or 0)
+def ebit(market: str, x):
+    """Operating profit (Damodaran's EBIT: operating income, the non-operating assets valued apart in the equity
+    bridge) from a row, a dict of trailing figures or a frame of years (a column then). US filers: the operating income
+    they report, when filed (their pretax profit carries equity stakes' fair-value changes, ASU 2016-01: Amazon's
+    Anthropic stake, and interest earned on cash). CN: 营业利润 less 投资收益, 公允价值变动收益 and interest income,
+    plus interest expense (research/cn.py). HK: pretax profit plus finance costs less interest income and the share of
+    associates' and joint ventures' profit (research/hk.py: fair-value changes have no line of their own). Else, and
+    where those lines are missing, pretax profit plus interest expense."""
+    frame = isinstance(x, pd.DataFrame)
+    get = lambda k: x[k] if k in x else None
+    zero = lambda v: v.fillna(0) if isinstance(v, pd.Series) else 0.0 if v is None or v != v else v
+    present = lambda v: v is not None and (frame or v == v)
+    pretax, interest, op = get("pretax"), get("interest"), get("op_income")
+    total = pretax + zero(interest) if present(pretax) else None
+    if market == "us":
+        core = op
+    elif market == "cn":
+        core = op - zero(get("invest_income")) - zero(get("fv_change")) - zero(get("interest_income")) + zero(interest) \
+            if present(op) else None
+    elif market == "hk":
+        core = total - zero(get("interest_income")) - zero(get("invest_income")) if total is not None else None
+    else:
+        core = None
+    if frame:
+        return total if core is None else core if total is None else core.where(core.notna(), total)
+    return core if present(core) else total
 
 
-def history(a: pd.DataFrame, dps: dict[str, float], kind: str, market: str = "cn") -> list[dict]:
+def history(a: pd.DataFrame, dps: dict[str, float], kind: str, market: str = "cn", held: bool = False) -> list[dict]:
     """Up to 10 fiscal years with margins, returns, cash conversion, free cash flow and leverage (not for banks, insurers
     and brokers, whose debt, cash and operating cash flow are their business; nor a REIT's cash conversion, its profit
-    carrying property revaluations). EPS is profit over the year's shares on today's basis."""
+    carrying property revaluations). EPS is profit over the year's shares on today's basis. `held`: the float's cash and
+    investments are operating assets, in the capital (value.capital)."""
     h = a.tail(10).copy()
     h["fcf"] = fcf(h) if fcf(h) is not None else np.nan
     h["gross_margin"], h["op_margin"], h["net_margin"] = h["gp"] / h["revenue"], h["op_income"] / h["revenue"], h["ni"] / h["revenue"]
     h["roe"], h["roa"], h["eps"] = roe_series(a).tail(10), h["ni"] / h["assets"], h["ni"] / h["shares"]
     tax_rate = (h["tax"] / h["pretax"]).clip(0, 0.5).fillna(0.25)
-    invested = h["equity"] + h["debt"].fillna(0) - h["cash"].fillna(0)
-    operating = ebit(market, h["pretax"], h["interest"], h["op_income"])
+    nonop = h["nonop"].fillna(0) if "nonop" in h else 0.0  # the stakes whose income EBIT leaves out (valued apart in
+    invested = h["equity"] + h["debt"].fillna(0) - (0.0 if held else h["cash"].fillna(0) + nonop)  # the bridge): out of capital too
+    operating = ebit(market, h)
     h["roic"] = (operating * (1 - tax_rate) / invested).where(invested > 0)
     h["ebit_margin"] = operating / h["revenue"]
     h["ocf_to_profit"], h["net_debt"] = h["ocf"] / h["ni"].where(h["ni"] > 0), h["debt"] - h["cash"]
     h["dps"] = h["period"].str[:4].map(dps)
     h[{"bank": FIN_OFF, "insurer": FIN_OFF, "broker": FIN_OFF, "reit": ["ocf_to_profit"]}.get(kind, [])] = np.nan
     keep = ["period", "currency", "revenue", "gp", "op_income", "ni", "ni_core", "eps", "dps", "ocf", "capex", "fcf",
-            "div_paid", "buyback", "assets", "equity", "debt", "cash", "net_debt", "goodwill", "shares", "gross_margin",
+            "div_paid", "buyback", "assets", "equity", "debt", "cash", "nonop", "net_debt", "goodwill", "shares", "gross_margin",
             "op_margin", "ebit_margin", "net_margin", "roe", "roa", "roic", "ocf_to_profit", "npl", "provision_cover", "car", "cet1", "nim",
             "solvency"]
     return h.reindex(columns=keep).dropna(axis=1, how="all").replace({np.nan: None}).to_dict("records")
@@ -111,7 +130,7 @@ def summary(a: pd.DataFrame, kind: str, market: str = "cn") -> dict:
             old = a.iloc[-1 - n]
             out[f"rev_cagr_{n}y"], out[f"ni_cagr_{n}y"] = cagr(val(t, "revenue"), val(old, "revenue"), n), cagr(val(t, "ni"), val(old, "ni"), n)
     five, roe = a.tail(5), roe_series(a)
-    operating = ebit(market, val(t, "pretax"), val(t, "interest"), val(t, "op_income"))
+    operating = ebit(market, {k: val(t, k) for k in EBIT_KEYS})
     ebitda = None if operating is None else operating + (val(t, "da") or 0)
     if kind in ("bank", "insurer", "broker"):
         a = a.assign(ocf=np.nan, capex=np.nan, debt=np.nan, cash=np.nan, gp=np.nan)
@@ -139,8 +158,10 @@ def stats(series: pd.Series, now: float | None) -> dict:
         return {"now": now, "months": len(s)}
     mean, sd, recent = float(s.mean()), float(s.std()), series.tail(60).dropna()
     recent = recent[recent > 0]
+    five = len(recent) >= 12  # the quartiles: a stand-in multiple's scenarios (stage 18)
     return {"now": now, "months": len(s), "mean": mean, "median": float(s.median()), "sd": sd, "min": float(s.min()), "max": float(s.max()),
-            "median_5y": float(recent.median()) if len(recent) >= 12 else None,
+            "median_5y": float(recent.median()) if five else None, "q25": float(s.quantile(0.25)), "q75": float(s.quantile(0.75)),
+            "q25_5y": float(recent.quantile(0.25)) if five else None, "q75_5y": float(recent.quantile(0.75)) if five else None,
             "pct": float((s < now).mean()), "above_3sd": now > mean + 3 * sd}
 
 

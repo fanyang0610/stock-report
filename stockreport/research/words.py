@@ -22,7 +22,7 @@ from dotenv import dotenv_values
 
 from stockreport import quotes
 from stockreport.config import CONFIG, ROOT
-from stockreport.research import CUR, money, pct, price, times
+from stockreport.research import CUR, compare, money, pct, price, times
 from stockreport.research.compare import MARGIN_SOURCE
 
 log = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ BEAR = """任务：空头观点。你只代表看空的一方（另一位研究�
 每条：title 短标题（不超过 14 个字），text 1-3 句，最后一句说明这条担忧落空需要看到什么。
 JSON：{"bear":[{"title":"","text":"","src":[]}]}"""
 
-THESIS = """任务：结论页和观点。程序已给出评级 {rating}、12 个月目标价 {target}（现价 {price}），预期 12 个月回报 {expected_return}，大盘 {market_return}；合理价值 {fair_value}（{fair_upside}），评级看合理价值的超额回报 {fair_excess}，股价一般约 3 年向合理价值靠拢，所以 12 个月目标价只计入约三分之一的差距。
+THESIS = """任务：结论页和观点。程序已给出评级 {rating}、12 个月目标价 {target}（现价 {price}），预期 12 个月回报 {expected_return}，同组公司 {market_return}；合理价值 {fair_value}（{fair_upside}），评级看现价隐含回报 {implied_return} 和同组公司（同一市场、同一估值方式）现价隐含回报 {market_implied} 的比较（合理价值的超额回报 {fair_excess}），股价一般约 3 年向合理价值靠拢，所以 12 个月目标价只计入约三分之一的差距。评级状态为「方法分歧未决」或「不给买入」时（{rating_state}），结论要写明。
 下面附有已核对的业务、多头、空头三部分，以及程序列出的「与市场一致目标价不同的原因」和「与每日筛选的异同」。你的观点要和程序的评级一致，同时公平呈现两方。
 - conclusion：一句话结论（不超过 50 个字），写出 {rating}，说清为什么是这个评级。
 - points（3 条）：投资要点：你综合多空两方之后支持 {rating} 的理由，每条 title + 1-2 句；不要照抄多头或空头的条目。
@@ -109,9 +109,9 @@ def keys(f: dict, v: dict, extra: dict) -> dict[str, tuple[str, str]]:
         "price": ("现价", price(v["price"], q)),
         "upside": ("目标价相对现价", pct(ratio(v.get("target"), v["price"]), True)),
         "expected_return": ("预期 12 个月回报（含股息）", pct(v.get("expected_return"), True)),
-        "market_return": ("大盘预期 12 个月回报", pct(v.get("market_return"))),
+        "market_return": ("同组公司预期 12 个月回报（现价隐含）", pct(v.get("market_return"))),
         "excess_return": ("预期 12 个月超额回报", pct(v.get("excess_return"), True)),
-        "band": ("评级门槛（估值不确定性）", "±" + pct((v.get("uncertainty") or {}).get("band"), digits=0) if v.get("uncertainty") else None),
+        "band": ("评级门槛（现价相对合理价值，估值不确定性越大越宽）", compare.threshold(v) if v.get("uncertainty") else None),
         "bear": ("悲观情景的 12 个月价格", price(v.get("bear"), q)), "bull": ("乐观情景的 12 个月价格", price(v.get("bull"), q)),
         "street_target": ("市场一致目标价", price(st.get("target"), q)),
         "street_upside": ("市场目标价相对现价", pct(st.get("upside"), True)),
@@ -121,9 +121,13 @@ def keys(f: dict, v: dict, extra: dict) -> dict[str, tuple[str, str]]:
         "street_bullish": ("其中看多（买入或增持）的机构数", f"{bullish:g}" if n_rated else None),
         "analysts": ("覆盖的分析师人数", f"{c['analysts']:g}" if c.get("analysts") else None),
         "wacc": ("我们用的资本成本", pct(k.get("wacc"))), "cost_equity": ("股权成本", pct(k.get("cost_equity"))),
-        "capm_cost_equity": ("CAPM 算出的股权成本", pct((k.get("floor") or {}).get("cost_equity_capm"))),
-        "rf": ("无风险利率", pct(k.get("rf"), digits=2)), "erp": ("股权风险溢价", pct(k.get("erp"), digits=2)),
-        "beta": ("贝塔", f"{k['beta']:.2f}" if k.get("beta") is not None else None), "g": ("永续增长率", pct(k.get("g"))),
+        "rf": ("无风险利率", pct(k.get("rf"), digits=2)), "erp": ("股权风险溢价（同组公司现价隐含）", pct(k.get("erp"), digits=2)),
+        "market_implied": ("同组公司（同一市场、同一估值方式）现价隐含的年回报（按本模型的现金流规则）", pct((k.get("market") or {}).get("r"))),
+        "implied_return": ("本股现价隐含的年回报", pct(rev.get("implied_return"))),
+        "rating_state": ("评级状态", {"unresolved": "方法分歧未决", "blocked": "未通过质量检查，不给买入", "resolved": "已决"}.get(v.get("state"))),
+        "absolute_fair": ("绝对视角（Damodaran 公布的溢价）的合理价值", price((v.get("absolute") or {}).get("fair_value"), q)),
+        "absolute_excess": ("绝对视角的超额回报", pct((v.get("absolute") or {}).get("gap"), True)),
+        "beta": ("行业贝塔（绝对视角用）", f"{k['beta']:.2f}" if k.get("beta") is not None else None), "g": ("永续增长率", pct(k.get("g"))),
         "implied_wacc": ("现价隐含的资本成本", pct(rev.get("implied_wacc"))),
         "implied_growth": ("现价隐含的未来 5 年营收年增长", pct(rev.get("implied_growth_5y"), True)),
         "implied_margin": ("现价隐含的长期营业利润率", pct(rev.get("implied_margin"))),
@@ -165,7 +169,7 @@ def keys(f: dict, v: dict, extra: dict) -> dict[str, tuple[str, str]]:
         "m_score": ("Beneish M 值", f"{ck['beneish']['m_score']:.2f}" if (ck.get("beneish") or {}).get("m_score") is not None else None),
         "f_score": ("Piotroski F 值", f"{ck['piotroski']['f_score']}/{ck['piotroski']['signals_known']}" if ck.get("piotroski") else None),
         "z2": ("Altman Z'' 值", f"{ck['altman']['z2']:.1f}" if (ck.get("altman") or {}).get("z2") is not None else None),
-        "quality_screen": ("去劣筛选", {"pass": "通过", "fail": "未通过"}.get((ck.get("quality_screen") or {}).get("result"))),
+        "quality_screen": ("去劣筛选", {"pass": "通过", "exclude": "未通过"}.get((ck.get("quality_screen") or {}).get("result"))),
         "checklist_stars": ("好生意五项的星数（满分 5）", f"{ck['checklist']['stars']}" if (ck.get("checklist") or {}).get("stars") is not None else None),
         "dps_cagr_5y": ("近 5 年每股股息年均增长", pct(inc.get("dps_cagr_5y"), True)), "payout": ("派息率", pct(inc.get("payout"), digits=0)),
         "div_raises": ("提高股息的年数", f"{inc['raises']}" if inc.get("raises") is not None else None),
