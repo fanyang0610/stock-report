@@ -914,6 +914,57 @@
     without fin_sector raises a KeyError, not a wrong number: every live path builds it (universe, the backtest's
     frames); the snapshots saved before 17b don't have it, and no app path scores them again (`track` reads their saved
     distress column); the comparison re-derived it with universe.fin_sector.
+- Stage 17c (US EBIT from the SEC; the lists check of 2026-11-15, F3): done 2026-11-22, on stage 17b (b9a2da5).
+  fetch/sec.py reads trailing operating income (DURATION "op", OperatingIncomeLoss: op_ttm) with the other TTM
+  figures, and reads every company again once while the table has no op_ttm; universe.yahoo_balance takes it as US
+  EBIT, Yahoo's EBIT where the tag is missing for the latest period. Reason and sources: "The score", EBIT/EV.
+  - Coverage on 2026-11-15 (790 US scored names, 684 outside the financials): 446 take the SEC's operating income;
+    81 SEC filers tag none for the latest period (Eli Lilly, Johnson & Johnson, Chevron, Merck, GE Aerospace, IBM,
+    KLA, Deere and others present no operating-income subtotal) and 157 are Yahoo's gap companies (foreign filers):
+    those keep Yahoo's. EV/EBIT 676 → 677 names. The SEC figure is more than 25% from Yahoo's for 58 names, 8 with
+    the other sign; the score's rank correlation before and after 0.999, 47 names move more than 20 places.
+  - Checked against the filings (companyfacts as filed by 2026-11-15, form by form):
+    - Lumentum: fiscal 2026 (10-K, filed 2026-08-17) $524.8m + Q1 fiscal 2027 (10-Q, 2026-11-03) $359.8m − Q1 fiscal
+      2026 $6.7m = $877.9m, against Yahoo's −$6.79bn; fiscal 2026's margin 524.8 ÷ 3,014 = 17.4%, as F3 says. Net
+      income −$6.94bn for fiscal 2026 (the notes' loss below operating income). EV/EBIT −7.9 → 61.0.
+    - Carvana: 9 months 2026 $1,975m + 2025 $1,881m − 9 months 2025 $1,457m = $2,399m (Q3 2026 alone $714m), against
+      Yahoo's $0.136bn, below even its $1.71bn of net income: a Yahoo fault, not a one-off. EV/EBIT 408.9 → 23.2.
+    - Boeing: 9 months 2026 $958m + 2025 $4,281m − 9 months 2025 −$4,496m = $9,735m, against Yahoo's $10.3bn. 2025
+      carries a $9,672m gain on dispositions (the Digital Aviation Solutions sale; $63m by September) that Boeing
+      reports inside operating income, so this change doesn't remove it: underlying, the twelve months earn ~$0.1bn.
+    - Also seen: General Mills (−$0.21bn: fiscal 2026's $1.5bn goodwill impairment is in operating income, and a high
+      Q1 fiscal 2026, $1,726m, leaves the twelve months) and Air Products (−$0.59bn: $2.9bn of project-exit charges in its
+      June quarter) turn negative where Yahoo's EBIT was positive; Amazon 178.7 → 104.4bn (its Anthropic gains out),
+      EchoStar 13.7 → 0.27bn, Intel −9.25 → +1.76bn (their gaps not traced).
+  - 2026-11-15's snapshot re-scored by the build's own path both times (universe.yahoo_balance on the snapshot's
+    rows and Yahoo's table of that day; before: Yahoo's EBIT; after: the SEC's operating income from the facts filed
+    by 2026-11-15, the same period as the snapshot's other SEC figures for all 527 SEC names): the same names in every
+    list. The order moves within Buy (Alphabet and Royalty Pharma, Target and META, Western Digital and ASML swap
+    places) and Sell (Constellation 8th → 4th, Carvana 7th → 10th); Hold is unchanged.
+    Lumentum stays a Sell: EV/EBIT 61 is still among the dearest (its percentile 0.06 → 0.12), and its value family
+    is set by P/S 14.5, a loss on E/P and an 8-year average loss, all on net income. Carvana stays a Sell (value
+    family 0.08 → 0.12, still the bottom tenth). Amazon falls 168th → 225th, outside every list either way. The cards
+    change: Lumentum's 为什么卖出 no longer says EBIT 为负 (it names the 8-year ROA, −6%), Carvana's no longer EV/EBIT
+    408.9 and its risk line names its volatility; Lumentum's 多年平均亏损 and 近 12 个月亏损 stay (net income).
+  - Follow-up, not built: a core-profit figure for the US and HK. US E/P, the 8-year average profit and the card's
+    loss lines use net income, so Lumentum's note loss still reads as a loss there; HK has no free 扣非. And the
+    operating income filers report keeps special items in it (Boeing's disposal gain, General Mills' impairment,
+    Air Products' exit charges), which Compustat's operating income, the EBIT the published studies used, leaves
+    out; SEC tags for impairments, restructuring and disposal gains could be added back. Both are data questions of
+    their own.
+  - 276 tests pass; new: the SEC's operating income parsed from Lumentum's saved facts and preferred over Yahoo's
+    EBIT (tests/data/us_companyfacts_lite_op_sample.json, 4 KB). App Python 10,884 → 10,890 lines.
+  - The fresh-context stage review (one, on Sonnet): 276 tests pass; the code as planned, with the live table's
+    missing op_ttm falling back to Yahoo's EBIT until the next fetch's one full re-read (not run: it needs the
+    network); nothing in stockreport/research changed, no ticker in the code; it re-ran both rebuilds (outputs
+    identical to the saved ones) and reproduced every figure above, with 0 period mismatches in the join. Its
+    points, answered: (1) "no change in any list" was membership only: Buy's and Sell's order and some cards' text
+    change; the entry now says so. (2) US EBIT now has two definitions, the SEC's operating income for 446 names and
+    Yahoo's for 238, and special items stay inside the SEC figure: both are said here and in "The score", and the
+    second is the follow-up. (3) The effect shows only after the next weekly fetch reads every SEC company again: as
+    intended (fetch/sec.py). Its caution that Carvana's "Yahoo fault" and Boeing's ~$0.1bn are inferences: both rest
+    on the filed figures above (Carvana's net income above Yahoo's EBIT; Boeing's tagged $9,672m gain on
+    dispositions), checked in the session.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1027,6 +1078,18 @@ momentum drive the score (fixed in stage 1 after the stage review).
     no minorities line); a missing cash line means the balance sheet wasn't read (every company holds cash; HK 02583's
     record had no cash, debt or liabilities) and, like a missing EBIT, leaves EBIT/EV out. Not for financials (their
     debt is their product). Coverage: see Status.
+    - **US EBIT is the SEC's operating income (stage 17c; the lists check of 2026-11-15, F3).** Yahoo's EBIT is pretax
+      profit plus interest, so every item below operating income sits in it: Lumentum's $7.8bn non-cash loss on
+      retiring convertible notes made a GAAP operating margin of +17% read as EBIT 为负, and Carvana's EV/EBIT read
+      409. The measure the sources rank on is operating earnings: Greenblatt's EBIT and Gray and Carlisle's are
+      operating income, Novy-Marx (2013) moves up the income statement because the lines further down are polluted,
+      and Rouen, So and Wang (JFE 2021) find non-core items transitory and mispriced. So US filers' EBIT is their
+      trailing-12-month OperatingIncomeLoss from the same companyfacts files and periods as their other figures
+      (fetch/sec.py, DURATION "op"; the TTM rule of "Data sources", US), Yahoo's only where the SEC tag is missing for
+      the latest period (filers without an operating-income line, foreign filers, Yahoo's gap companies). The research
+      module has read US EBIT this way since stage 10's Amazon check. CN and HK keep Yahoo's: the screening's CN and
+      HK tables carry no operating-income line, and the larger question for both, with the US's E/P, is a follow-up
+      (a core-profit E/P; Status, stage 17c). Debt, cash and minorities stay Yahoo's.
   - **Dividend yield** (stage 3's redo): cash dividends with ex-dates in the last 365 days over the price (0 for a
     non-payer). In ValueRank, and the first sort of 中证红利低波 (50 high-yield, low-volatility A-shares, yield-weighted)
     and 恒生港股通红利低波 (HK, net-yield-weighted): a cash yield is hard to fake, which matters most in CN and HK.
@@ -2371,6 +2434,12 @@ skill turns out different. The quality to expect is DeepSeek's on a fixed bundle
     2026-11-15 snapshot before and after with the names that change and why; the week's Hold and Sell exits before
     and after the buffer fix; a test for the capped buffer; pytest passes; the fresh-context stage review; status;
     committed.
+17c. **US EBIT from the SEC** (the lists check of 2026-11-15, F3). US EV/EBIT on the trailing operating income filers
+    tag (OperatingIncomeLoss), Yahoo's EBIT only where the tag is missing; financials as before. Not changed: CN and
+    HK, E/P, the families, the lists' rules. Done when: this plan has the change with its reason and source; the
+    coverage among the US scored names; Lumentum, Carvana and Boeing checked against their filings; the 2026-11-15
+    snapshot before and after with the names that change and why; a parser test on a saved SEC sample; pytest
+    passes; the fresh-context stage review; status; committed. A core-profit E/P for the US and HK is a follow-up.
 ## Kept from the old build
 - The fetchers and cross-checks; the history tables; the SEC frames with dead companies; the point-in-time CN panel.
 - The backtest snapshots and the stage-1 harness (index funds, costs, month-end frames).
@@ -2437,6 +2506,8 @@ Stage 17b: Fama and French, "The cross-section of expected stock returns" (JF 19
 (NBER working paper w12362, July 2006: section 3, p. 17, and the appendix; the JF 2008 article above); Hang Seng
 Composite Index methodology (LargeCap, MidCap and SmallCap bands); NAICS (sector 52, Finance and Insurance, apart from
 53, Real Estate) and GICS (Real Estate out of Financials, 2016).
+Stage 17c: Rouen, So and Wang, "Core earnings: new data and evidence" (JFE 2021); Novy-Marx (JFE 2013, above);
+Greenblatt (2006) and Gray and Carlisle (2012, above) for EBIT as operating earnings.
 
 ## Decisions kept from the old plan
 - Python 3.12 + uv. The old Swift project is archived read-only at ~/Developer/EquitySignalsClawbot-legacy.
@@ -2552,7 +2623,7 @@ Composite Index methodology (LargeCap, MidCap and SmallCap bands); NAICS (sector
     a preferred one. Yahoo's shortName repeats the screener's, so longName. Verified 2026-11-02 on BNS ("The Bank of
     Nova Scotia"), BRK-B, GOOGL, RY, TD and the 20; the four partnerships still end in LP / L.P., so they still can't
     be bought. A cached review is now redone when the name it was written for changes (review.valid).
-  - Trailing-12-month fundamentals: SEC companyfacts (data.sec.gov/api/xbrl/companyfacts), 4 at a time, at most ~8 requests/s, User-Agent = SEC_USER_AGENT from .env; refreshed weekly per company (~5 min for 1,100). Files are 1-8 MB: they are parsed in memory and never written to disk. TTM = year-to-date + last fiscal year - same YTD a year earlier (the CN formula), or, after an annual report for less than a year (a fiscal-year change's transition period, a merger's successor stub), the fewest reported periods added and subtracted end to end that span the 12 months (not otherwise: L3Harris tags its fiscal-year revenue with Q4's dates); growth = TTM vs the TTM a year earlier. Concepts are merged per period in a preference order because companies switch tags between filings, with three rules from the Phase 12 cross-checks (2026-10-19), also in the annual history: revenue is chosen per period, because companies also tag parts of it with its concepts (ASC 606 fee revenue at M&T, AmEx and SoFi, Blue Owl's "Revenues", Zions' non-interest revenue subtotal) and totals before intersegment eliminations (Williams' ASC 606 total, Hasbro's "Revenues"): the concept within 5% of what the income statement implies (gross profit + cost of revenue, else operating income + total costs and expenses), else the largest concept (REITs' rent: OperatingLeaseLeaseIncome), and for banks net interest + noninterest income when larger; a 12-month figure comes only from a 10-K (Comfort Systems' Q1 2026 10-Q tagged Q1 2025 revenue as the 2025 year); equity and net income are the parent's: the total including minorities less MinorityInterest when only the total is tagged (AT&T, Carlyle, TPG, Royalty Pharma), ProfitLoss less the minorities' share when NetIncomeLoss is missing (Invesco).
+  - Trailing-12-month fundamentals: SEC companyfacts (data.sec.gov/api/xbrl/companyfacts), 4 at a time, at most ~8 requests/s, User-Agent = SEC_USER_AGENT from .env; refreshed weekly per company (~5 min for 1,100). Files are 1-8 MB: they are parsed in memory and never written to disk. TTM = year-to-date + last fiscal year - same YTD a year earlier (the CN formula), or, after an annual report for less than a year (a fiscal-year change's transition period, a merger's successor stub), the fewest reported periods added and subtracted end to end that span the 12 months (not otherwise: L3Harris tags its fiscal-year revenue with Q4's dates); growth = TTM vs the TTM a year earlier. Concepts are merged per period in a preference order because companies switch tags between filings, with three rules from the Phase 12 cross-checks (2026-10-19), also in the annual history: revenue is chosen per period, because companies also tag parts of it with its concepts (ASC 606 fee revenue at M&T, AmEx and SoFi, Blue Owl's "Revenues", Zions' non-interest revenue subtotal) and totals before intersegment eliminations (Williams' ASC 606 total, Hasbro's "Revenues"): the concept within 5% of what the income statement implies (gross profit + cost of revenue, else operating income + total costs and expenses), else the largest concept (REITs' rent: OperatingLeaseLeaseIncome), and for banks net interest + noninterest income when larger; a 12-month figure comes only from a 10-K (Comfort Systems' Q1 2026 10-Q tagged Q1 2025 revenue as the 2025 year); equity and net income are the parent's: the total including minorities less MinorityInterest when only the total is tagged (AT&T, Carlyle, TPG, Royalty Pharma), ProfitLoss less the minorities' share when NetIncomeLoss is missing (Invesco). Stage 17c: also trailing operating income (OperatingIncomeLoss, op_ttm), the score's US EBIT ("The score", EBIT/EV); the table is read again for every company once when it has no op_ttm column.
   - Gaps (changed in the Phase 4 review; freshness: 200 days, 300 for half-year reporters): Yahoo fundamentals-timeseries (ws/fundamentals-timeseries/v1/finance/timeseries), one call per company, weekly, for companies SEC can't cover: no recent us-gaap 10-Q/10-K (foreign filers), no CIK, or a missing field (e.g. MLPs report partners' capital). It gives TTM revenue / profit / gross profit / operating cash flow and the balance sheet in the reporting currency; growth is TTM vs the TTM a year earlier, else the fiscal year a year earlier, else the same quarter a year earlier, else the last two fiscal years (semiannual reporters). 259 of 262 gap companies covered on 2026-10-17 (~80 s); 796 of the top 800 have complete data. Changed in Phase 12: fetched weekly for all 1,100 candidates (gap companies first), as the second source of the cross-checks, with NetIncome (before preferred dividends) and OrdinarySharesNumber added; ~5 min the first time. Stage 3's redo (verified 2026-11-01): also EBIT (trailing), TotalDebt, CashCashEquivalentsAndShortTermInvestments and MinorityInterest (latest quarter, else year), for EBIT/EV and the distress probability (GM: EBIT 5.2bn, debt 128.7bn with GM Financial's, cash 27.8bn); the same call for CN (600519.SS / 000001.SZ, the 1,200 largest A-shares) and HK (the 1,200 candidates) into cn_yahoo / hk_yahoo, weekly, ~12 min each the first time. Yahoo's A-share series were current on 2026-11-01 (600519 to 2026-06-30, 300750 to 2026-09-30); a series older than the freshness rule leaves EBIT/EV out for that stock.
   - Not used: FMP's free key. It served 7 of 184 gap companies (402 "premium" for ASML, NVO, SAP, AZN, SHEL, HSBC, TM, RY...) and stops at ~250 calls a day, which dropped 168 of the top 800.
   - Annual history (Phase 7): the same companyfacts files, forms 10-K, 20-F and 40-F, in us-gaap or ifrs-full: 20-F filers such as TSM and NVO report in ifrs-full (NVO has no ProfitLossAttributableToOwnersOfParent: ProfitLoss and Equity instead), ASML and BABA in us-gaap. One currency per company, the one with the most annual figures (TSM: TWD; its USD convenience figures cover the same years but appear only once each). Companies SEC has no annual history for: Yahoo fundamentals-timeseries annual types (4-5 years).
