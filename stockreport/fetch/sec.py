@@ -34,6 +34,7 @@ DURATION = {
     "cost": ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"],
     "ocf": ["NetCashProvidedByUsedInOperatingActivities",
             "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"],
+    "op": ["OperatingIncomeLoss"],  # the score's EBIT (universe.yahoo_balance); not tagged by most banks and insurers
 }
 # Equity is the parent's: the total including minorities less the minorities' share when only the total is tagged.
 WITH_NCI = "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"
@@ -213,7 +214,7 @@ def chain(vals: dict, end: str) -> float | None:
 
 
 def parse_facts(code: str, payload: dict, today: date) -> dict:
-    """One row per company: latest period, TTM revenue / profit / gross profit / operating cash flow,
+    """One row per company: latest period, TTM revenue / profit / gross profit / operating cash flow / operating income,
     growth against the TTM a year earlier (same concept), the latest equity, liabilities and assets, the basic
     weighted-average shares of the latest quarter (else of the period to the latest end, e.g. a 10-K's year) and the
     latest filing's cover-page count with its date.
@@ -346,12 +347,12 @@ def facts(client: Http, job: tuple[str, int, date]) -> tuple[dict, list[dict]]:
 def update_facts(today: date, codes: list[str]) -> None:
     """Weekly per company (4 at a time, under SEC's 10 requests/s); the same files give the annual
     history. Companies read before the history existed (no annual_years) are read again once; so is every company
-    when the table has no share counts yet."""
+    when the table has no share counts or operating income yet."""
     update_ciks(today)
     cik = load_ciks()
     table = pd.read_csv(TABLE, dtype={"code": str}) if TABLE.exists() else pd.DataFrame(columns=["code"])
     again = set(stale(TABLE, codes, today)) | set(table.loc[table.reindex(columns=["annual_years"])["annual_years"].isna(), "code"])
-    if "shares_cover" not in table.columns:
+    if not {"shares_cover", "op_ttm"} <= set(table.columns):
         again = set(codes)
     todo = [(c, int(cik[c]), today) for c in codes if c in again and c in cik.index]
     upsert_each(TABLE, make_http, facts, todo, today, 4, "sec facts", history=ANNUAL)

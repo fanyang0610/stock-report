@@ -104,10 +104,12 @@ def cn_float(mcap: pd.Series, weights: pd.Series, since: pd.Series | None = None
 
 
 def yahoo_balance(df: pd.DataFrame, market: str, quote: str) -> pd.DataFrame:
-    """Yahoo's trailing EBIT and latest debt, cash (with short-term investments), minorities and liabilities in the
+    """Trailing EBIT and Yahoo's latest debt, cash (with short-term investments), minorities and liabilities in the
     quote currency (fetch/yahoo.py), EV = market value + debt + minorities − cash, and the latest fiscal year's scaled
-    total accruals (sta, the buys' screen). A debt or minorities line Yahoo doesn't list is none (PLAN.md, EBIT/EV);
-    without a cash line the balance sheet wasn't read: no EBIT or no cash leaves EBIT/EV out (rule 5)."""
+    total accruals (sta, the buys' screen). EBIT is the operating income US filers report to the SEC (op_ttm, USD)
+    where they tag it, else Yahoo's, which is pretax profit plus interest and so carries one-off gains and losses below
+    operating income (PLAN.md, EBIT/EV). A debt or minorities line Yahoo doesn't list is none; without a cash line the
+    balance sheet wasn't read: no EBIT or no cash leaves EBIT/EV out (rule 5)."""
     path = yahoo.gaps_path(market)
     y = pd.read_csv(path, dtype={"code": str}).drop_duplicates("code", keep="last").set_index("code") \
         if path.exists() else pd.DataFrame(columns=["yahoo", "currency"])
@@ -116,9 +118,12 @@ def yahoo_balance(df: pd.DataFrame, market: str, quote: str) -> pd.DataFrame:
     fx = yahoo.load_fx()
     rate = (fx.get(quote, np.nan) / y["currency"].map(fx)).where(y["currency"] != quote, 1.0)
     items = y[["debt", "cash", "minority", "liabilities"]].mul(rate, axis=0)
-    have = y["ebit_ttm"].notna()
+    ebit = y["ebit_ttm"] * rate
+    if "op_ttm" in df:
+        ebit = df["op_ttm"].where(df["op_ttm"].notna(), ebit)
+    have = ebit.notna()
     ev = df["mcap"] + (items["debt"].fillna(0) + items["minority"].fillna(0) - items["cash"]).where(have)
-    return df.assign(ebit=y["ebit_ttm"] * rate, ev=ev, cash=items["cash"].where(have), liab_y=items["liabilities"],
+    return df.assign(ebit=ebit, ev=ev, cash=items["cash"].where(have), liab_y=items["liabilities"],
                      sta=y["sta"])
 
 
@@ -289,7 +294,7 @@ def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
 def us_fundamentals() -> pd.DataFrame:
     """SEC companyfacts rows, and Yahoo rows for the companies SEC has no recent quarterly numbers for
     (mostly foreign filers), converted to US dollars."""
-    money = ["revenue_ttm", "np_ttm", "gp_ttm", "ocf_ttm", "equity", "liabilities", "assets"]
+    money = ["revenue_ttm", "np_ttm", "gp_ttm", "ocf_ttm", "op_ttm", "equity", "liabilities", "assets"]
     cols = ["period", "notice_date", "rev_yoy", "np_yoy", "source", "currency"] + money
     read = lambda p: pd.read_csv(p, dtype={"code": str, "period": str, "notice_date": str})
     facts = read(sec.TABLE)
@@ -297,7 +302,7 @@ def us_fundamentals() -> pd.DataFrame:
     gaps = read(yahoo.GAPS) if yahoo.GAPS.exists() else pd.DataFrame(columns=["code", "yahoo"])
     gaps = gaps[gaps["yahoo"] == "ok"].assign(source="Yahoo").reindex(columns=["code"] + cols)
     gaps[money] = gaps[money].div(gaps["currency"].map(yahoo.load_fx()), axis=0)
-    both = pd.concat([facts, gaps[~gaps["code"].isin(facts["code"])]]).set_index("code")[cols]
+    both = pd.concat([facts, gaps[~gaps["code"].isin(facts["code"])]]).set_index("code").reindex(columns=cols)
     # a quarter of SEC filers tag neither gross profit nor a cost of revenue (Mastercard, Oracle, GE): Yahoo's
     # standardized gross profit (the cross-checks' second source) fills it, in USD
     yahoo_gp = gaps.set_index("code")["gp_ttm"]

@@ -231,3 +231,21 @@ def test_us_trend_takes_next_years_estimate_now_and_90_days_ago():
                             type("R", (), {"json": lambda r: payload})()})()
     assert yahoo.us_trend(client, "NVDA") == {"code": "NVDA", "analysts": 52, "e1_year": "2027-01", "eps_e2": 15.9146,
                                               "eps_e2_90": 12.81483, "currency": "USD"}  # FY to January 2028
+
+
+def test_us_ebit_is_the_sec_operating_income_else_yahoos(tmp_path, monkeypatch):
+    # Lumentum's real facts as filed by 2026-11-15, cut to four concepts: a $7.8bn loss on retiring convertible notes
+    # sits below operating income, so profit is a loss while operating income is FY2026 + Q1 FY2027 - Q1 FY2026.
+    row = sec.parse_facts("LITE", load("us_companyfacts_lite_op_sample.json"), date(2026, 11, 15))
+    assert row["period"] == "2026-09-26" and row["np_ttm"] < 0
+    assert row["op_ttm"] == pytest.approx(524.8e6 + 359.8e6 - 6.7e6)
+    import pandas as pd
+    from stockreport import universe
+    pd.DataFrame({"code": ["LITE", "X", "Y"], "yahoo": "ok", "currency": "USD", "ebit_ttm": [-6789.0, 10.0, 10.0],
+                  "debt": 0.0, "cash": [20.0, 20.0, None]}).to_csv(tmp_path / "us_yahoo.csv", index=False)
+    monkeypatch.setattr(yahoo, "gaps_path", lambda market: tmp_path / "us_yahoo.csv")
+    monkeypatch.setattr(yahoo, "load_fx", lambda: pd.Series({"USD": 1.0}))
+    df = pd.DataFrame({"mcap": 100.0, "op_ttm": [878.0, None, 5.0]}, index=["LITE", "X", "Y"])
+    b = universe.yahoo_balance(df, "us", "USD")
+    assert b["ebit"].tolist()[:2] == [878.0, 10.0]  # SEC's operating income, else Yahoo's EBIT (X tags none)
+    assert b.at["LITE", "ev"] == 80.0 and pd.isna(b.at["Y", "ev"])  # still no EV without Yahoo's cash line
