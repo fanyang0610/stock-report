@@ -79,7 +79,8 @@ def upsert_each(path: Path, make_http, fn, todo: list, today: date, workers: int
                 history: Path | None = None) -> None:
     """Rows from fn(http, item) for every item, stamped `fetched` = today and upserted into the
     per-stock table every 100 items, so an interrupted fetch keeps what it got. With `history`, fn
-    returns (row, yearly rows) and the yearly rows go to that table (keyed by code and fy_end) first."""
+    returns (row, yearly rows) and the yearly rows go to that table first, replacing each company's earlier rows (a
+    year no longer reported on the company's basis would otherwise stay)."""
     rows, years = [], []
     for i, got in enumerate(each(make_http, fn, todo, workers), 1):
         row, more = got if history and got else (got, [])
@@ -88,7 +89,7 @@ def upsert_each(path: Path, make_http, fn, todo: list, today: date, workers: int
             years += [r | {"fetched": today.isoformat()} for r in more]
         if rows and (i % 100 == 0 or i == len(todo)):
             if years:
-                merge(history, pd.DataFrame(years), ["code", "fy_end"])
+                merge(history, pd.DataFrame(years), ["code", "fy_end"], whole="code")
             merge(path, pd.DataFrame(rows), ["code"])
             rows, years = [], []
             log.info("%s: %d of %d", label, i, len(todo))
@@ -141,9 +142,12 @@ def save_rates(new: pd.DataFrame, market: str) -> None:
     df.to_csv(path, index=False)
 
 
-def merge(path: Path, new: pd.DataFrame, key: list[str]) -> pd.DataFrame:
-    """Upsert rows into a gzipped CSV table (key columns are compared as text, e.g. "004")."""
+def merge(path: Path, new: pd.DataFrame, key: list[str], whole: str | None = None) -> pd.DataFrame:
+    """Upsert rows into a gzipped CSV table (key columns are compared as text, e.g. "004"); with `whole`, the old
+    rows of every value of that column in `new` go first."""
     old = pd.read_csv(path, dtype={"code": str} | dict.fromkeys(key, str)) if path.exists() else new.iloc[:0]
+    if whole:
+        old = old[~old[whole].isin(new[whole])]
     df = pd.concat([old, new]).drop_duplicates(key, keep="last") if len(new) else old
     write(df, path)
     return df

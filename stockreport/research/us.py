@@ -261,8 +261,11 @@ def companyfacts(code: str) -> dict:
     cik = sec.update_ciks(date.today()).drop_duplicates("code").set_index("code")["cik"].get(code)
     if cik is None:
         raise RuntimeError(f"{code} has no SEC CIK")
-    resp = sec.make_http().get(sec.FACTS.format(cik=int(cik)), ok=(200, 404))
-    return resp.json() if resp.status_code == 200 else {"cik": int(cik)}
+    http = sec.make_http()
+    resp = http.get(sec.FACTS.format(cik=int(cik)), ok=(200, 404))
+    if resp.status_code != 200:
+        return {"cik": int(cik)}
+    return sec.complete(http, int(cik), resp.json(), date.today())  # the newest annual report companyfacts lacks
 
 
 def nasdaq() -> Http:

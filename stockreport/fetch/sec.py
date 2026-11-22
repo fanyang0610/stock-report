@@ -4,6 +4,7 @@ currency), and the names of filing forms and 8-K items for the review's filing t
 with the User-Agent SEC_USER_AGENT from .env. companyfacts files are several MB each: they are parsed
 in memory and never written to disk; only the extracted rows per company are kept (refreshed weekly)."""
 
+import xml.etree.ElementTree as ET
 from datetime import date, timedelta
 
 import pandas as pd
@@ -15,6 +16,9 @@ from stockreport.fetch import HISTORY, Http, stale, upsert_each, write
 TICKERS = "https://www.sec.gov/files/company_tickers_exchange.json"
 FACTS = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
 SUBMISSIONS = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
+ARCHIVE = "https://www.sec.gov/Archives/edgar/data/{cik}/{acc}/{doc}"
+XBRLI = "{http://www.xbrl.org/2003/instance}"
+MARKS = {"us-gaap": "fasb.org/us-gaap/", "ifrs-full": "ifrs.org/taxonomy/", "dei": "xbrl.sec.gov/dei/"}  # namespace URIs
 CIKS, TABLE = DATA / "fundamentals" / "us_cik.csv.gz", DATA / "fundamentals" / "us_facts.csv.gz"
 ANNUAL = HISTORY / "us_annual.csv.gz"  # one row per company and fiscal year (SEC, else Yahoo)
 # Concepts in order of preference. Companies switch concepts between filings, so the values of all
@@ -268,21 +272,54 @@ def annual(tax: dict, names: list, unit: str, instant: bool = False) -> dict[str
     return {e: v for (_, e), v in merge(latest(tax, n, unit, keep) for n in names).items()}
 
 
-def parse_annual(code: str, payload: dict) -> list[dict]:
-    """One row per fiscal year since 2015, in the taxonomy and currency with the most annual profit
-    years, then facts (TSM: ifrs-full in TWD, which every 20-F repeats as comparatives, not its USD
-    convenience figures); filed = when the year was first reported. Capex and dividends paid are
-    positive, as SEC reports them."""
-    facts, best = payload.get("facts", {}), (0, 0, "", "")
+def basis(facts: dict) -> tuple[str, str] | None:
+    """The taxonomy and currency of the latest annual profit, then of the most years and facts: a filer that moved to
+    IFRS (Toyota, Sony), back to us-gaap (Atlassian, Celestica) or to another currency (Diageo GBP to USD, YPF ARS to
+    USD) is read on its current basis; among the same year's units the reporting currency has the most years (TSM:
+    TWD, not its USD convenience figures)."""
+    best = None
     for name, (dur, _) in TAXONOMIES.items():
         tax = facts.get(name, {})
         for unit in sorted({u for c in dur["ni"] for u in tax.get(c, {}).get("units", {})}):
+            years = annual(tax, dur["ni"], unit)
             n = sum(f.get("form", "").startswith(ANNUAL_FORMS) for c in dur["ni"] for f in tax.get(c, {}).get("units", {}).get(unit, []))
-            best = max(best, (len(annual(tax, dur["ni"], unit)), n, name, unit))
-    if not best[0]:
+            if years:
+                best = max(best or (), (max(years), len(years), n, name, unit))
+    return best[3:] if best else None
+
+
+def parse_annual(code: str, payload: dict, backfill: bool = False) -> list[dict]:
+    """One row per fiscal year since 2015 on the filer's current basis (basis()); filed = when the year was first
+    reported, on any basis. With backfill, the years before that basis's first come from the other taxonomy in the same currency
+    (Toyota's us-gaap years before its IFRS ones); years in another currency are left out, so a company's history is
+    in one currency. Capex and dividends paid are positive, as SEC reports them."""
+    facts = payload.get("facts", {})
+    pick = basis(facts)
+    if pick is None:
         return []
-    _, _, name, unit = best
-    tax, (dur, inst) = facts[name], TAXONOMIES[name]
+    rows = taxonomy_rows(code, facts, *pick)
+    if backfill and rows:
+        for name in TAXONOMIES:
+            if name != pick[0]:
+                first = rows[0]["fy_end"]
+                rows = [r for r in taxonomy_rows(code, facts, name, pick[1]) if days(r["fy_end"], first) > 300] + rows
+    # a year restated on the new basis was public since its first report (Celestica's 2023: its IFRS 20-F of 2024)
+    first_filed = {}
+    for name, (dur, _) in TAXONOMIES.items():
+        for c in dur["ni"]:
+            for fs in facts.get(name, {}).get(c, {}).get("units", {}).values():
+                for f in fs:
+                    if f.get("form", "").startswith(ANNUAL_FORMS) and "start" in f:
+                        first_filed[f["end"]] = min(first_filed.get(f["end"], f["filed"]), f["filed"])
+    for r in rows:
+        earlier = [d for e, d in first_filed.items() if abs(days(e, r["fy_end"])) <= 7]
+        r["filed"] = min(earlier + [r["filed"]] if r["filed"] else earlier, default=None)
+    return rows
+
+
+def taxonomy_rows(code: str, facts: dict, name: str, unit: str) -> list[dict]:
+    """parse_annual's rows from one taxonomy in one currency."""
+    tax, (dur, inst) = facts.get(name, {}), TAXONOMIES[name]
     get = lambda names, unit=unit: annual(tax, names, unit)
     series = {k: revenue(get, c, CHECKS[name]) if k == "revenue" else get(c, "shares" if k in SHARE_UNITS else unit)
               for k, c in dur.items()}
@@ -307,6 +344,75 @@ def parse_annual(code: str, payload: dict) -> list[dict]:
             row["shares"] = next((v for e, v in cover if 0 <= days(end, e) <= 120), None)
         rows.append({k: v for k, v in row.items() if k not in ("nii", "nonint", "cost")})
     return rows
+
+
+def parse_instance(raw: bytes, form: str, filed: str, accn: str) -> dict:
+    """An annual report's XBRL instance as companyfacts' "facts" ({taxonomy: {concept: {"units": {unit: [fact]}}}}):
+    the facts without dimensions, in us-gaap, ifrs-full and dei, in a currency or in shares."""
+    root = ET.fromstring(raw)
+    periods = {}
+    for c in root.iter(XBRLI + "context"):
+        if c.find(f"{XBRLI}entity/{XBRLI}segment") is None:
+            p = c.find(XBRLI + "period")
+            start, end, instant = (p.findtext(XBRLI + t) for t in ("startDate", "endDate", "instant"))
+            periods[c.get("id")] = {"start": start, "end": end} if start else {"end": instant}
+    units = {}
+    for u in root.iter(XBRLI + "unit"):
+        measure = (u.findtext(XBRLI + "measure") or "").strip()
+        if measure.startswith("iso4217:") or measure.endswith("shares"):
+            units[u.get("id")] = measure.split(":")[-1]
+    out, seen = {}, set()
+    for el in root:
+        uri, _, concept = el.tag[1:].partition("}")
+        name = next((n for n, mark in MARKS.items() if mark in uri), None)
+        period, unit = periods.get(el.get("contextRef")), units.get(el.get("unitRef"))
+        if name is None or period is None or unit is None or (concept, el.get("contextRef"), unit) in seen:
+            continue
+        try:
+            val = float(el.text)
+        except (TypeError, ValueError):
+            continue
+        seen.add((concept, el.get("contextRef"), unit))
+        out.setdefault(name, {}).setdefault(concept, {"units": {}})["units"].setdefault(unit, []).append(
+            period | {"val": val, "form": form, "filed": filed, "accn": accn})
+    return out
+
+
+def last_annual(facts: dict) -> str | None:
+    """The latest fiscal year end of an annual profit figure, in any taxonomy and currency."""
+    ends = [f["end"] for name, (dur, _) in TAXONOMIES.items() for c in dur["ni"]
+            for fs in facts.get(name, {}).get(c, {}).get("units", {}).values() for f in fs
+            if f.get("form", "").startswith(ANNUAL_FORMS) and "start" in f]
+    return max(ends, default=None)
+
+
+def complete(client: Http, cik: int, payload: dict, today: date) -> dict:
+    """companyfacts with the newest annual report added when companyfacts lacks it: since about 2025 it has left out
+    many IFRS 20-Fs (TSMC's for 2025, Deutsche Bank's for 2024 and 2025) though their XBRL is filed. Only when the
+    latest annual year ended more than 485 days ago (a year plus the 20-F's 4 months): the filing list then names the
+    newest 10-K/20-F/40-F, and its XBRL instance (read in memory) adds that year and its comparatives."""
+    last = last_annual(payload.get("facts", {}))
+    if last is None or days(last, today.isoformat()) <= 485:
+        return payload
+    recent = client.get(SUBMISSIONS.format(cik=cik)).json()["filings"]["recent"]
+    i = next((i for i, f in enumerate(recent["form"]) if f in ANNUAL_FORMS), None)
+    if i is None or recent["reportDate"][i] <= last or not recent["isInlineXBRL"][i]:
+        return payload
+    accn, doc = recent["accessionNumber"][i], recent["primaryDocument"][i]
+    resp = client.get(ARCHIVE.format(cik=cik, acc=accn.replace("-", ""), doc=doc.rsplit(".", 1)[0] + "_htm.xml"), ok=(200, 404))
+    if resp.status_code != 200:
+        return payload
+    return add_facts(payload, parse_instance(resp.content, recent["form"][i], recent["filingDate"][i], accn))
+
+
+def add_facts(payload: dict, new: dict) -> dict:
+    """companyfacts with an instance's facts added (later filings win in latest())."""
+    facts = payload.setdefault("facts", {})
+    for name, concepts in new.items():
+        for concept, entry in concepts.items():
+            for unit, fs in entry["units"].items():
+                facts.setdefault(name, {}).setdefault(concept, {"units": {}})["units"].setdefault(unit, []).extend(fs)
+    return payload
 
 
 def update_ciks(today: date) -> pd.DataFrame:
@@ -339,7 +445,8 @@ def facts(client: Http, job: tuple[str, int, date]) -> tuple[dict, list[dict]]:
     code, cik, today = job
     resp = client.get(FACTS.format(cik=cik), ok=(200, 404))  # 404: no XBRL facts at all (some foreign filers)
     payload = resp.json() if resp.status_code == 200 else {"cik": cik}
-    years = parse_annual(code, payload)
+    payload = complete(client, cik, payload, today)
+    years = parse_annual(code, payload, backfill=True)
     roe_years = sum(r["ni"] is not None and r["equity"] is not None for r in years)
     return parse_facts(code, payload, today) | {"annual_years": roe_years}, years
 
