@@ -23,7 +23,7 @@ from dotenv import dotenv_values
 from stockreport import quotes
 from stockreport.config import CONFIG, ROOT
 from stockreport.research import CUR, compare, money, pct, price, times
-from stockreport.research.compare import MARGIN_SOURCE
+from stockreport.research.compare import margin_words
 
 log = logging.getLogger(__name__)
 CFG = CONFIG["research_words"]
@@ -147,7 +147,7 @@ def keys(f: dict, v: dict, extra: dict) -> dict[str, tuple[str, str]]:
         "base_implied": ("同等规模公司中 5 年做到现价隐含增长的比例（越低越难）", pct(br.get("implied"), digits=0)),
         "base_street": ("同等规模公司中 5 年做到市场目标价所需增长的比例（越低越难）", pct(br.get("street"), digits=0)),
         "target_margin": ("我们假设的长期营业利润率", pct((d.get("path") or {}).get("target_margin"))),
-        "margin_source": ("长期利润率的依据", MARGIN_SOURCE.get((d.get("path") or {}).get("margin_source"))),
+        "margin_source": ("长期利润率的依据", margin_words(d.get("path") or {})),
         "roe_term": ("我们假设的长期 ROE", pct(er.get("roe_term"))),
         "market_cap": ("市值", money(val["market_cap"], q)), "pe_ttm": ("市盈率（过去 12 个月）", times(val.get("pe_ttm"))),
         "pe_fwd": ("市盈率（未来 12 个月一致预期）", times(val.get("pe_fwd"))), "pb": ("市净率", times(val.get("pb"))),

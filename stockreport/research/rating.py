@@ -59,10 +59,10 @@ def methods(f: dict, k: dict, kind: str, cons: dict, today: date, eps_factor: fl
     case = lambda m: value.moat_case(m, k.get("moat_case"))  # a scenario: the moat off or on
     quartiles = lambda h: (h.quantile(0.75) - h.quantile(0.25)) / 2  # half the interquartile range: a quartile's move
     if {"dcf", "dcf_normal"} & set(w):
-        roic = case(value.moat(value.history(f, "roic", 10), k["wacc"], k["stable_wacc"], k["excess_keep"]))
+        roic = case(value.moat(value.line_rows(f, k, "roic", 10).dropna(), k["wacc"], k["stable_wacc"], k["excess_keep"]))
         g_dcf = dcf.tested_growth(lambda x: dcf.terminal(1.0, x, k["stable_wacc"], roic["ronic"]), k["g"])
         path = value.paths(f, k, kind, cons | {"eps": eps}, g_dcf)
-        m = value.history(f, "ebit_margin", 10)
+        m = value.line_rows(f, k, "ebit_margin", 10).dropna()
         peers_q = k.get("mature_quartiles") if path["margin_source"] == "profitable peers' median" else None
         step = min((peers_q[1] - peers_q[0]) / 2 if peers_q else quartiles(m), abs(path["target_margin"])) \
             if len(m) >= 3 or peers_q else 0.0  # the long-run margin's quartile move: its own 10 years', or the mature
@@ -331,6 +331,23 @@ def shared_peers(f: dict, today: date) -> dict:
     return best
 
 
+def long_line(f: dict, today: date) -> dict | None:
+    """A line with under 5 years of margins reads its issuer's other line that has them, the longest: one business
+    with one history (恒瑞's H line, listed in 2025, was young beside its A line's decades). Its margins set the young
+    test and the 8-year median, its capital the sales to capital, its return on capital the moat. None for a line with
+    its own 5 years."""
+    if len(value.history(f, "ebit_margin", 8)) >= 5:
+        return None
+    best = None
+    for o, of in other_lines(f, today):
+        n = len(value.history(of, "ebit_margin", 8))
+        if of["kind"] == f["kind"] and n >= 5 and (best is None or n > best[0]):
+            best = n, {"market": o["market"], "code": o["code"], "s2c": value.own_s2c(of),
+                       "ebit_margin": [x.get("ebit_margin") for x in of["history"]][-10:],
+                       "roic": [x.get("roic") for x in of["history"]][-10:]}
+    return best[1] if best else None
+
+
 def path_group(f: dict, revenue: float | None, today: date) -> dict | None:
     """The comparable companies whose revenue paths value it (comparables.group). An A+H issuer is one business on one
     set of paths: the A market's, whose table is the longer (four 10-year cohorts against Hong Kong's one of 7), and the
@@ -374,9 +391,11 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     k["mature_margin"], k["mature_quartiles"] = pm.get("mature_margin"), pm.get("mature_quartiles")
     kind, why, rates, cur_rev = typed(f)
     kind, why = one_type(f, today) or (kind, why)
+    k["long_line"] = long_line(f, today)  # a line too short to read its own margins reads its issuer's other line
     k["base_growth"] = rates.get("fifth_recent")  # companies of this size now: growth beyond the consensus (value.paths)
     k |= {"growth_shares": fade.growth_shares(market, 1), "trend_shares": fade.growth_shares(market, 3),
-          "margin_keep": fade.margin_keep(market), "excess_keep": fade.excess_keep(market)}  # stage 14's measured rates
+          "margin_keep": fade.margin_keep(market), "lasting_keep": fade.lasting_keep(market),  # stage 14's and 26's
+          "excess_keep": fade.excess_keep(market)}  # measured rates
     k["comparables"] = None if kind in FINANCIAL | {"reit", "pre_revenue"} else path_group(f, cur_rev, today)  # stage 25
     cons = value.consensus_years(f, k, today)
     status, reason = flags(f) if kind != "pre_revenue" else ("不评级", why)

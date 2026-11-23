@@ -28,7 +28,13 @@ SIGNAL = {"receivables_faster": "应收快于营收", "inventory_faster": "存�
 QUALITY = {"roe_10y": "10 年平均 ROE", "fcf_5y": "5 年自由现金流", "interest_cover": "利息保障倍数", "gross_margin_avg": "长期毛利率",
            "ocf_to_profit_5y": "经营现金流 / 净利润", "net_margin_avg": "长期净利率", "share_growth_5y": "5 年股本扩张"}
 MARGIN_SOURCE = {"10-year average": "自身 10 年平均", "profitable peers' median": "盈利同行的中位数", "industry": "行业平均",
-                 "own 8-year median": "自身 8 年中位数"}
+                 "own 8-year median": "自身 8 年中位数", "other line's 8-year median": "同一公司另一上市地的 8 年中位数"}
+
+
+def margin_words(path: dict) -> str | None:
+    """The long-run margin's source, and that a gap of 3 years or more closes more slowly (stage 26)."""
+    words = MARGIN_SOURCE.get(path.get("margin_source"))
+    return f"{words}；当前差距已持续 3 年以上，回归更慢" if words and path.get("margin_lasting") else words
 
 
 def screening(facts: dict, val: dict, market_pe: float | None, findings: list[dict] | None = None) -> dict:
@@ -139,7 +145,7 @@ def forecast(facts: dict, val: dict) -> dict:
     fy = [{"year": yy, "eps": c["eps"][yy], "revenue": ((c.get("yahoo_years") or {}).get(yy) or {}).get("revenue")} for yy in sorted(c["eps"])]
     return {"columns": cols, "rows": rows, "currency": k.get("currency"), "unit": CUR.get(k.get("currency"), ""),
             "consensus": fy, "consensus_currency": c.get("currency"), "source": c.get("source"), "analysts": c.get("analysts"),
-            "margin_source": MARGIN_SOURCE.get((d or {}).get("path", {}).get("margin_source"))}
+            "margin_source": margin_words((d or {}).get("path", {}))}
 
 
 def needs(x: dict, main: str, shares: dict) -> str:

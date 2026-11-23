@@ -1792,3 +1792,32 @@ HK return on equity above today's stable cost of equity 8.2%: share above h year
 
 HK used: margin gap kept a year above 0.884 below 0.850 (5 years: 0.54 / 0.44); growth shares after one year's excess [0.2, 0.075, 0.075, 0.063, 0.015], after three years' [0.145, 0.082, 0.06, 0.037, 0.017]; excess return kept a year 0.878 (year 11: 0.24, year 25: 0.04)
 ```
+
+## 29. Stage 26: a margin gap that has lasted (2026-11-23; backtest/persistence.py)
+
+The question (the review's F4; stage 14 asked it of growth): does a margin gap to the company's median that has lasted 3
+years keep a larger share 3 years on than a gap that opened in the last year? Stage 14's method: gaps of 3 points or
+more, the median share kept, net of the market's drift. Two gap definitions: to the 5 years' median before the year
+(stage 14's rate) and to the 8-year median ending with it (the forecast's anchor; the US and HK tables have one start
+year for it at this horizon). Intervals are 90%, resampling companies. CN and HK are today's listings only (survivors).
+The US reads SEC's frames: net margin, dead filers kept, the 1,100 largest filers by revenue each year.
+
+| Market, side | Lasting [gaps, start years] | New [gaps] | Difference, 5 years before (90%) | Difference, 8-year median (90%) | Kept a year, before → after |
+|---|---|---|---|---|---|
+| CN above | 0.73 [1,270, 9] | 0.79 [3,153] | -0.06 (-0.12, +0.03) | +0.03 (-0.06, +0.15) | 0.916 (unchanged) |
+| CN below | 0.69 [2,636, 9] | 0.53 [5,066] | +0.16 (+0.11, +0.22) | +0.23 (+0.16, +0.28) | 0.850 → 0.913 |
+| US above (frames) | 0.77 [207, 9] | 0.42 [1,006] | +0.36 (+0.23, +0.51) | +0.47 (+0.24, +0.63) | 0.838 → 0.973 |
+| US below (frames) | 0.53 [167, 9] | 0.21 [866] | +0.32 (+0.17, +0.47) | +0.36 (+0.20, +0.52) | 0.603 → 0.692 |
+| US above (operating margin) | 0.99 [86, 3] | 0.57 [289] | +0.42 (+0.21, +0.65) | +0.46 (-0.08, +0.85), 1 start year | not used |
+| US below (operating margin) | 0.46 [64, 3] | 0.19 [262] | +0.27 (-0.15, +0.55) | too few | not used |
+| HK above | 0.89 [214, 3] | 0.57 [804] | +0.32 (+0.18, +0.45) | -0.07 (-0.52, +0.25), 1 start year | 0.884 (unchanged) |
+| HK below | 0.75 [751, 3] | 0.48 [1,188] | +0.27 (+0.15, +0.39) | +0.34 (+0.16, +0.51), 1 start year | 0.850 → 0.886 |
+
+Reading: a side changes when both intervals are above zero: CN below, US above and below, HK below. CN above and HK
+above keep stage 14's rate. The annual rate fits the median share kept at each horizon with 3 start years and 30 gaps,
+on the 8-year median (CN and US horizons 1-7); HK's tables allow that median under 3 horizons, so HK below reads the 5
+years before, horizons 1-3. Limits: survivors in CN and HK; net rather than operating margin in the US; HK's rate
+extrapolated from 3 years; one rate per market and side, though a gap's size changes the share kept (gaps of 10 points
+or more keep less in the US and CN, more in HK).
+
+    uv run python -m backtest.persistence [cn|us|hk]

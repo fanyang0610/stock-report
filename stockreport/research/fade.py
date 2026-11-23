@@ -1,14 +1,14 @@
 """How long a company's advantages last, measured in the screening's history tables (today's listings only, so
 survivors: persistence above the median and recovery below it are overstated): margins against their own median,
 revenue growth above its size fifth's, returns above their cost. backtest/persistence.py prints the full
-measurement; value.py uses the three rates PLAN.md's rules name (margin_keep, growth_shares, excess_keep)."""
+measurement; value.py uses the rates PLAN.md's rules name (margin_keep, lasting_keep, growth_shares, excess_keep)."""
 
 from functools import lru_cache
 
 import numpy as np
 import pandas as pd
 
-from stockreport.config import DATA
+from stockreport.config import CONFIG, DATA
 from stockreport.research import damodaran
 
 MIN_GAP = 0.03  # a margin 3 points or more from its median: smaller gaps are noise around it
@@ -46,11 +46,13 @@ def margin_table(market: str) -> pd.DataFrame:
     return wide(t.assign(m=t["m"].clip(-1, 1)), "m")
 
 
-def margin_gaps(m: pd.DataFrame, window: int, current: bool, h: int, side: str, net: bool = True) -> pd.DataFrame:
-    """Each company-year's gap to its own median over `window` years (ending with the year, or the year before) and
-    the margin's distance from that median `h` years on; `net`: less the market's drift (the median company's
-    distance from its own median h years on: CN margins fell through 2010-2025, US margins rose, a trend of the decade
-    a forecast shouldn't carry)."""
+def margin_gaps(m: pd.DataFrame, window: int, current: bool, h: int, side: str, net: bool = True,
+                among: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Each company-year's gap to its own median over `window` years (ending with the year, or the year before), the
+    two years before it against the same median (`prev1`, `prev2`: gap_spells) and the margin's distance from that
+    median `h` years on; `net`: less the market's drift (the median company's distance from its own median h years on:
+    CN margins fell through 2010-2025, US margins rose, a trend of the decade a forecast shouldn't carry); `among`:
+    the companies counted in each start year (the drift stays the whole table's)."""
     cols, rows = list(m.columns), []
     for i in range(window - (0 if current else -1) - 1, len(cols) - h):
         hist = m[cols[i - window + 1:i + 1] if current else cols[i - window:i]]
@@ -58,8 +60,11 @@ def margin_gaps(m: pd.DataFrame, window: int, current: bool, h: int, side: str, 
         gap, later = m[cols[i]] - med, m[cols[i + h]] - med
         drift = later.where(gap.notna()).median() if net else 0.0
         ok = later.notna() & (gap >= MIN_GAP if side == "above" else gap <= -MIN_GAP)
-        rows.append(pd.DataFrame({"gap": gap[ok], "later": later[ok] - drift, "start": cols[i]}))
-    return pd.concat(rows) if rows else pd.DataFrame(columns=["gap", "later", "start"])
+        if among is not None:
+            ok &= among[cols[i]].reindex(m.index, fill_value=False)
+        rows.append(pd.DataFrame({"gap": gap[ok], "later": later[ok] - drift, "start": cols[i],
+                                  "prev1": (m[cols[i - 1]] - med)[ok], "prev2": (m[cols[i - 2]] - med)[ok]}))
+    return pd.concat(rows) if rows else pd.DataFrame(columns=["gap", "later", "start", "prev1", "prev2"])
 
 
 def margin_kept(m: pd.DataFrame, window: int, current: bool, h: int, side: str, net: bool = True) -> dict:
@@ -161,6 +166,56 @@ def margin_keep(market: str) -> dict:
     for side in ("above", "below"):
         kept = margin_kept(m, 5, False, KEPT_YEARS, side)["median"]
         out[side] = float(min(max(kept, 0.0), 1.0) ** (1 / KEPT_YEARS))
+    return out
+
+
+LASTING_YEARS = 3  # a lasting gap: on its side in each of the last 3 years
+LASTING_SIDES = {"cn": ("below",), "us": ("above", "below"), "hk": ("below",)}  # where a gap that has lasted 3 years
+# keeps more than one that just opened, the 90% interval above zero against both the 5 years' median before and the
+# 8-year median the forecast anchors on (backtest/persistence.py; PLAN.md "Forecast")
+LASTING_HORIZON = 8  # the longest horizon read, where the history has 3 start years for it (a 10-year forecast's rate)
+
+
+def gap_spells(d: pd.DataFrame, side: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """margin_gaps' rows split: the gap has lasted (3 points or more on its side in each of the last 3 years), or it
+    opened in the last year (the year before wasn't on its side). A 2-year gap is in neither."""
+    s = 1 if side == "above" else -1
+    return d[(s * d["prev1"] >= MIN_GAP) & (s * d["prev2"] >= MIN_GAP)], d[s * d["prev1"] < MIN_GAP]
+
+
+@lru_cache(maxsize=1)
+def frames_margins() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """US net margin per filer and year from SEC's frames (2009 on, dead filers kept), and which filers are among the
+    largest by revenue that year, as many as the screening's US candidates. The US's lasting gaps are read here: the
+    operating-margin table has 3 start years, all 2020-22, and today's listings only."""
+    t = pd.read_csv(DATA / "history" / "us_frames.csv.gz", dtype={"cik": str}, usecols=["year", "cik", "revenue", "ni"])
+    t = t.assign(code=t["cik"], year=t["year"].astype(str), m=(t["ni"] / t["revenue"].where(t["revenue"] > 0)).clip(-1, 1))
+    m = wide(t, "m")
+    return m, wide(t, "revenue").reindex(columns=m.columns).rank(ascending=False) <= CONFIG["universe"]["us_candidates"]
+
+
+def lasting_panel(market: str) -> tuple[pd.DataFrame, pd.DataFrame | None]:
+    return frames_margins() if market == "us" else (margin_table(market), None)
+
+
+@lru_cache(maxsize=3)
+def lasting_keep(market: str) -> dict:
+    """The share kept each year of a margin gap that has lasted 3 years, above and below apart: the annual rate that
+    fits the median share kept at each horizon with 3 start years and 30 gaps (through the origin in logs, so the long
+    horizons a 10-year forecast depends on weigh most). The gap is to the 8-year median ending with the year, the
+    forecast's own anchor; where that leaves under 3 horizons (HK's tables start in 2015), to the 5 years' median
+    before. Stage 14's rate where a lasting gap keeps no more (LASTING_SIDES)."""
+    out, (m, among) = dict(margin_keep(market)), lasting_panel(market)
+    for side in LASTING_SIDES[market]:
+        for window, current in ((8, True), (5, False)):
+            fit = []
+            for h in range(1, LASTING_HORIZON + 1):
+                d = gap_spells(margin_gaps(m, window, current, h, side, among=among), side)[0]
+                if len(d) >= 30 and d["start"].nunique() >= 3:
+                    fit.append((h, float(np.log(np.clip((d["later"] / d["gap"]).median(), 0.01, 1.0)))))
+            if len(fit) >= 3:
+                out[side] = float(np.exp(sum(h * x for h, x in fit) / sum(h * h for h, _ in fit)))
+                break
     return out
 
 

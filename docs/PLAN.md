@@ -1979,6 +1979,65 @@
     not reproduce: recomputed with its definition and corrected above (the mean doesn't lean high in the US, it does in
     CN); (6) the window alignment and the fault filter's reach: written in the method; (7) page 1's two ranges: the line
     now says which is which; its "stale 1%" is a different measure (5-year growth among the same size fifth), kept.
+- Stage 26 (the margin anchor; the review's F4): done 2026-11-23 on branch claude/priceless-jemison-987108 (from stage
+  25's claude/hopeful-joliot-de3f35, 239c9c8). Measured in backtest/persistence.py (BACKTEST.md section 29), by stage
+  14's method: the median share of a 3-point-or-larger margin gap kept 3 years on, net of the market's drift, a gap on
+  its side in each of the last 3 years (lasting) against one that opened in the last year (new); 90% intervals resample
+  companies. Survivors only in CN and HK; the US reads SEC's frames (net margin, dead filers kept, the 1,100 largest
+  filers by revenue each year), because its operating-margin table has 3 start years, all 2020-22, and today's
+  listings only.
+
+  | Market, side | Lasting [gaps] | New [gaps] | Difference, 5 years' median before (90%) | Difference, 8-year median (90%) | Decision | Kept a year |
+  |---|---|---|---|---|---|---|
+  | CN above | 0.73 [1,270] | 0.79 [3,153] | -0.06 (-0.12, +0.03) | +0.03 (-0.06, +0.15) | unchanged | 0.916 |
+  | CN below | 0.69 [2,636] | 0.53 [5,066] | +0.16 (+0.11, +0.22) | +0.23 (+0.16, +0.28) | lasting keeps more | 0.850 → 0.913 |
+  | US above | 0.77 [207] | 0.42 [1,006] | +0.36 (+0.23, +0.51) | +0.47 (+0.24, +0.63) | lasting keeps more | 0.838 → 0.973 |
+  | US below | 0.53 [167] | 0.21 [866] | +0.32 (+0.17, +0.47) | +0.36 (+0.20, +0.52) | lasting keeps more | 0.603 → 0.692 |
+  | HK above | 0.89 [214] | 0.57 [804] | +0.32 (+0.18, +0.45) | -0.07 (-0.52, +0.25), 1 start year | unchanged | 0.884 |
+  | HK below | 0.75 [751] | 0.48 [1,188] | +0.27 (+0.15, +0.39) | +0.34 (+0.16, +0.51), 1 start year | lasting keeps more | 0.850 → 0.886 |
+
+  - Decision: the anchor stays the own 8-year median, and a lasting gap fades at its own rate on the four sides whose
+    interval is above zero on both gap definitions. Reason: Fama and French (2000) find profitability reverting toward
+    its expected level, and these gaps show part of a lasting move is a new level. The rate is the annual share that
+    fits the median share kept at each horizon with 3 start years and 30 gaps (through the origin in logs, so the long
+    horizons weigh most), on the 8-year median the forecast itself anchors on: horizons 1-7 in CN and the US. HK's
+    tables give that median under 3 horizons, so HK below reads the 5 years' median before, horizons 1-3, extrapolated
+    to the 10-year path. Every other gap keeps stage 14's rate. US operating margins agree in sign (above +0.42,
+    interval +0.21 to +0.65; below +0.27, -0.15 to +0.55) on 3 start years.
+  - A+H (left by stages 24 and 25): a line with under 5 years of margins reads its issuer's other line for the young
+    test, the 8-year median, the sales to capital and the moat's return on capital (rating.long_line). 恒瑞's H line
+    stops being young. Its type already came from the longer line (stage 21). Still on the line's own history: a
+    cyclical's normal year and the financials' ROE methods, which this stage doesn't change.
+  - The 32 cached companies rebuilt on 2026-11-23 on one day's data, before (stage 25's code, a frozen copy) and after;
+    no errors, no rating changed, 30 unchanged. Fair value a year on, quote currency:
+
+    | Company | Type | Price | Fair before → after | Rating | Last 3 years' gap to the median (points) | Why |
+    |---|---|---|---|---|---|---|
+    | NVIDIA NVDA | fast grower | 125.53 | 405.45 → 534.37 (+31.8%) | 买入 | +19.2, +27.5, +25.5 | lasting above: year-10 margin 53.5% on the 0.973 rate |
+    | 恒瑞医药 01276 | ordinary | 42.92 | 26.65 → 30.73 (+15.3%) | 卖出 | its A line's history | no longer young: the A line's 23.6% median, 1.49 sales to capital and moat |
+    | Amazon AMZN | ordinary | 246.82 | 148.64 → 148.64 | 卖出 | +0.8, +5.1, +5.5 | 2 years on its side: not lasting |
+    | Apple AAPL | ordinary | 342.56 | 268.87 → 268.87 | 卖出 | +1.5, +1.9, +3.0 | not lasting |
+    | 贵州茅台 600519 | ordinary | 1485.75 | 1767.33 → 1767.33 | 持有 | +1.2, +1.5, -0.1 | not lasting |
+
+  - Measured, not changed: (1) one rate per market and side, though a gap's size matters: gaps of 10 points or more keep
+    less in the US and CN and more in HK, and the US's larger groups hold 31-121 gaps. NVIDIA's gap is in the US's larger
+    group, whose rate is 0.935: its fair value would be 482.61, still 买入, so its +31.8% leans high by about 10%. (2)
+    Amazon's review question stays open by rule: its gap has lasted 2 reported years. The test is a step: read as lasting
+    on today's inputs it would be worth 239.91 (持有) against 148.64 (卖出), so its next annual report can move it that far
+    if its margin holds 3 points over the median. (3) 恒瑞's H line stays below its A line's value because the HK cost of
+    capital is 9.65% against 6.47%: the markets' rates, unchanged here. (4) Stage 14's rate still pools lasting gaps with
+    the rest, so the others' true share is slightly lower (US above 0.52 against 0.59 at 3 years); left as it is, as the
+    stage changes only the lasting gaps.
+  - Tests: the spells' split, the size filter, the fitted rate, its 8-year window and fallback, the sides left alone, the
+    fade on a lasting gap (and not on 2 years or a broken run), the report's wording, a short line reading its issuer's
+    longer one, moat included. 356 pass.
+  - The fresh-context stage review (one, on Sonnet): 355 passed at the time, the table's rows recomputed independently
+    and matched, no look-ahead, the size filter correct, no rule written for a name. Its three findings, all fixed: (1)
+    HK above was adopted on one gap definition while the other spans zero: the rule is now both, and HK above keeps
+    stage 14's rate; HK's fit horizons are now stated. (2) The rate was measured on the 5 years' median before but
+    applied to the 8-year median: it is now fitted on the 8-year median where the history allows. (3) The moat still
+    read the short line's 4 years: it reads the long line now. Its other points stand as written: net margin is a proxy
+    for operating margin in the US, and the 3-year test is a step (Amazon, above).
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -3285,7 +3344,14 @@ were averaged with fixed weights (DCF 50%, multiples 50% for the ordinary; 60/40
   11 complete years). Survivors only: a company whose margin collapsed and that left the market is missing, so
   persistence above the median and recovery below it are both overstated. Our rates are slower than Fama and
   French's (their mean is fitted across firms; ours is the company's own median), except US margins below the
-  median, which recover as fast. Margins reached by year 5 as before: the young's mature-peer margin (Damodaran's
+  median, which recover as fast. Since stage 26 (the review's F4), a gap that has lasted keeps its own rate: when the
+  last 3 reported years are all 3 points or more on the side of the 8-year median the forecast starts from, the gap
+  shrinks by fade.lasting_keep (kept a year above / below: CN 0.916, unchanged / 0.913; US 0.973 / 0.692; HK 0.884,
+  unchanged / 0.886), on the sides where the measurement found lasting gaps keep more (Status, stage 26, has the table).
+  The anchor stays the own 8-year median: Fama and French (2000) find reversion toward expected profitability, and a
+  gap that lasted has partly moved that level, which a slower fade toward the median expresses with no new input. An
+  A+H line with under 5 years of margins reads its issuer's other line (rating.long_line): its margins for the young
+  test and the median, its capital for sales to capital, its return on capital for the moat. Margins reached by year 5 as before: the young's mature-peer margin (Damodaran's
   target margin for a company without its own); a cyclical's normal year since stage 18 ("As built", Cyclical; until
   then its 10-year average margin by year 5 on the consensus revenue, with its excess growth carried on). PLAN.md's
   earlier "US 0.28 after 3 years" (Amazon's valuation, 2026-11-12) came from a script not kept and isn't reproduced

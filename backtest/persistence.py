@@ -9,7 +9,12 @@ prints, per market:
   3. excess returns: of companies whose return on equity beat today's stable cost of equity in k of the last 5 years,
      the share that beats it h years on (Morningstar's moat: excess returns more likely than not for 10 / 20 years),
      and the share of a sustained excess kept h years on, net of the market's drift;
-  4. the rates the research DCF uses (fade.margin_keep, growth_shares, excess_keep).
+  4. the rates the research DCF uses (fade.margin_keep, lasting_keep, growth_shares, excess_keep);
+  5. stage 26: whether a margin gap that has lasted 3 years keeps more than one that opened in the last year, 3 years
+     on, by side (stage 14's gap: to the 5 years' median before, net of the drift), with a 90% interval on the
+     difference (resampling companies), and the same against the 8-year median the forecast anchors on: a side
+     changes when both intervals are above zero. The US also on
+     SEC's frames (net margin, dead filers kept, the largest filers by revenue each year), the rates' source.
 All on today's listings only (survivors: a company whose margin or return collapsed and that left the market is
 missing, so persistence above the median and recovery below it are overstated). Complete fiscal years only.
 
@@ -91,6 +96,39 @@ def returns(market: str) -> None:
     print("  5 of 5, share of the excess kept, net of drift: " + "  ".join(f"h{h} {k:4.2f} [{n}]" for h, (k, n) in kept.items()))
 
 
+def spread(lasting: pd.Series, new: pd.Series, n: int = 500) -> tuple[float, float]:
+    """A 90% interval on the difference of the two groups' median shares, resampling companies (a company's years are
+    not independent)."""
+    r, a, b = np.random.default_rng(0), lasting.groupby(level=0).apply(np.array), new.groupby(level=0).apply(np.array)
+    x = [np.median(np.concatenate(a.iloc[r.integers(0, len(a), len(a))].values))
+         - np.median(np.concatenate(b.iloc[r.integers(0, len(b), len(b))].values)) for _ in range(n)]
+    return float(np.percentile(x, 5)), float(np.percentile(x, 95))
+
+
+def spell_row(m: pd.DataFrame, window: int, current: bool, side: str, among: pd.DataFrame | None = None) -> str:
+    d = fade.margin_gaps(m, window, current, fade.KEPT_YEARS, side, among=among)
+    a, b = fade.gap_spells(d, side)
+    if len(a) < 30 or len(b) < 30:
+        return f"lasting [{len(a)}] new [{len(b)}]: too few"
+    x, y = a["later"] / a["gap"], b["later"] / b["gap"]
+    lo, hi = spread(x, y)
+    return (f"lasting {x.median():.2f} [{len(a)}, {a['start'].nunique()}y]  new {y.median():.2f} [{len(b)}]  "
+            f"difference {x.median() - y.median():+.2f} ({lo:+.2f}, {hi:+.2f})")
+
+
+def lasting(market: str) -> None:
+    m = fade.margin_table(market)
+    print(f"\n{market.upper()} lasting margin gaps: share kept {fade.KEPT_YEARS} years on (lasting: 3 years on its side; new: opened in the last)")
+    tables = [("own table", m, None)] + ([("SEC frames, largest filers", *fade.frames_margins())] if market == "us" else [])
+    for name, t, among in tables:
+        for side in ("above", "below"):
+            print(f"  {name}, {side}, 5 years before: {spell_row(t, 5, False, side, among)}")
+            print(f"  {name}, {side}, 8-year median:  {spell_row(t, 8, True, side, among)}")
+    keep, old = fade.lasting_keep(market), fade.margin_keep(market)
+    print(f"  kept a year: above {old['above']:.3f} -> {keep['above']:.3f}, below {old['below']:.3f} -> {keep['below']:.3f} (lasting gaps; "
+          f"sides that change: {', '.join(fade.LASTING_SIDES[market])})")
+
+
 def used(market: str) -> None:
     mk = fade.margin_keep(market)
     print(f"\n{market.upper()} used: margin gap kept a year above {mk['above']:.3f} below {mk['below']:.3f} (5 years: "
@@ -106,3 +144,4 @@ if __name__ == "__main__":
         growth(mk)
         returns(mk)
         used(mk)
+        lasting(mk)

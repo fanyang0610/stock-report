@@ -33,7 +33,7 @@ import pandas as pd
 
 from stockreport.config import DATA
 from stockreport.fetch import yahoo
-from stockreport.research import damodaran, dcf, sheet
+from stockreport.research import damodaran, dcf, fade, sheet
 from stockreport.research.checks import FINANCIAL
 
 RATE_OF = {"CNY": "cn", "USD": "us", "HKD": "hk"}
@@ -182,6 +182,19 @@ def capital(f: dict, x: dict) -> float:
 
 def history(f: dict, key: str, n: int) -> pd.Series:
     return pd.Series([h.get(key) for h in f["history"]][-n:], dtype=float).dropna()
+
+
+def line_rows(f: dict, k: dict, key: str, n: int) -> pd.Series:
+    """The last `n` years of a history line as reported (NaN where missing): the issuer's other line's when this line
+    has under 5 years of margins (k["long_line"], rating.long_line)."""
+    line = k.get("long_line")
+    return pd.Series(line[key][-n:] if line else [h.get(key) for h in f["history"]][-n:], dtype=float)
+
+
+def lasted(rows: pd.Series, target: float, side: str) -> bool:
+    """The margin was 3 points or more on this side of its long-run target in each of the last 3 reported years."""
+    last = rows.tail(fade.LASTING_YEARS)
+    return len(last) == fade.LASTING_YEARS and bool(((last - target) * (1 if side == "above" else -1) >= fade.MIN_GAP).all())
 
 
 def kind_of(f: dict, k: dict, norm: float | None) -> tuple[str, str]:
@@ -433,7 +446,8 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
       to the stable rate.
     - Margin: an own 8-year median target is approached as the market's history says a margin's gap to its median
       shrinks, the same share each year, above and below the median apart (k["margin_keep"]; Fama and French 2000's
-      partial adjustment); a cyclical's 10-year average (normalized earnings after the years the consensus sees) and
+      partial adjustment), a gap that has lasted 3 reported years at its own measured rate (k["lasting_keep"], stage
+      26: part of a lasting gap is a moved level, not noise); a cyclical's 10-year average (normalized earnings after the years the consensus sees) and
       the young's mature-peer margin are reached by year 5 (the Ginzu's default). The young (PLAN.md "Forecast"): a
       loss-maker, a fast grower with a loss year (else its margin is established), under 5 years of history or a
       negative 8-year median. With no consensus: the 3-year revenue trend."""
@@ -468,7 +482,8 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     if not growth:
         growth = [s.get("rev_cagr_3y") or s.get("rev_cagr_5y") or g_term]
         margin, shares = [m0], k.get("trend_shares") or [0.0] * CONVERGENCE
-    own = history(f, "ebit_margin", 8)
+    rows = line_rows(f, k, "ebit_margin", 8)
+    own = rows.dropna()
     young = kind == "loss_making" or kind == "fast_grower" and (own <= 0).any() or len(own) < 5 or own.median() <= 0
     if kind == "cyclical":
         target = history(f, "ebit_margin", 10).mean()
@@ -483,17 +498,21 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
         growth += [base + shares[t_ - n - 1] * (growth[n - 1] - base) for t_ in range(n + 1, CONVERGENCE + 1)]
         g5 = growth[-1]
         growth += [g5 + (g_term - g5) * (t_ - CONVERGENCE) / (dcf.YEARS - CONVERGENCE) for t_ in range(CONVERGENCE + 1, dcf.YEARS + 1)]
-    last = margin[-1]
+    last, lasting = margin[-1], False
     if kind == "cyclical" or young:
         margin += [target if t_ >= CONVERGENCE else last + (target - last) * (t_ - n) / (CONVERGENCE - n)
                    for t_ in range(n + 1, dcf.YEARS + 1)]
     else:
-        keep = k["margin_keep"]["above" if last > target else "below"]
+        side = "above" if last > target else "below"
+        keep = k["margin_keep"][side]
+        if lasted(rows, target, side):  # the rate differs only where the measurement found lasting gaps keep more
+            keep, lasting = (k.get("lasting_keep") or {}).get(side, keep), (k.get("lasting_keep") or {}).get(side, keep) != keep
         margin += [target + (last - target) * keep ** (t_ - n) for t_ in range(n + 1, dcf.YEARS + 1)]
-    return {"growth": growth, "margin": margin, "target_margin": target, "consensus_years": n, "fixed_years": fixed, "eps_check": check,
+    return {"growth": growth, "margin": margin, "target_margin": target, "margin_lasting": lasting, "consensus_years": n,
+            "fixed_years": fixed, "eps_check": check,
             **({"revenue0": rev0, "one_off": True} if odd else {}),
             "margin_source": "10-year average" if kind == "cyclical" else "profitable peers' median" if young and target == k.get("mature_margin")
-            else "industry" if young else "own 8-year median"}
+            else "industry" if young else "other line's 8-year median" if k.get("long_line") else "own 8-year median"}
 
 
 def consensus_ebit(f: dict, k: dict, cons: dict, eps: float) -> float:
@@ -535,10 +554,17 @@ def sales_to_capital(f: dict, k: dict, margin_source: str | None = None) -> tupl
     6.8% cost)."""
     if margin_source in YOUNG_SOURCES and k.get("ind_sales_to_capital"):
         return k["ind_sales_to_capital"], "industry (its long-run margin is mature peers')"
-    h = f["history"][-5:]
-    s2c = [x["revenue"] / ic for x in h if x.get("revenue") and x.get("equity") is not None
+    if (k.get("long_line") or {}).get("s2c"):
+        return k["long_line"]["s2c"], f"its {k['long_line']['market'].upper()} line's 5-year median"
+    own = own_s2c(f)
+    return (own, "own 5-year median") if own else (k["ind_sales_to_capital"], "industry")
+
+
+def own_s2c(f: dict) -> float | None:
+    """The 5-year median of revenue over invested capital, with at least 3 years of positive capital."""
+    s2c = [x["revenue"] / ic for x in f["history"][-5:] if x.get("revenue") and x.get("equity") is not None
            and (ic := capital(f, x)) > 0]
-    return (float(np.median(s2c)), "own 5-year median") if len(s2c) >= 3 else (k["ind_sales_to_capital"], "industry")
+    return float(np.median(s2c)) if len(s2c) >= 3 else None
 
 
 def moat(series: pd.Series, cost: float, stable: float, keep: float) -> dict:
