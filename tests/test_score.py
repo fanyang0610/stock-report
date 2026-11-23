@@ -294,6 +294,20 @@ def test_ev_needs_the_cash_line_and_a_missing_debt_line_is_no_debt(tmp_path, mon
     assert b["ev"].tolist()[:2] == [115.0, 80.0] and np.isnan(b.loc["C", "ev"])  # C: the balance sheet wasn't read
 
 
+def test_ev_adds_preferred_stock_and_in_cn_perpetuals_booked_as_equity(tmp_path, monkeypatch):
+    # Yahoo's PreferredStockEquity (Occidental's $8.3bn) and OtherEquityInterest: China's 其他权益工具, which holds the
+    # preferred shares too (招商银行's 199.989bn is its 优先股 and 永续债), so CN adds the larger line; in the US and HK that
+    # line is other reserves (携程's equals its equity) and only the preferred stock is added
+    pd.DataFrame({"code": ["A", "B", "C", "D"], "yahoo": "ok", "currency": "USD", "ebit_ttm": 10.0, "debt": 30.0, "cash": 20.0,
+                  "minority": 5.0, "pref": [8.0, 27.0, None, None], "other_equity": [None, 200.0, -12.0, None], "liabilities": 50.0,
+                  "sta": 0.0}).to_csv(tmp_path / "gaps.csv", index=False)
+    monkeypatch.setattr(uni.yahoo, "gaps_path", lambda market: tmp_path / "gaps.csv")
+    monkeypatch.setattr(uni.yahoo, "load_fx", lambda: pd.Series({"USD": 1.0}))
+    df = pd.DataFrame({"mcap": 100.0}, index=["A", "B", "C", "D"])
+    assert uni.yahoo_balance(df, "cn", "USD")["ev"].tolist() == [123.0, 315.0, 115.0, 115.0]  # + the claim (8, 200, none: a negative line is no claim, none)
+    assert uni.yahoo_balance(df, "us", "USD")["ev"].tolist() == [123.0, 142.0, 115.0, 115.0]  # + the preferred stock only
+
+
 def rated(n: int = 100) -> pd.DataFrame:
     """n names scored 0..1 by position (the last is the best), all among the largest, 6 sectors, volatility rising
     with the position modulo 7."""

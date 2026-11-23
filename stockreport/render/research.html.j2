@@ -253,7 +253,7 @@
 <div class="cols">
 <div><h3>折现率和长期假设（{{ k.currency }}）</h3>
 <table class="kv small">
-<tr><td>无风险利率（10 年国债，{{ k.rf_date }}）</td><td class="num">{{ F.pct(k.rf, False, 2) }}</td></tr>
+<tr><td>无风险利率（10 年国债，{{ k.rf_date }}{% if k.rf_note %}；{{ k.rf_note }}{% endif %}）</td><td class="num">{{ F.pct(k.rf, False, 2) }}</td></tr>
 {% if k.market and k.market.r is number %}<tr><td>同组公司现价隐含回报（{{ k.market.members }} 只）</td><td class="num">{{ F.pct(k.market.r, False, 2) }}</td></tr>{% endif %}
 <tr><td>股权风险溢价（同组公司隐含{% if k.crp %}，国别差 {{ F.pct(k.crp, True, 2) }}{% endif %}）</td><td class="num">{{ F.pct(k.erp, False, 2) }}</td></tr>
 <tr><td>要求回报（股权成本）</td><td class="num">{{ F.pct(k.cost_equity) }}</td></tr>

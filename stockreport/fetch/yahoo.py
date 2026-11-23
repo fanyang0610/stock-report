@@ -36,16 +36,19 @@ ANNUAL_FIELDS = {"revenue": "TotalRevenue", "gp": "GrossProfit", "op_income": "O
                  "dil_shares": "DilutedAverageShares", "equity": "StockholdersEquity", "pref": "PreferredStockEquity",
                  "assets": "TotalAssets", "liabilities": "TotalLiabilitiesNetMinorityInterest", "shares": "OrdinarySharesNumber"}
 # ni (net income before preferred dividends, like SEC's NetIncomeLoss) and shares: for the US cross-checks; EBIT,
-# debt, cash (with short-term investments) and minorities: EBIT/EV and the distress probability; the cash flow's
+# debt, cash (with short-term investments), minorities, preferred stock and other equity interest (CN: 其他权益工具,
+# the preferred shares and perpetual bonds booked as equity; elsewhere other reserves, not read):
+# EBIT/EV and the distress probability; the cash flow's
 # working-capital change and depreciation: the accruals screen (sta), in every market
 FIELDS = {"revenue": "TotalRevenue", "np": "NetIncomeCommonStockholders", "gp": "GrossProfit",
           "ocf": "OperatingCashFlow", "equity": "StockholdersEquity",
           "liabilities": "TotalLiabilitiesNetMinorityInterest", "assets": "TotalAssets",
           "ni": "NetIncome", "shares": "OrdinarySharesNumber", "ebit": "EBIT", "debt": "TotalDebt",
           "cash": "CashCashEquivalentsAndShortTermInvestments", "minority": "MinorityInterest",
+          "pref": "PreferredStockEquity", "other_equity": "OtherEquityInterest",
           "wc": "ChangeInWorkingCapital", "da": "DepreciationAndAmortization", "dep": "ReconciledDepreciation"}
 ANNUAL_AGE_DAYS = 550  # the accruals' fiscal year: its end, the filing ~4 months later, then a year
-BALANCE = ["equity", "liabilities", "assets", "shares", "debt", "cash", "minority"]
+BALANCE = ["equity", "liabilities", "assets", "shares", "debt", "cash", "minority", "pref", "other_equity"]
 MAX_AGE_DAYS = 200  # same freshness rule as SEC
 # Half-year and annual reporters (no quarterly figures in the last 400 days: BHP, Unilever, National Grid, HDFC Bank...)
 # report the next half within 3-4 months of its end (UK, EU, Australian listing rules), up to ~300 days after the last.
@@ -200,11 +203,11 @@ gaps_path = lambda market="us": GAPS if market == "us" else GAPS.with_name(f"{ma
 def update_gaps(today: date, codes: list[str], market: str = "us") -> None:
     """Weekly per company. US: the codes SEC has no recent quarterly numbers for first, then the rest of the
     candidates, whose Yahoo numbers are the second source of the cross-checks; CN and HK: EBIT, debt, cash,
-    minorities and accruals. A table fetched before the accruals were added (stage 3) is fetched again for every
-    company."""
+    minorities and accruals. A table fetched before the accruals (stage 3) or the preferred stock (stage 24) were added
+    is fetched again for every company."""
     path, symbol = gaps_path(market), MARKETS[market][2]
     todo = stale(path, codes, today)
-    if path.exists() and "sta" not in pd.read_csv(path, nrows=0).columns:
+    if path.exists() and not {"sta", "pref"} <= set(pd.read_csv(path, nrows=0).columns):
         todo = list(codes)
     upsert_each(path, make_http, timeseries, [(c, symbol(c), today) for c in todo], today, 2, f"yahoo {market} fundamentals")
 

@@ -104,25 +104,31 @@ def cn_float(mcap: pd.Series, weights: pd.Series, since: pd.Series | None = None
 
 
 def yahoo_balance(df: pd.DataFrame, market: str, quote: str) -> pd.DataFrame:
-    """Trailing EBIT and Yahoo's latest debt, cash (with short-term investments), minorities and liabilities in the
-    quote currency (fetch/yahoo.py), EV = market value + debt + minorities − cash, and the latest fiscal year's scaled
-    total accruals (sta, the buys' screen). EBIT is the operating income US filers report to the SEC (op_ttm, USD)
+    """Trailing EBIT and Yahoo's latest debt, cash (with short-term investments), minorities, preferred stock and
+    liabilities in the quote currency (fetch/yahoo.py), EV = market value + debt + minorities + preferred stock − cash
+    (the claims ahead of common holders, at carrying value: preferred stock, and in CN the perpetual bonds booked as
+    equity; the book value and earnings per share already leave them out, history.py), and the latest fiscal year's
+    scaled total accruals (sta, the buys' screen). EBIT is the operating income US filers report to the SEC (op_ttm, USD)
     where they tag it, else Yahoo's, which is pretax profit plus interest and so carries one-off gains and losses below
-    operating income (PLAN.md, EBIT/EV). A debt or minorities line Yahoo doesn't list is none; without a cash line the
+    operating income (PLAN.md, EBIT/EV). A debt, minorities or preferred line Yahoo doesn't list is none; without a cash line the
     balance sheet wasn't read: no EBIT or no cash leaves EBIT/EV out (rule 5)."""
     path = yahoo.gaps_path(market)
     y = pd.read_csv(path, dtype={"code": str}).drop_duplicates("code", keep="last").set_index("code") \
         if path.exists() else pd.DataFrame(columns=["yahoo", "currency"])
     y = y[y["yahoo"] == "ok"].reindex(df.index).reindex(columns=["currency", "ebit_ttm", "debt", "cash", "minority",
-                                                                  "liabilities", "sta"])
+                                                                  "pref", "other_equity", "liabilities", "sta"])
     fx = yahoo.load_fx()
     rate = (fx.get(quote, np.nan) / y["currency"].map(fx)).where(y["currency"] != quote, 1.0)
-    items = y[["debt", "cash", "minority", "liabilities"]].mul(rate, axis=0)
+    if market == "cn":  # China's 其他权益工具 (preferred shares and perpetual bonds) is Yahoo's OtherEquityInterest, equal to
+        # Eastmoney's line (招商银行 199.989bn, 比亚迪 17.08bn) and holding the preferred shares: the larger line. In the
+        # US and HK that line is other reserves (携程's equals its whole equity), so they take the preferred stock only
+        y["pref"] = y[["pref", "other_equity"]].clip(lower=0).max(axis=1)
+    items = y[["debt", "cash", "minority", "pref", "liabilities"]].mul(rate, axis=0)
     ebit = y["ebit_ttm"] * rate
     if "op_ttm" in df:
         ebit = df["op_ttm"].where(df["op_ttm"].notna(), ebit)
     have = ebit.notna()
-    ev = df["mcap"] + (items["debt"].fillna(0) + items["minority"].fillna(0) - items["cash"]).where(have)
+    ev = df["mcap"] + (items[["debt", "minority", "pref"]].fillna(0).sum(axis=1) - items["cash"]).where(have)
     return df.assign(ebit=ebit, ev=ev, cash=items["cash"].where(have), liab_y=items["liabilities"],
                      sta=y["sta"])
 

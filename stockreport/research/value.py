@@ -2,7 +2,8 @@
 valuation method's value per share, from the fact sheet and Damodaran's data (PLAN.md "The method"). rating.py weighs
 them into the target, the scenarios and the rating. Every choice below is a published default, cited where it is made:
 - Rates are in the reporting currency (the cash flows' currency, so r and g are in one currency): its government's
-  10-year yield (ChinaBond, US Treasury, HK government bond; other currencies: the US yield, said).
+  10-year yield (ChinaBond, US Treasury, HK government bond, the OECD's series for the currencies FRED carries; a
+  currency with none: the US yield, said).
 - Cost of equity (stage 15): the reporting currency's yield plus the listing market's implied premium (research/
   market.py: the return at which the market's members are worth their price under this model's own cash-flow rules,
   less the yield) plus Damodaran's country risk premium for the company's country (his company list) over the listing
@@ -62,9 +63,27 @@ METHODS = {  # PLAN.md's type table: the main method first (the fair value), the
 }
 
 
+def labelled(f: dict) -> bool:
+    """The exchange's pre-profit label (-B, -U) on the name. It types nothing: a company is pre-revenue by its figures
+    (no revenue, or operating costs over twice the revenue); a labelled one with revenue is typed as any other, and
+    page 1 says its pipeline isn't valued (compare.basis)."""
+    return f.get("market") != "us" and f.get("kind") not in FINANCIAL | {"reit"} and bool(PRE_REVENUE.search(str(f.get("name")).upper()))
+
+
 def rate(market: str) -> tuple[float, str]:
     r = pd.read_csv(DATA / "rates.csv").query("market == @market").dropna(subset=["y10"]).sort_values("date")
     return float(r["y10"].iloc[-1]) / 100, r["date"].iloc[-1]
+
+
+def yield_of(cur: str) -> tuple[float, str, str | None]:
+    """The reporting currency's own 10-year government yield, its date and a note: ChinaBond, US Treasury and the HK
+    government bond under their markets, the other currencies under their lowercase code (fetch/fred.py: the OECD's
+    series). A currency with none takes the US yield, said (Damodaran's rule is the currency's own riskless rate: a
+    TWD or DKK cash flow discounted at a dollar yield carries the dollar's inflation)."""
+    key = RATE_OF.get(cur, cur.lower())
+    if (pd.read_csv(DATA / "rates.csv")["market"] == key).any():
+        return *rate(key), None
+    return *rate("us"), f"{cur}：没有免费的本币 10 年国债收益率，用美国 10 年国债"
 
 
 def industry(dam: dict, kind: str) -> dict:
@@ -113,7 +132,7 @@ def inputs(f: dict, mkt: dict | None) -> dict:
     v, market, kind = f["valuation"], f["market"], f["kind"]
     dam, home_market = f["damodaran"] or {}, priced_in(f)
     cur, fin, t, b = v["report_currency"], kind in FINANCIAL, v["ttm"], v["balance"]
-    rf, rf_date = rate(RATE_OF.get(cur, "us"))
+    rf, rf_date, rf_note = yield_of(cur)
     country = country_of(f)
     c, home = damodaran.country(country), damodaran.country(COUNTRY[home_market])
     ref = damodaran.country(mkt.get("country") or COUNTRY[home_market]) if mkt else home  # the group's home: China for
@@ -136,7 +155,7 @@ def inputs(f: dict, mkt: dict | None) -> dict:
         rating, spread = None, None
     cost = lambda e: e if fin else None if spread is None else dcf.wacc(mcap, debt, e, rf + spread, tax_m)
     coe_pub = dcf.capm(rf, beta, c["erp"])
-    return {"currency": cur, "rf": rf, "rf_date": rf_date, "rf_note": None if cur in RATE_OF else f"{cur}: the US yield used",
+    return {"currency": cur, "rf": rf, "rf_date": rf_date, "rf_note": rf_note,
             "country": country, "priced_in": home_market, "erp": erp, "erp_market": erp_market, "crp": c["crp"] - ref["crp"], "industry": ind["name"],
             "market": dict(mkt) if mkt else {"r": None, "note": "the market's implied return couldn't be solved: Damodaran's published premium"},
             "region": ind["region"], "beta_source": "levered industry beta" if fin else "unlevered beta (cash-corrected), relevered",
@@ -149,6 +168,7 @@ def inputs(f: dict, mkt: dict | None) -> dict:
                           "market_return": rf + home["erp"]},  # Damodaran's published premium: the absolute view
             "ind_margin": ind.get("op_margin"), "ind_sales_to_capital": ind.get("sales_to_capital"),
             "debt": debt, "cash": 0.0 if fin or b.get("float_in_business") else (b["cash"] or 0.0), "minority": b["minority"] or 0.0,
+            "pref": 0.0 if fin else b.get("pref") or 0.0,  # ahead of common holders (facts: the statements' pref line)
             "nonop": 0.0 if fin or b.get("float_in_business") else (b.get("nonop") or 0.0),  # a float's in the business
             "shares": v["shares"], "fx": v["fx_quote_to_report"], "ebit": ebit}
 
@@ -170,17 +190,20 @@ def kind_of(f: dict, k: dict, norm: float | None) -> tuple[str, str]:
     if kind in FINANCIAL or kind == "reit":
         return kind, f"listing type and industry: {kind}"
     rev, ebit = t["revenue"], k["ebit"]
-    label = f["market"] != "us" and PRE_REVENUE.search(str(f["name"]).upper())
-    if label or not rev or rev <= 0 or (ebit is not None and -ebit > rev):
-        return "pre_revenue", "the exchange's pre-profit label, or costs over twice the revenue"
-    if ebit is None or ebit <= 0:
+    if not rev or rev <= 0 or (ebit is not None and -ebit > rev):
+        return "pre_revenue", "no revenue, or operating costs over twice the revenue"
+    m, growing = history(f, "ebit_margin", 10), ""
+    commodity = dam.get("sector") in CYCLICAL_SECTORS
+    cycle = (commodity or dam.get("industry") in CYCLICAL_INDUSTRIES) and len(m) >= 5 and m.min() < m.median() / 2 \
+        and (commodity or downturn(f, norm or 0.0))
+    if ebit is None or ebit <= 0:  # a cyclical at its trough: the normal year is the cycle's average margin, if positive
+        if cycle and m.mean() > 0 and (commodity or (cycle_growth(f) or 0.0) < FAST):
+            return "cyclical", (f"a cyclical industry and a margin that fell below half its median (low {m.min():.0%}, median "
+                                f"{m.median():.0%}); the trailing year is a loss, its normal year the 10-year average margin")
         return "loss_making", "an operating loss over the last twelve months"
     if dam.get("industry") == "Diversified":
         return "holding", "Damodaran's industry: diversified holding"
-    m, growing = history(f, "ebit_margin", 10), ""
-    commodity = dam.get("sector") in CYCLICAL_SECTORS
-    if (commodity or dam.get("industry") in CYCLICAL_INDUSTRIES) and len(m) >= 5 and m.min() < m.median() / 2 \
-            and (commodity or downturn(f, norm or 0.0)):
+    if cycle:
         g = cycle_growth(f)
         if commodity or g is None or g < FAST:
             return "cyclical", f"a cyclical industry and a margin that fell below half its median (low {m.min():.0%}, median {m.median():.0%})"
@@ -464,9 +487,11 @@ def consensus_ebit(f: dict, k: dict, cons: dict, eps: float) -> float:
 
 def capital_now(f: dict, k: dict) -> float:
     """Today's invested capital on one balance sheet: a US filer's equity is its latest 10-Q's, its cash, debt and
-    stakes its 10-K's, whose year end then gives the equity too (NVIDIA's cash earned since counted as capital)."""
+    stakes its 10-K's, whose year end then gives the equity too (NVIDIA's cash earned since counted as capital). The
+    equity is the parent's, with its preferred stock and perpetuals, as each history year's is (book_common leaves them
+    out)."""
     v = f["valuation"]
-    equity = v["book_common"] or 0.0
+    equity = (v["book_common"] or 0.0) + k.get("pref", 0.0)  # the preferred stock and perpetuals fund the assets too
     if (f.get("latest") or {}).get("period") != v["balance"].get("period"):
         equity = next((x["equity"] for x in f["history"] if x["period"] == v["balance"]["period"] and x.get("equity")), equity)
     return capital(f, {"equity": equity, "debt": k["debt"], "cash": k["cash"], "nonop": k["nonop"]})
@@ -529,7 +554,7 @@ def dcf_value(f: dict, k: dict, path: dict, s2c: float, ronic: list[float], cost
     res = dcf.fcff(path.get("revenue0") or f["valuation"]["ttm"]["revenue"], path["growth"], path["margin"],
                    dcf.steps(k["tax_effective"], k["tax_marginal"]), [s2c] * dcf.YEARS, cost, g,
                    k["stable_wacc"] + cost_shift, [r + cost_shift for r in ronic], k["tax_marginal"], earned=path.get("earned"))
-    equity = dcf.equity_value(res["operating"], k["debt"], k["minority"], k["cash"], k["nonop"])
+    equity = dcf.equity_value(res["operating"], k["debt"], k["minority"], k["cash"], k["nonop"], pref=k["pref"])
     return equity / k["shares"] / k["fx"], res
 
 

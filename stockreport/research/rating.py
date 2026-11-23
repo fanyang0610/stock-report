@@ -89,7 +89,7 @@ def methods(f: dict, k: dict, kind: str, cons: dict, today: date, eps_factor: fl
     if "evs_peers" in w and peers.get("ev_sales") and not np.isnan(peers["ev_sales"]):
         rev = cons["ntm_revenue"] or t["revenue"] * (1 + (v.get("eps_growth_consensus") or 0))
         ev = peers["ev_sales"] * rev * eps_factor
-        out["evs_peers"] = {"multiple": peers["ev_sales"], "target": per(ev - k["debt"] - k["minority"] + k["cash"])}
+        out["evs_peers"] = {"multiple": peers["ev_sales"], "target": per(ev - k["debt"] - k["minority"] - k["pref"] + k["cash"])}
     growth = v.get("eps_growth_consensus")
     if "peg_peers" in w and peers.get("peg") and not np.isnan(peers["peg"]) and growth and growth > 0 and eps_ntm > 0:
         out["peg_peers"] = {"multiple": peers["peg"], "pe": peers["peg"] * growth * 100,
@@ -173,8 +173,6 @@ def converge(fair: float, carry: float) -> float:
 
 def flags(f: dict) -> tuple[str | None, str | None]:
     """(status, reason) when no rating can be given: 不评级 or 评级暂停."""
-    if f["kind"] not in FINANCIAL and f["kind"] != "reit" and f["market"] != "us" and value.PRE_REVENUE.search(str(f["name"]).upper()):
-        return "不评级", "pre-revenue: a pipeline can't be valued from free data"
     op = f.get("audit_opinion")
     if op and "标准无保留" not in op and "unqualified" not in op.lower():
         return "不评级", f"audit opinion: {op}"

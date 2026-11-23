@@ -829,3 +829,66 @@ def test_results_released_after_the_figures_make_the_rating_provisional():
                          date(2026, 11, 23)) is None
     from stockreport.research import compare
     assert compare.provisional(p).startswith("评级暂定：2026-11-17 发布了新的业绩")
+
+
+def typing_sheet(ebit, revenue=100.0, name="X", market="hk", margins=None, industry="Semiconductor", sector="Information Technology",
+                 growth=0.0):
+    margins = margins or [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.1, 0.3, 0.3, 0.3]
+    return ({"kind": "general", "market": market, "name": name, "damodaran": {"sector": sector, "industry": industry},
+             "valuation": {"ttm": {"revenue": revenue}}, "summary": {"rev_cagr_3y": growth},
+             "history": [{"ebit_margin": m, "revenue": 100.0, "ni": 1.0} for m in margins]}, {"ebit": ebit})
+
+
+def test_a_cyclical_in_a_loss_is_cyclical_when_its_cycle_averages_a_profit():
+    # a chip maker whose margin halved in a flat-revenue year and whose trailing year is a loss (Micron's FY2023 shape)
+    f, k = typing_sheet(-5.0)
+    assert value.kind_of(f, k, 0.067)[0] == "cyclical" and "trailing year is a loss" in value.kind_of(f, k, 0.067)[1]
+    assert value.kind_of(*typing_sheet(-5.0, margins=[-0.2] * 10), 0.067)[0] == "loss_making"  # the average is a loss
+    assert value.kind_of(*typing_sheet(-5.0, margins=[-0.2] * 8 + [0.1, -0.3]), 0.067)[0] == "loss_making"
+    assert value.kind_of(*typing_sheet(-5.0, industry="Software (System & Application)", sector="Information Technology"), 0.067)[0] \
+        == "loss_making"  # not a cyclical industry
+    assert value.kind_of(*typing_sheet(-5.0, margins=[0.3] * 10), 0.067)[0] == "loss_making"  # no downturn in its record
+    assert value.kind_of(*typing_sheet(-5.0, sector="Materials", industry="Chemical (Basic)"), 0.067)[0] == "cyclical"
+    assert value.kind_of(*typing_sheet(-5.0, margins=[0.3] * 4), 0.067)[0] == "loss_making"  # under 5 years: unmeasured
+    assert value.kind_of(*typing_sheet(10.0), 0.067)[0] == "cyclical"  # in profit: as before
+
+
+def test_the_pre_profit_label_alone_does_not_make_a_company_pre_revenue(monkeypatch):
+    from stockreport import review
+    monkeypatch.setattr(review, "cached", lambda *a: None)
+    b = typing_sheet(10.0, name="百奥赛图-B", industry="Drugs (Biotechnology)", sector="Health Care", margins=[0.1] * 10)
+    assert value.labelled(b[0]) and value.kind_of(*b, 0.067)[0] == "ordinary"  # revenue 100, profit 10: its figures say
+    assert rating.flags(b[0] | {"code": "02315"}) == (None, None)  # and no longer 不评级 for the name
+    assert value.kind_of(*typing_sheet(-150.0, name="X-B"), 0.067)[0] == "pre_revenue"  # costs over twice the revenue
+    assert value.kind_of(*typing_sheet(-5.0, name="X-B", revenue=0.0), 0.067)[0] == "pre_revenue"  # no revenue
+    assert value.kind_of(*typing_sheet(-5.0, name="X-B", margins=[-0.5] * 10), 0.067)[0] == "loss_making"  # revenue, small loss
+    assert not value.labelled({"market": "us", "name": "X-B", "kind": "general"}) and not value.labelled({"market": "hk", "name": "X"})
+    assert not value.labelled({"market": "hk", "name": "X-B", "kind": "bank"})
+
+
+def test_each_currency_takes_its_own_yield_the_us_one_where_none_is_kept(tmp_path, monkeypatch):
+    import pandas as pd
+    pd.DataFrame({"date": ["2026-10-01", "2026-11-19", "2026-11-17"], "market": ["dkk", "us", "cn"], "y10": [3.2, 5.0, 1.9]}
+                 ).to_csv(tmp_path / "rates.csv", index=False)
+    monkeypatch.setattr(value, "DATA", tmp_path)
+    assert value.yield_of("DKK") == (0.032, "2026-10-01", None) and value.yield_of("CNY") == (0.019, "2026-11-17", None)
+    rf, day, note = value.yield_of("TWD")
+    assert (rf, day) == (0.05, "2026-11-19") and "TWD" in note and "美国" in note
+    assert value.yield_of("USD")[2] is None
+
+
+def test_the_equity_bridge_leaves_preferred_stock_and_perpetuals_to_their_holders():
+    assert dcf.equity_value(100.0, 10.0, 5.0, 20.0, 3.0, 2.0) == 106.0  # as before without them
+    assert dcf.equity_value(100.0, 10.0, 5.0, 20.0, 3.0, 2.0, pref=15.0) == 91.0
+
+
+def test_the_bridge_and_the_capital_carry_the_preferred_stock(monkeypatch):
+    f = {"valuation": {"balance": {"period": "2026-09-30"}, "book_common": 80.0, "ttm": {"revenue": 100.0}},
+         "history": [], "latest": {"period": "2026-09-30"}}
+    k = {"debt": 30.0, "cash": 20.0, "nonop": 0.0, "minority": 5.0, "pref": 15.0, "shares": 10.0, "fx": 1.0, "tax_effective": 0.2,
+         "tax_marginal": 0.25, "wacc": 0.08, "stable_wacc": 0.08, "g": 0.03}
+    assert value.capital_now(f, k) == 80.0 + 15.0 + 30.0 - 20.0  # common book + preferred + debt - cash
+    monkeypatch.setattr(dcf, "fcff", lambda *a, **kw: {"operating": 500.0})
+    path = {"growth": [0.0], "margin": [0.1], "revenue0": 100.0}
+    per_share, _ = value.dcf_value(f, k, path, 1.0, [0.08])
+    assert per_share == pytest.approx((500.0 - 30.0 - 5.0 - 15.0 + 20.0) / 10.0)  # operating - debt - minorities - pref + cash

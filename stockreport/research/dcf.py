@@ -126,8 +126,11 @@ def tested_growth(tv, g_max: float, g_min: float = 0.0) -> float:
     return lo
 
 
-def equity_value(operating: float, debt: float, minority: float, cash: float, nonop: float = 0.0, options: float = 0.0) -> float:
-    return operating - debt - minority + cash + nonop - options
+def equity_value(operating: float, debt: float, minority: float, cash: float, nonop: float = 0.0, options: float = 0.0,
+                 pref: float = 0.0) -> float:
+    """The operating assets' value less the claims ahead of common holders: debt, minorities, preferred stock and
+    perpetual securities booked as equity (`pref`, at carrying value), plus cash and the stakes valued apart."""
+    return operating - debt - minority - pref + cash + nonop - options
 
 
 def solve(f, target: float, low: float, high: float, tol: float = 1e-7) -> float | None:

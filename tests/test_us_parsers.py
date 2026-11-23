@@ -286,3 +286,12 @@ def test_the_annual_history_follows_the_current_basis():
                                            | ni("x", "c", "USD", range(2022, 2026))["x"]["c"]["units"]}}}
     assert [(r["fy_end"][:4], r["currency"]) for r in sec.parse_annual("DEO", {"facts": switch}, backfill=True)] == [
         (str(y), "USD") for y in range(2022, 2026)]
+
+
+def test_yahoo_balance_carries_the_preferred_stock_and_other_equity_lines():
+    def item(name, value):
+        return {"meta": {"type": [name]}, name: [{"asOfDate": "2026-09-30", "reportedValue": {"raw": value}, "currencyCode": "USD"}]}
+    payload = {"timeseries": {"result": [item("trailingNetIncomeCommonStockholders", 5.0), item("quarterlyPreferredStockEquity", 8.287e9),
+                                         item("quarterlyOtherEquityInterest", 2.0e9)]}}
+    row = yahoo.parse_timeseries("OXY", payload, date(2026, 11, 20))
+    assert row["pref"] == 8.287e9 and row["other_equity"] == 2.0e9

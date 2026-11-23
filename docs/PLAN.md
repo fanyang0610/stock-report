@@ -1738,7 +1738,7 @@
     the report not rendered from a real between-review day (the first comes the day after the first report on this
     code).
 - Method review (2026-11-23, Opus 5.5, read-only; docs/reviews/REVIEW-2026-11-23.md): stages 23-28 adopted ("Stages");
-  stage 23 done, 24-28 to come. The research forecast treats every company as the median company (688795 at 21 CNY against 270.5:
+  stages 23 and 24 done, 25-28 to come. The research forecast treats every company as the median company (688795 at 21 CNY against 270.5:
   two bugs and the median path; Amazon's margin anchor); the screening's history is survivors only, which fits its
   three adverse results.
 - Stage 23 (research forecast inputs; the review's F1 and F2): done 2026-11-23 on branch
@@ -1813,6 +1813,96 @@
     effective rate already carries their share; (5) the moves the text left unexplained (比亚迪, 恒瑞 A, 百济 A) and the
     1.61 / 1.71 mix-up: written. Year-10 returns of 95-320% (NVIDIA, Apple, 茅台, 五粮液) are the forecast's own: the
     row shows what the forecast implies against the industry, as the Ginzu does.
+- Stage 24 (typing and accounting; the review's F5): done 2026-11-23 on branch claude/bold-lichterman-532562 (from
+  stage 23's claude/quizzical-dubinsky-12662a, f5b27b4). The method is in "Which playbook", "As built in stage 10" and
+  the screening's "EBIT/EV"; each change and its reason:
+  - (a) A cyclical in a loss is cyclical (value.kind_of): the cyclical test (a cyclical industry, a margin whose worst
+    year fell below half its median in a downturn, not a growth firm across the cycle unless a commodity producer) now
+    runs before the loss test, and a trailing operating loss with a positive 10-year average margin is typed cyclical,
+    its normal year that average (value.normal); an average that is a loss stays a loss-maker, as does a company without
+    5 years of margins. Reason: Micron's FY2023 loss followed $9.7bn of operating income, and the loss-maker's rules
+    (mature peers' margin by year 5, the industry's sales to capital: young-firm rules) are not a mature cyclical's.
+    Checked end to end with Micron's cached fact sheet and a $5.7bn operating loss patched in: cyclical, fair value 577
+    (the normal year's 24.7% margin, 1.19 sales to capital); the old rule typed it a loss-maker, fair value 1,292
+    (the DCF at the mature-peer margin and EV/Sales). No cached company changes type for this (none is a cyclical in
+    a loss today); China's solar, lithium and chemical makers are the live case the day one is cached.
+  - (b) The "-B" / "-U" label types nothing (value.labelled, kind_of): pre-revenue is no revenue, or operating costs over
+    twice the revenue (the cost test already stood for every name; the label's own effect was to make a labelled
+    company with revenue and a profit 不评级, the review's eight "-B" names with revenue on 2026-11-22, not
+    re-verified here: the cache holds one, 加科思-B; a labelled loss-maker with revenue under twice its costs is now typed
+    a loss-maker too, where it was 不评级). A labelled company that is rated gets a page-1 line: its pipeline
+    isn't valued. rating.flags no longer returns 不评级 for the name.
+  - (c) Each reporting currency's own 10-year yield (value.yield_of; fetch/fred.py): Damodaran publishes no rate by
+    currency now (his January 2026 country workbook has no such sheet; the 2020 slides have a table), so the
+    government 10-year yield from FRED's OECD monthly series (IRLTLT01) for AUD, CAD, CHF, CLP, DKK, EUR (Germany), GBP,
+    JPY, KRW, MXN, SEK and ZAR, stored in rates.csv under the lowercase currency code by the US step's `10y yield`
+    (a series that fails keeps its last rows). A currency with no free series (TWD, BRL, INR, IDR, COP, VND, PEN, KZT,
+    SGD, MYR: no free Taiwan source found, TPEx publishes workbooks behind a form) takes the US yield, said on page 2's
+    risk-free line (before only in valuation.json). The market's implied return (market.aggregate) weights its members'
+    own yields now, so each US name's premium over the dollar yield moved: the US group's weighted yield 5.013% → 4.951%
+    (members in CAD, EUR, JPY, GBP), its implied return 7.41% → 7.40%, the premium 2.40% → 2.45%; the financial group's
+    yield 5.039% → 4.745% and premium 3.65% → 3.93%. Not changed: the premium's definition, Damodaran's country risk.
+  - (d) Claims ahead of common holders, at carrying value, in both reports. The research's lines were verified first:
+    the statements' pref line is SEC's PreferredStockValue (US), Eastmoney's OTHER_EQUITY_TOOL (CN: 其他权益工具, the
+    preferred shares and 永续债: 招商银行 199.989bn, 比亚迪 17.08bn) and HKEX's 优先股 / 永久资本证券 lines (HK), and
+    book_common (equity − pref) already took them out; the bridge and the EV did not. Now facts' EV adds them
+    (financials excepted, as before), dcf.equity_value subtracts them (value.dcf_value) and the EV/Sales target
+    subtracts them (rating.methods), and today's invested capital counts them with the common book (value.capital_now:
+    each history year's equity already included them; 比亚迪's year-10 return on capital 22.4% → 21.2%, its H line
+    17.7% → 17.0%, display only). Screening (universe.yahoo_balance): EV adds Yahoo's PreferredStockEquity in every
+    market and, for CN only, the larger of that and OtherEquityInterest (a negative line is no claim: 5 A-shares have
+    one, the largest -264m). For the A-shares that line is Eastmoney's 其他权益工具: of the 10 cached CN companies 9
+    agree to the yuan (招商银行 199.989bn, 比亚迪 17.08bn, the other seven none in both) and 君实生物 A doesn't (Yahoo
+    203.8m, Eastmoney none); 101 of the 243 CN names carry it above 5% of equity, not checked one by one. In the US and HK
+    that line is other reserves (携程's 159bn is its whole equity, 腾讯's is negative; a first version took it
+    everywhere and made 携程 +129%): not used.
+    The Yahoo balance tables gain `pref` and `other_equity` columns and are fetched again once for every company
+    (the stage-3 migration pattern). Not changed: the WACC's debt weight and the beta's relevering leave preferred stock
+    out, as before.
+  - Research rebuild, before (stage 23's code, a frozen copy) and after on 2026-11-23, 32 cached companies, no errors:
+    | Name | Type | Fair before → after | Rating | Why |
+    |---|---|---|---|---|
+    | 加科思-B (HK 01167) | pre-revenue → ordinary | - → 3.36 (price 4.02) | 不评级 → 持有 | (b): revenue 739m and operating profit 491m in the 12 months to June 2026 (a licence deal: 54m of revenue and losses every year before) |
+    | Novo Nordisk | fast grower | 85.55 → 105.96 (+23.8%) | 买入 → 买入 | (c): the DKK yield 3.23% for the US 5.04%; the growth rate in stable growth and every discount rate fall by it |
+    | 比亚迪 A / H | fast grower | 123.36 → 121.39 (-1.6%) / 94.15 → 91.79 (-2.5%) | 持有 → 持有 | (d): 17.08bn of 永续债 off the equity |
+    | JPMorgan | bank | 383.53 → 367.15 (-4.3%) | 持有 → 持有 | (c): the financial group's premium over the dollar yield, 3.65% → 3.93% |
+    | the other US names (Apple, Amazon, Lilly, NVIDIA, Palantir, Snowflake, TSMC, Micron, Realty Income) | | -0.1% to -0.9% | unchanged | (c): the US premium 2.40% → 2.45% (the members' own yields); TSMC stays on the US yield (no free TWD series), the move is the premium's alone |
+    | 领展, 百济 H | | -0.4% | unchanged | (c): both are priced in HK's non-China group, whose premium went 2.94% → 2.97% (its yield 4.24% → 4.21%) |
+    | CN names, the HK names with a CN line, the other banks and insurers | | 0.0% | unchanged | none of the changes reaches them |
+    Ratings: none changed but 加科思-B's.
+  - Screening, the 2026-11-23 snapshot (795 CN, 789 US, 391 HK rows), EV with and without the preferred claims on the
+    same freshly fetched Yahoo tables: EV rises for 114 CN names (median +0.8%, 90th percentile +9.0%, max +57%), 53 US
+    (median +0.9%, 90th percentile +6.4%, max +26%) and 3 HK (max +5.9%). EBIT/EV percentile within the peer group moves by 0.05 or
+    more for 21 CN, 6 US and no HK names, by 0.2 or more for 2 CN. Largest: 中国中冶 (建筑装饰) EV 101.8bn → 159.9bn
+    (永续债 58bn), EBIT/EV 6.6% → 4.2%, percentile 0.67 → 0.33; 中国能建 0.17 → 0.42 and 中国电建 0.08 → 0.25 (a
+    percentile moves up when the names above them fall: the sector's contractors all carry 永续债); 中国铁建 0.33 →
+    0.17; 华阳股份 (煤炭) 9.2% → 7.7%, 0.50 → 0.33; 华能国际 4.5% → 3.9%, 0.51 → 0.37; US: BCE 7.7% → 7.4%, 0.88 →
+    0.69, Public Storage 0.39 → 0.29, Occidental 12.5% → 11.0% (the review's 12.46% → 11.01%, its $8.3bn confirmed).
+    The lists weren't rebuilt (the score's value family has seven components; one percentile moving 0.2 moves the
+    family by about 0.03).
+  - Tests: one per change (the cyclical in a loss and its limits; the label and flags; each currency's yield and the
+    US fallback; the bridge; the EV's preferred and CN perpetuals; Yahoo's two new fields parsed). 336 pass.
+  - Found, not fixed: (1) an A+H issuer's young test reads each line's own history (恒瑞's H line, listed 2025, takes
+    peers' margin and the industry's 1.07 sales to capital where its A line keeps its own 1.49): it belongs to the
+    forecast's young test (value.paths: under 5 years of history), not to (a) or (b)'s typing; it is the margin anchor's
+    (F4), stage 26's. (2) 加科思-B's DCF extrapolates a licence year: a mature margin of 39% fading to 23% on revenue
+    falling 27% a year; its 持有 at 3.36 against 4.02 sits near the price and its cash (1.46bn of a 3.1bn market
+    value), but a one-off year is read as a business: the young types' valuation, stage 25's scope (the base-rate
+    paths). (3) HK's screening EV leaves out the mainland issuers' perpetual capital securities (Yahoo's HK reserves line
+    can't be told from them; the H shares' A lines carry theirs in CN); only the 15 HK names with a Yahoo preferred
+    line are in, and 3 EVs rise. (4) Currencies with no free yield keep the US one, and the OECD's are monthly averages
+    up to two months old (Novo's DKK 3.23% is October's; no age limit is coded: a series that stops would be used
+    until it is replaced). (5) The WACC's debt weight leaves preferred stock out.
+  - The fresh-context stage review (one, on Sonnet): no scope, rule or sign/unit fault; the tables recomputed and
+    matching except the screening's EV-rise counts (186/119/34 counted names with no EV at all: now 114/53/3) and the
+    explanation of 领展 and 百济 H (HK's premium, not the US one: written). Its points, answered: (1) the CN line can
+    lower an EV when negative: clipped at 0, with a test; its equality to Eastmoney's was shown on two names: now the
+    10 cached CN companies (9 agree), the 101 large ones unchecked, said; (2) only arithmetic was tested and invested
+    capital left the preferred stock out: capital_now includes it and a test follows the bridge through dcf_value and
+    capital_now (the EV/Sales target's subtraction and facts' EV are one line each, covered by the rebuild: 比亚迪);
+    (3) no age limit on the OECD yields: written as found; (4) the (b) wording widened (a labelled loss-maker too);
+    (5) the Micron check not re-run by the reviewer: it patches a loss into the cached sheet (scratch script,
+    valuation.json restored from the rebuild: 739.2 as in the after table).
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -1915,7 +2005,10 @@ momentum drive the score (fixed in stage 1 after the stage review).
   value measure (Liu-Stambaugh-Yuan 2019). B/P only where book > 0 (negative book from buybacks is undefined, not cheap
   or dear). S/P not for banks, insurers and brokers.
   - **EBIT/EV** (stage 3's redo): trailing operating profit before interest and tax over market value + debt +
-    minorities − cash. Greenblatt's Magic Formula and Gray and Carlisle's Quantitative Value rank on it (they found it
+    minorities + preferred stock − cash (stage 24: the claims ahead of common holders, at carrying value: Yahoo's
+    PreferredStockEquity, and in China and Hong Kong its OtherEquityInterest, the 其他权益工具 that holds the preferred
+    shares and the perpetual bonds and capital securities booked as equity, so the larger of the two lines; book value
+    and earnings per share already took them out; see Status, stage 24). Greenblatt's Magic Formula and Gray and Carlisle's Quantitative Value rank on it (they found it
     the best single value measure in US data 1964-2011, as did Loughran and Wellman 2011), and it is in ValueRank
     because it counts the debt E/P ignores: on 2026-11-01 GM's P/E is ~7 but its EV/EBIT ~33 with GM Financial's
     $129bn of debt. From Yahoo's fundamentals timeseries in all three markets (trailing EBIT, the latest total debt,
@@ -2949,7 +3042,7 @@ and the target price are code's: DeepSeek is told them and can't change them.
 | Ordinary profitable business | default | DCF; cross-checks: P/E against its own history and its peers | returns on capital, cash conversion |
 | Fast grower | revenue growth well above its market's norm, profitable or near | DCF with margins converging; cross-checks: EV/Sales and PEG against peers | the reverse DCF and the base rate |
 | Loss-making with revenue | operating loss | DCF to an industry target margin; cross-check: EV/Sales against peers (the fair value when the DCF's equity value is negative) | cash runway, path to profit |
-| Pre-revenue (biotech) | almost no revenue; CN "-U", HK "-B" | 不评级: a pipeline can't be valued from free data | cash runway, dilution |
+| Pre-revenue (biotech) | no revenue, or operating costs over twice the revenue (the "-B" / "-U" label alone no longer: stage 24) | 不评级: a pipeline can't be valued from free data | cash runway, dilution |
 | Bank | industry | excess-return model on book equity; cross-check: P/B against its history | NIM, bad loans, provisions, capital |
 | Insurer | industry; since stage 21 also an insurance carrier Damodaran files under Financials or not at all (below) | the same excess-return model (embedded value isn't reliably free; said so); cross-check: P/B against its history | solvency, combined ratio, investment yield |
 | Broker / asset manager | industry | the excess-return model on the cycle's ROE (8-year average); cross-check: P/B against its history | dependence on market turnover |
@@ -2969,9 +3062,14 @@ pretax profit carries its investment gains. Berkshire (SIC 6331, Diversified in 
 under an operating sector stays in its type with its float's assets in the business, "Valuation and target price":
 UnitedHealth, Elevance, Cigna, Humana and Centene, Health Care. Scanned on the 2026-11-14 US snapshot: 13 of its 33
 carriers aren't Damodaran's insurers; Berkshire, Manulife, Sun Life, Prudential plc, RGA, Corebridge, Everest and
-RenaissanceRe are now insurers, the five health insurers keep a DCF); pre-revenue: HKEX's "-B" (chapter 18A biotech; STAR's "-U" where a name keeps it, but CNINFO's
-names drop it) or operating costs over twice the revenue; loss-making: an operating loss (operating profit as "Valuation
-and target price" defines it per market) over the last twelve months; holding: Damodaran's "Diversified"; cyclical: Damodaran's Materials or Energy
+RenaissanceRe are now insurers, the five health insurers keep a DCF); pre-revenue: no revenue, or operating costs over twice the revenue (stage 24: HKEX's "-B" (chapter 18A biotech) and STAR's
+"-U" labelled a company pre-revenue by name alone, so a labelled company with revenue and a profit was 不评级 though its
+accounts value it, the 2026-11-22 snapshot's eight "-B" names with revenue; the label now types nothing, and page 1 of a labelled
+company that is rated says its pipeline isn't valued); loss-making: an operating loss (operating profit as "Valuation
+and target price" defines it per market) over the last twelve months, unless the cyclical test below holds and the 10-year average
+margin is positive (stage 24: Micron's FY2023 loss followed $9.7bn of operating income, its normal year is the cycle's;
+a cyclical at its trough was given the loss-maker's mature-peer margin by year 5 and its own sales to capital, which a
+loss-maker's young-firm rules, not a mature cyclical's, call for; an average margin that is a loss stays a loss-maker); holding: Damodaran's "Diversified"; cyclical: Damodaran's Materials or Energy
 sector, or his Semiconductor, Semiconductor Equip, Shipbuilding & Marine and Transportation industries (the plan's
 materials, chemicals, energy, shipping, memory chips), with an operating margin whose worst of the last 10 years fell
 below half its median in a downturn (since stage 20 for the economy-driven industries: a year whose revenue grew less
@@ -3339,7 +3437,11 @@ methods, target, rating, reverse DCF, base rates and grid; `research CODE --valu
 the plan left open, each a published default:
 - Currency: the cash flows' (reporting) currency's 10-year government yield, so r and g are in one currency
   (investment-research's rule): Tencent and Ping An H are valued in CNY at the ChinaBond yield and converted at
-  today's rate. Other reporting currencies use the US yield, said on the sheet.
+  today's rate. Other reporting currencies: since stage 24 their own government's 10-year yield where a free source
+  carries one (FRED's OECD monthly series IRLTLT01, stored in rates.csv under the lowercase currency code: AUD, CAD, CHF,
+  CLP, DKK, EUR (Germany's), GBP, JPY, KRW, MXN, SEK, ZAR), else the US yield, said on the sheet (page 2's risk-free
+  line). Damodaran publishes no rate-by-currency file now (his January 2026 country workbook has none; the 2020 slides
+  have one), so the rate is the bond's.
 - Beta (the absolute view since stage 15): Damodaran's industry unlevered beta corrected for cash, from his US table for US companies and his global
   table for the rest (his own practice and the Ginzu's "Industry (Global)"; his China-region averages give the whole
   market a beta of 1.75), relevered at market debt to equity with the statutory tax rate (CN 25%, HK 16.5%, US 25%);

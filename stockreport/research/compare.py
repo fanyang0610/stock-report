@@ -12,7 +12,7 @@ Each driver is a sentence with fact keys ({wacc}); words.py fills them in and De
   market's, the methods' state (unresolved: what the cross-check would need in the main method's terms), the checks
   that blocked a Buy or widened the band, the tail scenarios and the absolute view."""
 
-from stockreport.research import CUR, pct, price, times
+from stockreport.research import CUR, pct, price, times, value
 from stockreport.research.rating import ABSOLUTE
 
 VIEW = {"买入": 1, "偏多": 1, "持有": 0, "中性": 0, "卖出": -1, "偏空": -1}
@@ -173,6 +173,8 @@ def basis(f: dict, v: dict, index: str) -> list[str]:
         return []
     k, rv, q = v.get("inputs") or {}, v.get("reverse") or {}, v["currency"]
     out = [provisional(v["provisional"])] if v.get("provisional") else []
+    if value.labelled(f) and v["type"] != "pre_revenue":  # the label alone says nothing: the accounts type it
+        out.append("名称带 -B/-U 标记（尚未盈利的生物科技）：已有收入，按财务数字分类估值；在研管线本身没有估值，免费数据估不了")
     mk, u, main = k.get("market") or {}, v["uncertainty"], v["main"]
     shares = (v.get("base_rates") or {}).get("share_at_least") or {}
     r = rv.get("implied_return")

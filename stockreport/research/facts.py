@@ -357,8 +357,9 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     if market == "us" and g["latest"].get("equity"):
         bal["equity"] = g["latest"]["equity"]
     apart = 0.0 if held else (checks.val(bal, "cash") or 0) + (checks.val(bal, "nonop") or 0)
-    ev = None if fin else mcap * rate + (checks.val(bal, "debt") or 0) + (checks.val(bal, "minority") or 0) - apart  # the
-    # operating assets', as EBIT is
+    ev = None if fin else mcap * rate + sum(checks.val(bal, c) or 0 for c in ("debt", "minority", "pref")) - apart  # the
+    # operating assets', as EBIT is: the claims ahead of common holders (preferred stock and perpetual securities at
+    # carrying value, which book_common below leaves out of the equity) are part of it
     ebit = sheet.ebit(market, t12)
     common = None if checks.val(bal, "equity") is None else checks.val(bal, "equity") - (checks.val(bal, "pref") or 0)
     cons = consensus(market, g, int(a.iloc[-1]["period"][:4]))
@@ -373,7 +374,7 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     else:
         divs = g["prices"]["dividends"]
         dps_12m = float(divs.loc[divs["ex_date"] > year_ago, "dps"].sum()) if len(divs) else 0.0
-    balance = {k: None if fin and k in ("debt", "cash", "nonop") else checks.val(bal, k) for k in ("debt", "cash", "minority", "nonop")}
+    balance = {k: None if fin and k in ("debt", "cash", "nonop") else checks.val(bal, k) for k in ("debt", "cash", "minority", "nonop", "pref")}
     valuation = {"price": price, "quote_currency": quote_cur, "report_currency": report_cur, "fx_quote_to_report": rate,
                  "balance": balance | {"period": bal["period"], "float_in_business": held},
                  "shares": shares, "market_cap": mcap, "market_cap_report": mcap * rate, "ev": ev, "ttm": t12,

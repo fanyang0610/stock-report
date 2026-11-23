@@ -41,7 +41,7 @@ def aggregate(snap: pd.DataFrame, market: str) -> dict | None:
     dcf_form = ~s["financial"].astype(bool) if "financial" in s else pd.Series(True, index=s.index)  # banks, insurers
     ok = rg.notna() & bw.notna() & dcf_form  # and brokers carry no excess growth (their book grows at the base rate)
     ccy = s["currency"] if "currency" in s else s["report_currency"] if "report_currency" in s else pd.Series("CNY", index=s.index)
-    yields = {c: value.rate(value.RATE_OF.get(c, "us"))[0] for c in ccy.dropna().unique()}
+    yields = {c: value.yield_of(c)[0] for c in ccy.dropna().unique()}
     t = fade.return_table(market)
     years = list(t.columns)[-HISTORY_YEARS:]
     book = pd.Series((s["mcap"] * s["by"]).where(s["by"] > 0).values, index=s["code"].values)
