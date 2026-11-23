@@ -1738,7 +1738,7 @@
     the report not rendered from a real between-review day (the first comes the day after the first report on this
     code).
 - Method review (2026-11-23, Opus 5.5, read-only; docs/reviews/REVIEW-2026-11-23.md): stages 23-28 adopted ("Stages");
-  stages 23 and 24 done, 25-28 to come. The research forecast treats every company as the median company (688795 at 21 CNY against 270.5:
+  stages 23, 24 and 25 done, 26-28 to come. The research forecast treats every company as the median company (688795 at 21 CNY against 270.5:
   two bugs and the median path; Amazon's margin anchor); the screening's history is survivors only, which fits its
   three adverse results.
 - Stage 23 (research forecast inputs; the review's F1 and F2): done 2026-11-23 on branch
@@ -1903,6 +1903,82 @@
     (3) no age limit on the OECD yields: written as found; (4) the (b) wording widened (a labelled loss-maker too);
     (5) the Micron check not re-run by the reviewer: it patches a loss into the cached sheet (scratch script,
     valuation.json restored from the rebuild: 739.2 as in the after table).
+- Stage 25 (growth companies over their base-rate paths; the review's F3): built 2026-11-23 on branch
+  claude/hopeful-joliot-de3f35 (from stage 24's claude/bold-lichterman-532562, 007bb03). The method, its sources and
+  choices are in "Valuation and target price" (research/comparables.py): (a) the fast-grower and loss-maker types' fair
+  value is the mean of the DCF over comparable companies' actual revenue paths, failures at a distress value; (b) for
+  every DCF type, what the price needs: year 10's revenue at three long-run margins and the share of comparable companies
+  that reached it; (c) their bear and bull are the paths' quartiles; (d) page 1 leads with (b), then the expected value
+  and its range, and the absolute view left it. Found by stages 23 and 24 and fixed here: one peer margin for an A+H
+  issuer's two lines, the DCF-to-EV/Sales jump (a mean over paths is 0 only when every path is), one licence year read
+  as a business. Discount rates, the rating table and the other types are unchanged.
+  - The cached companies rebuilt on 2026-11-23, before (stage 24's code, a frozen copy) and after on the same day's data;
+    32 companies, no errors, 19 unchanged (no fast grower or loss-maker among them). Fair value a year on, quote currency:
+
+    | Company | Type | Price | Fair before → after | Rating | One path today → mean today | Comparable companies | The price needs (forecast margin; share who got there) |
+    |---|---|---|---|---|---|---|---|
+    | 688795 摩尔线程 | loss-maker | 270.50 | 60.73 → 80.26 | 卖出 | 57.04 → 75.38 | 124, 50%+ | 38.8x at 18%; 0.4% (12.7x at 36%; 4.8%) |
+    | 688180 君实生物 | loss-maker | 25.14 | 1.71 → 12.00 | 卖出 | 10.41 → 11.27 | 602, 0-20% | 11.8x at 24%; 1.2% |
+    | 01877 君实生物 | loss-maker | 13.20 | 7.92 → 8.45 | 持有 | 7.22 → 7.70 | 602, 0-20% | 13.5x at 24%; 1.0% |
+    | SNOW | loss-maker | 254.82 | 99.30 → 92.77 | 持有 → 卖出 | 92.39 → 86.31 | 118, 20-50% | 12.7x at 24%; 1.5% |
+    | 688235 百济神州 | fast grower | 262.72 | 151.42 → 173.74 | 卖出 | 142.22 → 163.18 | 129, 50%+ | 5.6x at 22%; 9.3% |
+    | 06160 百济神州 | fast grower | 230.80 | 67.44 → 154.43 | 持有 → 卖出 | 125.82 → 142.98 | 129, 50%+ | 5.4x at 22%; 9.3% |
+    | 002594 比亚迪 | fast grower | 79.68 | 121.39 → 139.33 | 持有 | 115.60 → 132.68 | 383, 20-50% | 1.1x at 6%; 65.8% |
+    | 01211 比亚迪股份 | fast grower | 62.35 | 91.79 → 104.08 | 持有 | 85.41 → 96.84 | 383, 20-50% | 1.0x at 6%; 70.8% |
+    | NVDA | fast grower | 125.53 | 397.13 → 405.45 | 买入 | 370.90 → 378.68 | 45, 50%+ | 1.6x at 40%; 65.2% |
+    | LLY | fast grower | 1347.11 | 710.75 → 751.24 | 卖出 | 671.41 → 709.65 | 118, 20-50% | 5.9x at 31%; 6.5% |
+    | NVO | fast grower | 37.82 | 105.96 → 146.28 | 买入 | 104.52 → 144.29 | 118, 20-50% | 0.4x at 43%; 94.5% |
+    | PLTR | fast grower | 143.49 | 35.41 → 27.96 | 卖出 | 32.95 → 26.01 | 118, 20-50% | 37.3x at 24%; 0.0% |
+    | 01167 加科思-B | ordinary → pre-revenue | 4.02 | 3.36 → none | 持有 → 不评级 | | | |
+
+  - Each move by rule. The mean over the paths: 摩尔线程 +32%, 比亚迪 +15% and +13%, 百济 A +15%, 礼来 +6%, NVIDIA +2%;
+    Novo +38%, of which restating the paths in today's nominal terms is +20 points (below). Palantir -21% and Snowflake
+    -7%: their one path carries a consensus excess above what growers of their band went on to do. 君实生物's A line: its
+    long-run margin goes from Damodaran's global 7.5% to the 24.3% of the HK peers its H line already took (one path 1.61
+    → 10.41), then the mean; A 12.00 CNY against H 8.45 HKD is now the two markets' discount rates (WACC 8.35% and 11.17%).
+    百济's H line: 10.7% → the 21.9% of its A line's larger peer group (one path 62.44 → 125.82), then the mean. 比亚迪's H
+    line moved onto the A market's paths with its A line. 加科思-B: revenue 739m in the 12 months to June 2026 against
+    54-156m in the three years before, losses every year on record, its two analysts back to a loss in 2027: its normal
+    year has operating costs over twice its revenue, so it is pre-revenue again, now by its figures.
+  - The three ratings that changed: 加科思-B as above; Snowflake (price 2.95 times fair value) and 百济 H (1.61 times) go
+    to 卖出 because their uncertainty is now read from the paths' quartiles: extreme → high, whose 卖出 line is 1.55 times
+    instead of 4.0. 摩尔线程 stays 卖出 at 3.59 times (very high: high from the paths, one level up for its M-score).
+  - Measured, not changed: the same averaging on the 12 cached companies of the other DCF types moves their DCF value by a
+    median of +8.6%, so the effect on mature types is not small: 茅台 +19%, 五粮液 +16%, 中国神华 +22% and +21%, 恒瑞 +10%
+    and +6%, Apple +7%, 阿里 +6%, 腾讯 +2%, Amazon -0.1%, TSMC -17%, Micron +45%. Why: revenue paths of any band are wide
+    and value is convex, and in CN the table has no failures. TSMC's forecast runs above its band's paths; Micron's 3-year
+    growth is its memory-price spike, so its band is the growers'. The item keeps these types on one path, and that is an
+    inconsistency, written as such: the two path types carry about 9 points the others and the market's implied return
+    don't, so a company crossing the type line moves by about that much. The fix, once stage 27 puts failures in the CN
+    history: measure this again and, if the lift stays, value the market's members over the paths too (market.py), so the
+    rating sets like against like. Doing it now would build the survivors' lift into every rating.
+  - Tests: tests/test_research_paths.py: the windows (failures, the acquired, faults, today's nominal terms, a short
+    table), the group's widening and weights, the mean against the median path and the distress value, the margin spread,
+    what the price needs, the one-off year, one margin and one set of paths for an A+H issuer, page 1's lines. 347 pass.
+  - 688795's report rendered and read: page 1 opens with the price's needs and the expected value, page 3 has the table.
+  - Found, not fixed: (1) the type-line inconsistency above; CN's and most of HK's history has no failures (0.009% and
+    2.9% of windows), so their means are lifted until stage 27, which page 1 says for those markets. (2) Restating in
+    today's nominal terms lifts the US means 12-20% (the last 5-year window's growth, 6.6% for the largest fifth, includes
+    the covid rebound and inflation) and lowers CN's and HK's 6-15%: the rule the base rate already follows, with the same
+    limit. (3) The largest size fifth is wide (at the latest year it starts at 3.8bn of revenue in the US and 7.0bn in
+    CN). Measured on its 20-50% growers, raw 10-year multiples by start size: US 80-90th percentile median 1.66, mean 2.15;
+    90-97th 1.69, 2.68; top 3% 1.23, 2.26 (33 windows, 25 companies): the median falls with size, the mean, which sets the
+    value, doesn't, so no lean is shown for the US's largest. CN 3.08, 2.68 and 2.33 by mean (top 3%: 119 windows), so 比亚迪's
+    mean leans high. A finer size cut is a choice for when the failures are in. (4) Margins are the company's own path at
+    three percentiles, not each comparable's own margin path, which the free tables don't give for every market. (5) The
+    young types' uncertainty levels fell (the paths' quartiles are narrower than the combined inputs were), which is what
+    moved two ratings. (6) DeepSeek's conclusion on 688795 repeats a fact key's opening words ("现价相当于合理价值现价相当于合理价值的
+    3.59 倍") and its risks list one point twice: the words' step, not this stage's.
+  - The fresh-context stage review (one, on Sonnet): 347 pass; the windows' alignment, the weights, quartiles, bear and
+    bull, the grid and the A+H sharing read correct, SNOW's group rebuilt independently from the frames (181 windows, 118
+    companies), every table row re-derived. Its points, answered: (1) CN's and HK's means are survivors' and (2) the two
+    types carry a lift the market return doesn't: both true and now written as one inconsistency with its fix, above; (3)
+    rules from single names: one_off is general in form and fires on one cached company, its thresholds code's readings,
+    said; the margin thirds' reason no longer cites a name; (4) a division by zero if every path is worth 0: not
+    reachable, main_of skips a method whose target isn't positive, so EV/Sales or 不评级 stands in; (5) the size claim did
+    not reproduce: recomputed with its definition and corrected above (the mean doesn't lean high in the US, it does in
+    CN); (6) the window alignment and the fault filter's reach: written in the method; (7) page 1's two ranges: the line
+    now says which is which; its "stale 1%" is a different measure (5-year growth among the same size fifth), kept.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -3040,9 +3116,9 @@ and the target price are code's: DeepSeek is told them and can't change them.
 | Type | Spotted by | Valuation | Stressed |
 |---|---|---|---|
 | Ordinary profitable business | default | DCF; cross-checks: P/E against its own history and its peers | returns on capital, cash conversion |
-| Fast grower | revenue growth well above its market's norm, profitable or near | DCF with margins converging; cross-checks: EV/Sales and PEG against peers | the reverse DCF and the base rate |
-| Loss-making with revenue | operating loss | DCF to an industry target margin; cross-check: EV/Sales against peers (the fair value when the DCF's equity value is negative) | cash runway, path to profit |
-| Pre-revenue (biotech) | no revenue, or operating costs over twice the revenue (the "-B" / "-U" label alone no longer: stage 24) | 不评级: a pipeline can't be valued from free data | cash runway, dilution |
+| Fast grower | revenue growth well above its market's norm, profitable or near | since stage 25 the mean of the DCF over comparable companies' actual revenue paths, margins converging; cross-checks: EV/Sales and PEG against peers | what the price needs and the base rate |
+| Loss-making with revenue | operating loss, or (stage 25) one trailing year's profit that isn't yet a business (value.one_off) | since stage 25 the mean of the DCF over comparable companies' actual revenue paths, to an industry target margin; cross-check: EV/Sales against peers (the fair value when every path's equity value is 0) | cash runway, path to profit |
+| Pre-revenue (biotech) | no revenue, or operating costs over twice the revenue, in a normal year when the trailing one is a one-off (stage 25; the "-B" / "-U" label alone no longer: stage 24) | 不评级: a pipeline can't be valued from free data | cash runway, dilution |
 | Bank | industry | excess-return model on book equity; cross-check: P/B against its history | NIM, bad loans, provisions, capital |
 | Insurer | industry; since stage 21 also an insurance carrier Damodaran files under Financials or not at all (below) | the same excess-return model (embedded value isn't reliably free; said so); cross-check: P/B against its history | solvency, combined ratio, investment yield |
 | Broker / asset manager | industry | the excess-return model on the cycle's ROE (8-year average); cross-check: P/B against its history | dependence on market turnover |
@@ -3270,6 +3346,55 @@ were averaged with fixed weights (DCF 50%, multiples 50% for the ordinary; 60/40
   swan or very obvious impactful events ... that hard to be missed by the street consensus but only captured by you").
 - The street's target and rating are shown for comparison only and never feed ours; the report says where and why ours
   differs.
+- Growth companies over their base-rate paths (stage 25; docs/reviews/REVIEW-2026-11-23.md, F3; research/comparables.py).
+  Value is convex in growth, so a DCF on the median path sits below the average over the paths that can happen; for a
+  mature company the paths are close, for a fast grower or a turnaround the gap is most of the answer. For the fast-grower
+  and loss-maker types the fair value is the mean of the DCF over the revenue paths comparable companies actually took
+  (Damodaran, "Valuing Young, Start-up and Growth Companies", 2009, and "Valuing Distressed and Declining Companies",
+  2009: simulate growth and margin, weigh failure in; Mauboussin and Callahan, "The Base Rate Book", 2016; Rappaport and
+  Mauboussin, "Expectations Investing"). No distribution is fitted. The choices:
+  - The paths: every company-year with 3 years of revenue behind it and 10 ahead, in the same market. CN 2012-2015 starts
+    (4 cohorts); the US from SEC's frames (4 cohorts, dead filers kept: the US history tables start in 2015 and hold only
+    today's top names); HK's tables start in 2015, so one cohort (2018) with 7 years, then the company's own fade to year
+    10, said on page 1.
+  - Comparable: the same size fifth at the start and the same 3-year growth band (falling, 0-20%, 20-50%, 50%+: Lynch's
+    20% and the review's 50%). At least 30 companies (a code's choice: Damodaran's floor of 10 is for an industry average,
+    and a mean over a right-skewed distribution needs more), else the adjacent size fifths, else every size, else the one
+    path as before, said. A company counts once however many start years it qualifies in (its windows share a weight).
+    An A+H issuer is one business on one set of paths: the A market's (four 10-year cohorts against Hong Kong's one of
+    7) and the A line's 3-year growth, else its own, else the other line's (rating.path_group).
+  - Today's nominal terms: each year's growth is restated by today's base rate (the size fifth's median 5-year growth in
+    the latest window, in the same table) over its cohort's median that year, the rule value.paths' base rate already
+    follows: the 2010s' nominal growth doesn't enter a value discounted at today's yields.
+  - The consensus years stay as forecast; each path takes over after them, from the same year of its own window (a
+    window's first years, usually its fastest, are the ones the consensus replaces). Margins and capital are the company's own
+    (stage 23's rules). The long-run margin is valued at its source's 25th, 50th and 75th percentile, a third each:
+    Damodaran's simulation draws "revenue growth rate, margin and interest rate", and for a young company the margin it
+    will settle on is as unknown as its revenue. Thirds are code's reading of three quartile points.
+  - Failure: a company that stopped reporting after its revenue fell below half its peak in the window takes the distress
+    sale value (Damodaran: going concern x (1 - P) + distress sale x P; proceeds as a percent of book assets, cash added,
+    equity 0 when debt exceeds them): 25% of book operating assets, his worked assumption, plus cash and stakes, less the
+    claims ahead of common holders, at least 0, not discounted for the year of failure (his formula's form). A company that stopped with its revenue intact was most likely bought: its
+    outcome is unknown and it is left out. A window with a year of 20 times or a twentieth of the last is a unit error or
+    a reverse merger and is dropped (rule 5), the 3 years before the start included, so a true 20-fold year is lost with them. Limits: CN and HK hold today's listings, so their failure share is near 0
+    and the mean is overstated until stage 27; ST history isn't in the tables.
+  - The bear and bull are the paths' 25th and 75th percentiles (Morningstar's reading of its scenarios), instead of the
+    inputs combined as independent; a skewed group's mean can sit above the 75th percentile, and page 1 says so.
+  - What the price needs, for every DCF type (comparables.needs): the revenue in year 10, as a multiple of today's, at
+    the forecast's long-run margin, 1.5 times it and twice it, and the share of comparable companies that reached it.
+    It solves whenever new capital earns more than it costs (stage 23's sales to capital). Page 1 leads with it, then the
+    expected value and its range. The "absolute view" (Damodaran's published premium and an industry beta) left page 1
+    and DeepSeek's fact keys: it decides nothing and a reader took it as a second fair value (招商银行 163 against a
+    price of 44); it stays in valuation.json.
+  - An A+H issuer's two lines take one mature-peer margin: the line whose peer group has the most profitable members, at
+    equal count the A line's (rating.shared_peers), since one business doesn't settle on two margins (君实生物: Damodaran's
+    global 7.5% on the A line, 24.3% from its HK peers).
+  - One year that isn't the business (value.one_off): an operating profit after a loss in every fiscal year on record (3
+    at least), revenue at 3 times or more the last 3 years' median, those years not growing, and no analyst forecasting a
+    profit in the last year covered. The type tests then read its normal year, the 3 years' median revenue and margin
+    (Damodaran normalizes a year that isn't normal, "Investment Valuation", ch. 22): operating costs over twice that
+    revenue make it pre-revenue (不评级, the type table's own test), else it is a loss-maker whose forecast starts from
+    that year. The 3 times is code's reading.
 
 #### Rating (code)
 Since stage 15 (docs/reviews/REVIEW-2026-11-13.md, R1 and R3, and the skills' section): the return today's price implies

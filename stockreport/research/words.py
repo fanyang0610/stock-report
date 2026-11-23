@@ -91,6 +91,7 @@ def keys(f: dict, v: dict, extra: dict) -> dict[str, tuple[str, str]]:
     m = v.get("methods") or {}
     d, er, own = m.get("dcf") or m.get("dcf_normal") or {}, m.get("excess_return") or {}, val.get("own_history") or {}
     lt, px, inc = f.get("latest") or {}, f["price"], ck.get("income") or {}
+    nd = next((x for x in rev.get("needs") or [] if x.get("multiple") is not None), None)  # at the forecast's margin
     ratio = lambda a, b: a / b - 1 if a is not None and b else None
     ratings = st.get("ratings") or {}
     n_rated = sum(x or 0 for x in ratings.values())
@@ -125,9 +126,12 @@ def keys(f: dict, v: dict, extra: dict) -> dict[str, tuple[str, str]]:
         "market_implied": ("同组公司（同一市场、同一估值方式）现价隐含的年回报（按本模型的现金流规则）", pct((k.get("market") or {}).get("r"))),
         "implied_return": ("本股现价隐含的年回报", pct(rev.get("implied_return"))),
         "rating_state": ("评级状态", {"unresolved": "方法分歧未决", "blocked": "未通过质量检查，不给买入", "resolved": "已决"}.get(v.get("state"))),
-        "absolute_fair": ("绝对视角（Damodaran 公布的溢价）的合理价值", price((v.get("absolute") or {}).get("fair_value"), q)),
-        "absolute_excess": ("绝对视角的超额回报", pct((v.get("absolute") or {}).get("gap"), True)),
-        "beta": ("行业贝塔（绝对视角用）", f"{k['beta']:.2f}" if k.get("beta") is not None else None), "g": ("永续增长率", pct(k.get("g"))),
+        "g": ("永续增长率", pct(k.get("g"))),
+        "needs_multiple": ("现价需要的第 10 年营收（今天的倍数）", f"{nd['multiple']:.1f} 倍" if nd else None),
+        "needs_margin": ("达到这一营收时对应的长期营业利润率", pct(nd["margin"]) if nd else None),
+        "needs_share": ("同类公司里做到这一营收的比例", pct(nd.get("share")) if nd else None),
+        "paths_mean": ("按同类公司真实营收路径平均的期望价值（一年后）", price(v.get("fair_value"), q) if d.get("paths") else None),
+        "paths_range": ("这些路径中间一半结果的范围", f"{price(v.get('fair_bear'), q)} 至 {price(v.get('fair_bull'), q)}" if d.get("paths") else None),
         "implied_wacc": ("现价隐含的资本成本", pct(rev.get("implied_wacc"))),
         "implied_growth": ("现价隐含的未来 5 年营收年增长", pct(rev.get("implied_growth_5y"), True)),
         "implied_margin": ("现价隐含的长期营业利润率", pct(rev.get("implied_margin"))),

@@ -22,7 +22,7 @@ import numpy as np
 
 from stockreport import review
 from stockreport.fetch import yahoo
-from stockreport.research import dcf, fade, folder, judge, load, save, sheet, stamp, texts, value
+from stockreport.research import comparables, dcf, fade, folder, judge, load, save, sheet, stamp, texts, value
 from stockreport.research import market as markets
 from stockreport.research.checks import FINANCIAL, cagr
 
@@ -64,17 +64,19 @@ def methods(f: dict, k: dict, kind: str, cons: dict, today: date, eps_factor: fl
         path = value.paths(f, k, kind, cons | {"eps": eps}, g_dcf)
         m = value.history(f, "ebit_margin", 10)
         peers_q = k.get("mature_quartiles") if path["margin_source"] == "profitable peers' median" else None
-        if shift and (len(m) >= 3 or peers_q):  # a scenario: the long-run margin at its source's 25th / 75th percentile:
-            # its own 10 years', or the mature peers' whose median it takes (a young firm's losses say how it got here,
-            # not where its margin settles: Damodaran's target margin)
-            d = min((peers_q[1] - peers_q[0]) / 2 if peers_q else quartiles(m), abs(path["target_margin"])) * shift
-            path["margin"] = [x + d * min(i + 1, value.CONVERGENCE) / value.CONVERGENCE for i, x in enumerate(path["margin"])]
+        step = min((peers_q[1] - peers_q[0]) / 2 if peers_q else quartiles(m), abs(path["target_margin"])) \
+            if len(m) >= 3 or peers_q else 0.0  # the long-run margin's quartile move: its own 10 years', or the mature
+        # peers' whose median it takes (a young firm's losses say how it got here, not where it settles: Damodaran)
+        if shift and step:  # a scenario: the long-run margin at its source's 25th / 75th percentile
+            path["margin"] = [x + step * shift * min(i + 1, value.CONVERGENCE) / value.CONVERGENCE for i, x in enumerate(path["margin"])]
         s2c, s2c_source = (path["sales_to_capital"], "normal: new capital earns the cycle's average return") \
             if path.get("sales_to_capital") else value.sales_to_capital(f, k, path["margin_source"])
         x, res = value.dcf_value(f, k, path, s2c, roic["ronic"], g_term=g_dcf)
-        x = max(x, 0.0)
+        x, c = max(x, 0.0), k.get("comparables") if kind in comparables.TYPES else None
+        over = comparables.spread(f, k, path, s2c, roic["ronic"], g_dcf, c, float(step)) if c else None  # the mean over the
+        worth = over["mean"] if over else x  # comparable companies' revenue paths (stage 25), else the one path
         out["dcf_normal" if kind == "cyclical" else "dcf"] = {
-            "value": x, "target": x * roll, "path": path, "sales_to_capital": s2c, "s2c_source": s2c_source,
+            "value": worth, "target": worth * roll, "one_path": x, "paths": over, "path": path, "sales_to_capital": s2c, "s2c_source": s2c_source,
             **year10_return(f, k, res),
             "moat": roic, "g": g_dcf, "terminal_multiple": dcf.terminal(1.0, g_dcf, k["stable_wacc"], roic["ronic"]),
             "years": {key: res[key] for key in ("revenue", "ebit", "nopat", "reinvestment", "fcff")},
@@ -87,7 +89,7 @@ def methods(f: dict, k: dict, kind: str, cons: dict, today: date, eps_factor: fl
     if "pb_own" in w and multiple("pb") and fwd_book:
         out["pb_own"] = {"multiple": multiple("pb"), "target": multiple("pb") * fwd_book / shares / fx}
     if "evs_peers" in w and peers.get("ev_sales") and not np.isnan(peers["ev_sales"]):
-        rev = cons["ntm_revenue"] or t["revenue"] * (1 + (v.get("eps_growth_consensus") or 0))
+        rev = cons["ntm_revenue"] or (value.one_off(f) or {}).get("revenue") or t["revenue"] * (1 + (v.get("eps_growth_consensus") or 0))
         ev = peers["ev_sales"] * rev * eps_factor
         out["evs_peers"] = {"multiple": peers["ev_sales"], "target": per(ev - k["debt"] - k["minority"] - k["pref"] + k["cash"])}
     growth = v.get("eps_growth_consensus")
@@ -235,6 +237,9 @@ def sensitivity(f: dict, k: dict, found: dict) -> dict:
     d = found.get("dcf") or found.get("dcf_normal")
     if d:
         fn = lambda c, g: value.dcf_value(f, k, d["path"], d["sales_to_capital"], d["moat"]["ronic"], c, g)[0]
+        if d.get("paths"):  # the grid around the fair value: the mean over the same paths
+            fn = lambda c, g: comparables.spread(f, k, d["path"], d["sales_to_capital"], d["moat"]["ronic"], g, k["comparables"],
+                                                 d["paths"]["margin_step"], c)["mean"]
         return {"method": "dcf", "cost_shift": costs, "growth": around(d["g"]), "values": dcf.grid(fn, costs, around(d["g"]))}
     if found.get("ddm"):
         x = found["ddm"]
@@ -294,6 +299,48 @@ def years(f: dict) -> int:
     return n
 
 
+def other_lines(f: dict, today: date):
+    """An A+H issuer's other line(s) and their fact sheets (built today if needed; one that can't be is skipped)."""
+    from stockreport.research import facts as fact_sheet
+    if f["market"] not in ("cn", "hk"):
+        return
+    for o in f.get("other_listings") or []:
+        if o["market"] not in ("cn", "hk"):
+            continue
+        try:
+            path = folder(o["market"], fact_sheet.normal(o["market"], o["code"])) / "facts.json"
+            yield o, load(path) if path.exists() and load(path)["built"][:10] == today.isoformat() else \
+                fact_sheet.build(o["market"], o["code"], today)
+        except Exception as e:
+            log.warning("%s: its %s line %s couldn't be read: %s", f["code"], o["market"].upper(), o["code"], e)
+
+
+def shared_peers(f: dict, today: date) -> dict:
+    """The mature peers a young company's long-run margin takes (value.paths): for an A+H issuer, one business, the
+    line whose peer group has the most profitable members (at equal count the A line's), so its two lines don't settle
+    on different margins (君实生物: Damodaran's global 7.5% on the A line, whose peers have under 10 profitable members,
+    against 24.3% from its HK peers)."""
+    best, mine = value.peer_medians(f, today), f["market"]
+    for o, of in other_lines(f, today):
+        if of["kind"] != f["kind"]:
+            continue
+        x = value.peer_medians(of, today)
+        rank = lambda p, m: (p.get("mature_margin") is not None, p.get("profitable") or 0, m == "cn")
+        if rank(x, o["market"]) > rank(best, mine):
+            best, mine = x, o["market"]
+    return best
+
+
+def path_group(f: dict, revenue: float | None, today: date) -> dict | None:
+    """The comparable companies whose revenue paths value it (comparables.group). An A+H issuer is one business on one
+    set of paths: the A market's, whose table is the longer (four 10-year cohorts against Hong Kong's one of 7), and the
+    A line's 3-year growth, else its own, else the other line's (a line without 3 clean years: 百济神州's A line)."""
+    lines = {o["market"]: of for o, of in other_lines(f, today)}
+    a = lines.get("cn") or (f if f["market"] == "cn" else None)
+    grew = next((x["summary"]["rev_cagr_3y"] for x in (a, f, *lines.values()) if x and x["summary"].get("rev_cagr_3y") is not None), None)
+    return comparables.group("cn" if a else f["market"], revenue, grew)
+
+
 def one_type(f: dict, today: date) -> tuple[str, str] | None:
     """An A+H issuer's type from the line whose fact sheet has the longer history (years()), typed as that line is:
     one company with one set of accounts is one type (Damodaran's playbook types the business, not the listing).
@@ -305,19 +352,7 @@ def one_type(f: dict, today: date) -> tuple[str, str] | None:
     stand for both lines since stage 19. None
     when no other line's history is longer (or the line is the A line at equal length), or its fact sheet is of another
     kind (a financial, a REIT) or can't be built."""
-    from stockreport.research import facts as fact_sheet
-    if f["market"] not in ("cn", "hk"):
-        return None
-    for o in f.get("other_listings") or []:
-        if o["market"] not in ("cn", "hk"):
-            continue
-        try:
-            path = folder(o["market"], fact_sheet.normal(o["market"], o["code"])) / "facts.json"
-            of = load(path) if path.exists() and load(path)["built"][:10] == today.isoformat() else \
-                fact_sheet.build(o["market"], o["code"], today)
-        except Exception as e:
-            log.warning("%s: its %s line %s couldn't be typed: %s", f["code"], o["market"].upper(), o["code"], e)
-            continue
+    for o, of in other_lines(f, today):
         n, mine = years(of), years(f)
         if of["kind"] == f["kind"] and (n > mine or n == mine and o["market"] == "cn"):
             kind, why, _, _ = typed(of)
@@ -335,13 +370,14 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     k, v = value.inputs(f, markets.implied(priced, today, fin, home)), f["valuation"]
     k["groups"] = {key: (markets.implied(priced, today, key == "financial", home) or {}).get("r")  # page 1: the gap between
                    for key in ("financial", "other")}  # the forms, so the sector view is said, not hidden in every rating
-    pm = value.peer_medians(f, today)  # the young's target margin (value.paths) and its quartiles (the scenarios)
+    pm = shared_peers(f, today)  # the young's target margin (value.paths) and its quartiles (the scenarios)
     k["mature_margin"], k["mature_quartiles"] = pm.get("mature_margin"), pm.get("mature_quartiles")
     kind, why, rates, cur_rev = typed(f)
     kind, why = one_type(f, today) or (kind, why)
     k["base_growth"] = rates.get("fifth_recent")  # companies of this size now: growth beyond the consensus (value.paths)
     k |= {"growth_shares": fade.growth_shares(market, 1), "trend_shares": fade.growth_shares(market, 3),
           "margin_keep": fade.margin_keep(market), "excess_keep": fade.excess_keep(market)}  # stage 14's measured rates
+    k["comparables"] = None if kind in FINANCIAL | {"reit", "pre_revenue"} else path_group(f, cur_rev, today)  # stage 25
     cons = value.consensus_years(f, k, today)
     status, reason = flags(f) if kind != "pre_revenue" else ("不评级", why)
     out = {"code": f["code"], "market": market, "name": f["name"], "built": stamp(), "price": v["price"],
@@ -357,10 +393,16 @@ def build(market: str, code: str, today: date | None = None) -> dict:
         return target if x is None else x  # base (a value of 0 stands)
     lo, hi = cons["range"] or (1.0, 1.0)
     q = rates.get("fifth_recent_quartiles") if k.get("base_growth") is not None else None
-    cases = {"analysts": (at(lo), at(hi)), "margin": (at(s=-1), at(s=+1)), "moat": (at(moat_case="off"), at(moat_case="on")),
-             "growth": (at(base_growth=q[0]), at(base_growth=q[1])) if q else (target, target),
-             "multiple": (at(quantile=0.25), at(quantile=0.75)) if main not in ABSOLUTE else (target, target)}
-    bear, bull = judge.scenarios(target, cases)
+    over = found[main].get("paths")
+    if over:  # the comparable paths' own quartiles, a year on as the value is (Morningstar's bear and bull)
+        step = target / found[main]["value"]
+        cases = {"paths": (over["p25"] * step, over["p75"] * step)}
+        bear, bull = cases["paths"]
+    else:
+        cases = {"analysts": (at(lo), at(hi)), "margin": (at(s=-1), at(s=+1)), "moat": (at(moat_case="off"), at(moat_case="on")),
+                 "growth": (at(base_growth=q[0]), at(base_growth=q[1])) if q else (target, target),
+                 "multiple": (at(quantile=0.25), at(quantile=0.75)) if main not in ABSOLUTE else (target, target)}
+        bear, bull = judge.scenarios(target, cases)
     dividend = value.next_dividend(f, k, cons)
     acts = judge.checks(f, kind)
     u = judge.uncertainty(target, bear, bull, bool(acts["widen"]), k["market_return"])
@@ -371,7 +413,8 @@ def build(market: str, code: str, today: date | None = None) -> dict:
     expected = (target12 - price + dividend) / price
     d = found.get("dcf") or found.get("dcf_normal")
     ours = cagr(d["years"]["revenue"][4], v["ttm"]["revenue"], 5) if d else None
-    rev = reverse(f, k, kind, cons, found) | {"implied_return": implied(f, k, kind, cons, today, main)}
+    rev = reverse(f, k, kind, cons, found) | {"implied_return": implied(f, k, kind, cons, today, main),
+                                              "needs": comparables.needs(f, k, d, price, k["comparables"]) if d else []}
     roll = 1 + k["cost_equity"] - dividend / price  # as the absolute methods' targets roll forward
     for x in j["cross"]:  # what the main method would need to reach a cross-check that rates it differently
         if x["view"] != j["main_view"]:
@@ -425,6 +468,7 @@ def year10_return(f: dict, k: dict, res: dict) -> dict:
 
 
 def finish(out: dict) -> dict:
+    out["inputs"] = {key: x for key, x in out["inputs"].items() if key != "comparables"}  # the windows' arrays
     save(folder(out["market"], out["code"]) / "valuation.json", out)
     return out
 
@@ -462,6 +506,13 @@ def show(r: dict) -> str:
                      f"{p['target_margin']:.1%} ({p['margin_source']}); sales to capital {d['sales_to_capital']:.2f} ({d['s2c_source']});"
                      f" year-10 ROIC {'-' if d.get('roic10') is None else f'{d['roic10']:.1%}'} (industry "
                      f"{'-' if d.get('roic_industry') is None else f'{d['roic_industry']:.1%}'})")
+        if d.get("paths"):
+            o = d["paths"]
+            lines.append(f"  paths: mean {o['mean']:.2f}, quartiles {o['p25']:.2f} / {o['p75']:.2f}, one path {d['one_path']:.2f}; {o['firms']} companies, "
+                         f"{o['windows']} windows, size fifth {o['fifth']} ({o['band']}), {o['years']} years, failed {o['failed_share']:.1%} at {o['distress']:.2f}")
+    for x in rv.get("needs") or []:
+        lines.append(f"  price needs: margin {x['margin']:.1%}, year-10 revenue {'-' if x['multiple'] is None else f"{x['multiple']:.1f}x"}, reached by "
+                     f"{'-' if x['share'] is None else f"{x['share']:.1%}"} of comparable companies")
     for x in c.get("revenue_rejected") or []:
         lines.append(f"  rejected: {x['source']}'s FY{x['year']} revenue {x['revenue']:,.0f} below the {x['reported']:,.0f} already reported")
     if r.get("provisional"):

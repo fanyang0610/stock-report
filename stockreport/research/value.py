@@ -196,6 +196,10 @@ def kind_of(f: dict, k: dict, norm: float | None) -> tuple[str, str]:
     commodity = dam.get("sector") in CYCLICAL_SECTORS
     cycle = (commodity or dam.get("industry") in CYCLICAL_INDUSTRIES) and len(m) >= 5 and m.min() < m.median() / 2 \
         and (commodity or downturn(f, norm or 0.0))
+    if odd := one_off(f):  # one year's deal: its normal year is what the tests read
+        if -odd["margin"] > 1:
+            return "pre_revenue", "one year's deal after losses in every year on record; in a normal year operating costs are over twice the revenue"
+        return "loss_making", "a trailing profit after losses in every year on record, on revenue that wasn't growing: one year's deal, not yet a business"
     if ebit is None or ebit <= 0:  # a cyclical at its trough: the normal year is the cycle's average margin, if positive
         if cycle and m.mean() > 0 and (commodity or (cycle_growth(f) or 0.0) < FAST):
             return "cyclical", (f"a cyclical industry and a margin that fell below half its median (low {m.min():.0%}, median "
@@ -215,6 +219,24 @@ def kind_of(f: dict, k: dict, norm: float | None) -> tuple[str, str]:
         return "income", (f"utility" if dam.get("sector") == "Utilities" else
                           f"5-year payout {payout:.0%} and revenue growth below the market's median ({norm:.1%})")
     return "ordinary", "a profitable business without a special type"
+
+
+def one_off(f: dict) -> dict | None:
+    """A trailing year that isn't the business: an operating profit after a loss in every fiscal year on record (3 at
+    least), revenue at 3 times or more its last 3 years' median, those years not growing, and no analyst forecasting a
+    profit in the last year they cover (a licence fee booked at once: 加科思's 739m against 54-156m, its two analysts
+    back to a loss in 2027). Damodaran normalizes a year that isn't normal ("Investment Valuation", ch. 22): its revenue
+    and margin are the last 3 fiscal years' medians, and the forecast starts there. The 3 times is code's reading of a
+    year out of line."""
+    t, h = f["valuation"]["ttm"], [x for x in f["history"] if x.get("revenue") and x.get("ebit_margin") is not None]
+    eps = (f.get("consensus") or {}).get("eps") or {}
+    if len(h) < 3 or any(x["ebit_margin"] >= 0 for x in h) or (eps and (eps[max(eps)] or 0) > 0):
+        return None
+    ebit = sheet.ebit(f["market"], t)
+    rev = float(np.median([x["revenue"] for x in h[-3:]]))
+    if ebit is None or ebit <= 0 or not t["revenue"] or t["revenue"] < 3 * rev or (f["summary"].get("rev_cagr_3y") or 0) > 0:
+        return None
+    return {"revenue": rev, "margin": float(np.median([x["ebit_margin"] for x in h[-3:]]))}
 
 
 def downturn(f: dict, norm: float) -> bool:
@@ -417,9 +439,11 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
       negative 8-year median. With no consensus: the 3-year revenue trend."""
     t, s = f["valuation"]["ttm"], f["summary"]
     rev0, ebit0, eps0 = t["revenue"], k["ebit"], cons.get("eps0")
-    m0, base = ebit0 / rev0, k.get("base_growth")
+    m0, base, odd = ebit0 / rev0, k.get("base_growth"), one_off(f) if kind == "loss_making" else None
+    if odd:  # the trailing year was a one-off: the forecast starts from the normal year's revenue and margin
+        rev0, m0 = odd["revenue"], odd["margin"]
     growth, margin, check, prev_r = [], [], [], rev0
-    for e, r in zip(cons["eps"], cons["revenue"]):
+    for e, r in [] if odd else zip(cons["eps"], cons["revenue"]):
         if not r or prev_r <= 0:  # a margin needs the revenue and the profit of the same 12 months
             break
         growth.append(r / prev_r - 1)
@@ -440,7 +464,7 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
                 "margin": [nm["margin"]] * dcf.YEARS, "target_margin": nm["margin"], "consensus_years": n,
                 "revenue0": nm["revenue"], "earned": earned, "normal": nm, "margin_source": "10-year average", "eps_check": check,
                 "sales_to_capital": nm["revenue"] / nm["capital"] if nm["capital"] else None}
-    shares = k.get("growth_shares") or [0.0] * CONVERGENCE
+    shares, fixed = k.get("growth_shares") or [0.0] * CONVERGENCE, len(growth)  # the years the consensus fixes
     if not growth:
         growth = [s.get("rev_cagr_3y") or s.get("rev_cagr_5y") or g_term]
         margin, shares = [m0], k.get("trend_shares") or [0.0] * CONVERGENCE
@@ -466,7 +490,8 @@ def paths(f: dict, k: dict, kind: str, cons: dict, g_term: float) -> dict:
     else:
         keep = k["margin_keep"]["above" if last > target else "below"]
         margin += [target + (last - target) * keep ** (t_ - n) for t_ in range(n + 1, dcf.YEARS + 1)]
-    return {"growth": growth, "margin": margin, "target_margin": target, "consensus_years": n, "eps_check": check,
+    return {"growth": growth, "margin": margin, "target_margin": target, "consensus_years": n, "fixed_years": fixed, "eps_check": check,
+            **({"revenue0": rev0, "one_off": True} if odd else {}),
             "margin_source": "10-year average" if kind == "cyclical" else "profitable peers' median" if young and target == k.get("mature_margin")
             else "industry" if young else "own 8-year median"}
 

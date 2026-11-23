@@ -10,7 +10,9 @@
 Each driver is a sentence with fact keys ({wacc}); words.py fills them in and DeepSeek writes the paragraph from them.
 - The rating's basis (stage 15; page 1 and the WeChat summary, by code): the return the price implies against the
   market's, the methods' state (unresolved: what the cross-check would need in the main method's terms), the checks
-  that blocked a Buy or widened the band, the tail scenarios and the absolute view."""
+  that blocked a Buy or widened the band and the tail scenarios. Since stage 25 it opens with what the price needs in
+  business terms and the expected value over comparable companies' paths; the absolute view (Damodaran's published
+  premium) left page 1: it decides nothing and read as a second fair value (招商银行 163 against a price of 44)."""
 
 from stockreport.research import CUR, pct, price, times, value
 from stockreport.research.rating import ABSOLUTE
@@ -172,7 +174,8 @@ def basis(f: dict, v: dict, index: str) -> list[str]:
     if v.get("target") is None:
         return []
     k, rv, q = v.get("inputs") or {}, v.get("reverse") or {}, v["currency"]
-    out = [provisional(v["provisional"])] if v.get("provisional") else []
+    out = [x for x in (price_needs(v), path_value(v)) if x]
+    out += [provisional(v["provisional"])] if v.get("provisional") else []
     if value.labelled(f) and v["type"] != "pre_revenue":  # the label alone says nothing: the accounts type it
         out.append("名称带 -B/-U 标记（尚未盈利的生物科技）：已有收入，按财务数字分类估值；在研管线本身没有估值，免费数据估不了")
     mk, u, main = k.get("market") or {}, v["uncertainty"], v["main"]
@@ -225,11 +228,40 @@ def basis(f: dict, v: dict, index: str) -> list[str]:
             out.append(f"尾部情景：{line}，以价值归零为界；一年内发生的概率超过 {pct(t['breakeven'], digits=0)} 时，评级会降一档")
         else:
             out.append(f"尾部情景：{line}，以价值归零为界（已是卖出）")
-    a = v.get("absolute") or {}
-    if a.get("fair_value") is not None:
-        out.append(f"绝对视角（Damodaran 公布的股权风险溢价 {pct(a['erp'])}、行业贝塔 {k['beta']:.2f}，股权成本 {pct(a['cost_equity'])}）："
-                   f"合理价值 {price(a['fair_value'], q)}，超额回报 {pct(a['gap'], True)}，看{a['view']}")
     return out
+
+
+def price_needs(v: dict) -> str | None:
+    """What today's price needs (comparables.needs): year 10's revenue at the forecast's long-run margin and at twice
+    it, each with the share of comparable companies that reached that revenue."""
+    rows = [x for x in (v.get("reverse") or {}).get("needs") or [] if x.get("multiple") is not None]
+    if not rows:
+        return None
+    d = (v.get("methods") or {}).get("dcf") or (v.get("methods") or {}).get("dcf_normal") or {}
+    base = "正常年份" if (d.get("path") or {}).get("normal") else "今天"
+    def one(x: dict) -> str:
+        return f"{x['multiple']:.1f} 倍、长期营业利润率 {pct(x['margin'])}" + \
+            (f"（同类公司里做到这一营收的占 {pct(x['share'])}）" if x.get("share") is not None else "")
+    return f"现价需要：10 年后营收达到{base}的 " + one(rows[0]) + ("；或 " + one(rows[-1]) if len(rows) > 1 else "")
+
+
+def path_value(v: dict) -> str | None:
+    """The expected value over comparable companies' revenue paths (comparables.spread) and its range, a year on."""
+    p = ((v.get("methods") or {}).get(v.get("main")) or {}).get("paths")
+    if not p:
+        return None
+    q, size = v["currency"], {0: "同等规模", 1: "规模相近"}.get(p["near"], "各种规模")
+    band = "" if p["band"] == "不分增长" else f"、近 3 年{p['band']}"
+    tail = f"（第 {p['years'] + 1}-10 年按本模型的增长递减）" if p["years"] < 10 else ""
+    line = (f"期望价值 {price(v['fair_value'], q)}：{p['firms']} 家{size}{band}的公司真实走过的 {p['years']} 年营收路径{tail}的平均；"
+            f"合理价值有一半的可能落在 {price(v['fair_bear'], q)} 至 {price(v['fair_bull'], q)}（页首的 12 个月区间是股价向它靠拢三分之一后的位置）")
+    if v["fair_value"] > v["fair_bull"]:
+        line += "，少数大赢家把平均值拉到了这个区间之上"
+    if p["failed_share"] > 0:
+        line += f"；其中 {pct(p['failed_share'])} 中途失败，按变卖价值计"
+    if v.get("market") != "us":
+        line += "；历史表只含今天仍上市的公司，失败的公司大多缺失，平均值可能偏高"
+    return line
 
 
 def provisional(p: dict) -> str:

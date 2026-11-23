@@ -153,6 +153,10 @@
 <p class="small muted">多头和空头由两次独立的调用分别写成，各自只看同样的材料，避免报告一边倒。</p>
 <h3>现价假设了什么</h3>
 {% set rv = v.reverse or {} %}
+{% set solved = (rv.needs or []) | selectattr('multiple', 'number') | list %}
+{% if solved %}<table class="small"><tr><th>现价需要的长期营业利润率</th><th class="num">第 10 年营收（今天的倍数）</th><th class="num">同类公司里做到的比例</th></tr>
+{% for x in solved %}<tr><td>{{ F.pct(x.margin) }}</td><td class="num">{{ F.money(x.revenue, r.rc) }}（{{ '%.1f' | format(x.multiple) }} 倍）</td><td class="num">{{ F.pct(x.share) if x.share is number else '-' }}</td></tr>{% endfor %}
+</table>{% endif %}
 <ul>
 {% if rv.implied_growth_5y is number %}<li>按我们的其余假设，现价相当于未来 5 年营收每年增长 <b>{{ F.pct(rv.implied_growth_5y, True) }}</b>{% if v.base_rates and v.base_rates.share_at_least.implied is number %}；{{ v.base_rates.years }} 年间同等规模（按营收第 {{ v.base_rates.fifth }} 个五分之一）的公司里，5 年做到这一增长的占 {{ F.pct(v.base_rates.share_at_least.implied, False, 0) }}{% endif %}。我们的预测是 {{ F.pct(v.forecast_growth_5y, True) }}{% if v.base_rates and v.base_rates.share_at_least.forecast is number %}（做到的占 {{ F.pct(v.base_rates.share_at_least.forecast, False, 0) }}）{% endif %}。</li>{% endif %}
 {% if rv.implied_wacc is number %}<li>现价相当于资本成本 <b>{{ F.pct(rv.implied_wacc) }}</b>，我们用 {{ F.pct(v.inputs.wacc) }}。</li>{% endif %}
@@ -257,7 +261,6 @@
 {% if k.market and k.market.r is number %}<tr><td>同组公司现价隐含回报（{{ k.market.members }} 只）</td><td class="num">{{ F.pct(k.market.r, False, 2) }}</td></tr>{% endif %}
 <tr><td>股权风险溢价（同组公司隐含{% if k.crp %}，国别差 {{ F.pct(k.crp, True, 2) }}{% endif %}）</td><td class="num">{{ F.pct(k.erp, False, 2) }}</td></tr>
 <tr><td>要求回报（股权成本）</td><td class="num">{{ F.pct(k.cost_equity) }}</td></tr>
-<tr><td>绝对视角：公布溢价 · 行业贝塔</td><td class="num">{{ F.pct(k.published.erp, False, 2) }} · {{ '%.2f' | format(k.beta) }}</td></tr>
 {% if k.wacc %}<tr><td>资本成本（WACC）· 债务评级</td><td class="num">{{ F.pct(k.wacc) }} · {{ k.rating }}</td></tr>{% endif %}
 {% set d = v.methods.dcf or v.methods.dcf_normal %}
 <tr><td>永续期资本成本 · 永续增长</td><td class="num">{{ F.pct(k.stable_wacc if d and k.stable_wacc is number else k.stable_cost) }} · {{ F.pct(d.g if d else k.g) }}</td></tr>
@@ -339,7 +342,7 @@
 <section class="back">
 <h2>方法、来源和局限</h2>
 <p><b>评级和目标价的含义</b>：评级把本股现价隐含的回报和大盘现价隐含的回报相比，两者用同一套现金流规则算出：大盘的隐含回报是让当天全部成分股（按市值加权）的价值正好等于其市值的折现率（Damodaran 的隐含股权风险溢价方法，现金流换成本模型自己的规则），所以和大盘定价一样的股票，超额回报为 0。合理价值是该类型主要方法的一年后价值，按这个要求回报折现；其余方法只做交叉检验，不参与平均：交叉检验和主要方法方向相反（一个看买入、一个看卖出）时，分歧不靠平均消除，评级为持有并写明主要方法要达到交叉检验的价值需要什么假设。评级看合理价值的超额回报 =（合理价值 − 现价 + 下一年股息）÷ 现价 − 大盘现价隐含回报：在 +门槛以上为买入，−门槛以下为卖出，其间为持有；门槛随主要方法的悲观—乐观区间在 10% 到 75% 之间，财报异常信号放宽一档；未通过去劣筛选、自由现金流连续 3 年为负或股息长期高于自由现金流时不给买入（晨星按不确定性要求的安全边际：最高评级要求低于合理价值 20%、30%、40%、50% 到 75%；中国券商以 6-12 个月相对沪深 300 的评级标准）。股价向合理价值靠拢通常要几年：晨星预计一般在 3 年内，价值与价格之比对超额回报的预测力约持续 3 年（Ali、Hwang 和 Trombley，2003）。所以 12 个月目标价 = 现价按股权成本增长（减去股息）后，再缩小与合理价值之间三分之一的差距（按对数）。卖方的 12 个月目标价默认一年内到达合理价值，到期时只有约四成达到（Bradshaw、Brown 和 Huang，2013）：评级是有结构的判断，不是承诺。</p>
-<p><b>估值</b>：公司类型（{{ r.type_name }}：{{ v.type_reason }}）决定主要方法和交叉检验。现金流折现按 Damodaran 的 10 年 FCFF 结构：营收先用一致预期，之后到第 5 年用同等规模公司最近 5 年营收增长的中位数，加上高出部分按本市场历史能延续的比例（营收增长有部分延续、利润增长没有：Chan、Karceski 和 Lakonishok，2003），再逐年降到第 10 年的永续增长率；利润率 5 年内移到长期目标（成熟公司和至少 5 年、年年盈利的快速成长公司用自身近 8 年中位数，其余用成熟同行的）；折现率用无风险利率加大盘现价隐含的股权风险溢价（贝塔按 1，加 Damodaran 的国别风险差；在美国上市的中国公司按港股定价）；按 Damodaran 公布的溢价和行业贝塔的结果作为绝对视角另列一行。退市、VIE 失效这类离散风险不放进折现率，单列为尾部情景。倍数法用自身近 5 年（周期股 10 年）的中位数和同行中位数，乘以未来 12 个月的一致预期。所有数字由程序从免费数据算出；文字由 DeepSeek 依据事实表和编号来源写成，数字由程序按键名填入，无法核对的数字、引文和建议词会被删除（本报告删除 {{ w.dropped | length if w.dropped else 0 }} 条）。</p>
+<p><b>估值</b>：公司类型（{{ r.type_name }}：{{ v.type_reason }}）决定主要方法和交叉检验。现金流折现按 Damodaran 的 10 年 FCFF 结构：营收先用一致预期，之后到第 5 年用同等规模公司最近 5 年营收增长的中位数，加上高出部分按本市场历史能延续的比例（营收增长有部分延续、利润增长没有：Chan、Karceski 和 Lakonishok，2003），再逐年降到第 10 年的永续增长率；利润率 5 年内移到长期目标（成熟公司和至少 5 年、年年盈利的快速成长公司用自身近 8 年中位数，其余用成熟同行的）；折现率用无风险利率加大盘现价隐含的股权风险溢价（贝塔按 1，加 Damodaran 的国别风险差；在美国上市的中国公司按港股定价）；快速成长和亏损公司的合理价值是同类公司（同市场、同规模档、近 3 年增长相近）真实走过的 10 年营收路径上现金流折现的平均，长期利润率取其来源的 25%、50%、75% 分位各三分之一，中途失败的公司按变卖价值计；悲观和乐观是这些结果的 25% 和 75% 分位（Damodaran，2009；Mauboussin 和 Callahan，2016）。退市、VIE 失效这类离散风险不放进折现率，单列为尾部情景。倍数法用自身近 5 年（周期股 10 年）的中位数和同行中位数，乘以未来 12 个月的一致预期。所有数字由程序从免费数据算出；文字由 DeepSeek 依据事实表和编号来源写成，数字由程序按键名填入，无法核对的数字、引文和建议词会被删除（本报告删除 {{ w.dropped | length if w.dropped else 0 }} 条）。</p>
 <p><b>局限</b>：第 1-2 年依赖卖方一致预期（没有更好的免费预测）；本报告加上的是纪律：增长回落到基准率、主要方法加交叉检验、相对大盘隐含回报的评级、按不确定性定门槛、空头观点、会计检查和反向现金流折现。免费数据无法估算保险的内含价值、集团的分部价值、药物管线或物业净资产，报告直接说明而不硬算；尚无收入的生物科技公司不评级。基准率只含今天仍上市的公司。</p>
 <p><b>数据日期</b>：{% for k, d in f.as_of.items() %}{{ k.split('.')[0] }} {{ d[5:] }}{% if not loop.last %}；{% endif %}{% endfor %}。年报：{{ r.sections.doc or '无' }}{% if r.sections.date %}（{{ r.sections.date }}）{% endif %}{% if r.sections.note %}，{{ r.sections.note }}{% endif %}。</p>
 {% if r.cited %}<h3>文中引用的来源</h3>
