@@ -151,6 +151,7 @@ def test_live_line_leaves_out_missing_figures():
     assert "停牌或退市的 1 只按最后收盘价计（占卖出 10%）。" in line
     assert report.live_line("hk", cohorts, t.assign(buy=float("nan"), sell=float("nan")), 0) == ""
     assert "第一个月末之后" in report.live_line("hk", cohorts, pd.DataFrame(), 0)
+    assert "停牌或退市的 1 只未计入。" in report.live_line("hk", cohorts, t, 1, None)  # a mark from before stage 28
 
 
 def test_the_buys_largest_cluster_is_one_computed_sentence():

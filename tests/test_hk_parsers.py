@@ -89,3 +89,13 @@ def test_hk_ebit_lines_one_row_per_report():
     assert pd.isna(t.loc["00001", "interest"]) and pd.isna(t.loc["00001", "invest_income"])
     ebit = universe.ebit("hk", t)
     assert ebit["00700"] == pytest.approx(2.1785e11 + 9.445e9 - 1.2219e10 + 1.791e9) and ebit["00001"] == 1.0e9
+
+
+def test_statement_ebit_takes_the_new_year_when_a_fiscal_year_changes():
+    """A company moving its year end reports one period end twice (00653's 2024-12-31: from 2024-01-01 and from
+    2024-07-01, a six-month transition year); the TTM takes the new year's report and doesn't fail on the pair."""
+    lines = pd.DataFrame({"code": "00653", "period": ["2024-12-31", "2024-12-31", "2025-06-30", "2025-12-31"],
+                          "start": ["2024-01-01", "2024-07-01", "2025-01-01", "2025-01-01"],
+                          "pretax": [100.0, 50.0, 30.0, 70.0]})
+    got = universe.statement_ebit(lines, "hk", pd.Series({"00653": "2025-12-31"}))
+    assert got["00653"] == pytest.approx(70.0)

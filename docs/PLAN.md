@@ -2091,16 +2091,46 @@
     SURVIVORS_ONLY check made the same in fade.py and dead.py, and the US Buy and Hold lines' survivor figures written.
     Left as written: Baostock's figures may be restated and include minorities (not documented by it); report.py at
     425 lines (the 400 is an estimate).
-- Stage 28 (screening value measures and the tracker; the review's F7): BUILT 2026-11-28 on branch
-  claude/lucid-shannon-5c6910 (from stage 27's bd5b176), NOT yet reviewed or finished. Done: (a) CN and HK EBIT from
-  Eastmoney's statements ("The score", EBIT/EV; fetch/eastmoney.py CN_EBIT and update_hk_ebit; universe.statement_ebit);
-  (b) ep8 on the scaled average (signals.long_run norm8; "E/P on the average profit"); (c) track.py keeps unresolved
-  names at their last close and shows their share (report.live_line). Snapshot on 2026-11-28's data as a review build
-  (before = bd5b176): CN buy 天赐材料 → 璞泰来 (ep8: 璞泰来's assets grew); US buy ALL, REGN → RGA, EHC (RGA's ep8
-  0.35 → 0.68; EHC kept by the buffer), hold CP → PG; HK buy 工商银行, 香港电讯 → 中国太保, 网易, sell 再鼎医药 → 康方生物.
-  Found, not fixed: 中信股份 (a conglomerate consolidating a bank) reads EBIT −178bn (its bank's interest income is
-  taken out, its interest expense isn't in 融资成本). History rerun done (data/history/expect.json in the worktree);
-  left: BACKTEST.md before/after section, the stage-8 tracker paragraph's wording, the fresh-context stage review.
+- Stage 28 (screening value measures and the tracker; the review's F7): done 2026-11-28 on branch
+  claude/lucid-shannon-5c6910 (from stage 27's bd5b176). Not merged into main. Chain: stages 23-28 on this branch.
+  - (a) CN and HK EBIT from Eastmoney's statements on research/sheet.ebit's definitions ("The score", EBIT/EV;
+    fetch/eastmoney.py CN_EBIT and update_hk_ebit; universe.statement_ebit). Coverage: CN 714 of 714 non-financial
+    scored names, HK 347 of 349. EBIT now leaves associates' and joint ventures' income out while EV still holds those
+    stakes at market value, as Gray and Carlisle's TEV and the US since stage 17c do: holding companies read dearer
+    (长和 EBIT 69.9 → 43.0bn; 19 CN and 7 HK EBITs turn negative, most of them investment income, the point of F7).
+  - (b) ep8 on the scaled average: the 8-year average ROA × the latest fiscal year's assets (signals.long_run norm8;
+    "E/P on the average profit"). The plan item says today's assets; the latest annual report's are used so the live
+    build and the history read one table.
+  - (c) track.py keeps an unresolved name at its last close and records its share of its group (`held`), shown in
+    `track` and the 实盘记录 line; marks recorded before stage 28 keep their values and the old wording (未计入).
+  - Snapshot on 2026-11-28's data, built as a month's review (before = bd5b176's code, same data): CN buy 天赐材料 →
+    璞泰来 (璞泰来's normal profit doubled with its assets: ep8 3.7% → 7.1%, percentile 0.80 → 0.85; 天赐材料's
+    0.75 → 0.59; one 电力设备 place); US buy Allstate, Regeneron → Reinsurance Group, Encompass Health (RGA's ep8
+    percentile 0.35 → 0.68; Allstate's 0.54 → 0.37; EHC, rated in the last report, now within the buffer at 0.755
+    against Regeneron's 0.763), Hold Canadian Pacific → Procter & Gamble; HK buy 工商银行, 香港电讯 → 中国太保, 网易
+    (香港电讯's EBIT/EV and ep8 percentiles fell, 0.26 → 0.21 and 0.75 → 0.60), Sell 再鼎医药 → 康方生物 (both
+    loss-makers near the cut; the buffer). Between reviews the lists stand (stage 22), so these show at December's
+    review. Scores' rank correlation with before 0.996-0.997.
+  - The history rerun (BACKTEST.md section 31; ep8 only, the history has no EBIT/EV): 20 names over the fund CN +1.4%
+    → +0.6% (48% → 37% of windows ahead), US +2.2% → +1.9%, HK +3.3% → +2.6%; the value family's spread CN +0.34 →
+    +0.18 points, US +0.69 → +0.17, HK −1.49 → −1.92. Within the windows' noise; not kept or dropped on it (rule 12).
+    The 预期 lines read it; the report of 2026-11-28 rendered from it (the lists unchanged).
+  - Tests: CN EBIT TTM on 中国中冶's real rows (its asset-sale gain out), the half-year lag, a missing line; the HK
+    income rows' table and a fiscal-year change; the scaled average against the amounts' average and a clipped year;
+    a Sell name gone from the prices; the 实盘记录 line's share and old marks. 367 pass.
+  - The fresh-context stage review (one, on Sonnet): the code implements the item; nothing chosen on a backtest
+    result; no rule for a named stock; every figure here and in BACKTEST.md 31 matches the expect files and snapshots;
+    the families' membership and the lists' rules unchanged. Its findings: (1, medium) a fiscal-year change gives two
+    HK reports for one period end (00653, 02920 in the table) and the TTM failed on the pair, which would have stopped
+    the HK build: fixed (the new year's report kept, tested); (4) old marks' wording and the scorecard's missing
+    column: fixed; (5) docs: fixed; (3) the stakes in EV: written above.
+  - Found, not fixed (the review's (2), a follow-up for the research module and the screen together, as both read
+    sheet.ebit): a company consolidating a bank or a finance arm has its financial business's interest income taken
+    out of EBIT but not its interest expense: 中信股份 (00267) reads EBIT −178bn (its bank's 利息收入 out, its interest
+    expense not in 融资成本), 上汽集团 24.0 → 6.8bn (its finance company's 利息支出, CN's INTEREST_EXPENSE, not added
+    back). Fix: in CN add INTEREST_EXPENSE back beside INTEREST_INCOME (net the finance arm's spread, cn.py and
+    CN_EBIT); in HK leave EBIT/EV out (rule 5) where interest income is a large share of revenue and no matching
+    expense line exists. Neither name is on a list.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -4488,7 +4518,7 @@ above).
 - CN (changed in Phase 2, see below):
   - Universe and quotes: Eastmoney datacenter daily valuation table RPT_VALUEANALYSIS_DET (close, total market value, total shares, PE-TTM, PB-MRQ, industry BOARD_NAME = the same industry field as clist f100).
   - Quarterly results for all A-shares: Eastmoney datacenter 业绩报表 RPT_LICO_FN_CPD; debt/assets from RPT_DMSK_FN_BALANCE; cash dividends from RPT_SHAREBONUS_DET.
-  - The score's EBIT (stage 28): RPT_F10_FINANCE_GINCOME (the general income statement) filtered by REPORT_DATE and the A-share type, market-wide (~5,800 rows, ~12 pages, ~17 s a period): 营业利润, 投资收益, 公允价值变动收益, 财务费用's interest expense and income, a finance subsidiary's 利息收入, 利润总额; the last 5 report periods, as cn_ebit_<period>.csv.gz (~0.2 MB each), refreshed with the results (daily while a period is open, else weekly).
+  - The score's EBIT (stage 28): RPT_F10_FINANCE_GINCOME (the general income statement) filtered by REPORT_DATE and the A-share type, market-wide (~5,800 rows, ~12 pages, ~17 s a period): 营业利润, 投资收益, 公允价值变动收益, 财务费用's interest expense and income, a finance subsidiary's 利息收入, 利润总额; the last 5 report periods fetched (older files kept, ~0.9 MB a year, as cn_results), as cn_ebit_<period>.csv.gz (~0.2 MB each), refreshed with the results (daily while a period is open, else weekly).
   - Analyst consensus EPS for the next three fiscal years: Eastmoney datacenter 研报一致预期 RPT_WEB_RESPREDICT (one market-wide table, refreshed weekly).
   - History (verified in Phase 7, 2026-10-18): RPT_LICO_FN_CPD has DEDUCT_BASIC_EPS (扣非 EPS) and WEIGHTAVG_ROE for every report period back to 2015 (4,329 rows for 2015-12-31, ~5,580 recently); both are also in the weekly quarterly tables, which give the TTM 扣非 EPS (eps_deduct_ttm in the snapshot; there is no 扣非 profit amount). RPT_VALUEANALYSIS_DET filtered by TRADE_DATE has the whole market from 2018-12-28 (3,354 rows) and nothing for 2016-06-30; non-trading days return no rows. 业绩预告 RPT_PUBLIC_OP_NEWPREDICT filtered by NOTICE_DATE or REPORT_DATE: one row per stock, period and indicator (PREDICT_FINANCE_CODE 004 net profit, 005 扣非 net profit, ...), with the amount and year-on-year ranges, PREDICT_TYPE (预增, 扭亏, 略减, ...) and last year's figure; ~14,300 rows in 13 months.
   - Price history and turnover: 通达信 official daily packages, www.tdx.com.cn/products/data/data/g4day/<YYYYMMDD>.zip (whole market in one ~2.7 MB file per day). Returns are chained as close ÷ exchange prev-close, which is ex-rights adjusted (checked on ex-dividend days).

@@ -117,6 +117,8 @@ def statement_ebit(rows: pd.DataFrame, market: str, period: pd.Series) -> pd.Ser
     小米's the reverse), and a newer statement is kept; an older one, or none, leaves Yahoo's (yahoo_balance)."""
     if rows.empty:
         return pd.Series(np.nan, index=period.index)
+    if "start" in rows:  # a fiscal-year change gives two reports for one period end (00653's 2024-12-31): the new year's
+        rows = rows.sort_values("start").drop_duplicates(["code", "period"], keep="last")
     rows = rows.assign(ebit=ebit(market, rows))
     t = ttm(rows, ["ebit"]).reindex(period.index)
     lag = (pd.to_datetime(period) - pd.to_datetime(t["period"])).dt.days

@@ -271,7 +271,8 @@ def live(market: str) -> str:
 def live_line(market: str, cohorts: pd.DataFrame, t: pd.DataFrame, gone: int, held: dict[str, float] | None = None) -> str:
     """Each cohort's newest month-end mark: Buy against the fund and the 对照组合, Hold and Sell against the fund (the
     average over the cohorts with both figures), and the names without a trade, kept at their last close, with their
-    share of each rating (`held`, track.standing); before the first mark, when it comes."""
+    share of each rating (`held`, track.standing; None: marks recorded before stage 28, which left them out); before
+    the first mark, when it comes."""
     fund, mine = MARKETS[market][3], cohorts.loc[cohorts["market"] == market, "cohort"]
     if mine.empty:
         return ""
@@ -294,7 +295,8 @@ def live_line(market: str, cohorts: pd.DataFrame, t: pd.DataFrame, gone: int, he
     text = (f"实盘记录（月末收盘价，含股息）：{len(t)} 批名单，已持有 {months} 个月"
             + "".join(f"；{p}" for p in ["，".join(parts)] + rest if p) + "。")
     shares = "、".join(f"{dict(buy='买入', hold='持有', sell='卖出')[g]} {x:.0%}" for g, x in (held or {}).items())
-    out = f"停牌或退市的 {gone} 只按最后收盘价计" + (f"（占{shares}）" if shares else "") + "。" if gone else ""
+    kept = f"停牌或退市的 {gone} 只按最后收盘价计" + (f"（占{shares}）" if shares else "") + "。"
+    out = "" if not gone else kept if held is not None else f"停牌或退市的 {gone} 只未计入。"  # marks before stage 28
     return (text + out + ("各批平均。" if len(t) > 1 else "")) \
         if parts or rest else ""
 

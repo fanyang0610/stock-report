@@ -240,17 +240,20 @@ def update(today: date, loaders: dict) -> pd.DataFrame:
     return marks
 
 
-def standing(marks: pd.DataFrame, market: str) -> tuple[pd.DataFrame, int, dict[str, float]]:
+def standing(marks: pd.DataFrame, market: str) -> tuple[pd.DataFrame, int, dict[str, float] | None]:
     """Each cohort's newest mark (one row per cohort with start, mark, months and the groups' returns), how many
     different names of the three ratings are unresolved in them, and each rating's unresolved share (the average over
-    the cohorts; only those above zero). A mark recorded before stage 28 has no share: it left those names out."""
+    the cohorts; only those above zero; None when a newest mark was recorded before stage 28, which left them out)."""
     m = marks[marks["market"] == market]
     if m.empty:
         return pd.DataFrame(), 0, {}
     m = m[m["mark"] == m.groupby("cohort")["mark"].transform("max")]
     wide = m.pivot_table(index=["cohort", "start", "mark", "months"], columns="group", values="value")
     gone = {x.split("=")[0] for x in " ".join(m.loc[m["group"].isin(RATINGS), "missing"].fillna("")).split()}
-    held = m[m["group"].isin(RATINGS)].groupby("group")["held"].mean() if "held" in m else pd.Series(dtype=float)
+    rated = m[m["group"].isin(RATINGS)]
+    if "held" not in rated or rated["held"].isna().any():  # a mark from before stage 28 left those names out
+        return wide.sub(1).reset_index().reindex(columns=["cohort", "start", "mark", "months", *GROUPS]), len(gone), None
+    held = rated.groupby("group")["held"].mean()
     share = {g: float(held[g]) for g in RATINGS if held.get(g, 0) > 0}
     return wide.sub(1).reset_index().reindex(columns=["cohort", "start", "mark", "months", *GROUPS]), len(gone), share
 
@@ -292,7 +295,7 @@ def scorecard() -> int:
                 continue
             t = rows.pivot_table(index=["mark", "months", "recorded"], columns="group", values="value").reindex(
                 columns=GROUPS).sub(1)
-            u = rows[rows["group"].isin(RATINGS) & (rows["unresolved"] > 0)]
+            u = rows[rows["group"].isin(RATINGS) & (rows["unresolved"] > 0)].reindex(columns=list(dict.fromkeys([*rows.columns, "held"])))
             u = u.assign(text=u["group"] + " " + u["unresolved"].astype(int).astype(str) + " ("
                          + u["held"].map(lambda x: "?" if pd.isna(x) else f"{x:.0%}") + ")")
             u = u.groupby("mark")["text"].agg(", ".join)
