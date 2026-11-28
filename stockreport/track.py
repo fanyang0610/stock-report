@@ -11,8 +11,12 @@ places, as the buys get them, each sector's money spread equally over every name
 day's snapshot). They go to data/cohorts.csv.gz once the report's day is over, and are held 12 months from the first
 close after the lists' prices (on or after the report's day). At each month end and at 12 months each group's value is
 written to data/cohort_marks.csv as observed and never recomputed, so the price files' rolling window can't erase it. A
-name without a trade that day (suspended, delisted) is unresolved: left out of its group's value and counted, never
-taken as flat. Both files are a few hundred KB a year, outside cleanup's folders."""
+name without a trade that day (suspended, delisted) is unresolved: it stays in its group at its last close, as MSCI
+keeps a suspended constituent at its last price (stage 28; dropping it rescaled the rest, so a Sell name gone to zero
+vanished from its basket), and its weight is shown. A delisting settles at what holders received where the prices
+know it: the exchange's last close, which is the offer in a cash takeover or a privatization and, in CN, the price of
+the 退市整理期's last day (the 通达信 packages carry those days). No free source gives a bankrupt's proceeds, so its last
+close stands, shown as unresolved. Both files are a few hundred KB a year, outside cleanup's folders."""
 
 import logging
 from datetime import date, timedelta
@@ -30,7 +34,8 @@ COLUMNS = ["date", "market", "bucket", "ticker", "name", "price", "price_date", 
 COHORTS = DATA / "cohorts.csv.gz"
 MARKS = DATA / "cohort_marks.csv"
 MEMBER = ["market", "cohort", "priced", "group", "code", "name", "weight"]  # cohort: the report's day
-MARK = ["market", "cohort", "start", "mark", "months", "group", "value", "names", "unresolved", "missing", "recorded"]
+MARK = ["market", "cohort", "start", "mark", "months", "group", "value", "names", "unresolved", "missing", "held",
+        "recorded"]  # held: the unresolved names' share of the group, at their last close
 WAIT = 5  # trading days a mark with unresolved names waits, so a failed fetch's gap is filled first (Yahoo refetches 10 days)
 START = "2026-11-07"  # the first report of November built by the score as it stands (stage 6's inputs): PLAN, stage 8
 FUND = {"cn": "510300", "us": "SPY", "hk": "02800"}  # 沪深300ETF, SPDR S&P 500, 盈富基金: prices with dividends
@@ -176,17 +181,16 @@ def traded(prices: pd.DataFrame, day: str) -> set[str]:
     return set(p.loc[(p["volume"] > 0) | (p["close"] != p["prev_close"]), "code"])
 
 
-def value(g: pd.DataFrame, live: set[str], group: pd.DataFrame, first: str, day: str) -> tuple[float, int, list[str]]:
-    """(value of 1 put in at the first close, names counted, the unresolved names) on `day`: the weighted growth of the
-    names that traded that day, their weights scaled to sum to 1. Each unresolved name is kept as code=its growth to its
-    last close (code alone if never priced), for the record; it isn't in the value."""
+def value(g: pd.DataFrame, live: set[str], group: pd.DataFrame, first: str, day: str) -> tuple[float, int, list[str], float]:
+    """(value of 1 put in at the first close, names that traded that day, the unresolved names, their share of the
+    group) on `day`: every name's growth to its last close on or before `day` (growth carries a day without a trade at
+    the last close; a name never priced since its list's price stays at it), at its weight. Each unresolved name is
+    kept as code=its growth to its last close, for the record."""
     w = group.set_index("code")["weight"]
-    ok = [c for c in w.index if c in live and c in g.columns]
-    missing = [f"{c}={g.at[day, c] / g.at[first, c]:.4f}" if c in g.columns else c for c in w.index if c not in ok]
-    if not ok:
-        return float("nan"), 0, missing
-    grown = g.loc[day, ok] / g.loc[first, ok]
-    return float((grown * w[ok]).sum() / w[ok].sum()), len(ok), missing
+    grown = pd.Series({c: g.at[day, c] / g.at[first, c] if c in g.columns else 1.0 for c in w.index})
+    out = [c for c in w.index if c not in live or c not in g.columns]
+    missing = [f"{c}={grown[c]:.4f}" if c in g.columns else c for c in out]
+    return float((grown * w).sum() / w.sum()), len(w) - len(out), missing, float(w[out].sum() / w.sum())
 
 
 def marks_for(cohort: pd.DataFrame, prices: pd.DataFrame, days: pd.Index, first: str, at: list[str]) -> list[dict]:
@@ -195,10 +199,11 @@ def marks_for(cohort: pd.DataFrame, prices: pd.DataFrame, days: pd.Index, first:
     for day in at:
         live = traded(prices, day)
         for name, group in cohort.groupby("group"):
-            v, n, missing = value(g, live, group, first, day)
+            v, n, missing, held = value(g, live, group, first, day)
             out.append({"market": cohort["market"].iloc[0], "cohort": cohort["cohort"].iloc[0], "start": first,
                         "mark": day, "months": round((date.fromisoformat(day) - date.fromisoformat(first)).days / 30.44, 1),
-                        "group": name, "value": v, "names": n, "unresolved": len(missing), "missing": " ".join(missing)})
+                        "group": name, "value": v, "names": n, "unresolved": len(missing), "missing": " ".join(missing),
+                        "held": held})
     return out
 
 
@@ -235,16 +240,19 @@ def update(today: date, loaders: dict) -> pd.DataFrame:
     return marks
 
 
-def standing(marks: pd.DataFrame, market: str) -> tuple[pd.DataFrame, int]:
-    """Each cohort's newest mark (one row per cohort with start, mark, months and the groups' returns), and how many
-    different names of the three ratings are unresolved in them."""
+def standing(marks: pd.DataFrame, market: str) -> tuple[pd.DataFrame, int, dict[str, float]]:
+    """Each cohort's newest mark (one row per cohort with start, mark, months and the groups' returns), how many
+    different names of the three ratings are unresolved in them, and each rating's unresolved share (the average over
+    the cohorts; only those above zero). A mark recorded before stage 28 has no share: it left those names out."""
     m = marks[marks["market"] == market]
     if m.empty:
-        return pd.DataFrame(), 0
+        return pd.DataFrame(), 0, {}
     m = m[m["mark"] == m.groupby("cohort")["mark"].transform("max")]
     wide = m.pivot_table(index=["cohort", "start", "mark", "months"], columns="group", values="value")
     gone = {x.split("=")[0] for x in " ".join(m.loc[m["group"].isin(RATINGS), "missing"].fillna("")).split()}
-    return wide.sub(1).reset_index().reindex(columns=["cohort", "start", "mark", "months", *GROUPS]), len(gone)
+    held = m[m["group"].isin(RATINGS)].groupby("group")["held"].mean() if "held" in m else pd.Series(dtype=float)
+    share = {g: float(held[g]) for g in RATINGS if held.get(g, 0) > 0}
+    return wide.sub(1).reset_index().reindex(columns=["cohort", "start", "mark", "months", *GROUPS]), len(gone), share
 
 
 def loaders() -> dict:
@@ -265,7 +273,7 @@ def scorecard() -> int:
     print("Scorecard: the first report of each month, held 12 months from the first close after it; equal amounts "
           "within each rating;\nfund = the index fund with dividends (510300 / SPY / 2800.HK); basket = the same sector "
           "places, every name that can be bought.\nValues at month-end closes since the first close; unresolved = names "
-          "with no trade that day (suspended, delisted), left out.\n")
+          "with no trade that day (suspended, delisted), kept at their last close, with their share of each rating.\n")
     for market in [m for m in FUND if m in set(cohorts["market"])]:
         part = cohorts[cohorts["market"] == market]
         prices = load_prices[market]()
@@ -284,10 +292,13 @@ def scorecard() -> int:
                 continue
             t = rows.pivot_table(index=["mark", "months", "recorded"], columns="group", values="value").reindex(
                 columns=GROUPS).sub(1)
-            u = rows[rows["group"] != "fund"].groupby("mark")["unresolved"].sum()
+            u = rows[rows["group"].isin(RATINGS) & (rows["unresolved"] > 0)]
+            u = u.assign(text=u["group"] + " " + u["unresolved"].astype(int).astype(str) + " ("
+                         + u["held"].map(lambda x: "?" if pd.isna(x) else f"{x:.0%}") + ")")
+            u = u.groupby("mark")["text"].agg(", ".join)
             show = pd.DataFrame({g: t[g].map(pct) for g in GROUPS})
             show["buy-fund"], show["buy-basket"] = (t["buy"] - t["fund"]).map(pct), (t["buy"] - t["basket"]).map(pct)
-            show["unresolved"] = u.reindex(t.index.get_level_values("mark")).to_numpy()
+            show["unresolved"] = u.reindex(t.index.get_level_values("mark")).fillna("").to_numpy()
             print(show.reset_index().drop(columns="recorded").to_string(index=False) + "\n")
     print(record.show(today))
     return 0

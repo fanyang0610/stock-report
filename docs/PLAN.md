@@ -2084,6 +2084,16 @@
     SURVIVORS_ONLY check made the same in fade.py and dead.py, and the US Buy and Hold lines' survivor figures written.
     Left as written: Baostock's figures may be restated and include minorities (not documented by it); report.py at
     425 lines (the 400 is an estimate).
+- Stage 28 (screening value measures and the tracker; the review's F7): BUILT 2026-11-28 on branch
+  claude/lucid-shannon-5c6910 (from stage 27's bd5b176), NOT yet reviewed or finished. Done: (a) CN and HK EBIT from
+  Eastmoney's statements ("The score", EBIT/EV; fetch/eastmoney.py CN_EBIT and update_hk_ebit; universe.statement_ebit);
+  (b) ep8 on the scaled average (signals.long_run norm8; "E/P on the average profit"); (c) track.py keeps unresolved
+  names at their last close and shows their share (report.live_line). Snapshot on 2026-11-28's data as a review build
+  (before = bd5b176): CN buy 天赐材料 → 璞泰来 (ep8: 璞泰来's assets grew); US buy ALL, REGN → RGA, EHC (RGA's ep8
+  0.35 → 0.68; EHC kept by the buffer), hold CP → PG; HK buy 工商银行, 香港电讯 → 中国太保, 网易, sell 再鼎医药 → 康方生物.
+  Found, not fixed: 中信股份 (a conglomerate consolidating a bank) reads EBIT −178bn (its bank's interest income is
+  taken out, its interest expense isn't in 融资成本). History rerun done (data/history/expect.json in the worktree);
+  left: BACKTEST.md before/after section, the stage-8 tracker paragraph's wording, the fresh-context stage review.
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -2150,7 +2160,7 @@ momentum drive the score (fixed in stage 1 after the stage review).
 
 | Family | CN | HK | US |
 |---|---|---|---|
-| 价值 Value | E/P on 扣非 TTM, forward E/P, B/P, S/P, EBIT/EV, dividend yield, E/P on the 5-8-year average 扣非 profit | E/P, forward E/P, B/P, S/P, EBIT/EV, dividend yield, E/P on the 5-8-year average profit | the same as HK |
+| 价值 Value | E/P on 扣非 TTM, forward E/P, B/P, S/P, EBIT/EV, dividend yield, E/P on the normal 扣非 profit (5-8-year average ROA × today's assets) | E/P, forward E/P, B/P, S/P, EBIT/EV, dividend yield, E/P on the normal profit (5-8-year average ROA × today's assets) | the same as HK |
 | 质量 Quality | ROE, cash backing, debt ÷ assets, 8-year ROA, margin stability, low volatility, 5-year profit growth over assets | the same as CN | gross profit ÷ assets, cash backing, liabilities ÷ assets, 8-year ROA, margin stability, low volatility, 5-year profit growth over assets |
 | 动量 Momentum | earnings momentum (SUE), profit growth, revenue growth, revisions | 12-1-month price return, profit growth, revenue growth, revisions | the same as HK |
 
@@ -2209,9 +2219,20 @@ momentum drive the score (fixed in stage 1 after the stage review).
       trailing-12-month OperatingIncomeLoss from the same companyfacts files and periods as their other figures
       (fetch/sec.py, DURATION "op"; the TTM rule of "Data sources", US), Yahoo's only where the SEC tag is missing for
       the latest period (filers without an operating-income line, foreign filers, Yahoo's gap companies). The research
-      module has read US EBIT this way since stage 10's Amazon check. CN and HK keep Yahoo's: the screening's CN and
-      HK tables carry no operating-income line, and the larger question for both, with the US's E/P, is a follow-up
-      (a core-profit E/P; Status, stage 17c). Debt, cash and minorities stay Yahoo's.
+      module has read US EBIT this way since stage 10's Amazon check. Debt, cash and minorities stay Yahoo's.
+    - **CN and HK EBIT from Eastmoney's statements (stage 28; the method review of 2026-11-23, F7).** For the same
+      reason: Yahoo's CN and HK EBIT is pretax profit plus interest, so investment gains, fair-value changes and other
+      items below operating profit were in EBIT/EV (中国中冶's FY2025 18.2bn gain on an asset sale read as EBIT 6.8bn
+      where its operating profit without it was a 15.6bn loss). The trailing-12-month EBIT is now research/sheet.ebit's,
+      the research report's operating profit: CN 营业利润 less 投资收益, 公允价值变动收益 and interest income (财务费用's,
+      and a finance subsidiary's inside revenue) plus 财务费用's interest expense; HK pretax profit plus 融资成本 less
+      利息收入 and the shares of associates' and joint ventures' profit (HK's statements give fair-value changes no line
+      of their own). From market-wide Eastmoney tables, one row per company and report ("Data sources"), summed like
+      revenue (universe.statement_ebit), used where its latest report is at most a half year (185 days) older than the
+      report of the stock's other figures: Eastmoney fills its HK statements and main indicators on different days (on
+      2026-11-28 中国石油's Q3 had indicators and no statement yet, 小米's the reverse). Yahoo's only where the statement
+      lacks it. Coverage on 2026-11-28: CN 714 of 714 non-financial scored names, HK 347 of 349 (EBIT/EV itself still
+      needs Yahoo's cash line: CN 713, HK 341).
   - **Dividend yield** (stage 3's redo): cash dividends with ex-dates in the last 365 days over the price (0 for a
     non-payer). In ValueRank, and the first sort of 中证红利低波 (50 high-yield, low-volatility A-shares, yield-weighted)
     and 恒生港股通红利低波 (HK, net-yield-weighted): a cash yield is hard to fake, which matters most in CN and HK.
@@ -2230,6 +2251,18 @@ momentum drive the score (fixed in stage 1 after the stage review).
       a company whose share count grew or shrank much over the years compares older profit with today's shares (a
       per-share history needs split and bonus-share restatement in every market). Not adjusted for inflation
       (Graham's form, not Shiller's). Coverage on 2026-11-13: CN 100%, US 96%, HK 95%.
+    - **Scaled to today's company (stage 28; F7).** The average of the amounts set a smaller company's profit against
+      today's market value: a company that doubled its assets by issuing shares, at a steady return, read twice as
+      dear as it is. The normal year's profit is now Damodaran's scaled average (Investment Valuation, ch. 22, the
+      normalized earnings the research report's cyclicals already use): the 8-year average ROA (the quality family's
+      8-year ROA, each year clipped to −50%..150%) × the latest fiscal year's total assets, in the quote currency at
+      the date's rate (signals.long_run's norm8), over today's market value. The same years, minimum (5) and stale
+      rule; the latest annual report's assets, not the latest quarter's, so the live build and the history run read
+      the same table. Graham's normal year is kept, its size is today's. A loss-making average still reads
+      多年平均亏损. Coverage on 2026-11-28: CN 794 of 795, US 752 of 789 (761 before: 8 names with under 5 years of
+      assets, as their 8-year ROA, and SEI's latest year without assets), HK 371 of 392. Against the average of the
+      amounts the normal profit is a median 1.40 times higher in CN, 1.21 in the US and 1.27 in HK (assets grew); the
+      percentile's rank correlation with the old one 0.93-0.96.
 - **Quality:** profitability (Novy-Marx 2013; Asness-Frazzini-Pedersen's quality-minus-junk, which holds in 23 of 24
   countries), cash backing = −(net profit − operating cash flow) ÷ revenue (Sloan 1996), and balance-sheet strength
   (lower debt is better; not for the financial sector, whose leverage is its business or its clients' money: stage

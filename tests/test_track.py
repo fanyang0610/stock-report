@@ -69,8 +69,9 @@ def test_month_end_values_and_an_unresolved_name():
     rows = rows.set_index(["mark", "group"])
     # From Monday 11-09's close to Monday 11-30's: 15 trading days, the dividend day included.
     nov = rows.loc[("2026-11-30", "buy")]
-    assert nov["value"] == pytest.approx(1.01 ** 15)  # CCC didn't trade on 11-30: left out, not counted as flat
-    assert (nov["names"], nov["unresolved"]) == (1, 1)
+    # CCC didn't trade on 11-30: it stays at its last close (MSCI's practice), not dropped with the rest rescaled
+    assert nov["value"] == pytest.approx((1.01 ** 15 + 1.02 ** 14) / 2)
+    assert (nov["names"], nov["unresolved"], nov["held"]) == (1, 1, 0.5)
     assert nov["missing"] == f"CCC={1.02 ** 14:.4f}"  # kept for the record: its growth to its last close
     assert rows.loc[("2026-11-30", "fund"), "value"] == pytest.approx(1.005 ** 15)
     assert rows.loc[("2026-11-30", "sell"), "value"] == pytest.approx(1.0)
@@ -78,7 +79,21 @@ def test_month_end_values_and_an_unresolved_name():
     # 12-31: 38 trading days; CCC traded again, its return running from its last close (37 up days).
     dec = rows.loc[("2026-12-31", "buy")]
     assert dec["value"] == pytest.approx((1.01 ** 38 + 1.02 ** 37) / 2)
-    assert (dec["names"], dec["unresolved"]) == (2, 0)
+    assert (dec["names"], dec["unresolved"], dec["held"]) == (2, 0, 0.0)
+
+
+def test_a_name_gone_from_the_prices_stays_at_its_last_close():
+    """One Sell name of ten collapses and delists (its last close 5% of its start, then no rows) and nine stay flat: the
+    rating reads -9.5%, where dropping it read 0%; a name never priced stays at its list's price."""
+    days = [d.date().isoformat() for d in pd.bdate_range("2026-11-09", "2026-11-30")]
+    rows = [{"date": d, "code": f"S{k}", "close": 10.0, "prev_close": 10.0, "volume": 100} for d in days for k in range(1, 9)]
+    rows += [{"date": d, "code": "S0", "close": 0.5 if d > "2026-11-09" else 10.0,
+              "prev_close": 10.0 if d <= "2026-11-10" else 0.5, "volume": 100} for d in days if d <= "2026-11-13"]
+    sells = pd.DataFrame({"market": "cn", "cohort": "2026-11-07", "priced": "2026-11-06", "group": "sell",
+                          "code": [f"S{k}" for k in range(10)], "name": "", "weight": 0.1})  # S9: no price at all
+    got = track.marks_for(sells, pd.DataFrame(rows), pd.Index(days), "2026-11-09", ["2026-11-30"])[0]
+    assert got["value"] == pytest.approx(0.1 * 0.05 + 0.9) and got["names"] == 8
+    assert (got["unresolved"], got["held"]) == (2, pytest.approx(0.2)) and got["missing"] == "S0=0.0500 S9"
 
 
 def test_half_day_volume_zero_still_traded():
@@ -129,7 +144,7 @@ def test_update_records_once_and_keeps_marks(tmp_path, monkeypatch):
     later = p[p["date"] > "2026-12-15"]
     again = track.update(date(2027, 1, 10), {"us": lambda: later})
     assert again.equals(marks) and track.first_close(again, DAYS[DAYS > "2026-12-15"], "us", c) == "2026-11-09"
-    s, gone = track.standing(again, "us")
+    s, gone, held = track.standing(again, "us")
     assert s["mark"].item() == "2026-12-31" and s["buy"].item() == pytest.approx((1.01 ** 38 + 1.02 ** 37) / 2 - 1)
-    assert gone == 0
+    assert gone == 0 and held == {}
     assert track.tracked("us", date(2027, 1, 10), ["MSFT"]) == ["MSFT", "AAA", "BBB", "CCC", "SPY"]

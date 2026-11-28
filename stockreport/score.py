@@ -29,7 +29,7 @@ WORDS = {  # component -> (good, bad, the figure shown)
     "rev": ("分析师 3 个月上调{}盈利预测", "分析师 3 个月下调{}盈利预测", lambda x: f"相当于股价的 {x:+.1%}"),  # the year: phrase
     "ev": ("企业价值/息税前利润低", "企业价值/息税前利润高", lambda x: f"EV/EBIT {1 / x:.1f}" if x > 0 else "EBIT 为负"),
     "dy": ("股息率高", "股息率低", lambda x: f"{x:.1%}"),
-    "ep8": ("多年平均利润的市盈率低", "多年平均利润的市盈率高", lambda x: f"PE {1 / x:.1f}" if x > 0 else "多年平均亏损"),
+    "ep8": ("多年平均盈利水平的市盈率低", "多年平均盈利水平的市盈率高", lambda x: f"PE {1 / x:.1f}" if x > 0 else "多年平均亏损"),
     "prof8": ("8 年平均资产回报率高", "8 年平均资产回报率低", lambda x: f"{x:.0%}"),
     "gm8": ("毛利率多年稳定", "毛利率多年波动大", lambda x: f"均值/标准差 {x:.1f}"),
     "vol": ("股价波动小", "股价波动大", lambda x: f"年化 {x:.0%}"),
@@ -95,7 +95,7 @@ def phrase(row: pd.Series, c: str, market: str) -> str:
     peers ="" if key in SIGNED or str(row.get("peers", "")).startswith("全市场") else "同行中" + " " * words[0].isascii()
     text = f"{peers}{words}（{figure}）"
     if market == "cn" and c in ("ep", "ep8"):  # CN's earnings are 扣非
-        return text.replace("市盈率", "扣非市盈率") if c == "ep" else text.replace("平均利润", "平均扣非利润")
+        return text.replace("市盈率", "扣非市盈率") if c == "ep" else text.replace("平均盈利水平", "平均扣非盈利水平")
     return text
 
 

@@ -13,6 +13,7 @@ import pandas as pd
 from stockreport import crosscheck
 from stockreport.config import CONFIG, DATA
 from stockreport.fetch import eastmoney, frames, hkex, index, nasdaq, sec, swclass, tdx, yahoo
+from stockreport.research.sheet import ebit
 from stockreport.signals import forward, fy_end
 
 log = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ CN_FINANCIAL = ["银行", "非银金融"]  # 申万 level 1: banks, brokers, ins
 US_SIC = [(6000, 6199), (6300, 6399)]
 # The financial sector, whose leverage isn't read (fin_sector): US SIC 6000-6499, finance and insurance.
 FIN_SIC = (6000, 6499)
+LAG_DAYS = 185  # statement_ebit: at most one half-year report behind the card's figures
 CONSENSUS = ["analysts", "e1_year", "eps_e1", "eps_e2", "eps_e3"]  # CN and US: three estimate years
 
 
@@ -59,15 +61,18 @@ def fin_sector(df: pd.DataFrame, market: str) -> pd.Series:
 def load_results(table: str = "results") -> pd.DataFrame:
     """All saved CN report periods of a table (cn_<table>_<period>.csv.gz), with a period column."""
     paths = sorted((DATA / "fundamentals").glob(f"cn_{table}_*.csv.gz"))
+    if not paths:
+        return pd.DataFrame(columns=["code", "period"])
     return pd.concat([pd.read_csv(p, dtype={"code": str, "notice_date": str}).assign(period=p.name[4 + len(table):-7])
                       for p in paths], ignore_index=True)
 
 
-def ttm(results: pd.DataFrame) -> pd.DataFrame:
-    """Latest report per stock, plus trailing-12-month revenue and profit (and 扣非 EPS where the table has it): TTM =
-    year-to-date + last full year - same period of last year; the fiscal year starts on the row's `start` (HK) or Jan 1."""
-    results = results.dropna(subset=["revenue", "np"])
-    cols = ["revenue", "np"] + (["eps_deduct"] if "eps_deduct" in results else [])
+def ttm(results: pd.DataFrame, need: list[str] | None = None) -> pd.DataFrame:
+    """Latest report per stock, plus trailing-12-month revenue and profit (and 扣非 EPS where the table has it), or the
+    `need` columns: TTM = year-to-date + last full year - same period of last year; the fiscal year starts on the row's
+    `start` (HK) or Jan 1."""
+    cols = need or ["revenue", "np"] + (["eps_deduct"] if "eps_deduct" in results else [])
+    results = results.dropna(subset=need or ["revenue", "np"])
     latest = results.loc[results.groupby("code")["period"].idxmax()].copy()
     start = pd.to_datetime(latest["start"] if "start" in latest else latest["period"].str[:4] + "-01-01")
     latest["fy_period"] = (start - pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d")
@@ -103,14 +108,30 @@ def cn_float(mcap: pd.Series, weights: pd.Series, since: pd.Series | None = None
     return mcap * factor.reindex(mcap.index).fillna(factor.median())
 
 
+def statement_ebit(rows: pd.DataFrame, market: str, period: pd.Series) -> pd.Series:
+    """Trailing-12-month EBIT from Eastmoney's income lines (eastmoney.CN_EBIT, eastmoney.HK_EBIT), each report's on
+    research/sheet.ebit's definitions (the research report's operating profit: without investment income, fair-value
+    changes and interest income, plus interest expense), summed like revenue (ttm). Kept where its latest report is
+    at most LAG_DAYS older than the one the rest of the stock's figures come from (`period`): Eastmoney updates its HK
+    statements and main indicators on different days (on 2026-11-28 中国石油's Q3 had indicators and no statement,
+    小米's the reverse), and a newer statement is kept; an older one, or none, leaves Yahoo's (yahoo_balance)."""
+    if rows.empty:
+        return pd.Series(np.nan, index=period.index)
+    rows = rows.assign(ebit=ebit(market, rows))
+    t = ttm(rows, ["ebit"]).reindex(period.index)
+    lag = (pd.to_datetime(period) - pd.to_datetime(t["period"])).dt.days
+    return t["ebit_ttm"].where(lag <= LAG_DAYS)
+
+
 def yahoo_balance(df: pd.DataFrame, market: str, quote: str) -> pd.DataFrame:
     """Trailing EBIT and Yahoo's latest debt, cash (with short-term investments), minorities, preferred stock and
     liabilities in the quote currency (fetch/yahoo.py), EV = market value + debt + minorities + preferred stock − cash
     (the claims ahead of common holders, at carrying value: preferred stock, and in CN the perpetual bonds booked as
     equity; the book value and earnings per share already leave them out, history.py), and the latest fiscal year's
-    scaled total accruals (sta, the buys' screen). EBIT is the operating income US filers report to the SEC (op_ttm, USD)
-    where they tag it, else Yahoo's, which is pretax profit plus interest and so carries one-off gains and losses below
-    operating income (PLAN.md, EBIT/EV). A debt, minorities or preferred line Yahoo doesn't list is none; without a cash line the
+    scaled total accruals (sta, the buys' screen). EBIT is the operating profit of the company's own statements (op_ttm,
+    quote currency): what US filers report to the SEC as operating income where they tag it, CN and HK operating profit
+    from Eastmoney's statements (statement_ebit); else Yahoo's, which is pretax profit plus interest and so carries
+    investment gains, fair-value changes and one-off items below operating income (PLAN.md, EBIT/EV). A debt, minorities or preferred line Yahoo doesn't list is none; without a cash line the
     balance sheet wasn't read: no EBIT or no cash leaves EBIT/EV out (rule 5)."""
     path = yahoo.gaps_path(market)
     y = pd.read_csv(path, dtype={"code": str}).drop_duplicates("code", keep="last").set_index("code") \
@@ -284,6 +305,7 @@ def build_cn(today: date) -> tuple[pd.DataFrame, dict]:
     df["financial"] = df["sector"].isin(CN_FINANCIAL)
     df["fin_sector"] = fin_sector(df, "cn")
     df["float_value"] = cn_float(df["mcap"], index.load(), moved(prices, index.as_of()))
+    df["op_ttm"] = statement_ebit(load_results("ebit"), "cn", df["period"])
     df = yahoo_balance(df, "cn", "CNY")
 
     checks = {
@@ -388,6 +410,12 @@ def hk_fundamentals(currency: pd.Series) -> pd.DataFrame:
     rows[money] = rows[money].div(yahoo.cny_per(rows["currency"], rows["period"]), axis=0)
     df, fx = ttm(rows), yahoo.load_fx()
     df[["revenue_ttm", "np_ttm", "bps"]] = df[["revenue_ttm", "np_ttm", "bps"]].mul(df["currency"].map(fx["HKD"] / fx), axis=0)
+    if eastmoney.HK_EBIT.exists():  # the same way: CNY at each period end's rate, back to the reporting currency, HKD
+        lines = pd.read_csv(eastmoney.HK_EBIT, dtype={"code": str, "period": str, "start": str, "date_type": str})
+        lines = lines.assign(currency=lines["code"].map(currency)).dropna(subset=["currency"])
+        money = ["pretax", "interest", "interest_income", "invest_income"]
+        lines[money] = lines[money].div(yahoo.cny_per(lines["currency"], lines["period"]), axis=0)
+        df["op_ttm"] = statement_ebit(lines, "hk", df["period"]) * df["currency"].map(fx["HKD"] / fx)
     return df
 
 

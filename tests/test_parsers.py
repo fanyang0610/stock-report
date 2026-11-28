@@ -8,6 +8,7 @@ import pytest
 from stockreport.fetch.eastmoney import (consensus_table, deduct_table, forecast_table, is_open, quarter_ends,
                                          results_table)
 from stockreport.fetch.tdx import parse_package
+from stockreport import universe
 from stockreport.universe import finish, ttm
 
 SAMPLES = Path(__file__).parent / "data"
@@ -146,3 +147,22 @@ def test_csi300_weights_file():
     assert len(df) == 300 and df["weight"].sum() == pytest.approx(1, abs=1e-3) and set(df["date"]) == {"2026-09-30"}
     w = df.set_index("code")["weight"]
     assert w["000001"] == pytest.approx(0.00453) and w["300308"] == pytest.approx(0.03642)  # 中际旭创, the largest
+
+
+def test_statement_ebit_leaves_investment_income_out_and_keeps_a_recent_report():
+    """CN EBIT from the income lines (eastmoney.CN_EBIT, research/sheet.ebit), the trailing 12 months like revenue. Real
+    rows of 中国中冶 (601618, CNY bn, 2026-11-28): FY2025's 投资收益 of 18.19bn (an asset sale) sat in its operating
+    profit; Yahoo's EBIT (pretax + interest) read 6.77bn, the operating profit without it is a loss."""
+    rows = pd.DataFrame({"code": "601618", "period": ["2025-09-30", "2025-12-31", "2026-09-30"],
+                         "op_income": [7.11, 5.19, 5.59], "invest_income": [-0.87, 18.19, -0.27],
+                         "fv_change": [-0.02, -0.03, 0.03], "interest_income": [1.47, 3.45, 1.60],
+                         "interest": [2.16, 3.65, 1.61], "pretax": [7.02, 5.01, 5.68]})
+    one = lambda r: r["op_income"] - r["invest_income"] - r["fv_change"] - r["interest_income"] + r["interest"]
+    want = one(rows.iloc[2]) + one(rows.iloc[1]) - one(rows.iloc[0])
+    got = universe.statement_ebit(rows, "cn", pd.Series({"601618": "2026-09-30"}))
+    assert got["601618"] == pytest.approx(want) and want == pytest.approx(-15.62)
+    # the card's figures from a report more than a half year newer: the statement's EBIT is too old, Yahoo's fills it
+    assert universe.statement_ebit(rows, "cn", pd.Series({"601618": "2027-06-30"})).isna().all()
+    # a line the report doesn't have is none that period (sheet.ebit's sparse lines), not a missing EBIT
+    sparse = rows.assign(fv_change=float("nan"))
+    assert universe.statement_ebit(sparse, "cn", pd.Series({"601618": "2026-09-30"}))["601618"] == pytest.approx(want + 0.02)

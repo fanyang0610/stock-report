@@ -71,3 +71,21 @@ def test_a_zero_90_day_estimate_is_missing():
         if t["period"] == "+1y":
             t["epsTrend"]["90daysAgo"] = {"raw": 0, "fmt": "0.00"}
     assert yahoo.parse_trend("00939", payload)["eps_e2_90"] is None
+
+
+def test_hk_ebit_lines_one_row_per_report():
+    """Long income rows (RPT_HKF10_FN_INCOME_PC, one per item) -> one row per report with research/sheet.ebit's lines:
+    Tencent's 2026 Q3 year to date (real amounts, CNY), associates' and joint ventures' shares summed (the JV row
+    made up), a line the report doesn't have left empty; EBIT = pretax + finance costs - interest income - the shares."""
+    row = lambda item, amount, period="2026-09-30 00:00:00": {
+        "SECURITY_CODE": "00700", "REPORT_DATE": period, "START_DATE": "2026-01-01 00:00:00", "DATE_TYPE_CODE": "004",
+        "STD_ITEM_NAME": item, "AMOUNT": amount}
+    rows = [row("除税前溢利", 2.1785e11), row("融资成本", 9.445e9), row("利息收入", 1.2219e10),
+            row("应占联营公司溢利", -1.891e9), row("应占合营公司溢利", 1.0e8), row("毛利", 4.0e11),
+            {**row("除税前溢利", 1.0e9, "2026-06-30 00:00:00"), "SECURITY_CODE": "00001", "DATE_TYPE_CODE": "002"}]
+    t = eastmoney.hk_ebit_table(rows).set_index("code")
+    assert t.loc["00700", ["period", "start", "date_type"]].tolist() == ["2026-09-30", "2026-01-01", "004"]
+    assert t.loc["00700", "invest_income"] == pytest.approx(-1.791e9)
+    assert pd.isna(t.loc["00001", "interest"]) and pd.isna(t.loc["00001", "invest_income"])
+    ebit = universe.ebit("hk", t)
+    assert ebit["00700"] == pytest.approx(2.1785e11 + 9.445e9 - 1.2219e10 + 1.791e9) and ebit["00001"] == 1.0e9

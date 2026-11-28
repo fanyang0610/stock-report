@@ -257,7 +257,7 @@ def test_long_run_takes_the_years_public_by_the_day():
     lr = long_run(years, "2026-03-30").loc["A"]  # FY2025 not yet public: 2017-2024
     assert lr["prof8"] == pytest.approx(0.1) and lr["gm8"] == pytest.approx(0.45 / pd.Series([0.4, 0.5] * 4).std())
     assert lr["roa5"] == pytest.approx((19 - 14) / 100)  # FY2024 against FY2019, over FY2019's assets
-    assert lr["core8"] == pytest.approx(np.mean(range(12, 20)))  # the average yearly profit, 2017-2024
+    assert lr["norm8"] == pytest.approx(0.1 * 100)  # the normal year: the 8-year average ROA × FY2024's assets
     assert long_run(years, "2026-03-31").loc["A", "prof8"] == pytest.approx((0.1 * 7 + 0.3) / 8)
     assert long_run(years[years["year"] >= 2022], "2026-03-31").isna().all(axis=None)  # 4 years: too few
 
@@ -268,11 +268,24 @@ def test_long_run_average_profit_is_in_the_quote_currency_and_a_stale_history_ha
                           "currency": ["TWD"] * 6 + ["JPY"] * 6, "avail": "2026-04-30"})
     rate = pd.Series({"TWD": 0.03, "JPY": 0.0065, "USD": 1.0})  # US dollars per unit
     lr = long_run(years, "2026-11-13", rate)
-    assert lr.loc["T", "core8"] == pytest.approx((10 * 5 + 40) / 6 * 0.03)  # a peak year counts once in six
+    assert lr.loc["T", "norm8"] == pytest.approx(0.1 * 100 * 0.03)  # the latest assets in US dollars
     assert lr.loc["J"].isna().all()  # latest fiscal year 2020: the history isn't today's company
-    s = score(universe(core8=[0.0] * 9 + [5.0]), "us")
+    s = score(universe(norm8=[0.0] * 9 + [5.0]), "us")
     assert s.loc["C9", "c_ep8"] == pytest.approx(5.0 / 100)  # over today's market value
-    assert phrase(s.loc["C9"], "ep8", "cn") == "多年平均扣非利润的市盈率低（PE 20.0）"
+    assert phrase(s.loc["C9"], "ep8", "cn") == "多年平均扣非盈利水平的市盈率低（PE 20.0）"
+
+
+def test_long_run_normal_profit_is_scaled_to_todays_assets():
+    # a company that doubled its assets (an acquisition paid in shares) at a steady 10% ROA: the average of the amounts
+    # (Graham's, stage 16) judged today's company on the smaller one's profit; Damodaran's scaled average doesn't
+    years = pd.DataFrame({"code": "G", "year": range(2018, 2026), "assets": [100.0] * 4 + [200.0] * 4, "roa": 0.1,
+                          "gm": 0.5, "avail": "2026-04-30"})
+    years["core"] = years["roa"] * years["assets"]
+    lr = long_run(years, "2026-11-13").loc["G"]
+    assert lr["norm8"] == pytest.approx(20.0) and years["core"].mean() == pytest.approx(15.0)
+    # a year's ROA is clipped as prof8's (a tiny base), so one wild year can't scale up the normal profit
+    years.loc[0, "roa"] = 9.0
+    assert long_run(years, "2026-11-13").loc["G", "norm8"] == pytest.approx((1.5 + 0.1 * 7) / 8 * 200)
 
 
 def test_long_run_is_on_assets_whatever_the_book():

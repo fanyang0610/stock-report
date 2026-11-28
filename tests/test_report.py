@@ -146,8 +146,9 @@ def test_live_line_leaves_out_missing_figures():
     cohorts = pd.DataFrame({"market": ["hk"], "cohort": ["2026-11-07"]})
     t = pd.DataFrame({"cohort": ["2026-11-07"], "start": ["2026-11-09"], "mark": ["2026-12-31"], "months": [1.7],
                       "buy": [0.03], "hold": [float("nan")], "sell": [-0.03], "basket": [0.01], "fund": [0.005]})
-    line = report.live_line("hk", cohorts, t, 1)
-    assert "持有比" not in line and "、。" not in line and "比对照组合多赚 2.0%" in line and "停牌或退市的 1 只" in line
+    line = report.live_line("hk", cohorts, t, 1, {"sell": 0.1})
+    assert "持有比" not in line and "、。" not in line and "比对照组合多赚 2.0%" in line
+    assert "停牌或退市的 1 只按最后收盘价计（占卖出 10%）。" in line
     assert report.live_line("hk", cohorts, t.assign(buy=float("nan"), sell=float("nan")), 0) == ""
     assert "第一个月末之后" in report.live_line("hk", cohorts, pd.DataFrame(), 0)
 

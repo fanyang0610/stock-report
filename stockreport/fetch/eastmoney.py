@@ -1,6 +1,6 @@
 """Eastmoney datacenter (datacenter-web.eastmoney.com): CN daily valuation, quarterly results, balance sheets, dividends
 and the ChinaBond 10-year yield; the HK list and main indicators; the company id (ORG_CODE, one per issuer across A/H/ADR
-lines) for the issuer dedupe. History: CN annual results (扣非 EPS), CN valuations at half-year ends since 2018-12, HK
+lines) for the issuer dedupe; CN and HK income-statement lines for the score's EBIT (research/sheet.ebit). History: CN annual results (扣非 EPS), CN valuations at half-year ends since 2018-12, HK
 main indicators since 2015, and the market-wide 业绩预告 table."""
 
 import logging
@@ -91,6 +91,14 @@ CN_RESULTS = {"SECURITY_CODE": "code", "NOTICE_DATE": "notice_date", "BASIC_EPS"
               "BPS": "bps", "MGJYXJJE": "ocfps", "XSMLL": "gross_margin", "WEIGHTAVG_ROE": "roe"}  # eps_deduct: 扣非 EPS
 
 
+# The general layout's income lines for EBIT (research/sheet.ebit, research/cn.py's statement_rows): 营业利润 less
+# 投资收益, 公允价值变动收益 and interest income (财务费用's, and a finance subsidiary's inside revenue), plus 财务费用's
+# interest expense; banks', insurers' and brokers' rows have none of them, and EBIT/EV isn't read for them
+CN_EBIT = {"SECURITY_CODE": "code", "NOTICE_DATE": "notice_date", "OPERATE_PROFIT": "op_income",
+           "INVEST_INCOME": "invest_income", "FAIRVALUE_CHANGE_INCOME": "fv_change", "FE_INTEREST_INCOME": "fe_interest_income",
+           "INTEREST_INCOME": "fin_interest_income", "FE_INTEREST_EXPENSE": "interest", "TOTAL_PROFIT": "pretax"}
+
+
 def results_table(rows: list[dict]) -> pd.DataFrame:
     """业绩报表 rows -> code, notice date, EPS and 扣非 EPS, revenue, profit, growth (%), BPS,
     operating cash flow per share, gross margin (%) and weighted ROE (%)."""
@@ -109,6 +117,13 @@ def update_fundamentals(today: date) -> None:
                                           raw=f"cn_results_{p}"))
             write(df, path)
             log.info("cn results %s: %d rows", p, len(df))
+        path = DATA / "fundamentals" / f"cn_ebit_{p}.csv.gz"
+        if i < 5 and needs_refresh(path, today, opened):  # a TTM reaches back 4 quarters
+            df = pd.DataFrame(datacenter("RPT_F10_FINANCE_GINCOME", f"(REPORT_DATE='{p}'){A_SHARES}", ",".join(CN_EBIT)),
+                              columns=list(CN_EBIT)).rename(columns=CN_EBIT)
+            write(df.assign(interest_income=df[["fe_interest_income", "fin_interest_income"]].sum(axis=1, min_count=1))
+                  .drop(columns=["fe_interest_income", "fin_interest_income"]), path)
+            log.info("cn operating profit %s: %d rows", p, len(df))
         path = DATA / "fundamentals" / f"cn_balance_{p}.csv.gz"
         if i < 3 and needs_refresh(path, today, opened):  # leverage only needs the latest periods
             rows = datacenter("RPT_DMSK_FN_BALANCE", f"(REPORT_DATE='{p}'){A_SHARES}",
@@ -342,6 +357,40 @@ def update_hk_fundamentals(today: date) -> None:
                                sort="SECURITY_CODE,REPORT_DATE", sort_type="1,1"))
     write(df, HK_RESULTS)
     log.info("hk results: %d rows for %d companies since %s", len(df), df["code"].nunique(), since)
+
+
+HK_EBIT = DATA / "fundamentals" / "hk_ebit.csv.gz"
+HK_EBIT_ITEMS = {"除税前溢利": "pretax", "融资成本": "interest", "利息收入": "interest_income",
+                 "应占联营公司溢利": "invest_income", "应占合营公司溢利": "invest_income"}  # research/hk.py's ITEMS
+
+
+def hk_ebit_table(rows: list[dict]) -> pd.DataFrame:
+    """Long income-statement rows (one per item) -> code, period, start, date type and the lines research/sheet.ebit
+    reads (amounts in CNY at the period end's rate, as the main indicators); associates' and joint ventures' shares
+    summed, a line the report doesn't have left empty."""
+    df = pd.DataFrame(rows, columns=["SECURITY_CODE", "REPORT_DATE", "START_DATE", "DATE_TYPE_CODE", "STD_ITEM_NAME", "AMOUNT"])
+    df = df.assign(item=df["STD_ITEM_NAME"].map(HK_EBIT_ITEMS), period=df["REPORT_DATE"].str[:10],
+                   start=df["START_DATE"].str[:10]).dropna(subset=["item"])
+    wide = df.pivot_table(index=["SECURITY_CODE", "period", "start", "DATE_TYPE_CODE"], columns="item", values="AMOUNT",
+                          aggfunc=lambda v: v.sum(min_count=1))
+    wide = wide.reindex(columns=["pretax", "interest", "interest_income", "invest_income"]).reset_index()
+    return wide.rename(columns={"SECURITY_CODE": "code", "DATE_TYPE_CODE": "date_type"}).rename_axis(columns=None)
+
+
+def update_hk_ebit(today: date) -> None:
+    """The income lines of every HK company's reports for EBIT, refreshed as the main indicators are: the periods of
+    the last 400 days (800 the first time, as the main indicators) merged into the kept table, which keeps 800 days."""
+    if not needs_refresh(HK_EBIT, today, open_period=today.month in (3, 4, 8)):
+        return
+    since = (today - timedelta(days=400 if HK_EBIT.exists() else 800)).isoformat()
+    names = ",".join(f'"{n}"' for n in HK_EBIT_ITEMS)
+    rows = datacenter("RPT_HKF10_FN_INCOME_PC", f"(REPORT_DATE>='{since}')(STD_ITEM_NAME in ({names}))",
+                      "SECURITY_CODE,REPORT_DATE,START_DATE,DATE_TYPE_CODE,STD_ITEM_NAME,AMOUNT", max_pages=400)
+    df = merge(HK_EBIT, hk_ebit_table(rows), ["code", "period", "date_type"], whole="period")
+    keep = df[df["period"] >= (today - timedelta(days=800)).isoformat()]
+    if len(keep) < len(df):
+        write(keep, HK_EBIT)
+    log.info("hk operating profit: %d rows since %s", len(rows), since)
 
 
 def update_hk_history(today: date) -> None:

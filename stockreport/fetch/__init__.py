@@ -204,6 +204,7 @@ def steps(market: str, today: date) -> list:
         return [("company list", lambda: eastmoney.update_hk_list(today)),
                 ("board lots", lambda: hkex.update_lots(today)),
                 ("fundamentals", lambda: eastmoney.update_hk_fundamentals(today)),
+                ("operating profit", lambda: eastmoney.update_hk_ebit(today)),
                 ("prices", lambda: yahoo.update_prices(today, tracked("hk", today, eastmoney.hk_candidates()), "hk")),
                 ("consensus and reporting currency", lambda: yahoo.update_consensus(today, eastmoney.hk_candidates())),
                 ("HK-listed shares", lambda: yahoo.update_share_counts(eastmoney.hk_candidates(), "hk")),
