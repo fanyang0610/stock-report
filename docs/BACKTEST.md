@@ -1899,3 +1899,26 @@ the before.
 - Stage 26's lasting margin gaps in CN with the delisted names: the sides hold (below lasting 0.69 vs new 0.54 at 3
   years, interval +0.09 to +0.20 and +0.16 to +0.28 on the two definitions; above's still spans zero); the rates move
   by under 0.01 (stage 14's above 0.916 → 0.909, below 0.850 → 0.854; lasting below 0.913 → 0.914).
+
+## 31. Stage 28: E/P on the scaled average profit (2026-11-28; backtest/qvm.py)
+The history rerun on stage 27's frames (delisted CN and HK names in, the US bankruptcies put back analytically) after
+stage 28's change to the value family's E/P on the long-run profit: the 8-year average ROA × the latest fiscal year's
+total assets over today's market value (Damodaran's scaled average), in place of the average of the yearly amounts.
+The history has no EBIT/EV (Yahoo keeps no history of it), so stage 28's EBIT change doesn't enter it, nor does the
+live tracker's. Same data, same day; before = stage 27's figures (section 30).
+
+| | CN before → after | US | HK |
+|---|---|---|---|
+| 20 names over the fund, a year (share of windows ahead) | +1.4% (48%) → +0.6% (37%) | +2.2% (59%) → +1.9% (56%) | +3.3% (60%) → +2.6% (56%) |
+| 10 highest scores | −2.2% → −2.3% | +2.4% → +2.5% | +3.4% → +2.9% |
+| 5 highest scores | −6.2% → −5.7% | +1.5% → +2.9% | +3.2% → +1.6% |
+| the picks over the sector-matched basket | −1.5% → −2.2% | −0.8% → −1.0% | +3.3% → +2.6% |
+| Hold over the fund | +1.5% → +1.4% | −6.9% → −6.1% | −1.7% → −1.9% |
+| Sell over the fund (trailing is right) | +7.7% → +8.6% | +0.8% → +0.8% | +6.0% → +5.7% |
+| value family, top fifth minus bottom fifth | +0.34 → +0.18 points | +0.69 → +0.17 | −1.49 → −1.92 |
+
+The other families are unchanged (they don't read ep8); ep8's coverage in the frames is CN 99%, US 79%, HK 64% of rows.
+Every change is within the noise of 81-108 overlapping windows (a 20-name list's yearly excess has a spread near
+10 points; section 21). The change isn't kept or dropped on these numbers (PLAN.md rule 12): it fixes a measurement
+error the method review named (F7: old profit set against today's larger company) with a published form, and the
+history neither confirms nor refutes it. The 预期 lines read the after figures.
