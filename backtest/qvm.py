@@ -9,7 +9,9 @@ sector, equal amounts within it) to split the 20 names' lead over the fund into 
 amounts. Stage 17: each month's lists keep the month before's names within the buffer (lists.buffered), and Sell is
 the live rule's expensive, low-quality names (lists.junk; the history has no distress inputs, so its safety part sits
 at the middle). Stage 17d: the same rule keeps momentum's top fifth off Sell (lists.sells; the history's momentum
-family has no revisions).
+family has no revisions). Stage 27: the names a survivor-only history leaves out (backtest/dead.py): CN's delisted
+A-shares and HK's delisted names the free sources keep enter the snapshots; the US lists' bankruptcies are put back at
+Shumway's delisting returns (expect.json's `dead`), as no free source keeps delisted US prices.
 - Portfolios: the app's buy rule each month (lists.positions: each sector's places by its share of the free-float
   value, its best scores, equal amounts, the screen) on the whole snapshot (the 800 largest; HK all that pass the
   floors). Free float then: CN market value × today's CSI 300 float factor (the median outside it; float_factors), HK
@@ -25,8 +27,8 @@ family has no revisions).
   not 0: a 0 for every stock made its percentile one value per sector, which sorted sectors by their size.
 - Snapshots built before stage 1 carry inputs winsorized at 2/98% (ROE, debt, 12-1 momentum, growth: ties at the
   extremes) and dropped stocks without growth figures; US gross profit has no Yahoo fill here; all three hold today's
-  listings (Eastmoney drops delisted A-shares), and CN 扣非 figures are Eastmoney's latest (restated) ones under the
-  first notice date. The score's financials are set by today's definitions (stockreport.universe) on each snapshot.
+  listings (Eastmoney drops delisted A-shares; stage 27 adds them back from Baostock, and HK's from Tencent), and CN
+  扣非 figures are Eastmoney's latest (restated) ones under the first notice date. The score's financials are set by today's definitions (stockreport.universe) on each snapshot.
 
   uv run python -m backtest.qvm frame cn|us|hk   # the score on every snapshot: data/backtest/qvm_<market>.pkl
   uv run python -m backtest.qvm run cn|us|hk     # portfolios and families; writes data/history/expect.json
@@ -40,7 +42,7 @@ from datetime import timedelta
 import numpy as np
 import pandas as pd
 
-from backtest import panel, run
+from backtest import dead, panel, run
 from backtest.funnel import COST, PERIODS
 from backtest.stage1 import ETF
 from stockreport import history, lists, signals, universe
@@ -321,9 +323,10 @@ def run_market(market: str) -> None:
           f"12-month return {basket['mean']:+.1%}, over the fund {basket['excess']:+.1%} (ahead {basket['beat']:.0%}); "
           f"the 20 names over it {basket['picks']:+.1%} (ahead {basket['picks_beat']:.0%}); largest fall "
           f"{basket['drawdown']:.1%}; {said(basket)}")
-    result_ratings = {}
+    result_ratings, wins = {}, {"buy": w20}
     for kind, picks in rated.items():
         w, monthly, fund = evaluate(paths, picks, cost)
+        wins[kind] = w
         ex = w["ret"] - w["fund"]
         r = {"excess": ex.mean(), "beat": (ex > 0).mean(), "half": ex.abs().median(), "p10": ex.quantile(0.1),
              "p90": ex.quantile(0.9), "worst": w["ret"].min(), "mean": w["ret"].mean(), "fund_mean": w["fund"].mean(),
@@ -343,6 +346,10 @@ def run_market(market: str) -> None:
     runs = json.loads(EXPECT.read_text(encoding="utf-8")) if EXPECT.exists() else {}
     runs[market] = {"first": first, "last": last_month, "windows": n_windows, "fund_drawdown": fund_dd, "portfolios": result,
                     "ratings": result_ratings, "neutral": basket, "families": {k: v["all"] for k, v in t.T.to_dict().items()}}
+    runs[market]["dead_names"] = dead.entered(market, f["code"])  # delisted names in the history (stage 27)
+    if market == "us":  # no free price source keeps delisted US names: the bankruptcies put back analytically (stage 27)
+        runs[market]["dead"] = dead.us_correction({"buy": lists20} | rated, wins)
+        print("-- bankruptcies put back (backtest/dead.py us_correction): " + json.dumps(runs[market]["dead"], default=float)[:1500])
     EXPECT.write_text(json.dumps(runs, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
 
 

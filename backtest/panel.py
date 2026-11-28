@@ -11,6 +11,7 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
+from backtest import dead
 from stockreport import history, universe
 from stockreport.config import CONFIG, DATA
 from stockreport.fetch import nasdaq, sec
@@ -65,6 +66,8 @@ def month_ends(days: list[str], start: str, end: str) -> list[str]:
 def cn_results() -> pd.DataFrame:
     """业绩报表 for every quarter since 2009; a missing notice date is filled with the statutory deadline."""
     r = pd.read_csv(BT / "cn_results.csv.gz", dtype={"code": str, "notice_date": str, "period": str})
+    if t := dead.cn_tables():  # the delisted A-shares (stage 27), Baostock's quarterly reports; Eastmoney's where it has them
+        r = pd.concat([r, t["results"][~t["results"]["code"].isin(set(r["code"]))]], ignore_index=True)
     deadline = pd.to_datetime(r["period"]) + pd.to_timedelta(np.where(r["period"].str[5:7] == "12", 120, 62), unit="D")
     r["notice_date"] = r["notice_date"].fillna(deadline.dt.strftime("%Y-%m-%d"))
     return r[r["code"].str.match(A_SHARE)]
@@ -78,6 +81,8 @@ def cn_valuations() -> pd.DataFrame:
     frames = [pd.read_csv(p, dtype={"code": str}) for p in sorted((BT / "cn_val_daily").glob("*.csv.gz"))]
     daily = pd.concat(frames)
     out = pd.concat([daily[daily["date"].isin(ends)], pd.read_csv(BT / "cn_val_month.csv.gz", dtype={"code": str})])
+    if t := dead.cn_tables():
+        out = pd.concat([out, dead.cn_valuations(ends, t)])
     return out.drop_duplicates(["date", "code"])
 
 
@@ -87,7 +92,7 @@ class CNPrices:
     prev-close after. Cached in data/backtest/cn_daily.npz."""
 
     def __init__(self):
-        path = BT / "cn_daily.npz"
+        path = BT / ("cn_daily.npz" if dead.survivors_only() else "cn_daily_dead.npz")
         if not path.exists():
             self.build(path)
         z = np.load(path, allow_pickle=False)
@@ -110,8 +115,13 @@ class CNPrices:
                          for p in sorted((BT / "tdx").glob("*.csv.gz"))])
         tdx = tdx[tdx["code"].str.match(A_SHARE) & (tdx["date"] >= start)]
         tdx = tdx.assign(ret=np.where(tdx["volume"] > 0, tdx["close"] / tdx["prev_close"], 1.0), traded=tdx["volume"] > 0)
-        both = pd.concat([em[["date", "code", "close", "ret", "amount", "traded"]],
-                          tdx[["date", "code", "close", "ret", "amount", "traded"]]])
+        parts = [em, tdx]
+        if t := dead.cn_tables():  # delisted names before the packages' start (they hold the later days)
+            d = t["daily"]
+            d = d[(d["date"] < start) & d["date"].isin(set(days)) & d["code"].str.match(A_SHARE) & ~d["code"].isin(set(em["code"]))]
+            moved = d["tradestatus"] == 1
+            parts.append(d.assign(ret=np.where(moved, 1 + d["chg"] / 100, 1.0), traded=moved, amount=np.nan))
+        both = pd.concat([p[["date", "code", "close", "ret", "amount", "traded"]] for p in parts])
         codes = np.array(sorted(both["code"].unique()))
         r, c = np.searchsorted(days, both["date"].to_numpy()), np.searchsorted(codes, both["code"].to_numpy())
         mats = {name: np.full((len(days), len(codes)), fill, dtype=dtype) for name, fill, dtype in (
@@ -232,6 +242,8 @@ def cn_balance() -> pd.DataFrame:
     """Balance sheets, public when that period's results were (the balance table's own notice date is
     the latest restatement's)."""
     bal = pd.read_csv(BT / "cn_balance.csv.gz", dtype={"code": str, "period": str, "notice_date": str})
+    if t := dead.cn_tables():
+        bal = pd.concat([bal, t["balance"][~t["balance"]["code"].isin(set(bal["code"]))]], ignore_index=True)
     notice = cn_results().set_index(["code", "period"])["notice_date"]
     bal["avail"] = notice.reindex(pd.MultiIndex.from_arrays([bal["code"], bal["period"]])).to_numpy()
     return bal.dropna(subset=["avail"])
@@ -244,6 +256,8 @@ class Monthly:
 
     def __init__(self, market: str):
         m = history.read(f"{market}_monthly")
+        if market == "hk" and len(gone := dead.hk_prices_table(m["month"].max())):  # the names that stopped trading (stage 27)
+            m = pd.concat([m, gone], ignore_index=True)
         self.close = m.pivot(index="month", columns="code", values="close")
         self.ret = m.pivot(index="month", columns="code", values="ret")
         self.splits = history.read(f"{market}_splits")
@@ -270,7 +284,7 @@ class Monthly:
                 out[f"ret_{h}"] = np.nan
                 continue
             window = (1 + self.ret.iloc[i + 1: i + k + 1]).reindex(columns=list(codes))
-            out[f"ret_{h}"] = window.prod(min_count=k) - 1
+            out[f"ret_{h}"] = window.fillna(1.0).prod().where(window.notna().any()) - 1  # a stock that stopped trading stays flat
             out[f"idx_{h}"] = self.close[self.index_code].iloc[i + k] / self.close[self.index_code].iloc[i] - 1
             if h == BLOWUP:
                 out[f"worst_{h}"] = (window.cumprod().min() - 1).where(out[f"ret_{h}"].notna())

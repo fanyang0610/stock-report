@@ -5,7 +5,8 @@ over the inputs' distributions and weigh failure in; Mauboussin and Callahan, "T
 by starting size).
 - The paths: every company-year in the market's history tables with 3 years behind it and 10 ahead (HK's tables start
   in 2015: one cohort, 7 years ahead), its own year-by-year revenue growth; no fitted distribution. US: SEC's frames,
-  which keep dead filers; CN and HK: today's listings, so survivors only until stage 27.
+  which keep dead filers; CN: today's listings and, since stage 27, the A-shares delisted from 2012 (fade.cn_dead,
+  Baostock); HK: today's listings, survivors only.
 - Comparable: the same size fifth and recent-growth band at the start. Each company counts once, however many start
   years it qualifies in.
 - Today's nominal terms: each year's growth is restated by today's base rate over its cohort's median that year, so the

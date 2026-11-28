@@ -2038,6 +2038,52 @@
     applied to the 8-year median: it is now fitted on the 8-year median where the history allows. (3) The moat still
     read the short line's 4 years: it reads the long line now. Its other points stand as written: net margin is a proxy
     for operating margin in the US, and the 3-year test is a step (Amazon, above).
+- Stage 27 (a survivor-free history; the review's F6): done 2026-11-28 on branch claude/gallant-liskov-2fcccd (from stage
+  26's cc7c7e8). Not merged into main. backtest/dead.py; the history (backtest/panel.py, qvm.py) reads its tables;
+  research/fade.py reads CN's delisted names' annual table; report.py's 预期 lines say what each history holds.
+  - Sources and their limits: "Data sources", "Delisted names". Baostock added as a backtest-only uv group at your OK
+    (2026-11-23); it blocked the IP for days after six sessions at full speed, so it runs paced at two.
+  - The history before (`SURVIVORS_ONLY=1`, same day's data) and after: BACKTEST.md section 30. CN 49 delisted names
+    enter the 800 (1.3% of the rows), HK 31 (2.2%), the US none (bankruptcies put back analytically: 1.8% a year among
+    loss-making or negative-equity $1bn+ filers, 0.07% among the rest). 20 names over the fund CN +1.7% → +1.4%, HK
+    +2.6% → +3.3%, US +2.2% → +2.1% (Nasdaq return); the picks over the sector-matched basket CN −1.5% → −1.5%, HK
+    +2.7% → +3.3%, US −0.8%; Sell over the fund CN +6.7% → +7.7%, HK +6.4% → +6.0%, US +0.8% → +0.3%. The live
+    data/history/expect.json is the after; the 预期 lines give the picks against the basket beside the 20 names against
+    the fund (as since stage 7) and now say what each market's history holds (report.HELD, report.sold); the report
+    of 2026-11-28 rendered from it (the lists unchanged). The US Buy and Hold lines keep the survivors' figures (the
+    correction moves them 0.1 point or less); the US Sell line gives the corrected one.
+  - Found, not changed (rule: no list rule changes here): with the dead names in, Sell still beats the index fund in
+    CN (+7.7%) and HK (+6.0%), and US quality still runs against its published direction (top fifth minus bottom −9.9
+    points a year; the US history has no dead names, so this one is untested by the stage). Survivorship isn't what
+    lifts CN and HK's Sell here: few delisted names looked expensive and weak when they were in the 800. Next: an
+    evidence review of the published work on each market's Sell side (the expensive, low-quality and distressed in CN
+    and HK) and on US quality over the last decade, before any change to the Sell rule or the quality family.
+  - Stage 25's open point, measured: CN's comparable windows now hold failures (0.01% → 2.39% of windows, 122
+    companies; the 50%+ band 5.6%), and the path mean's lift over one path on the other DCF types stays: median +10.6% →
+    +9.8% on the same 11 cached companies, the CN ones down 1-2 points each (茅台 +19.6% → +18.7%). So the inconsistency
+    stage 25 wrote stands: the market's members should be valued over the paths too (market.py), so the rating sets
+    like against like; a research-method change for its own stage, not this one. The CN research values move slightly
+    now (the failures enter every CN path type's mean; HK has no delisted revenue history).
+  - Stage 26's lasting gaps, rerun with the delisted names in fade's CN tables (backtest/persistence.py): the sides
+    hold (below lasting beats new, intervals +0.09 to +0.20 and +0.16 to +0.28; above spans zero) and the rates move
+    under 0.01 (stage 14's above 0.916 → 0.909, below 0.850 → 0.854; lasting below 0.913 → 0.914; all read live from
+    the tables). LASTING_SIDES unchanged.
+  - Also: a US or HK stock with a gap in its monthly prices now stays flat over the gap in the 12-month forward return
+    (panel.Monthly.forward), as CN's always did, instead of dropping out of the family spreads.
+  - Tests: HK total return (a dividend, a split and its later dividends, a series cut after a split, a collapse), the
+    US correction, the 预期 lines' wording per market. 362 pass.
+  - The fresh-context stage review (one, on Sonnet): every figure in BACKTEST.md section 30 and here matches the expect
+    files; CN's delisted results enter only after their publication date and the share count for their market value
+    was public by each month end; the score and the lists unchanged; baostock only in the uv group. Its findings, all
+    fixed: (1, medium) HK's total return started its share scale at 1 on a series cut at 2015-09, so names split
+    earlier got a false dividend on every up month (33 stopped names, 89 history rows, among them the Sell list's
+    00612): it now runs on each name's whole series with a return formula that holds through any share event; HK
+    rerun (Sell +6.0% either way; the picks +3.3% (63%), families value −1.5, quality −1.6). (2) The US correction is
+    called an estimate, not a bound (only the delisting return is bounded), and the flat-after-the-last-trade
+    convention's gap for a suspended HK name later cancelled is written. (3) Counts in the docs (244 CN, 192 HK), the
+    SURVIVORS_ONLY check made the same in fade.py and dead.py, and the US Buy and Hold lines' survivor figures written.
+    Left as written: Baostock's figures may be restated and include minorities (not documented by it); report.py at
+    425 lines (the 400 is an estimate).
 
 ## Why this plan
 - **What went wrong.** Thirteen phases and two stages built engines that no successful stock-ranking product builds (a
@@ -2883,9 +2929,12 @@ momentum drive the score (fixed in stage 1 after the stage review).
   It fills the 预期 lines and decides nothing (BACKTEST.md section 27).
 - Stage 17d: the same Sell rule keeps momentum's top fifth off the list (lists.sells), on the history's momentum family
   (no revisions there).
-- The CN frames are point-in-time by report date but hold only companies still listed (Eastmoney drops delisted ones),
-  with restated 扣非 figures; US and HK hold today's listings. So every market's numbers are flattered, and the report
-  says so (corrected in stage 1: this line said CN had delisted names).
+- The CN frames are point-in-time by report date, with restated 扣非 figures for the companies still listed (Eastmoney
+  drops delisted ones; corrected in stage 1: this line said CN had delisted names). Stage 27 (backtest/dead.py) adds
+  the A-shares delisted from 2018-12 from Baostock (prices and results as published) and the HK names that stopped
+  trading that Eastmoney's HK tables keep (2023 on), priced from Tencent; US delisted names have no free price, so the
+  US lists' bankruptcies are put back at Shumway's delisting returns from SEC's dead filers (expect.json `dead`). The
+  report says per market what its history holds (report.HELD).
 
 ### Results review (stage 2; only when you ask for a report)
 The project's one AI step (2026-11-07, your words: "i can close claude code completely and still run the project,
@@ -4483,6 +4532,36 @@ above).
     revenue shares only, no amounts or profit), so: an A+H issuer's A line's 主营构成, an issuer with its own SEC
     filing (Alibaba, JD, Baidu) by its US line's XBRL, else the HKEXnews annual report's segment note, the PDF read in
     memory (4-36 MB) with pypdf's layout text (extraction_mode="layout") for the pages that name the note.
+- Delisted names (stage 27, verified 2026-11-23/28; backtest/dead.py, the history only, never the daily build):
+  - CN: Baostock (the `baostock` package, a backtest-only uv group, `uv run --group backtest`; your OK 2026-11-23). Its
+    stock list keeps every delisted A-share (status 0, outDate: 342 since 1995, 244 that left from 2018-12); daily K
+    data as traded (close, the exchange's price move, turnover, P/E, P/B, ST flag) to the last trading day, identical
+    to the 通达信 packages where both exist (10,919 overlapping days: moves within 0.00002%); quarterly profit, balance
+    and cash-flow tables with the publication date (pubDate) and YTD figures (MBRevenue, netProfit, gpMargin,
+    totalShare, liabilityToAsset, CFOToNP). Limits: whether its figures are as first published or restated isn't
+    documented (not checked); its net profit includes minority interests (Eastmoney's survivors' is the parent's); no 扣非 profit (net profit stands in on fade's margin table; the
+    screening's 扣非 E/P is missing for them, at the middle), no dividends (as the packages), P/E and P/B are its own
+    (not compared with Eastmoney's), revenue is 主营业务收入. It blocks an IP that calls too fast: on 2026-11-23 six
+    sessions at full speed were blocked ("黑名单用户") for days; two sessions with a 0.3 s pause each since. ~1 s a call.
+    Eastmoney drops delisted names from every table (checked on 乐视网, 长生生物, 辅仁药业, 康得新, 凯迪生态, 暴风集团);
+    the 通达信 packages keep them, from 2021-08 only.
+  - HK: Tencent's monthly kline, web.ifzq.gtimg.cn/appstock/app/kline/kline?param=hk<code>,month,,,800 (as traded) and
+    .../hkfqkline/get?param=hk<code>,month,,,800,hfq (back-adjusted: each dividend, times the share scale so far, is
+    added to the later closes, and a split multiplies them; so a month's total return is the adjusted move over the
+    scale times the month before's close, the scale read from the recent months' adjusted over raw moves, on each
+    name's whole series), delisted names included (中国恒大 to 2024-01). Checked against Yahoo on 0700, 0941 and 1398
+    (12-month returns within 0.1-1 point a year on average;
+    HSBC differs because Yahoo's HSBC dividends are wrong). The names come from Eastmoney's HK list and results, which
+    keep the delisted ones only for some years: the 192 HK names with results but no Yahoo prices that stopped trading
+    all stopped in 2023-2026 (52 from 2026-03, suspensions among them), so earlier delistings are missing. Eastmoney's push2his kline has the same data but drops
+    every call after a burst (2026-11-23), as the "Not used" line above found for push2.
+  - US: no free price source keeps delisted names (Yahoo answers "symbol may be delisted" for SIVB, BBBY, TWTR, WE,
+    LEH; Alpha Vantage's delisted list needs a key and has no prices). SEC's frames keep the dead filers' figures; their
+    EDGAR filing lists (data.sec.gov/submissions) give how each ended: an 8-K Item 1.03 in the year before its last
+    periodic report or after it is a bankruptcy, a tender offer, merger proxy or merger registration a takeover. Of
+    the 1,039 filers with $1bn+ revenue in some year that stopped filing and aren't listed today: 99 bankrupt (Sears,
+    Rite Aid, Bed Bath & Beyond, WeWork...), 703 taken over, 237 other. Limit: no prices, so the history can't rank
+    them; their bankruptcies are put back at Shumway's delisting returns (BACKTEST.md section 30).
 - FX, only needed when a company reports in a different currency from the one it trades in: ECB rates via api.frankfurter.dev.
 - Legacy references (read only), all under ~/Developer/EquitySignalsClawbot-legacy/:
   - Sources/EquitySignalsClawbotCore/PublicUniverse.swift (around line 1310, the Eastmoney list call)

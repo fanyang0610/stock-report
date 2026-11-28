@@ -1,8 +1,10 @@
-"""How long a company's advantages last, measured in the screening's history tables (today's listings only, so
-survivors: persistence above the median and recovery below it are overstated): margins against their own median,
+"""How long a company's advantages last, measured in the screening's history tables (today's listings, so survivors:
+persistence above the median and recovery below it are overstated; CN's tables also hold the delisted A-shares since
+stage 27, cn_dead): margins against their own median,
 revenue growth above its size fifth's, returns above their cost. backtest/persistence.py prints the full
 measurement; value.py uses the rates PLAN.md's rules name (margin_keep, lasting_keep, growth_shares, excess_keep)."""
 
+import os
 from functools import lru_cache
 
 import numpy as np
@@ -26,6 +28,15 @@ def wide(t: pd.DataFrame, col: str) -> pd.DataFrame:
     return complete(t.drop_duplicates(["code", "year"], keep="last").pivot(index="code", columns="year", values=col).sort_index(axis=1))
 
 
+@lru_cache(maxsize=1)
+def cn_dead() -> pd.DataFrame | None:
+    """The delisted A-shares' yearly revenue, net profit and ROE (backtest/dead.py cn-annual, from Baostock; stage 27),
+    which the survivors-only tables leave out; None when not fetched. Baostock has no 扣非 profit: net profit stands in
+    for it on the margin table."""
+    path = DATA / "history" / "cn_dead_annual.csv.gz"
+    return pd.read_csv(path, dtype={"code": str}) if path.exists() and os.environ.get("SURVIVORS_ONLY") != "1" else None
+
+
 @lru_cache(maxsize=3)
 def margin_table(market: str) -> pd.DataFrame:
     """Margin per company and fiscal year: US operating income over revenue; CN 扣非 profit over revenue and HK profit
@@ -37,6 +48,8 @@ def margin_table(market: str) -> pd.DataFrame:
     elif market == "cn":
         a = pd.read_csv(h / "cn_annual.csv.gz", dtype={"code": str}, usecols=["code", "period", "revenue"])
         d = pd.read_csv(h / "cn_deduct.csv.gz", dtype={"code": str}, usecols=["code", "period", "deduct"])
+        if (dead := cn_dead()) is not None:
+            a, d = pd.concat([a, dead[["code", "period", "revenue"]]]), pd.concat([d, dead.rename(columns={"np": "deduct"})[["code", "period", "deduct"]]])
         t = a.merge(d[d["period"].str.endswith("12-31")], on=["code", "period"])
         t = t.assign(year=t["period"].str[:4], m=t["deduct"] / t["revenue"].where(t["revenue"] > 0))
     else:
@@ -86,6 +99,8 @@ def revenue_table(market: str) -> pd.DataFrame:
     h = DATA / "history"
     if market == "cn":
         t = pd.read_csv(h / "cn_annual.csv.gz", dtype={"code": str}, usecols=["code", "period", "revenue"])
+        if (dead := cn_dead()) is not None:
+            t = pd.concat([t, dead[["code", "period", "revenue"]]])
         t = t.assign(year=t["period"].astype(str).str[:4])
     elif market == "us":
         t = pd.read_csv(h / "us_annual.csv.gz", dtype={"code": str}, usecols=["code", "fy_end", "revenue", "currency"])
@@ -128,6 +143,8 @@ def return_table(market: str) -> pd.DataFrame:
         t = t.assign(year=t["fy_end"].str[:4], r=t["ni"] / t["equity"].where(t["equity"] > 0))
     elif market == "cn":
         t = pd.read_csv(h / "cn_annual.csv.gz", dtype={"code": str}, usecols=["code", "period", "roe"])
+        if (dead := cn_dead()) is not None:
+            t = pd.concat([t, dead[["code", "period", "roe"]]])
         t = t.assign(year=t["period"].str[:4], r=t["roe"] / 100)
     else:
         t = pd.read_csv(h / "hk_results.csv.gz", dtype={"code": str}, usecols=["code", "period", "date_type", "roe"])

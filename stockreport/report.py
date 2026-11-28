@@ -38,6 +38,11 @@ EVIDENCE = {
     "hk": "已发表研究：港股价值和质量的证据较多，恒生港股通红利低波按股息率和低波动选股，价格动量的证据不一；含港股的亚洲 7 个市场里，"
           "多数市场股价随分析师预测调整同向（S&P DJI 2017）。",
 }
+HELD = {  # what each market's history holds (stage 27; backtest/dead.py)
+    "cn": "历史含 2019 年以来退市的 A 股（价格和当时公布的财报来自 Baostock；仍上市公司的财务数字是后来修订过的版本）",
+    "hk": "历史含今天仍上市的港股和 2023 年以后退市、东方财富仍保留资料的港股，更早退市的不在里面",
+    "us": "历史只含今天仍上市的美股（没有免费数据保留退市美股的股价），大公司破产按已发表的退市损失另行估算",
+}
 FIELD = {"cn": "A 股市值前 800 只", "us": "美股市值前 800 只", "hk": "流动性达标的港股"}  # the buys' field: the scored market
 GUIDE = [  # page 1: how to read it, in five lines
     "<b>三种评级</b>，像券商分析师给股票评级一样只看股票本身，不看任何人的持仓：<b>买入</b> = 预计跑赢大盘；<b>持有</b> = 评分居中，"
@@ -51,8 +56,8 @@ GUIDE = [  # page 1: how to read it, in five lines
     "时写<b>短板</b>，即和同行比最弱的一项。",
     "<b>审核</b>：DeepSeek 读每只股票近期的公告、最新定期报告的相关段落和新闻，引文由程序核对；有硬风险的买入和持有会被换掉，"
     "卖出名单上的只做标注。这是唯一用 AI 的一步，其余全部由程序完成。",
-    "<b>不是保证</b>：这类方法平均每年跑赢指数几个百分点，但约 4 成年份跑输。历史模拟只含今天仍上市的公司，退市的差公司不在里面，"
-    "所以检验不了卖出名单。所有数字来自程序和公开数据，不构成投资建议。",
+    "<b>不是保证</b>：这类方法平均每年跑赢指数几个百分点，但约 4 成年份跑输。历史模拟含 A 股 2019 年以来退市的公司，港股只含部分、"
+    "美股不含退市公司（另按已发表的退市损失估算），结果仍偏乐观。所有数字来自程序和公开数据，不构成投资建议。",
 ]
 METHOD = [  # the back pages
     ("怎么打分", "每只股票按三类打分，各占三分之一，每项都和同行业比（银行、保险、券商等金融股另算；同行不足 10 只的和全市场比）："
@@ -96,6 +101,19 @@ SUFFIX = re.compile(r"(,?\s+(Inc\.?|Corp\.?|Corporation|Company|Co\.?|Ltd\.?|Lim
 CJK = re.compile(r"[一-鿿]")
 
 
+def sold(market: str, e: dict, x: dict, more, fund: str) -> str:
+    """What the history says about the Sell list, given what it holds (HELD): CN and HK with their delisted names, the
+    US with the large companies' bankruptcies put back at Shumway's delisting returns (backtest/dead.py us_correction)."""
+    if market != "us":
+        return (f"{'即使加上退市的公司，' if e.get('dead_names') else ''}卖出在这段历史里平均"
+                f"{'仍跑赢' if x['excess'] >= 0 else '跑输'}{fund}；")
+    d = (e.get("dead") or {}).get("sell")
+    if not d:
+        return "历史里只有今天仍上市的公司，后来破产、退市的都不在里面，所以模拟里的卖出比实际好看；"
+    return (f"历史里只有今天仍上市的公司；大公司破产很少，按已发表的退市损失把它们放回去，卖出平均{more(d['Nasdaq']['excess'])}"
+            f"（最坏按全部亏光算{more(d['total loss']['excess'])}），所以这段模拟检验不了卖出；")
+
+
 def expect(market: str) -> dict:
     """The 预期 lines in plain words (the Buy portfolio's; Hold's and Sell's, under their headings), the summary's
     shorter ones (the buys'; then Hold's and Sell's, `rated`), and the details for the back pages (the history run's
@@ -129,16 +147,15 @@ def expect(market: str) -> dict:
                 f"{h['vol'] / h['fund_vol']:.1f} 倍；{fell(h)}。10 只合起来每月的涨跌通常比大盘小，大盘涨得多时会落后。")
         sell = (f"历史模拟（简化版）里每月的卖出 10 只拿 12 个月：{1 - x['beat']:.0%} 的时候跑输{fund}，平均{more(x['excess'])}"
                 f"（它们自己平均 {x['mean']:+.1%}，{fund} {x['fund_mean']:+.1%}）；波动是{fund}的 {x['vol'] / x['fund_vol']:.1f} 倍；"
-                f"{fell(x)}。跑输不等于下跌。这段历史检验不了卖出名单：历史里只有今天仍上市的公司，又贵又差的公司里后来破产、退市的"
-                "都不在里面，留下的是熬过来的，所以模拟里的卖出比实际好看；历史数据里也没有财务困境概率，模拟的卖出只按价值和质量选。"
-                "卖出的依据是几十年、含退市公司的已发表研究（见附页），不是这段模拟。")
-        rated = f"持有{more(h['excess'])}、波动小于基金；卖出：模拟只含存活的公司，检验不了。"
+                f"{fell(x)}。跑输不等于下跌。{sold(market, e, x, more, fund)}历史数据里没有财务困境概率，模拟的卖出只按价值和质量选，"
+                "样本也只有七到十年。卖出的依据是几十年、含退市公司的已发表研究（见附页），不是这段模拟。")
+        rated = (f"持有{more(h['excess'])}、波动小于基金；卖出{more(x['excess'])}（{1 - x['beat']:.0%} 的时候跑输），"
+                 + ("模拟不含退市美股，检验不了。" if market == "us" else "这段模拟检验不了。"))
     detail = [f"模拟回测：{e['first']} 至 {e['last']} 每月建仓的 {e['windows']} 个 12 个月，扣交易成本。只买 10 只 / 5 只：最差的 12 个月"
               "相对基金 " + " / ".join(f"{e['portfolios'][n]['worst_excess']:+.0%}" for n in ("10", "5")) +
               f"（20 只 {n20['worst_excess']:+.0%}），名单越短结果越分散。每月建仓、同时持有 12 批的组合，整段历史里从高点的最大跌幅 "
               f"{-n20['drawdown']:.0%}（{fund} {-e['fund_drawdown']:.0%}）。",
-              ("历史只含今天仍上市的公司（A 股的财务数字还是后来修订过的版本），模拟结果偏乐观" if market == "cn" else
-               "历史只含今天仍上市的公司，模拟结果偏乐观") + "；模拟的 12 个月里没有分析师预测，也没有 EBIT、有息负债和现金的历史，"
+              HELD[market] + "，模拟结果仍偏乐观；模拟的 12 个月里没有分析师预测，也没有 EBIT、有息负债和现金的历史，"
               "评分不含预期 E/P、预测调整和 EBIT/EV，也没有财务困境和应计利润筛选" +
               ("；行业份额用今天的自由流通比例近似。" if market != "us" else "。")]
     backwards = [f"{NAMES[f]}（前五分之一比后五分之一每 12 个月少 {-x:.1%}）"

@@ -15,8 +15,9 @@ prints, per market:
      difference (resampling companies), and the same against the 8-year median the forecast anchors on: a side
      changes when both intervals are above zero. The US also on
      SEC's frames (net margin, dead filers kept, the largest filers by revenue each year), the rates' source.
-All on today's listings only (survivors: a company whose margin or return collapsed and that left the market is
-missing, so persistence above the median and recovery below it are overstated). Complete fiscal years only.
+All on today's listings (survivors: a company whose margin or return collapsed and that left the market is missing,
+so persistence above the median and recovery below it are overstated), except CN, whose tables hold the A-shares
+delisted from 2012 since stage 27 (fade.cn_dead; their net margin stands in for 扣非). Complete fiscal years only.
 
   uv run python -m backtest.persistence [cn|us|hk]
 """

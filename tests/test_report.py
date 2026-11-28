@@ -69,7 +69,7 @@ def test_report_dry_run(tmp_path, monkeypatch):
     assert lines[1].startswith("评级：买入 = 预计跑赢大盘；持有 = 评分居中、不偏涨也不偏跌")  # the three ratings first
     cn = summary.split("【A股】")[1].split("【美股】")[0]
     assert "预期：历史模拟（简化版）：买入平均每年比沪深300ETF多赚 2.5%" in cn and "买入 20 只，每只等额，持有到 2027-10-24" in cn
-    assert "选股本身少赚 0.5%），最差一年 -18%，基金同期 -20%。持有少赚 0.4%、波动小于基金；卖出：模拟只含存活的公司，检验不了。" in cn
+    assert "选股本身少赚 0.5%），最差一年 -18%，基金同期 -20%。持有少赚 0.4%、波动小于基金；卖出少赚 4.0%（70% 的时候跑输），这段模拟检验不了。" in cn
     assert "注意：今日部分数据获取失败（prices）" in cn and "持有 10 只：" + "、".join(hold["name"]) in cn
     assert "卖出 10 只：" + "、".join(sell["name"]) in cn and cn.splitlines()[2].count("、") == 19  # the 20 buys by name
     hk = summary.split("【港股】")[1]
@@ -159,3 +159,14 @@ def test_the_buys_largest_cluster_is_one_computed_sentence():
     assert report.cluster(buys, "us") == ("最集中的行业：科技 4 只（占市场自由流通市值的 41%，名额按这个分配）；"
                                           "同一细分行业 3 只（T0、T1、T2），它们常一起涨跌。")
     assert report.cluster(buys[3:] + [{"sector": "Energy", "short": "E"}], "cn") == "最集中的行业：金融 2 只（占市场自由流通市值的 10%，名额按这个分配）。"
+
+
+def test_sell_line_says_what_the_history_holds():
+    more = lambda x: f"{'多' if x >= 0 else '少'}赚 {abs(x):.1%}"
+    x = {"excess": 0.06}
+    assert report.sold("cn", {"dead_names": 12}, x, more, "沪深300ETF") == "即使加上退市的公司，卖出在这段历史里平均仍跑赢沪深300ETF；"
+    assert report.sold("hk", {}, {"excess": -0.01}, more, "盈富基金") == "卖出在这段历史里平均跑输盈富基金；"
+    dead = {"sell": {"Nasdaq": {"excess": 0.003}, "total loss": {"excess": -0.001}}}
+    us = report.sold("us", {"dead": dead}, x, more, "标普500基金")
+    assert "卖出平均多赚 0.3%（最坏按全部亏光算少赚 0.1%）" in us and "检验不了" in us
+    assert "后来破产、退市的都不在里面" in report.sold("us", {}, x, more, "标普500基金")

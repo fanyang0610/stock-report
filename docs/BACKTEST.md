@@ -1821,3 +1821,81 @@ extrapolated from 3 years; one rate per market and side, though a gap's size cha
 or more keep less in the US and CN, more in HK).
 
     uv run python -m backtest.persistence [cn|us|hk]
+
+## 30. Stage 27: a survivor-free history (2026-11-28; backtest/dead.py, backtest/qvm.py)
+
+The method review of 2026-11-23 (F6) read three results of the history as what a survivor-only history produces: the
+score's picks no better than a sector-matched basket in CN and the US, US quality against its published direction,
+and Sell beating the index fund in CN and HK. This stage puts back the names the free sources keep (PLAN.md "Data
+sources", "Delisted names"), changes nothing in the score or the lists, and reruns the history. "Before" is the same
+code with `SURVIVORS_ONLY=1` on the same day's data (2026-11-28). The inputs moved since stage 17d's run of 2026-11-22
+(CN Hold +1.6% then, +2.2% today; HK's 20 names +3.2% then, +2.6% today), so the before is today's.
+
+What enters:
+- CN: the A-shares that left from 2018-12 (Baostock: 244, 241 of them traded after 2019-01), with their daily prices and their quarterly results by
+  publication date; 71 of them reach within 80% of the 800th market value on some month end, and 49 of those enter
+  a month's 800 (962 name-months, 1.3% of the rows). Into the lists: Buy 11 of 1,860 name-months (中航机电, 退市易见,
+  中航产融, 海通证券: two mergers, a fraud delisting, a voluntary delisting), Hold 14 (海通证券), Sell 1 (中潜退).
+- HK: the names Eastmoney's list and results keep and Tencent prices, that stopped trading before Yahoo's last month (192: 13 in 2023, 39 in 2024, 79 in
+  2025, 61 in 2026; the 52 that last traded from 2026-03 include suspensions);
+  31 enter (1,006 name-months, 2.2%). Buy 7 name-months (东风集团, 海通证券), Hold 34 (恒生银行, 天瑞水泥, 九台农商
+  and the same), Sell 8 (嘉文世纪, 中国恒大). Most are privatisations and mergers, settled at their last price.
+- US: none can be priced. The SEC frames' large filers (revenue $1bn+) that stopped filing, classified from their
+  filing lists, give the yearly rate of bankruptcy within 12 months of a month end (2018-01..2023-12, by the filer's
+  last published year): 1.81% for those with a loss or negative equity (453 of 25,039 filer-months), 0.066% for the
+  rest (57 of 85,890); takeovers 3.1% and 2.3%. Each list's share of loss-making or negative-equity names sets its
+  rate, and that share of the money earns Shumway's delisting return (−30% NYSE/AMEX, 1997; −55% Nasdaq, Shumway and
+  Warther 1999; and a total loss) instead of the list's.
+
+| 12 months from each month end, after costs | CN (510300): before → after | HK (2800): before → after | US (SPY): survivors → bankruptcies put back (Nasdaq; total loss) |
+|---|---|---|---|
+| 20 names over the fund (windows ahead) | +1.7% (51%) → **+1.4% (48%)** | +2.6% (57%) → **+3.3% (60%)** | +2.2% (59%) → **+2.1%**; +2.1% |
+| the neutral basket over the fund | +3.2% → **+2.9%** | −0.1% → **+0.0%** | +3.0% (not corrected) |
+| the picks: 20 names over the basket (ahead) | −1.5% (28%) → **−1.5% (31%)** | +2.7% (62%) → **+3.3% (63%)** | −0.8% (46%) |
+| Hold 10 over the fund (ahead) | +2.2% (63%) → **+1.5% (64%)** | −1.6% (46%) → **−1.7% (44%)** | −6.9% (27%) → **−6.9%**; −7.0% |
+| **Sell 10 over the fund (windows behind)** | +6.7% (60%) → **+7.7% (58%)** | +6.4% (62%) → **+6.0% (63%)** | +0.8% (47%) → **+0.3%**; +0.0% |
+| Sell: 10th / 90th percentile over the fund | −19.7% / +45.4% → −19.4% / +45.4% | −23.5% / +56.0% → −22.1% / +52.3% | −19.8% / +19.0% |
+| families' top fifth − bottom fifth: value, quality, momentum | +0.7, +0.8, +1.9 → +0.3, +1.1, +2.1 | −1.2, −1.6, +9.3 → −1.5, −1.6, +8.9 | +0.7, −9.9, −0.1 (not corrected) |
+
+**What it says.**
+- The dead names change the history little, because the score's field is the 800 largest (CN, US) and the liquid
+  half (HK): large companies rarely fail. In CN 1.3% of the rows are delisted names, in HK 2.2%; US bankruptcies among
+  $1bn+ filers run at 0.07-1.8% a year.
+- The basket's lead shrinks a little in CN (+3.2% → +2.9%), as F6 expected, but the picks stay behind it (−1.5%): in CN
+  the score still doesn't pick within sectors in this history; the 20 names' lead over the fund comes from the places
+  and equal amounts. In HK the picks lead the basket by more (+3.3%). The US picks stay −0.8% behind it.
+- Sell still beats the fund in CN (+7.7%, behind in 58% of the windows) and HK (+6.0%, 63%), and the US Sell's small
+  lead goes to about zero (+0.3%; +0.0% if every bankrupt name lost everything). Survivorship was not why CN and HK's Sell beat the fund:
+  the delisted names that reached the 800 were mostly merged or restructured large companies, and few looked expensive
+  and weak when they entered. US quality still runs against its published direction (−9.9 points a year).
+- The history decides nothing (PLAN.md "How decisions are made"); these numbers fill the 预期 lines, which now say what
+  each market's history holds. The two results that stand after the dead names are put back, Sell beating the fund in
+  CN and HK and US quality's sign, go to an evidence review of each market's published work (PLAN.md Status, stage 27).
+
+Limits: CN's delisted names have no 扣非 profit (their 扣非 E/P is at the middle) and Baostock's own P/E and P/B (the
+snapshot's check against Eastmoney's skips them); their net profit includes minority interests and may be restated
+(not documented); Baostock gives 主营收入 only half-yearly, so Q1 and Q3 revenue is net
+profit over net margin (over 主营收入 where both exist: median 1.00, 90th percentile 1.05). HK's earlier delistings (2016-2022) are
+not in any free source found. A delisted name stays flat after its last trading day (the convention for every
+stopped stock; CN's last days are its 退市整理期 prices, HK's privatisations settle near the offer, but a suspended
+HK name whose listing is later cancelled, 中国恒大, loses what is left, which flat leaves out). HK monthly returns come
+from Tencent's raw and back-adjusted closes on each name's whole series (a month's return is the adjusted move over
+the share scale times the month before's close; the scale from the recent months' adjusted over raw moves), checked
+against Yahoo on live names (12-month returns within 0.1-1 point a year on 0700, 0941, 1398). The US correction is
+an estimate, not a bound: only the delisting return is bounded (the total loss); the frequency isn't, as an
+expensive, low-quality Sell list may fail more often than its loss-making share says, and the 237 filers that ended
+otherwise (some in distress) are left out; no dead US name is ranked into a list, and takeovers' premiums are left out.
+
+Rerun: `uv run --group backtest python -m backtest.dead cn-prices`, `cn-annual`, `cn-results` (Baostock, ~1 hour at
+two sessions), `uv run python -m backtest.dead hk-prices` (~10 min) and `us-filers` (~3 min); then for each market
+`backtest.run build`, `backtest.qvm frame`, `backtest.qvm run` (the US: `frame` and `run`). `SURVIVORS_ONLY=1` gives
+the before.
+
+**Carried from stages 25 and 26** (measured, written in PLAN.md Status):
+- Stage 25's comparable windows (fade.revenue_table via fade.cn_dead): CN failed windows 0.01% → 2.39% (122 companies);
+  the 50%+ growth band 0% → 5.6%, its mean 10-year revenue multiple 4.88 → 4.64; the smallest size fifth fails 3.2%,
+  the largest 1.4%. The path mean's lift over one path on the other DCF types: on the same 11 cached companies median
+  +10.6% → +9.8%; 茅台 +19.6% → +18.7%, 中国神华 +22.6% → +21.0%, 五粮液 +16.6% → +15.4%, 恒瑞 +10.6% → +9.8%.
+- Stage 26's lasting margin gaps in CN with the delisted names: the sides hold (below lasting 0.69 vs new 0.54 at 3
+  years, interval +0.09 to +0.20 and +0.16 to +0.28 on the two definitions; above's still spans zero); the rates move
+  by under 0.01 (stage 14's above 0.916 → 0.909, below 0.850 → 0.854; lasting below 0.913 → 0.914).

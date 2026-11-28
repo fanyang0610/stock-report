@@ -90,5 +90,5 @@ def summary_lines(report: dict, level: int = 0) -> list[str]:
         if m.get("review"):
             lines.append(m["review"])
         lines.append("预期：" + m["expect"]["short"] + (m["expect"].get("rated", "") if level < 4 else ""))
-    return lines + ["", "每家公司做什么、为什么这样评级、风险、一手多少钱和审核结果见 PDF。历史模拟不代表未来，只含仍上市的公司，"
+    return lines + ["", "每家公司做什么、为什么这样评级、风险、一手多少钱和审核结果见 PDF。历史模拟不代表未来，退市的美股和较早退市的港股不在里面，"
                         "检验不了卖出名单；不构成投资建议。"]
